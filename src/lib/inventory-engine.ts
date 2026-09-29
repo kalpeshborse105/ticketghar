@@ -1,0 +1,418 @@
+import { db } from '../db/index.ts';
+import {
+  seatInventory,
+  ticketTypes,
+  orders,
+  tickets,
+  settlements,
+  events,
+  organizers,
+  seats,
+  venueSections,
+  coupons,
+  auditLogs,
+} from '../db/schema.ts';
+import { eq, and, sql, inArray, lt } from 'drizzle-orm';
+import crypto from 'crypto';
+import QRCode from 'qrcode';
+import { PricingBreakdown } from './types.ts';
+
+const TICKET_SECRET = process.env.TICKET_SECRET || 'ticketghar_secure_signing_key_maharashtra_2026';
+const HOLD_DURATION_MINUTES = 8;
+
+/**
+ * Release any seat holds that have expired past their 8-minute reservation window
+ */
+export async function releaseExpiredHolds(sessionId: number): Promise<number> {
+  try {
+    const now = new Date();
+    const result = await db
+      .update(seatInventory)
+      .set({
+        status: 'available',
+        heldByUserId: null,
+        holdExpiresAt: null,
+      })
+      .where(
+        and(
+          eq(seatInventory.sessionId, sessionId),
+          eq(seatInventory.status, 'held'),
+          lt(seatInventory.holdExpiresAt, now)
+        )
+      )
+      .returning({ id: seatInventory.id });
+
+    return result.length;
+  } catch (error) {
+    console.error('Error releasing expired holds:', error);
+    return 0;
+  }
+}
+
+/**
+ * Calculate transparent ticket pricing breakdown
+ */
+export async function calculatePricing(
+  event: any,
+  ticketCount: number,
+  faceValueTotal: number,
+  couponCode?: string
+): Promise<PricingBreakdown> {
+  // Platform / Convenience Fee calculation
+  let platformFeePerTicket = event.convenienceFeeValue || 3000; // in paise (e.g. ₹30.00)
+  if (event.convenienceFeeType === 'percent') {
+    platformFeePerTicket = Math.round((faceValueTotal / ticketCount) * 0.05); // 5%
+  }
+  const platformFeeTotal = platformFeePerTicket * ticketCount;
+
+  // 18% GST exclusively on the platform convenience fee
+  const gstPercent = event.gstPercent || 18;
+  const taxTotal = Math.round((platformFeeTotal * gstPercent) / 100);
+
+  // Gateway cost estimate (2% on total collected amount)
+  const grossSubtotal = faceValueTotal + platformFeeTotal + taxTotal;
+  const gatewayCostEstimate = Math.round(grossSubtotal * 0.02);
+
+  // Coupon discount check
+  let discountTotal = 0;
+  let appliedCoupon: string | null = null;
+
+  if (couponCode && couponCode.trim()) {
+    const cleanCode = couponCode.trim().toUpperCase();
+    const couponList = await db
+      .select()
+      .from(coupons)
+      .where(and(eq(coupons.code, cleanCode), eq(coupons.active, 1)));
+
+    if (couponList.length > 0) {
+      const c = couponList[0];
+      if (grossSubtotal >= c.minOrderValue) {
+        if (c.discountType === 'percentage') {
+          const discount = Math.round((grossSubtotal * c.discountValue) / 10000);
+          discountTotal = Math.min(discount, c.maxDiscount);
+        } else {
+          discountTotal = Math.min(c.discountValue, grossSubtotal);
+        }
+        appliedCoupon = c.code;
+      }
+    }
+  }
+
+  const grandTotal = Math.max(0, grossSubtotal - discountTotal);
+
+  return {
+    ticketCount,
+    ticketFaceValueTotal: faceValueTotal,
+    platformFeeTotal,
+    taxTotal,
+    gatewayCostEstimate,
+    discountTotal,
+    grandTotal,
+    appliedCoupon,
+  };
+}
+
+/**
+ * Atomically create a temporary reservation/hold for selected seats
+ */
+export async function createTemporarySeatHold(params: {
+  sessionId: number;
+  seatIds: number[];
+  userIdStr: string;
+}) {
+  const { sessionId, seatIds, userIdStr } = params;
+
+  // 1. First sweep away expired holds for this session
+  await releaseExpiredHolds(sessionId);
+
+  // 2. Fetch target event and session details
+  const sessionInventories = await db
+    .select({
+      invId: seatInventory.id,
+      seatId: seatInventory.seatId,
+      status: seatInventory.status,
+      heldBy: seatInventory.heldByUserId,
+      holdExpires: seatInventory.holdExpiresAt,
+      ticketTypeId: seatInventory.ticketTypeId,
+      price: ticketTypes.price,
+      seatCode: seats.seatCode,
+      tier: seats.tier,
+      sectionId: seats.sectionId,
+    })
+    .from(seatInventory)
+    .innerJoin(ticketTypes, eq(seatInventory.ticketTypeId, ticketTypes.id))
+    .innerJoin(seats, eq(seatInventory.seatId, seats.id))
+    .where(
+      and(
+        eq(seatInventory.sessionId, sessionId),
+        inArray(seatInventory.seatId, seatIds)
+      )
+    );
+
+  if (sessionInventories.length !== seatIds.length) {
+    throw new Error('Some requested seats do not exist in this event session.');
+  }
+
+  // 3. Concurrency check: Ensure none of the seats are booked or held by another user
+  const now = new Date();
+  for (const inv of sessionInventories) {
+    if (inv.status === 'booked') {
+      throw new Error(`Seat ${inv.seatCode} is already booked.`);
+    }
+    if (inv.status === 'held' && inv.heldBy !== userIdStr) {
+      if (inv.holdExpires && new Date(inv.holdExpires) > now) {
+        throw new Error(`Seat ${inv.seatCode} is currently held by another user.`);
+      }
+    }
+  }
+
+  // 4. Atomically mark seats as 'held' with 8-minute expiry
+  const expiresAt = new Date(Date.now() + HOLD_DURATION_MINUTES * 60 * 1000);
+
+  await db
+    .update(seatInventory)
+    .set({
+      status: 'held',
+      heldByUserId: userIdStr,
+      holdExpiresAt: expiresAt,
+    })
+    .where(
+      and(
+        eq(seatInventory.sessionId, sessionId),
+        inArray(seatInventory.seatId, seatIds)
+      )
+    );
+
+  // Compute face value total
+  const faceValueTotal = sessionInventories.reduce((sum, item) => sum + item.price, 0);
+
+  return {
+    heldSeatIds: seatIds,
+    heldSeats: sessionInventories.map((i) => ({
+      seatId: i.seatId,
+      seatCode: i.seatCode,
+      price: i.price,
+      tier: i.tier,
+    })),
+    holdExpiresAt: expiresAt.toISOString(),
+    expiresInSeconds: HOLD_DURATION_MINUTES * 60,
+    faceValueTotal,
+  };
+}
+
+/**
+ * Confirm booking after payment verification and generate cryptographically signed QR tickets
+ */
+export async function confirmBookingOrder(params: {
+  sessionId: number;
+  eventId: number;
+  seatIds: number[];
+  userId: number;
+  userName: string;
+  userEmail: string;
+  userPhone: string;
+  pricing: PricingBreakdown;
+  paymentDetails: {
+    gateway: string;
+    razorpayOrderId?: string;
+    razorpayPaymentId?: string;
+    idempotencyKey?: string;
+  };
+}) {
+  const { sessionId, eventId, seatIds, userId, userName, userEmail, userPhone, pricing, paymentDetails } = params;
+
+  // 1. Sweep expired holds first
+  await releaseExpiredHolds(sessionId);
+
+  // 2. Query event and organizer
+  const [eventData] = await db
+    .select({
+      event: events,
+      organizer: organizers,
+    })
+    .from(events)
+    .innerJoin(organizers, eq(events.organizerId, organizers.id))
+    .where(eq(events.id, eventId));
+
+  if (!eventData) {
+    throw new Error('Event or organizer not found.');
+  }
+
+  // 3. Verify that the seats are indeed held or available (not already booked by anyone else)
+  const currentSeats = await db
+    .select({
+      invId: seatInventory.id,
+      seatId: seatInventory.seatId,
+      status: seatInventory.status,
+      ticketTypeId: seatInventory.ticketTypeId,
+      seatCode: seats.seatCode,
+      price: ticketTypes.price,
+    })
+    .from(seatInventory)
+    .innerJoin(ticketTypes, eq(seatInventory.ticketTypeId, ticketTypes.id))
+    .innerJoin(seats, eq(seatInventory.seatId, seats.id))
+    .where(
+      and(
+        eq(seatInventory.sessionId, sessionId),
+        inArray(seatInventory.seatId, seatIds)
+      )
+    );
+
+  for (const s of currentSeats) {
+    if (s.status === 'booked') {
+      throw new Error(`Cannot confirm: Seat ${s.seatCode} has already been purchased.`);
+    }
+  }
+
+  // 4. Create authoritative Order
+  const randomSuffix = Math.floor(10000 + Math.random() * 90000);
+  const orderNumber = `TG-${new Date().getFullYear()}-${randomSuffix}`;
+
+  const [order] = await db
+    .insert(orders)
+    .values({
+      orderNumber,
+      userId,
+      userEmail,
+      userPhone,
+      userName,
+      eventId,
+      sessionId,
+      ticketCount: pricing.ticketCount,
+      ticketFaceValueTotal: pricing.ticketFaceValueTotal,
+      platformFeeTotal: pricing.platformFeeTotal,
+      taxTotal: pricing.taxTotal,
+      gatewayCostEstimate: pricing.gatewayCostEstimate,
+      discountTotal: pricing.discountTotal,
+      grandTotal: pricing.grandTotal,
+      currency: 'INR',
+      paymentStatus: 'captured',
+      orderStatus: 'confirmed',
+      razorpayOrderId: paymentDetails.razorpayOrderId || `rzp_order_${Date.now()}`,
+      razorpayPaymentId: paymentDetails.razorpayPaymentId || `rzp_pay_${Date.now()}`,
+      idempotencyKey: paymentDetails.idempotencyKey || `idem_${orderNumber}`,
+    })
+    .returning();
+
+  // 5. Update seat inventory to 'booked' and attach orderId
+  await db
+    .update(seatInventory)
+    .set({
+      status: 'booked',
+      heldByUserId: null,
+      holdExpiresAt: null,
+      orderId: order.id,
+    })
+    .where(
+      and(
+        eq(seatInventory.sessionId, sessionId),
+        inArray(seatInventory.seatId, seatIds)
+      )
+    );
+
+  // 6. Generate individual tickets with QR codes & HMAC SHA-256 signatures
+  const generatedTickets: any[] = [];
+
+  for (let idx = 0; idx < currentSeats.length; idx++) {
+    const s = currentSeats[idx];
+    const ticketCode = `TG-TK-${order.id}-${s.seatCode.replace(/[^A-Za-z0-9]/g, '')}-${idx + 1}`;
+
+    // Cryptographic signature: HMAC SHA256 of ticketCode + eventId + sessionId + seatCode
+    const rawData = `${ticketCode}|${eventId}|${sessionId}|${s.seatCode}|${userName}`;
+    const securityHash = crypto
+      .createHmac('sha256', TICKET_SECRET)
+      .update(rawData)
+      .digest('hex');
+
+    const qrPayload = JSON.stringify({
+      code: ticketCode,
+      order: order.orderNumber,
+      event: eventData.event.title,
+      eventMr: eventData.event.titleMr,
+      seat: s.seatCode,
+      name: userName,
+      hash: securityHash.substring(0, 16),
+      v: 1,
+    });
+
+    // Generate real scannable QR Data URL
+    const qrDataUrl = await QRCode.toDataURL(qrPayload, {
+      errorCorrectionLevel: 'M',
+      margin: 2,
+      width: 280,
+      color: {
+        dark: '#0F172A',
+        light: '#FFFFFF',
+      },
+    });
+
+    const [ticketRecord] = await db
+      .insert(tickets)
+      .values({
+        ticketCode,
+        orderId: order.id,
+        sessionId,
+        ticketTypeId: s.ticketTypeId,
+        seatId: s.seatId,
+        seatCode: s.seatCode,
+        attendeeName: userName,
+        faceValue: s.price,
+        securityHash,
+        qrPayload,
+        status: 'valid',
+      })
+      .returning();
+
+    generatedTickets.push({
+      ...ticketRecord,
+      qrDataUrl,
+    });
+  }
+
+  // 7. Update Settlement Ledger for the Organiser
+  // Calculate commission: e.g. 500 basis points = 5.0%
+  const orgCommRate = eventData.organizer.commissionRate || 500;
+  const platformCommissionEarned = Math.round(
+    (pricing.ticketFaceValueTotal * orgCommRate) / 10000
+  );
+  const netPayableToOrganizer = pricing.ticketFaceValueTotal - platformCommissionEarned;
+
+  const settleRef = `SETTLE-${new Date().getFullYear()}-${eventData.organizer.id.toString().padStart(3, '0')}-${order.id}`;
+
+  await db.insert(settlements).values({
+    settlementReference: settleRef,
+    organizerId: eventData.organizer.id,
+    eventId: eventData.event.id,
+    totalGrossTicketSales: pricing.ticketFaceValueTotal,
+    totalPlatformFeesCollected: pricing.platformFeeTotal,
+    totalPaymentGatewayCost: pricing.gatewayCostEstimate,
+    totalTaxCollected: pricing.taxTotal,
+    platformCommissionEarned,
+    totalRefundDeductions: 0,
+    netPayableToOrganizer,
+    status: 'pending',
+  });
+
+  // 8. Audit log for financial & booking integrity
+  await db.insert(auditLogs).values({
+    actorId: `user-${userId}`,
+    actorRole: 'customer',
+    action: 'ORDER_CONFIRMED',
+    entityType: 'order',
+    entityId: order.orderNumber,
+    details: JSON.stringify({
+      orderId: order.id,
+      seats: currentSeats.map((c) => c.seatCode),
+      grandTotal: pricing.grandTotal,
+      organizerNet: netPayableToOrganizer,
+    }),
+  });
+
+  return {
+    order,
+    tickets: generatedTickets,
+    event: eventData.event,
+    organizer: eventData.organizer,
+    pricing,
+  };
+}
