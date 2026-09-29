@@ -6,6 +6,7 @@ import { Language, EventCategory, EventItem, EventSessionItem } from '@/src/lib/
 import { Header } from '@/src/components/Header';
 import { HeroBanner } from '@/src/components/HeroBanner';
 import { EventCard } from '@/src/components/EventCard';
+import { CatalogFilterBar } from '@/src/components/CatalogFilterBar';
 import { SeatMapModal } from '@/src/components/SeatMapModal';
 import { CheckoutDrawer } from '@/src/components/CheckoutDrawer';
 import { TicketPassModal } from '@/src/components/TicketPassModal';
@@ -15,7 +16,6 @@ import { AdminPanel } from '@/src/components/AdminPanel';
 import { useOnlineStatus } from '@/hooks/use-pwa';
 import {
   Sparkles,
-  Flame,
   Theater,
   Music,
   Smile,
@@ -25,13 +25,10 @@ import {
   Palette,
   AlertTriangle,
   RefreshCw,
-  HelpCircle,
-  ShieldCheck,
   Building2,
-  PhoneCall,
-  Calendar,
+  ShieldCheck,
   MapPin,
-  Clock,
+  Calendar,
 } from 'lucide-react';
 
 const CATEGORIES: { id: EventCategory; labelEn: string; labelMr: string; icon: any }[] = [
@@ -46,14 +43,24 @@ const CATEGORIES: { id: EventCategory; labelEn: string; labelMr: string; icon: a
 ];
 
 export default function HomePage() {
+  const [mounted, setMounted] = useState(false);
   const [language, setLanguage] = useState<Language>('mr');
   const t = translations[language];
   const isOnline = useOnlineStatus();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Navigation and Filtering State
   const [selectedCity, setSelectedCity] = useState('महाराष्ट्र (All)');
   const [selectedCategory, setSelectedCategory] = useState<EventCategory>('all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // NEW: Price range & Date filter state
+  const [priceRange, setPriceRange] = useState<number>(2000);
+  const [selectedDate, setSelectedDate] = useState<string>('all');
+  const [customDate, setCustomDate] = useState<string>('');
 
   // Events Data
   const [events, setEvents] = useState<EventItem[]>([]);
@@ -72,6 +79,15 @@ export default function HomePage() {
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [confirmedBookingResult, setConfirmedBookingResult] = useState<any | null>(null);
 
+  // Reset all filters
+  const handleResetFilters = () => {
+    setPriceRange(2000);
+    setSelectedDate('all');
+    setCustomDate('');
+    setSelectedCategory('all');
+    setSearchQuery('');
+  };
+
   // Fetch Events from API
   const fetchEvents = async () => {
     try {
@@ -87,6 +103,14 @@ export default function HomePage() {
       }
       if (searchQuery.trim()) {
         params.append('search', searchQuery.trim());
+      }
+      if (priceRange < 2000) {
+        params.append('maxPrice', String(priceRange));
+      }
+      if (customDate) {
+        params.append('date', customDate);
+      } else if (selectedDate && selectedDate !== 'all') {
+        params.append('date', selectedDate);
       }
 
       const res = await fetch(`/api/events?${params.toString()}`);
@@ -124,7 +148,7 @@ export default function HomePage() {
 
   useEffect(() => {
     fetchEvents();
-  }, [selectedCity, selectedCategory, searchQuery]);
+  }, [selectedCity, selectedCategory, searchQuery, priceRange, selectedDate, customDate]);
 
   // Initiate booking from event card
   const handleSelectEvent = (event: EventItem) => {
@@ -166,14 +190,14 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950">
       {/* Offline Status Alert Banner */}
-      {!isOnline && (
+      {mounted && !isOnline && (
         <div className="bg-amber-600 px-4 py-2 text-center text-xs font-bold text-slate-950 flex items-center justify-center gap-2 shadow-lg sticky top-0 z-50">
           <AlertTriangle className="w-4 h-4 fill-current shrink-0" />
           <span>{t.offlineBanner}</span>
         </div>
       )}
 
-      {/* Main Header */}
+      {/* Main Header with dynamic city support */}
       <Header
         language={language}
         onLanguageChange={setLanguage}
@@ -195,9 +219,9 @@ export default function HomePage() {
           onViewTicket={(data) => setConfirmedBookingResult(data)}
         />
       ) : (
-        <div className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-8 sm:space-y-10">
+        <div className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-6 sm:space-y-8">
           {/* Top Hero Banner */}
-          {!searchQuery && selectedCategory === 'all' && (
+          {!searchQuery && selectedCategory === 'all' && priceRange === 2000 && selectedDate === 'all' && !customDate && (
             <HeroBanner
               events={events}
               language={language}
@@ -229,9 +253,22 @@ export default function HomePage() {
             </div>
           </div>
 
+          {/* Interactive Catalog Filter Bar: Price Range Slider + Date Picker Dropdown */}
+          <CatalogFilterBar
+            language={language}
+            priceRange={priceRange}
+            onPriceRangeChange={setPriceRange}
+            selectedDate={selectedDate}
+            onDateChange={setSelectedDate}
+            customDate={customDate}
+            onCustomDateChange={setCustomDate}
+            onResetFilters={handleResetFilters}
+            totalFiltered={events.length}
+          />
+
           {/* Section 1: Marathi Theatre Spotlight (मराठी रंगभूमी विशेष) */}
-          {selectedCategory === 'all' && !searchQuery && theatreEvents.length > 0 && (
-            <div className="space-y-4">
+          {selectedCategory === 'all' && !searchQuery && priceRange === 2000 && selectedDate === 'all' && !customDate && theatreEvents.length > 0 && (
+            <div className="space-y-4 pt-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center">
@@ -262,18 +299,20 @@ export default function HomePage() {
           )}
 
           {/* Section 2: All Events / Filtered Catalog */}
-          <div className="space-y-4">
+          <div className="space-y-4 pt-2">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div>
                 <h2 className="text-xl sm:text-2xl font-black text-white font-serif tracking-tight">
                   {selectedCategory === 'all'
                     ? language === 'mr'
-                      ? 'सर्व आगामी कार्यक्रम (All Upcoming Experiences)'
-                      : 'All Upcoming Experiences'
+                      ? 'आगामी कार्यक्रम (Upcoming Experiences)'
+                      : 'Upcoming Experiences'
                     : CATEGORIES.find((c) => c.id === selectedCategory)?.labelMr || 'कार्यक्रम'}
                 </h2>
                 <p className="text-xs text-slate-400">
                   {selectedCity} • {events.length} कार्यक्रम उपलब्ध
+                  {priceRange < 2000 && ` • कमाल ₹${priceRange}`}
+                  {customDate ? ` • तारीख: ${customDate}` : selectedDate !== 'all' ? ` • ${selectedDate}` : ''}
                 </p>
               </div>
 
@@ -311,23 +350,19 @@ export default function HomePage() {
                 </button>
               </div>
             ) : events.length === 0 ? (
-              <div className="py-16 text-center bg-slate-900/50 rounded-2xl border border-slate-800 p-8 space-y-2">
+              <div className="py-16 text-center bg-slate-900/50 rounded-2xl border border-slate-800 p-8 space-y-3">
                 <Theater className="w-10 h-10 text-slate-600 mx-auto" />
                 <h3 className="text-base font-bold text-white">
-                  सध्या या शहरात किंवा वर्गात कार्यक्रम उपलब्ध नाहीत
+                  या फिल्टर किंवा बजेटनुसार सध्या कार्यक्रम उपलब्ध नाहीत
                 </h3>
-                <p className="text-xs text-slate-400">
-                  कृपया दुसरे शहर निवडा किंवा &apos;महाराष्ट्र (सर्व शहरे)&apos; निवडून तपासा.
+                <p className="text-xs text-slate-400 max-w-md mx-auto">
+                  आपले बजेट वाढवून पहा किंवा फिल्टर रीसेट करून महाराष्ट्रातील इतर शहरांमधील नाटके व कार्यक्रम शोधा.
                 </p>
                 <button
-                  onClick={() => {
-                    setSelectedCity('महाराष्ट्र (All)');
-                    setSelectedCategory('all');
-                    setSearchQuery('');
-                  }}
-                  className="mt-3 px-4 py-2 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs"
+                  onClick={handleResetFilters}
+                  className="mt-2 px-5 py-2.5 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs shadow-lg hover:bg-amber-400 transition"
                 >
-                  सर्व कार्यक्रम दाखवा
+                  सर्व फिल्टर रीसेट करा (Show All Events)
                 </button>
               </div>
             ) : (
@@ -344,7 +379,7 @@ export default function HomePage() {
             )}
           </div>
 
-          {/* Maharashtra Producer & Organizer Banner */}
+          {/* Producer & Organizer Banner with quick admin entry */}
           <div className="rounded-3xl bg-gradient-to-r from-amber-950/60 via-slate-900 to-slate-900 border border-amber-500/30 p-6 sm:p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl">
             <div className="space-y-2 max-w-xl text-center md:text-left">
               <span className="text-xs uppercase font-extrabold tracking-widest text-amber-400 flex items-center justify-center md:justify-start gap-1.5">
@@ -358,12 +393,21 @@ export default function HomePage() {
                 पारदर्शक लेजर, सुरक्षित पेमेंट, थेट गेट स्कॅनर सपोर्ट आणि महाराष्ट्रातील लक्षावधी रसिकांपर्यंत थेट पोहोच.
               </p>
             </div>
-            <button
-              onClick={() => setPartnerModalOpen(true)}
-              className="px-6 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-extrabold text-xs sm:text-sm shadow-xl transition transform hover:scale-105 whitespace-nowrap cursor-pointer"
-            >
-              {t.partnerWithUs}
-            </button>
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <button
+                onClick={() => setPartnerModalOpen(true)}
+                className="px-6 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-extrabold text-xs sm:text-sm shadow-xl transition transform hover:scale-105 whitespace-nowrap cursor-pointer"
+              >
+                {t.partnerWithUs}
+              </button>
+              <button
+                onClick={() => setViewState('admin')}
+                className="px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-amber-400 font-semibold text-xs sm:text-sm transition whitespace-nowrap flex items-center gap-1.5"
+              >
+                <ShieldCheck className="w-4 h-4" />
+                <span>ॲडमिन कंट्रोल कक्ष</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -379,7 +423,7 @@ export default function HomePage() {
               </span>
             </div>
             <p className="mt-1 text-slate-500">
-              पुणे • मुंबई • नागपूर • नाशिक • ठाणे • संभाजीनगर • कोल्हापूर
+              पुणे • मुंबई • नागपूर • नाशिक • ठाणे • संभाजीनगर • कोल्हापूर • सोलापूर • सांगली
             </p>
           </div>
 
@@ -392,9 +436,10 @@ export default function HomePage() {
             </button>
             <button
               onClick={() => setViewState('admin')}
-              className="hover:text-amber-400 transition"
+              className="hover:text-amber-400 transition flex items-center gap-1 text-amber-400"
             >
-              प्रशासक लॉगिन
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>प्रशासक लॉगिन (Admin)</span>
             </button>
             <span className="text-slate-600">|</span>
             <span>© {new Date().getFullYear()} Kalpkrut Infotech</span>

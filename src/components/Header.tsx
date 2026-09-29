@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Language, translations } from '../lib/i18n.ts';
 import { usePWAInstall } from '@/hooks/use-pwa';
 import {
@@ -14,6 +14,7 @@ import {
   Download,
   Menu,
   X,
+  ChevronDown,
   Sparkles,
 } from 'lucide-react';
 
@@ -28,17 +29,25 @@ interface HeaderProps {
   onOpenPartnerModal: () => void;
   onOpenAdmin: () => void;
   onHomeClick: () => void;
+  availableCities?: string[];
 }
 
-const CITIES = [
+const DEFAULT_CITIES = [
   'महाराष्ट्र (All)',
   'Pune',
   'Mumbai',
+  'Thane',
   'Nagpur',
   'Nashik',
-  'Thane',
   'Chhatrapati Sambhaji Nagar',
   'Kolhapur',
+  'Solapur',
+  'Sangli',
+  'Satara',
+  'Amravati',
+  'Nanded',
+  'Ratnagiri',
+  'Jalgaon',
 ];
 
 export const Header: React.FC<HeaderProps> = ({
@@ -52,13 +61,33 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenPartnerModal,
   onOpenAdmin,
   onHomeClick,
+  availableCities,
 }) => {
   const t = translations[language];
   const { isInstallable, install } = usePWAInstall();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [cityList, setCityList] = useState<string[]>(availableCities || DEFAULT_CITIES);
+
+  // Fetch dynamic cities from API if available
+  useEffect(() => {
+    async function loadCities() {
+      try {
+        const res = await fetch('/api/cities');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.cities && Array.isArray(data.cities)) {
+            setCityList(data.cities);
+          }
+        }
+      } catch (e) {
+        // Fallback to default
+      }
+    }
+    loadCities();
+  }, []);
 
   return (
-    <header className="sticky top-0 z-40 bg-slate-950/90 backdrop-blur-md border-b border-slate-800 text-white shadow-xl">
+    <header className="sticky top-0 z-40 bg-slate-950/95 backdrop-blur-md border-b border-slate-800 text-white shadow-xl">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 sm:h-20 gap-3">
           {/* Brand Logo */}
@@ -87,14 +116,15 @@ export const Header: React.FC<HeaderProps> = ({
             <select
               value={selectedCity}
               onChange={(e) => onCityChange(e.target.value)}
-              className="bg-slate-900 border border-slate-700/80 rounded-lg pl-9 pr-7 py-2 text-xs sm:text-sm font-medium text-slate-200 hover:border-amber-500/50 focus:outline-none focus:ring-1 focus:ring-amber-500 transition appearance-none cursor-pointer"
+              className="bg-slate-900 border border-slate-700/80 rounded-xl pl-9 pr-8 py-2 text-xs sm:text-sm font-semibold text-slate-200 hover:border-amber-500/50 focus:outline-none focus:ring-1 focus:ring-amber-500 transition appearance-none cursor-pointer"
             >
-              {CITIES.map((c) => (
+              {cityList.map((c) => (
                 <option key={c} value={c} className="bg-slate-900 text-white">
                   {c === 'महाराष्ट्र (All)' ? t.allMaharashtra : c}
                 </option>
               ))}
             </select>
+            <ChevronDown className="absolute right-2.5 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
           </div>
 
           {/* Search Bar */}
@@ -139,13 +169,17 @@ export const Header: React.FC<HeaderProps> = ({
               <span>{t.partnerWithUs}</span>
             </button>
 
-            {/* Admin Console */}
+            {/* Prominent Admin Console Button */}
             <button
               onClick={onOpenAdmin}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 text-xs font-semibold transition"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500/20 to-amber-600/20 border border-amber-500/50 text-amber-400 hover:bg-amber-500/30 text-xs font-bold transition shadow-sm"
+              title="Visit Admin Control Panel (सुपर ॲडमिन, ऑपरेशन्स, लेजर, गेट स्कॅनर)"
             >
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>{t.adminPanel}</span>
+              <ShieldCheck className="w-4 h-4 text-amber-400" />
+              <span className="hidden sm:inline">
+                {language === 'mr' ? 'ॲडमिन कक्ष' : 'Admin Panel'}
+              </span>
+              <span className="sm:hidden font-bold">Admin</span>
             </button>
 
             {/* PWA Install */}
@@ -184,11 +218,11 @@ export const Header: React.FC<HeaderProps> = ({
           <select
             value={selectedCity}
             onChange={(e) => onCityChange(e.target.value)}
-            className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs font-medium text-amber-400"
+            className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs font-semibold text-amber-400 max-w-[130px] truncate"
           >
-            {CITIES.map((c) => (
+            {cityList.map((c) => (
               <option key={c} value={c}>
-                {c === 'महाराष्ट्र (All)' ? 'महाराष्ट्र' : c}
+                {c === 'महाराष्ट्र (All)' ? 'सर्व महाराष्ट्र' : c}
               </option>
             ))}
           </select>
@@ -197,6 +231,16 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Mobile Dropdown Menu */}
         {mobileMenuOpen && (
           <div className="md:hidden border-t border-slate-800 py-3 space-y-2">
+            <button
+              onClick={() => {
+                onOpenAdmin();
+                setMobileMenuOpen(false);
+              }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-sm font-bold text-amber-400"
+            >
+              <ShieldCheck className="w-4 h-4 text-amber-400" />
+              <span>{language === 'mr' ? 'ॲडमिन कंट्रोल कक्ष' : 'Admin Control Center'}</span>
+            </button>
             <button
               onClick={() => {
                 onOpenMyTickets();

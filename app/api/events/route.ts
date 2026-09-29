@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
 import { events, venues, organizers, eventSessions, ticketTypes } from '@/src/db/schema.ts';
-import { eq, and, sql, desc, or, ilike } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 
 export async function GET(request: Request) {
   try {
@@ -9,6 +9,8 @@ export async function GET(request: Request) {
     const city = searchParams.get('city');
     const category = searchParams.get('category');
     const search = searchParams.get('search');
+    const maxPrice = searchParams.get('maxPrice');
+    const dateFilter = searchParams.get('date');
     const featuredOnly = searchParams.get('featured') === 'true';
 
     // Base query
@@ -82,7 +84,49 @@ export async function GET(request: Request) {
       })
     );
 
-    return NextResponse.json({ events: enrichedEvents });
+    // Apply maxPrice filter if specified
+    let finalEvents = enrichedEvents;
+    if (maxPrice && !isNaN(Number(maxPrice)) && Number(maxPrice) > 0) {
+      const maxPricePaise = Number(maxPrice) * 100;
+      finalEvents = finalEvents.filter((item) => (item.minPrice || 0) <= maxPricePaise);
+    }
+
+    // Apply date filter if specified
+    if (dateFilter && dateFilter !== 'all') {
+      const now = new Date();
+      const todayStr = now.toISOString().split('T')[0];
+
+      const tomorrow = new Date(now);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+      finalEvents = finalEvents.filter((item) => {
+        if (!item.sessions || item.sessions.length === 0) return false;
+
+        return item.sessions.some((s) => {
+          const sDate = new Date(s.sessionStartTime);
+          const sDateStr = sDate.toISOString().split('T')[0];
+
+          if (dateFilter === 'today') {
+            return sDateStr === todayStr;
+          } else if (dateFilter === 'tomorrow') {
+            return sDateStr === tomorrowStr;
+          } else if (dateFilter === 'weekend') {
+            const dayOfWeek = sDate.getDay();
+            // Saturday is 6, Sunday is 0
+            return dayOfWeek === 6 || dayOfWeek === 0;
+          } else if (dateFilter === 'week') {
+            const diffDays = (sDate.getTime() - now.getTime()) / (1000 * 3600 * 24);
+            return diffDays >= -0.5 && diffDays <= 7.5;
+          } else {
+            // Specific YYYY-MM-DD date
+            return sDateStr === dateFilter;
+          }
+        });
+      });
+    }
+
+    return NextResponse.json({ events: finalEvents });
   } catch (error: any) {
     console.error('Failed to fetch events:', error);
     return NextResponse.json(
