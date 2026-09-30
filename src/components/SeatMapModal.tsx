@@ -168,14 +168,11 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 md:p-6">
       <div className="relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[96vh] border border-slate-200">
-        
+
         {/* Modal Top Header */}
         <div className="px-4 sm:px-6 py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xs uppercase font-extrabold px-2 py-0.5 rounded bg-[#ea580c] text-white">
-                BookMyShow Style
-              </span>
               <h2 className="text-base sm:text-lg font-black text-white truncate max-w-[280px] sm:max-w-md">
                 {language === 'mr' ? event.titleMr || event.title : event.title}
               </h2>
@@ -184,12 +181,12 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
               {venueData?.nameMr || venueData?.name || event.venue?.name} ·{' '}
               {session.sessionStartTime
                 ? new Date(session.sessionStartTime).toLocaleString('en-IN', {
-                    weekday: 'short',
-                    day: 'numeric',
-                    month: 'short',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })
+                  weekday: 'short',
+                  day: 'numeric',
+                  month: 'short',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })
                 : 'Showtime'}
             </p>
           </div>
@@ -246,9 +243,26 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
         {/* Seat Layout Canvas Area */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50 space-y-6">
           {loading ? (
-            <div className="py-20 flex flex-col items-center justify-center space-y-3 text-slate-500">
-              <div className="w-8 h-8 border-3 border-[#ea580c] border-t-transparent rounded-full animate-spin" />
-              <p className="text-sm font-medium">सभागृह आसन व्यवस्था लोड होत आहे...</p>
+            <div className="py-20 flex flex-col items-center justify-center space-y-4 text-slate-500">
+              <div className="flex items-end gap-2 animate-pulse">
+                {/* Happy Theater Mask */}
+                <svg width="48" height="48" viewBox="0 0 48 48" fill="none" className="transform hover:scale-105 transition">
+                  <circle cx="24" cy="24" r="22" fill="#fff7ed" stroke="#ea580c" strokeWidth="2.5" />
+                  <circle cx="17" cy="20" r="3" fill="#ea580c" />
+                  <circle cx="31" cy="20" r="3" fill="#ea580c" />
+                  <path d="M15 29 Q24 38 33 29" stroke="#ea580c" strokeWidth="3" strokeLinecap="round" fill="none" />
+                </svg>
+                {/* Sad Theater Mask */}
+                <svg width="42" height="42" viewBox="0 0 48 48" fill="none" className="opacity-70">
+                  <circle cx="24" cy="24" r="22" fill="#f8fafc" stroke="#475569" strokeWidth="2" />
+                  <circle cx="17" cy="20" r="3" fill="#475569" />
+                  <circle cx="31" cy="20" r="3" fill="#475569" />
+                  <path d="M15 33 Q24 25 33 33" stroke="#475569" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+                </svg>
+              </div>
+              <p className="text-xs sm:text-sm font-bold text-slate-700 font-serif">
+                सभागृह आसन व्यवस्था लोड होत आहे...
+              </p>
             </div>
           ) : error ? (
             <div className="py-16 text-center space-y-3">
@@ -256,20 +270,22 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
               <p className="text-sm font-medium text-slate-800">{error}</p>
               <button
                 onClick={fetchSessionSeats}
-                className="px-4 py-1.5 rounded-lg bg-[#ea580c] text-white text-xs font-bold shadow-sm"
+                className="px-4 py-1.5 rounded-lg bg-[#ea580c] text-white text-xs font-bold shadow-sm cursor-pointer hover:bg-[#c2410c]"
               >
                 पुन्हा प्रयत्न करा
               </button>
             </div>
           ) : (
             <div className="space-y-6 max-w-2xl mx-auto">
-              
-              {/* BookMyShow Style Curved Screen / Stage Representation */}
-              <div className="flex flex-col items-center pt-2 pb-4">
-                <div className="w-full max-w-md h-3.5 bg-gradient-to-b from-[#ea580c] via-orange-400 to-transparent rounded-t-[100px] shadow-md opacity-90" />
-                <div className="w-full max-w-lg border-t-2 border-dashed border-[#ea580c]/50 mt-1" />
-                <div className="flex items-center gap-1.5 text-[11px] font-black uppercase text-slate-700 tracking-widest mt-2">
-                  <span>🎭 ऑल आईज ऑन स्टेज · SCREEN / STAGE THIS WAY</span>
+              {/* Realistic Theater Stage with spotlight & glow */}
+              <div className="relative flex flex-col items-center pt-2 pb-5">
+                <div className="w-full max-w-lg h-10 bg-gradient-to-b from-orange-400/25 via-orange-300/5 to-transparent rounded-t-[120px] pointer-events-none" />
+                <div className="w-full max-w-md h-3.5 bg-gradient-to-r from-amber-700 via-[#ea580c] to-amber-700 rounded-t-[100px] shadow-lg shadow-orange-500/30 flex items-center justify-center">
+                  <div className="w-12 h-1 bg-white/40 rounded-full" />
+                </div>
+                <div className="w-full max-w-lg border-b-2 border-dashed border-orange-300/80 mt-1" />
+                <div className="flex items-center gap-2 text-[10px] sm:text-xs font-black uppercase text-slate-800 tracking-widest mt-2 bg-orange-50 px-3 py-1 rounded-full border border-orange-200 shadow-xs">
+                  <span>🎭 रंगमंच · SCREEN / STAGE THIS WAY</span>
                 </div>
               </div>
 
@@ -300,28 +316,41 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
                           const isBooked = seat.status === 'booked';
                           const isHeld = seat.status === 'held' && !isSelected;
 
-                          let seatClass =
-                            'bg-white border-2 border-slate-300 text-slate-800 hover:border-[#ea580c] hover:scale-105 active:scale-95';
-                          if (isSelected) {
-                            seatClass =
-                              'bg-[#ea580c] border-[#ea580c] text-white font-black scale-105 shadow-md shadow-orange-500/30';
-                          } else if (isBooked) {
-                            seatClass =
-                              'bg-slate-200 border-slate-200 text-slate-400 cursor-not-allowed';
-                          } else if (isHeld) {
-                            seatClass =
-                              'bg-amber-100 border-amber-300 text-amber-700 cursor-not-allowed';
-                          }
-
                           return (
                             <button
                               key={seat.seatId}
                               disabled={isBooked || isHeld}
                               onClick={() => toggleSeatSelection(seat)}
-                              className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg text-[10px] sm:text-xs flex items-center justify-center transition-all duration-150 font-mono font-bold ${seatClass}`}
                               title={`${seat.seatCode} (₹${((seat.price || 30000) / 100).toFixed(0)})`}
+                              className={`flex flex-col items-center select-none transition-all duration-150 p-0.5 group focus:outline-none ${isBooked || isHeld
+                                ? 'cursor-not-allowed opacity-50'
+                                : 'cursor-pointer hover:scale-110 active:scale-95'
+                                }`}
                             >
-                              {isSelected ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : seat.seatNumber}
+                              {/* Chair Backrest */}
+                              <div
+                                className={`w-5 sm:w-6 h-2 rounded-t-md transition-colors ${isSelected
+                                  ? 'bg-[#c2410c]'
+                                  : isBooked
+                                    ? 'bg-slate-300'
+                                    : isHeld
+                                      ? 'bg-amber-300'
+                                      : 'bg-orange-200 group-hover:bg-orange-300'
+                                  }`}
+                              />
+                              {/* Chair Cushion */}
+                              <div
+                                className={`w-6 sm:w-7 h-5 sm:h-6 rounded-b-md border flex items-center justify-center font-bold text-[9px] sm:text-[10px] font-mono shadow-xs transition-all ${isSelected
+                                  ? 'bg-[#ea580c] border-[#ea580c] text-white shadow-md shadow-orange-500/40 ring-2 ring-orange-300'
+                                  : isBooked
+                                    ? 'bg-slate-200 border-slate-300 text-slate-400'
+                                    : isHeld
+                                      ? 'bg-amber-100 border-amber-300 text-amber-700'
+                                      : 'bg-white border-slate-300 text-slate-800 group-hover:border-[#ea580c]'
+                                  }`}
+                              >
+                                {isSelected ? <Check className="w-3 h-3 stroke-[3]" /> : seat.seatNumber}
+                              </div>
                             </button>
                           );
                         })}
@@ -361,28 +390,41 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
                             const isBooked = seat.status === 'booked';
                             const isHeld = seat.status === 'held' && !isSelected;
 
-                            let seatClass =
-                              'bg-white border-2 border-slate-300 text-slate-800 hover:border-[#ea580c] hover:scale-105 active:scale-95';
-                            if (isSelected) {
-                              seatClass =
-                                'bg-[#ea580c] border-[#ea580c] text-white font-black scale-105 shadow-md shadow-orange-500/30';
-                            } else if (isBooked) {
-                              seatClass =
-                                'bg-slate-200 border-slate-200 text-slate-400 cursor-not-allowed';
-                            } else if (isHeld) {
-                              seatClass =
-                                'bg-amber-100 border-amber-300 text-amber-700 cursor-not-allowed';
-                            }
-
                             return (
                               <button
                                 key={seat.seatId}
                                 disabled={isBooked || isHeld}
                                 onClick={() => toggleSeatSelection(seat)}
-                                className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg text-[10px] sm:text-xs flex items-center justify-center transition-all duration-150 font-mono font-bold ${seatClass}`}
                                 title={`${seat.seatCode} (₹${((seat.price || 40000) / 100).toFixed(0)})`}
+                                className={`flex flex-col items-center select-none transition-all duration-150 p-0.5 group focus:outline-none ${isBooked || isHeld
+                                  ? 'cursor-not-allowed opacity-50'
+                                  : 'cursor-pointer hover:scale-110 active:scale-95'
+                                  }`}
                               >
-                                {isSelected ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : seat.seatNumber}
+                                {/* Balcony Chair Backrest */}
+                                <div
+                                  className={`w-5 sm:w-6 h-2 rounded-t-md transition-colors ${isSelected
+                                    ? 'bg-amber-700'
+                                    : isBooked
+                                      ? 'bg-slate-300'
+                                      : isHeld
+                                        ? 'bg-amber-300'
+                                        : 'bg-amber-200 group-hover:bg-amber-300'
+                                    }`}
+                                />
+                                {/* Balcony Chair Cushion */}
+                                <div
+                                  className={`w-6 sm:w-7 h-5 sm:h-6 rounded-b-md border flex items-center justify-center font-bold text-[9px] sm:text-[10px] font-mono shadow-xs transition-all ${isSelected
+                                    ? 'bg-amber-500 border-amber-600 text-white shadow-md shadow-amber-500/40 ring-2 ring-amber-300'
+                                    : isBooked
+                                      ? 'bg-slate-200 border-slate-300 text-slate-400'
+                                      : isHeld
+                                        ? 'bg-amber-100 border-amber-300 text-amber-700'
+                                        : 'bg-white border-amber-300 text-slate-800 group-hover:border-amber-500'
+                                    }`}
+                                >
+                                  {isSelected ? <Check className="w-3 h-3 stroke-[3]" /> : seat.seatNumber}
+                                </div>
                               </button>
                             );
                           })}
@@ -457,8 +499,8 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
                       ? `बुकिंग निश्चित करा (${selectedSeatIds.length})`
                       : `Confirm Booking (${selectedSeatIds.length} Seats)`
                     : language === 'mr'
-                    ? 'जागा निवडा'
-                    : 'Select Seats'}
+                      ? 'जागा निवडा'
+                      : 'Select Seats'}
                 </span>
                 <ArrowRight className="w-4 h-4" />
               </>

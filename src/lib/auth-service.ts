@@ -185,6 +185,12 @@ export async function sendOtpEmail(email: string, otp: string): Promise<boolean>
         port: smtpPort,
         secure: process.env.SMTP_SECURE === 'true' || smtpPort === 465,
         auth: { user: smtpUser, pass: smtpPass },
+        connectionTimeout: 7000,
+        greetingTimeout: 5000,
+        socketTimeout: 10000,
+        tls: {
+          rejectUnauthorized: false,
+        },
       });
       await transporter.sendMail({
         from: fromAddress,
@@ -195,7 +201,7 @@ export async function sendOtpEmail(email: string, otp: string): Promise<boolean>
       console.log(`[AUTH-OTP] Sent OTP via SMTP to ${email}`);
       return true;
     } catch (err) {
-      console.error('[AUTH-OTP] SMTP delivery failed:', err);
+      console.error('[AUTH-OTP] SMTP delivery failed, falling back:', err);
     }
   }
 

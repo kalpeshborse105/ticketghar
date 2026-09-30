@@ -36,6 +36,15 @@ android {
         buildConfigField("String", "APP_NAME_MR", "\"महाटिकिट\"")
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("mahaticket-release.jks")
+            storePassword = "mahaticket123"
+            keyAlias = "mahaticket"
+            keyPassword = "mahaticket123"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -43,6 +52,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {

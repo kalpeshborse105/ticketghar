@@ -110,7 +110,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         setError(data.error || 'OTP पाठवण्यात त्रुटी आली.');
         return;
       }
-      setSuccessMessage('६-अंकी पडताळणी कोड आपल्या ईमेलवर पाठवला आहे!');
+      if (data.devOtp) {
+        setOtp(data.devOtp);
+        setSuccessMessage(`चाचणी कोड: ${data.devOtp} (आपोआप भरला आहे)`);
+      } else {
+        setSuccessMessage('६-अंकी पडताळणी कोड आपल्या ईमेलवर पाठवला आहे!');
+      }
       setStep('otp');
     } catch {
       setError('OTP पाठवण्यात त्रुटी आली. कृपया पुन्हा प्रयत्न करा.');

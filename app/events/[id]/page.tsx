@@ -1,28 +1,24 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft,
   MapPin,
-  Calendar,
   Clock,
-  Tag,
   Ticket,
-  Loader2,
   ChevronRight,
   Share2,
-  Heart,
-  Star,
   ShieldCheck,
   Sparkles,
-  Info,
   CheckCircle2,
   Navigation,
-  Volume2,
   Award,
 } from 'lucide-react';
+import { SeatMapModal } from '@/src/components/SeatMapModal';
+import { CheckoutDrawer } from '@/src/components/CheckoutDrawer';
+import { TicketPassModal } from '@/src/components/TicketPassModal';
 
 interface EventDetail {
   id: number;
@@ -43,6 +39,7 @@ interface EventDetail {
     nameMr?: string;
     address?: string;
     city?: string;
+    facilities?: any;
     sections?: any[];
   };
   organizer: {
@@ -67,11 +64,40 @@ interface EventDetail {
   }>;
 }
 
-
+// Theater Mask Loader — inspired by happy/sad mask concept
+function TheaterLoader() {
+  return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="text-center space-y-4 p-8">
+        <div className="relative w-24 h-24 mx-auto">
+          {/* Happy mask */}
+          <div className="absolute left-0 top-0 w-12 h-12 animate-bounce" style={{ animationDelay: '0ms' }}>
+            <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="24" cy="24" r="22" fill="#ea580c" stroke="#c2410c" strokeWidth="2"/>
+              <circle cx="17" cy="20" r="3" fill="white"/>
+              <circle cx="31" cy="20" r="3" fill="white"/>
+              <path d="M15 30 Q24 38 33 30" stroke="white" strokeWidth="2.5" strokeLinecap="round" fill="none"/>
+            </svg>
+          </div>
+          {/* Sad mask */}
+          <div className="absolute right-0 bottom-0 w-12 h-12 animate-bounce" style={{ animationDelay: '300ms' }}>
+            <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="24" cy="24" r="22" fill="#1e293b" stroke="#0f172a" strokeWidth="2"/>
+              <circle cx="17" cy="20" r="3" fill="white"/>
+              <circle cx="31" cy="20" r="3" fill="white"/>
+              <path d="M15 34 Q24 26 33 34" stroke="white" strokeWidth="2.5" strokeLinecap="round" fill="none"/>
+            </svg>
+          </div>
+        </div>
+        <p className="text-sm font-bold text-slate-700">कार्यक्रमाचा तपशील लोड होत आहे...</p>
+        <p className="text-xs text-slate-500">MahaTicket अधिकृत बुकिंग पोर्टल</p>
+      </div>
+    </div>
+  );
+}
 
 export default function EventDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const eventId = params?.id as string;
 
   const [event, setEvent] = useState<EventDetail | null>(null);
@@ -81,35 +107,47 @@ export default function EventDetailPage() {
   const [showFullDesc, setShowFullDesc] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
+  // Booking flow state — all inline on this page (no redirect to home!)
+  const [seatMapOpen, setSeatMapOpen] = useState(false);
+  const [selectedSession, setSelectedSession] = useState<any>(null);
+  const [checkoutHoldData, setCheckoutHoldData] = useState<any>(null);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [confirmedBooking, setConfirmedBooking] = useState<any>(null);
+
   useEffect(() => {
     if (!eventId) return;
-
     const fetchEvent = async () => {
       try {
         const res = await fetch(`/api/events/${eventId}`);
         if (!res.ok) {
-          if (res.status === 404) {
-            setError('Event not found');
-          } else {
-            setError('Unable to load event details');
-          }
+          setError(res.status === 404 ? 'Event not found' : 'Unable to load event details');
           return;
         }
         const json = await res.json();
         setEvent(json.event);
       } catch (err) {
-        console.error('Error fetching event:', err);
         setError('Failed to load event details');
       } finally {
         setLoading(false);
       }
     };
-
     fetchEvent();
   }, [eventId]);
 
-  const handleBookSession = (sessionId: number) => {
-    router.push(`/?bookEvent=${eventId}&session=${sessionId}`);
+  const handleBookSession = (session: any) => {
+    setSelectedSession(session);
+    setSeatMapOpen(true);
+  };
+
+  const handleProceedToCheckout = (holdData: any) => {
+    setCheckoutHoldData(holdData);
+    setSeatMapOpen(false);
+    setCheckoutOpen(true);
+  };
+
+  const handleBookingConfirmed = (result: any) => {
+    setCheckoutOpen(false);
+    setConfirmedBooking(result);
   };
 
   const handleShare = () => {
@@ -120,17 +158,7 @@ export default function EventDetailPage() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="text-center space-y-3 p-8">
-          <Loader2 className="w-10 h-10 animate-spin text-[#ea580c] mx-auto" />
-          <p className="text-sm font-bold text-slate-700">कार्यक्रमाचा तपशील लोड होत आहे...</p>
-          <p className="text-xs text-slate-600">MahaTicket official booking portal</p>
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <TheaterLoader />;
 
   if (error || !event) {
     return (
@@ -157,7 +185,6 @@ export default function EventDetailPage() {
 
   const activeSessions = event.sessions.filter((s) => s.status === 'active');
 
-  // Group unique session dates for BookMyShow date pill bar
   const uniqueDates = Array.from(
     new Set(
       activeSessions.map((s) => {
@@ -175,30 +202,41 @@ export default function EventDetailPage() {
         );
 
   const categoryLabel: Record<string, string> = {
-    plays: 'नाटक व रंगभूमी (Theatre Play)',
-    music: 'संगीत व मैफल (Music Concert)',
-    comedy: 'हास्यविनोद (Comedy Standup)',
-    cultural: 'सांस्कृतिक महोत्सव (Cultural)',
-    workshops: 'कार्यशाळा (Workshops)',
-    movies: 'चित्रपट (Movies)',
-    sports: 'क्रीडा (Sports)',
+    plays: 'नाटक व रंगभूमी',
+    music: 'संगीत व मैफल',
+    comedy: 'हास्यविनोद',
+    cultural: 'सांस्कृतिक महोत्सव',
+    workshops: 'कार्यशाळा',
+    movies: 'चित्रपट',
+    sports: 'क्रीडा',
   };
 
   let parsedDbCast: Array<{ name: string; role?: string; roleMr?: string; image?: string }> | null = null;
   if ((event as any).castCrew) {
     try {
-      const parsed = typeof (event as any).castCrew === 'string'
-        ? JSON.parse((event as any).castCrew)
-        : (event as any).castCrew;
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        parsedDbCast = parsed;
-      }
-    } catch {
-      // fallback if castCrew is not JSON
-    }
+      const parsed =
+        typeof (event as any).castCrew === 'string'
+          ? JSON.parse((event as any).castCrew)
+          : (event as any).castCrew;
+      if (Array.isArray(parsed) && parsed.length > 0) parsedDbCast = parsed;
+    } catch {}
   }
 
-  const castList = parsedDbCast;
+  let facilitiesList: string[] = [];
+  if ((event.venue as any)?.facilities) {
+    try {
+      const parsed =
+        typeof (event.venue as any).facilities === 'string'
+          ? JSON.parse((event.venue as any).facilities)
+          : (event.venue as any).facilities;
+      if (Array.isArray(parsed)) facilitiesList = parsed;
+    } catch {}
+  }
+
+  const minSessionPrice =
+    activeSessions.length > 0 && activeSessions[0].ticketTypes.length > 0
+      ? Math.min(...activeSessions.flatMap((s) => s.ticketTypes.map((t) => t.price / 100)))
+      : 0;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-28">
@@ -210,27 +248,28 @@ export default function EventDetailPage() {
             className="flex items-center gap-2 text-xs font-bold text-slate-700 hover:text-[#ea580c] transition group"
           >
             <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-            <span>मुख्य पानावर परत जा (Home)</span>
+            <span className="hidden sm:inline">मुख्य पानावर परत जा</span>
+            <span className="sm:hidden">परत</span>
           </Link>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleShare}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-xs font-semibold text-slate-700 transition"
-              title="लिंक कॉपी करा"
-            >
-              <Share2 className="w-3.5 h-3.5 text-[#ea580c]" />
-              <span>{copiedLink ? 'लिंक कॉपी झाली!' : 'शेअर करा'}</span>
-            </button>
+          <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse inline-block" />
+            <span className="hidden sm:inline">थेट आरक्षण उपलब्ध</span>
           </div>
+          <button
+            onClick={handleShare}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-xs font-semibold text-slate-700 transition"
+            title="लिंक कॉपी करा"
+          >
+            <Share2 className="w-3.5 h-3.5 text-[#ea580c]" />
+            <span>{copiedLink ? 'कॉपी झाली ✓' : 'शेअर'}</span>
+          </button>
         </div>
       </header>
 
-      {/* Hero Showcase Section - BookMyShow & Cinemax Vibrant Layout */}
+      {/* Hero Section */}
       <section className="relative bg-slate-950 text-white overflow-hidden">
-        {/* Ambient Blur Backdrop */}
         <div
-          className="absolute inset-0 opacity-25 filter blur-3xl scale-110 pointer-events-none"
+          className="absolute inset-0 opacity-20 filter blur-3xl scale-110 pointer-events-none"
           style={{
             backgroundImage: `url(${event.bannerUrl || event.posterUrl})`,
             backgroundSize: 'cover',
@@ -242,52 +281,57 @@ export default function EventDetailPage() {
         <div className="relative max-w-6xl mx-auto px-4 py-8 sm:py-12">
           <div className="flex flex-col md:flex-row gap-6 md:gap-10 items-center md:items-start">
             {/* Poster Card */}
-            <div className="relative shrink-0 w-56 sm:w-64 md:w-72 rounded-2xl overflow-hidden shadow-2xl border-2 border-white/10 group">
-              <img
-                src={event.posterUrl}
-                alt={event.title}
-                className="w-full h-80 sm:h-96 object-cover transition-transform duration-300 group-hover:scale-105"
-              />
-              <div className="absolute top-3 left-3 bg-[#ea580c] text-white text-[11px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow">
+            <div className="relative shrink-0 w-48 sm:w-56 md:w-64 rounded-2xl overflow-hidden shadow-2xl border-2 border-white/10 group">
+              {event.posterUrl ? (
+                <img
+                  src={event.posterUrl}
+                  alt={event.title}
+                  className="w-full h-72 sm:h-80 object-cover transition-transform duration-300 group-hover:scale-105"
+                />
+              ) : (
+                <div className="w-full h-72 sm:h-80 bg-slate-800 flex items-center justify-center">
+                  <Ticket className="w-16 h-16 text-slate-600" />
+                </div>
+              )}
+              <div className="absolute top-3 left-3 bg-[#ea580c] text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider shadow">
                 {event.language || 'मराठी'}
               </div>
             </div>
 
-            {/* Event Info Details */}
+            {/* Event Info */}
             <div className="flex-1 space-y-4 text-center md:text-left">
               <div className="flex flex-wrap items-center justify-center md:justify-start gap-2">
                 <span className="px-3 py-1 rounded-full text-xs font-bold bg-[#ea580c]/20 text-orange-400 border border-orange-500/30">
                   {event.categoryMr || categoryLabel[event.category] || event.category}
                 </span>
-                <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-white/10 text-slate-200 border border-white/10">
-                  प्रमाणपत्र: {event.ageGuidance || 'U'}
-                </span>
-                <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-white/10 text-slate-200 border border-white/10 flex items-center gap-1">
-                  <Clock className="w-3 h-3 text-[#ea580c]" />
-                  <span>{event.durationMinutes || 150} मिनिटे</span>
-                </span>
-              </div>
-
-              {/* Title */}
-              <div>
-                <h1 className="text-2xl sm:text-4xl lg:text-5xl font-extrabold text-white font-serif tracking-tight">
-                  {event.titleMr || event.title}
-                </h1>
-                {event.titleMr && event.title !== event.titleMr && (
-                  <p className="text-base sm:text-lg text-slate-400 font-medium mt-1">
-                    {event.title}
-                  </p>
+                {event.ageGuidance && (
+                  <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-white/10 text-slate-200 border border-white/10">
+                    प्रमाणपत्र: {event.ageGuidance}
+                  </span>
+                )}
+                {event.durationMinutes && (
+                  <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-white/10 text-slate-200 border border-white/10 flex items-center gap-1">
+                    <Clock className="w-3 h-3 text-[#ea580c]" />
+                    <span>{event.durationMinutes} मिनिटे</span>
+                  </span>
                 )}
               </div>
 
-              {/* Official Ticketing Badge */}
+              <div>
+                <h1 className="text-2xl sm:text-4xl lg:text-5xl font-extrabold text-white font-serif tracking-tight leading-tight">
+                  {event.titleMr || event.title}
+                </h1>
+                {event.titleMr && event.title !== event.titleMr && (
+                  <p className="text-base sm:text-lg text-slate-400 font-medium mt-1">{event.title}</p>
+                )}
+              </div>
+
               <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-md px-3.5 py-1.5 rounded-xl border border-white/15 text-xs text-slate-200">
                 <Ticket className="w-4 h-4 text-orange-400" />
                 <span>MahaTicket अधिकृत तिकीट आरक्षण</span>
               </div>
 
-              {/* Quick Info Specs */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 text-xs text-slate-300 max-w-xl">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 text-xs max-w-xl">
                 <div className="flex items-center gap-2.5 bg-white/5 p-2.5 rounded-xl border border-white/10">
                   <MapPin className="w-4 h-4 text-[#ea580c] shrink-0" />
                   <div className="text-left">
@@ -295,24 +339,22 @@ export default function EventDetailPage() {
                     <p className="text-slate-400 text-[11px]">{event.venue.city}, महाराष्ट्र</p>
                   </div>
                 </div>
-
                 <div className="flex items-center gap-2.5 bg-white/5 p-2.5 rounded-xl border border-white/10">
                   <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
                   <div className="text-left">
-                    <p className="font-bold text-white">अधिकृत तिकीट आरक्षण</p>
+                    <p className="font-bold text-white">अधिकृत तिकीट</p>
                     <p className="text-slate-400 text-[11px]">M-Ticket सह थेट प्रवेश</p>
                   </div>
                 </div>
               </div>
 
-              {/* Hero CTA Button */}
-              <div className="pt-2 flex flex-wrap items-center justify-center md:justify-start gap-3">
+              <div className="pt-2">
                 <a
                   href="#sessions"
-                  className="px-8 py-3.5 rounded-2xl bg-[#ea580c] hover:bg-[#c2410c] text-white font-extrabold text-sm shadow-xl shadow-orange-500/30 transition-all active:scale-95 flex items-center gap-2"
+                  className="inline-flex items-center gap-2 px-8 py-3.5 rounded-2xl bg-[#ea580c] hover:bg-[#c2410c] text-white font-extrabold text-sm shadow-xl shadow-orange-500/30 transition-all active:scale-95"
                 >
                   <Ticket className="w-4 h-4" />
-                  <span>शोची वेळ व जागा निवडा (Book Tickets)</span>
+                  <span>शो व जागा निवडा{minSessionPrice > 0 ? ` — ₹${minSessionPrice} पासून` : ''}</span>
                 </a>
               </div>
             </div>
@@ -320,43 +362,32 @@ export default function EventDetailPage() {
         </div>
       </section>
 
-      {/* Main Content Body */}
-      <main className="max-w-6xl mx-auto px-4 py-8 space-y-10">
-        {/* Real Database Cast & Crew Section (shown only if provided by organizer) */}
-        {castList && castList.length > 0 && (
+      <main className="max-w-6xl mx-auto px-4 py-8 space-y-8">
+
+        {/* Cast & Crew */}
+        {parsedDbCast && parsedDbCast.length > 0 && (
           <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-6">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div>
-                <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 font-serif">
-                  कलाकार व तंत्रज्ञ (Cast & Crew)
-                </h2>
-                <p className="text-xs text-slate-600">
-                  अधिकृत कलाकार आणि तंत्रज्ञ माहिती
-                </p>
+                <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 font-serif">कलाकार व तंत्रज्ञ</h2>
+                <p className="text-xs text-slate-600">Cast & Crew</p>
               </div>
               <Award className="w-5 h-5 text-[#ea580c]" />
             </div>
-
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
-              {castList.map((member, idx) => (
+              {parsedDbCast.map((member, idx) => (
                 <div key={idx} className="flex flex-col items-center text-center space-y-2 group">
                   {member.image ? (
-                    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border-2 border-orange-200 p-0.5 shadow group-hover:border-[#ea580c] transition duration-200">
-                      <img
-                        src={member.image}
-                        alt={member.name}
-                        className="w-full h-full object-cover rounded-full group-hover:scale-105 transition duration-300"
-                      />
+                    <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-orange-200 p-0.5 shadow group-hover:border-[#ea580c] transition duration-200">
+                      <img src={member.image} alt={member.name} className="w-full h-full object-cover rounded-full group-hover:scale-105 transition duration-300" />
                     </div>
                   ) : (
-                    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-orange-100 border-2 border-orange-200 flex items-center justify-center text-orange-600 font-bold text-lg">
+                    <div className="w-20 h-20 rounded-full bg-orange-100 border-2 border-orange-200 flex items-center justify-center text-orange-600 font-bold text-lg">
                       {member.name ? member.name[0] : 'C'}
                     </div>
                   )}
                   <div>
-                    <h4 className="text-xs sm:text-sm font-bold text-slate-900 group-hover:text-[#ea580c] transition">
-                      {member.name}
-                    </h4>
+                    <h4 className="text-xs sm:text-sm font-bold text-slate-900 group-hover:text-[#ea580c] transition">{member.name}</h4>
                     {(member.roleMr || member.role) && (
                       <p className="text-[11px] text-slate-600 font-medium">{member.roleMr || member.role}</p>
                     )}
@@ -367,28 +398,24 @@ export default function EventDetailPage() {
           </section>
         )}
 
-        {/* About The Show & Synopsis */}
+        {/* About */}
         <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 pb-4">
             <div>
-              <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 font-serif">
-                नाटकाविषयी / माहिती (About The Show)
-              </h2>
-              <p className="text-xs text-slate-600">कथानक, संवाद आणि विशेष वैशिष्ट्ये</p>
+              <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 font-serif">नाटकाविषयी</h2>
+              <p className="text-xs text-slate-600">About The Show</p>
             </div>
             <Sparkles className="w-5 h-5 text-amber-500" />
           </div>
-
-          <div className="text-sm text-slate-700 leading-relaxed space-y-3 font-normal">
+          <div className="text-sm text-slate-700 leading-relaxed space-y-3">
             <p className={showFullDesc ? '' : 'line-clamp-4'}>
-              {event.descriptionMr || event.description}
+              {event.descriptionMr || event.description || 'या कार्यक्रमाविषयी अधिक माहिती लवकरच उपलब्ध होईल.'}
             </p>
             {event.description && event.description !== event.descriptionMr && (
-              <p className="text-slate-600 text-xs pt-1 border-t border-slate-100 italic">
+              <p className={`text-slate-600 text-xs pt-1 border-t border-slate-100 italic ${showFullDesc ? '' : 'hidden'}`}>
                 {event.description}
               </p>
             )}
-
             <button
               onClick={() => setShowFullDesc(!showFullDesc)}
               className="text-xs font-bold text-[#ea580c] hover:underline pt-1 inline-block"
@@ -396,106 +423,80 @@ export default function EventDetailPage() {
               {showFullDesc ? 'कमी वाचा ▲' : 'पूर्ण माहिती वाचा ▼'}
             </button>
           </div>
-
-          {/* Real Database Facility / Event Details */}
-          {(() => {
-            let facilitiesList: string[] = [];
-            if ((event.venue as any)?.facilities) {
-              try {
-                const parsed = typeof (event.venue as any).facilities === 'string'
-                  ? JSON.parse((event.venue as any).facilities)
-                  : (event.venue as any).facilities;
-                if (Array.isArray(parsed)) {
-                  facilitiesList = parsed;
-                }
-              } catch {
-                // ignore
-              }
-            }
-
-            return (
-              <div className="pt-4 border-t border-slate-100 flex flex-wrap gap-2 text-xs">
-                {event.language && (
-                  <span className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg font-medium">
-                    🗣️ {event.language}
-                  </span>
-                )}
-                {event.durationMinutes && (
-                  <span className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg font-medium">
-                    ⏱️ {event.durationMinutes} मिनिटे
-                  </span>
-                )}
-                {facilitiesList.map((fac, idx) => (
-                  <span key={idx} className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg font-medium">
-                    ✨ {fac}
-                  </span>
-                ))}
-              </div>
-            );
-          })()}
+          {facilitiesList.length > 0 && (
+            <div className="pt-4 border-t border-slate-100 flex flex-wrap gap-2 text-xs">
+              {event.language && (
+                <span className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg font-medium">🗣️ {event.language}</span>
+              )}
+              {event.durationMinutes && (
+                <span className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg font-medium">⏱️ {event.durationMinutes} मिनिटे</span>
+              )}
+              {facilitiesList.map((fac, idx) => (
+                <span key={idx} className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg font-medium">✨ {fac}</span>
+              ))}
+            </div>
+          )}
         </section>
 
-        {/* Sessions & Seat Booking Bar - BookMyShow Experience */}
+        {/* Sessions — BOOKING HAPPENS HERE, no redirect! */}
         <section id="sessions" className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
             <div>
               <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 font-serif">
-                उपलब्ध प्रयोग व वेळा (Select Date & Showtime)
+                उपलब्ध प्रयोग व वेळा
               </h2>
-              <p className="text-xs text-slate-600">
-                आपल्या सोयीनुसार तारीख व वेळ निवडून जागा निश्चित करा
-              </p>
+              <p className="text-xs text-slate-600">आपल्या सोयीनुसार तारीख व वेळ निवडून जागा निश्चित करा</p>
             </div>
             <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block animate-pulse" />
-              <span>थेट आरक्षण उपलब्ध (Live Holds)</span>
+              <span>थेट आरक्षण उपलब्ध</span>
             </div>
           </div>
 
-          {/* BookMyShow Date Filter Tabs */}
+          {/* Modern Date Tab Pills — BookMyShow style */}
           {uniqueDates.length > 1 && (
-            <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+            <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none -mx-1 px-1">
               <button
                 onClick={() => setSelectedDate('all')}
-                className={`px-4 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition ${
+                className={`px-4 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition border ${
                   selectedDate === 'all'
-                    ? 'bg-[#ea580c] text-white shadow-md shadow-orange-500/20'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    ? 'bg-[#ea580c] text-white shadow-md shadow-orange-500/20 border-transparent'
+                    : 'bg-white text-slate-700 hover:bg-slate-50 border-slate-200'
                 }`}
               >
-                सर्व तारखा (All Shows)
+                सर्व तारखा
               </button>
               {uniqueDates.map((dateStr) => {
                 const dateObj = new Date(dateStr);
                 const dayName = dateObj.toLocaleDateString('mr-IN', { weekday: 'short' });
                 const dayNumber = dateObj.getDate();
                 const monthName = dateObj.toLocaleDateString('mr-IN', { month: 'short' });
-
+                const isSelected = selectedDate === dateStr;
                 return (
                   <button
                     key={dateStr}
                     onClick={() => setSelectedDate(dateStr)}
-                    className={`flex flex-col items-center px-4 py-1.5 rounded-2xl text-xs font-bold whitespace-nowrap transition border ${
-                      selectedDate === dateStr
+                    className={`flex flex-col items-center min-w-[56px] px-3 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition border ${
+                      isSelected
                         ? 'bg-orange-50 border-[#ea580c] text-[#ea580c] shadow-sm'
-                        : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                        : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50'
                     }`}
                   >
-                    <span className="text-[10px] text-slate-600 uppercase">{dayName}</span>
-                    <span className="text-sm font-black">{dayNumber}</span>
-                    <span className="text-[10px] text-slate-600">{monthName}</span>
+                    <span className="text-[9px] uppercase tracking-wide opacity-70">{dayName}</span>
+                    <span className={`text-lg font-black leading-tight ${isSelected ? 'text-[#ea580c]' : 'text-slate-900'}`}>{dayNumber}</span>
+                    <span className="text-[9px] uppercase tracking-wide opacity-70">{monthName}</span>
                   </button>
                 );
               })}
             </div>
           )}
 
-          {/* Session Cards List */}
+          {/* Session Cards */}
           {filteredSessions.length === 0 ? (
             <div className="text-center py-10 space-y-2 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-              <Calendar className="w-8 h-8 text-slate-400 mx-auto" />
+              <div className="text-4xl">🗓️</div>
               <p className="text-sm font-bold text-slate-700">निवडलेल्या तारखेला प्रयोग उपलब्ध नाही</p>
-              <p className="text-xs text-slate-600">कृपया इतर तारीख किंवा सर्व तारखा निवडा.</p>
+              <p className="text-xs text-slate-500">कृपया इतर तारीख किंवा सर्व तारखा निवडा.</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -511,7 +512,6 @@ export default function EventDetailPage() {
                   hour: '2-digit',
                   minute: '2-digit',
                 });
-
                 const minPrice =
                   session.ticketTypes.length > 0
                     ? Math.min(...session.ticketTypes.map((t) => t.price / 100))
@@ -520,16 +520,13 @@ export default function EventDetailPage() {
                   session.ticketTypes.length > 0
                     ? Math.max(...session.ticketTypes.map((t) => t.price / 100))
                     : 500;
-
-                const availableSeats = session.ticketTypes.reduce(
-                  (sum, t) => sum + t.availableQuota,
-                  0
-                );
+                const availableSeats = session.ticketTypes.reduce((sum, t) => sum + t.availableQuota, 0);
 
                 return (
                   <div
                     key={session.id}
-                    className="p-5 sm:p-6 bg-slate-50 border border-slate-200 rounded-2xl hover:border-[#ea580c] transition duration-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 group"
+                    className="p-5 sm:p-6 bg-slate-50 border border-slate-200 rounded-2xl hover:border-[#ea580c] hover:shadow-md transition duration-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 group cursor-pointer"
+                    onClick={() => handleBookSession(session)}
                   >
                     <div className="space-y-2 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -538,27 +535,26 @@ export default function EventDetailPage() {
                           <span>{timeStr}</span>
                         </span>
                         <span className="text-xs font-bold text-slate-800">{dateStr}</span>
-                        {availableSeats < 50 && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-200">
-                            भरत आले आहे (Filling Fast)
+                        {availableSeats < 50 && availableSeats > 0 && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-200 animate-pulse">
+                            भरत आले! Filling Fast
+                          </span>
+                        )}
+                        {availableSeats === 0 && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-600 border border-slate-300">
+                            Housefull
                           </span>
                         )}
                       </div>
-
                       <div className="flex items-center gap-2 text-xs text-slate-600">
-                        <MapPin className="w-3.5 h-3.5 text-slate-500" />
+                        <MapPin className="w-3.5 h-3.5 text-slate-400" />
                         <span>{event.venue.nameMr || event.venue.name}</span>
                         <span>•</span>
                         <span>{event.venue.city}</span>
                       </div>
-
-                      {/* Ticket categories chips */}
                       <div className="flex items-center gap-2 flex-wrap pt-1">
                         {session.ticketTypes.map((tt) => (
-                          <span
-                            key={tt.id}
-                            className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-[11px] font-semibold text-slate-700"
-                          >
+                          <span key={tt.id} className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-[11px] font-semibold text-slate-700">
                             {tt.nameMr || tt.name}: ₹{tt.price / 100}
                           </span>
                         ))}
@@ -567,18 +563,18 @@ export default function EventDetailPage() {
 
                     <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end pt-2 md:pt-0 border-t md:border-t-0 border-slate-200">
                       <div className="text-left md:text-right">
-                        <p className="text-[11px] text-slate-600">तिकीट दर</p>
+                        <p className="text-[11px] text-slate-500">तिकीट दर</p>
                         <p className="text-sm font-extrabold text-slate-900">
-                          ₹{minPrice} - ₹{maxPrice}
+                          ₹{minPrice}{minPrice !== maxPrice ? ` - ₹${maxPrice}` : ''}
                         </p>
                       </div>
-
                       <button
-                        onClick={() => handleBookSession(session.id)}
-                        className="px-6 py-2.5 rounded-xl bg-[#ea580c] hover:bg-[#c2410c] text-white font-bold text-xs shadow-lg shadow-orange-500/20 transition active:scale-95 flex items-center gap-1.5"
+                        onClick={(e) => { e.stopPropagation(); handleBookSession(session); }}
+                        disabled={availableSeats === 0}
+                        className="px-6 py-2.5 rounded-xl bg-[#ea580c] hover:bg-[#c2410c] disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold text-xs shadow-lg shadow-orange-500/20 transition active:scale-95 flex items-center gap-1.5 group-hover:shadow-orange-500/40"
                       >
-                        <span>आसन निवडा (Select Seats)</span>
-                        <ChevronRight className="w-4 h-4" />
+                        <span>{availableSeats === 0 ? 'Housefull' : 'आसन निवडा'}</span>
+                        {availableSeats > 0 && <ChevronRight className="w-4 h-4" />}
                       </button>
                     </div>
                   </div>
@@ -588,26 +584,21 @@ export default function EventDetailPage() {
           )}
         </section>
 
-        {/* Venue Information & Directions */}
+        {/* Venue Info */}
         <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 pb-4">
             <div>
-              <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 font-serif">
-                नाट्यगृह व पत्ता (Venue Location)
-              </h2>
-              <p className="text-xs text-slate-600">पत्ता, नकाशा आणि पोहोचण्याची सोय</p>
+              <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 font-serif">नाट्यगृह व पत्ता</h2>
+              <p className="text-xs text-slate-600">Venue Location & Directions</p>
             </div>
             <MapPin className="w-5 h-5 text-[#ea580c]" />
           </div>
-
           <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
-            <h3 className="text-sm font-bold text-slate-900">
-              {event.venue.nameMr || event.venue.name}
-            </h3>
+            <h3 className="text-sm font-bold text-slate-900">{event.venue.nameMr || event.venue.name}</h3>
             <p className="text-xs text-slate-700 leading-relaxed">
               {event.venue.address || 'नाट्यगृह परिसर, मुख्य रस्ता'}, {event.venue.city}, महाराष्ट्र
             </p>
-            <div className="pt-2 flex items-center gap-3">
+            <div className="pt-2">
               <a
                 href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
                   `${event.venue.name} ${event.venue.city}`
@@ -617,40 +608,43 @@ export default function EventDetailPage() {
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-slate-300 hover:border-[#ea580c] text-[#ea580c] text-xs font-bold transition shadow-sm"
               >
                 <Navigation className="w-3.5 h-3.5" />
-                <span>गुगल मॅप्सवर दिशा पहा (Get Directions)</span>
+                <span>Google Maps वर दिशा पहा</span>
               </a>
             </div>
           </div>
         </section>
 
-        {/* Organizer Details */}
+        {/* Organizer */}
         <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm flex items-center justify-between gap-4">
           <div>
-            <p className="text-xs text-slate-600">आयोजक व नाट्यसंस्था (Organized By)</p>
+            <p className="text-xs text-slate-500">आयोजक (Organized By)</p>
             <h3 className="text-sm font-bold text-slate-900">{event.organizer.name}</h3>
             {event.organizer.companyName && (
-              <p className="text-xs text-slate-600">{event.organizer.companyName}</p>
+              <p className="text-xs text-slate-500">{event.organizer.companyName}</p>
             )}
           </div>
           <div className="flex items-center gap-1 text-xs text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200 font-bold">
             <CheckCircle2 className="w-4 h-4" />
-            <span>व्हेरिफाइड आयोजक</span>
+            <span>व्हेरिफाइड</span>
           </div>
         </section>
       </main>
 
-      {/* Floating Bottom Sticky Bar for Mobile & Quick Action */}
-      <aside aria-label="Quick booking" className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 p-3 sm:p-4 z-30 shadow-2xl">
+      {/* Floating Bottom Sticky Bar */}
+      <aside
+        aria-label="Quick booking"
+        className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 p-3 sm:p-4 z-30 shadow-2xl"
+      >
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
           <div className="truncate">
             <h4 className="text-xs sm:text-sm font-bold text-slate-900 truncate font-serif">
               {event.titleMr || event.title}
             </h4>
-            <p className="text-[11px] text-slate-600 truncate">
+            <p className="text-[11px] text-slate-500 truncate">
               {event.venue.nameMr || event.venue.name} · {event.venue.city}
+              {minSessionPrice > 0 && ` · ₹${minSessionPrice} पासून`}
             </p>
           </div>
-
           <a
             href="#sessions"
             className="shrink-0 px-6 sm:px-8 py-2.5 sm:py-3 rounded-xl bg-[#ea580c] hover:bg-[#c2410c] text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-orange-500/25 transition active:scale-95 flex items-center gap-2"
@@ -660,6 +654,38 @@ export default function EventDetailPage() {
           </a>
         </div>
       </aside>
+
+      {/* Inline SeatMapModal — no redirect needed! */}
+      {seatMapOpen && event && selectedSession && (
+        <SeatMapModal
+          event={event as any}
+          session={selectedSession}
+          language="mr"
+          onClose={() => { setSeatMapOpen(false); setSelectedSession(null); }}
+          onProceedToCheckout={handleProceedToCheckout}
+        />
+      )}
+
+      {/* Inline CheckoutDrawer */}
+      {checkoutOpen && event && selectedSession && checkoutHoldData && (
+        <CheckoutDrawer
+          event={event as any}
+          session={selectedSession}
+          holdData={checkoutHoldData}
+          language="mr"
+          onClose={() => setCheckoutOpen(false)}
+          onSuccess={handleBookingConfirmed}
+        />
+      )}
+
+      {/* Ticket Pass Modal after success */}
+      {confirmedBooking && (
+        <TicketPassModal
+          bookingResult={confirmedBooking}
+          language="mr"
+          onClose={() => setConfirmedBooking(null)}
+        />
+      )}
     </div>
   );
 }

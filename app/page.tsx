@@ -15,7 +15,7 @@ import { MyTicketsView } from '@/src/components/MyTicketsView';
 import { PartnerWithUsModal } from '@/src/components/PartnerWithUsModal';
 import { AuthModal } from '@/src/components/AuthModal';
 import { MTBottomNavigation, NavTab } from '@/src/components/ui/MTBottomNavigation';
-import { MTSkeleton } from '@/src/components/ui/MTSkeleton';
+import { MTSkeleton, MTEventCardSkeleton } from '@/src/components/ui/MTSkeleton';
 import { MTEmptyState } from '@/src/components/ui/MTEmptyState';
 import { MTToastContainer, ToastMessage } from '@/src/components/ui/MTToast';
 import { useOnlineStatus } from '@/hooks/use-pwa';
@@ -33,7 +33,9 @@ import {
   Building2,
   Tag,
   ShieldCheck,
+  MapPin,
 } from 'lucide-react';
+
 
 const CATEGORIES: { id: EventCategory; labelEn: string; labelMr: string; icon: any }[] = [
   { id: 'all', labelEn: 'All Experiences', labelMr: 'सर्व कार्यक्रम', icon: Sparkles },
@@ -54,6 +56,8 @@ export default function HomePage() {
 
   // Navigation and Filtering State
   const [selectedCity, setSelectedCity] = useState('महाराष्ट्र (All)');
+  const [cityDetected, setCityDetected] = useState(false);
+  const [detectedCityName, setDetectedCityName] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<EventCategory>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeNavTab, setActiveNavTab] = useState<NavTab>('home');
@@ -83,30 +87,62 @@ export default function HomePage() {
   const [checkoutHoldData, setCheckoutHoldData] = useState<any | null>(null);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [confirmedBookingResult, setConfirmedBookingResult] = useState<any | null>(null);
+  const [announcements, setAnnouncements] = useState<any[]>([]);
 
   useEffect(() => {
     setMounted(true);
-    
-    // Handle query params for direct booking
-    const params = new URLSearchParams(window.location.search);
-    const bookEventId = params.get('bookEvent');
-    const sessionId = params.get('session');
-    
-    if (bookEventId && sessionId) {
-      // Fetch the event and open seat map
-      fetch(`/api/events/${bookEventId}`)
-        .then(res => res.json())
-        .then(data => {
-          const event = data.event;
-          const session = event.sessions.find((s: any) => s.id === parseInt(sessionId, 10));
-          if (event && session) {
-            setSelectedEventForBooking(event);
-            setSelectedSessionForBooking(session);
-            setSeatMapOpen(true);
+
+    // Fetch public active announcements from admin
+    const loadAnnouncements = async () => {
+      try {
+        const res = await fetch('/api/announcements');
+        if (res.ok) {
+          const data = await res.json();
+          setAnnouncements(data.announcements || []);
+        }
+      } catch (e) {
+        console.warn('Failed to load announcements', e);
+      }
+    };
+    loadAnnouncements();
+
+    // IP-based city auto-detection (like BookMyShow)
+    const detectCity = async () => {
+      try {
+        const savedCity = typeof window !== 'undefined' ? localStorage.getItem('mahaticket_user_city') : null;
+        if (savedCity && savedCity !== 'महाराष्ट्र (All)') {
+          setSelectedCity(savedCity);
+          return;
+        }
+        const res = await fetch('https://ipapi.co/json/');
+        if (res.ok) {
+          const geo = await res.json();
+          const ipCity = geo.city || '';
+          const MAHARASHTRA_CITIES: Record<string, string> = {
+            'Pune': 'Pune', 'Pimpri': 'Pune', 'Pimpri-Chinchwad': 'Pune',
+            'Mumbai': 'Mumbai', 'Navi Mumbai': 'Mumbai', 'Thane': 'Thane',
+            'Nagpur': 'Nagpur', 'Nashik': 'Nashik', 'Aurangabad': 'Chhatrapati Sambhaji Nagar',
+            'Sambhajinagar': 'Chhatrapati Sambhaji Nagar', 'Kolhapur': 'Kolhapur',
+            'Solapur': 'Solapur', 'Sangli': 'Sangli', 'Satara': 'Satara',
+            'Amravati': 'Amravati', 'Nanded': 'Nanded', 'Ratnagiri': 'Ratnagiri',
+            'Jalgaon': 'Jalgaon',
+          };
+          const matched = Object.entries(MAHARASHTRA_CITIES).find(([key]) =>
+            ipCity.toLowerCase().includes(key.toLowerCase())
+          );
+          if (matched) {
+            setSelectedCity(matched[1]);
+            setDetectedCityName(matched[1]);
+            setCityDetected(true);
+            localStorage.setItem('mahaticket_user_city', matched[1]);
+            setTimeout(() => setCityDetected(false), 5000);
           }
-        })
-        .catch(err => console.error('Failed to load booking:', err));
-    }
+        }
+      } catch {
+        // Silently fallback to all Maharashtra
+      }
+    };
+    detectCity();
   }, []);
 
   const addToast = (type: 'success' | 'error' | 'warning' | 'info', message: string) => {
@@ -277,7 +313,21 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Main Header with dynamic city support */}
+      {/* City Auto-Detected Banner — shows after IP detection like BookMyShow */}
+      {mounted && cityDetected && detectedCityName && (
+        <div className="bg-gradient-to-r from-orange-500 to-orange-600 px-4 py-2 text-center text-xs font-bold text-white flex items-center justify-center gap-2 animate-in slide-in-from-top duration-300">
+          <MapPin className="w-3.5 h-3.5 shrink-0" />
+          <span>📍 आपले शहर आढळले: <strong>{detectedCityName}</strong> — {detectedCityName} मधील कार्यक्रम दाखवत आहे</span>
+          <button
+            onClick={() => { setSelectedCity('महाराष्ट्र (All)'); localStorage.removeItem('mahaticket_user_city'); setCityDetected(false); }}
+            className="ml-2 underline text-orange-100 hover:text-white"
+          >
+            बदला
+          </button>
+        </div>
+      )}
+
+
       <Header
         language={language}
         onLanguageChange={setLanguage}
@@ -376,9 +426,64 @@ export default function HomePage() {
               />
             )}
 
-            {/* Category Navigation Pills */}
+            {/* Active Announcements / Promotion Banners from Admin */}
+            {announcements.length > 0 && (
+              <div className="space-y-2.5">
+                {announcements.map((a) => (
+                  <div
+                    key={a.id}
+                    className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-orange-600 via-amber-600 to-orange-500 text-white p-3.5 sm:p-4 shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
+                  >
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-white/20 text-white uppercase tracking-wider">
+                          {a.category === 'flash_sale' ? '⚡ महा ऑफर' : '📢 सूचना'}
+                        </span>
+                        <h4 className="text-xs sm:text-sm font-extrabold">{a.title}</h4>
+                      </div>
+                      <p className="text-xs text-orange-100 leading-relaxed">{a.message}</p>
+                    </div>
+                    {a.ctaUrl && (
+                      <a
+                        href={a.ctaUrl}
+                        className="shrink-0 px-4 py-2 rounded-xl bg-white text-orange-600 font-extrabold text-xs shadow-md hover:bg-orange-50 transition active:scale-95"
+                      >
+                        {a.ctaLabel || 'अधिक माहिती'}
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* BookMyShow Style City Excitement Showcase */}
+            <div className="bg-gradient-to-r from-orange-50 via-amber-50/40 to-white border border-orange-200/80 rounded-2xl p-3 sm:p-4 flex items-center justify-between shadow-xs">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-[#ea580c] flex items-center justify-center text-white shadow-sm shadow-orange-500/20 shrink-0">
+                  <MapPin className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 font-serif">
+                      {selectedCity === 'महाराष्ट्र (All)' ? 'महाराष्ट्रातील लोकप्रिय नाटके व प्रयोग' : `${selectedCity} शहरातील विशेष नाटके व कार्यक्रम`}
+                    </h3>
+                    <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200 uppercase">
+                      Live
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500">
+                    आपल्या जवळच्या नाट्यगृहातील आजचे व या आठवड्यातील प्रयोग
+                  </p>
+                </div>
+              </div>
+              <div className="hidden sm:flex items-center gap-1.5 text-xs font-bold text-[#ea580c] bg-white px-3 py-1.5 rounded-xl border border-orange-200 shadow-xs">
+                <span>📍 {selectedCity}</span>
+              </div>
+            </div>
+
+            {/* Category Navigation Pills — Centralized */}
             <div className="space-y-1.5">
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 scrollbar-none">
+              <div className="flex items-center justify-center gap-1.5 overflow-x-auto pb-1.5 scrollbar-none">
                 {CATEGORIES.map((cat) => {
                   const Icon = cat.icon;
                   const isSelected = selectedCategory === cat.id;
@@ -386,10 +491,10 @@ export default function HomePage() {
                     <button
                       key={cat.id}
                       onClick={() => setSelectedCategory(cat.id)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap cursor-pointer active:scale-95 ${
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all whitespace-nowrap cursor-pointer active:scale-95 ${
                         isSelected
-                          ? 'bg-[#ea580c] text-white shadow-sm font-semibold'
-                          : 'bg-white text-[#6b7280] hover:text-[#111827] border border-[#e5e7eb] hover:bg-[#f5f5f5] hover:border-[#ea580c]'
+                          ? 'bg-[#ea580c] text-white shadow-sm font-bold'
+                          : 'bg-white text-slate-700 hover:text-slate-900 border border-slate-200 hover:bg-slate-50 hover:border-orange-300'
                       }`}
                     >
                       <Icon className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : 'text-[#ea580c]'}`} />
@@ -472,12 +577,8 @@ export default function HomePage() {
 
               {loading ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 py-4">
-                  {[1, 2, 3].map((n) => (
-                    <div key={n} className="bg-white rounded-xl border border-[#e5e7eb] p-3 space-y-3">
-                      <MTSkeleton className="w-full h-40" />
-                      <MTSkeleton variant="text" width="70%" />
-                      <MTSkeleton variant="text" width="40%" />
-                    </div>
+                  {[1, 2, 3, 4, 5, 6].map((n) => (
+                    <MTEventCardSkeleton key={n} />
                   ))}
                 </div>
               ) : error ? (
@@ -540,54 +641,81 @@ export default function HomePage() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-[#e5e7eb] bg-white py-6 px-4 sm:px-8 text-xs text-[#6b7280] hidden md:block">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
-          <div>
-            <div className="flex items-center justify-center sm:justify-start gap-2 text-[#111827] font-bold text-sm">
-              <span>MahaTicket (महाटिकिट)</span>
-              <span className="text-[10px] text-[#ea580c] bg-[#ea580c]/10 px-1.5 py-0.2 rounded border border-[#ea580c]/20">
-                महाराष्ट्र
-              </span>
+      <footer className="border-t border-[#e5e7eb] bg-white py-8 px-4 sm:px-8 text-xs text-[#6b7280]">
+        <div className="max-w-7xl mx-auto space-y-6">
+          {/* Top: Brand + App Download */}
+          <div className="flex flex-col sm:flex-row items-center sm:items-start justify-between gap-6">
+            <div className="text-center sm:text-left">
+              <div className="flex items-center justify-center sm:justify-start gap-2 text-[#111827] font-bold text-base">
+                <div className="w-7 h-7 rounded-xl bg-[#ea580c] flex items-center justify-center">
+                  <svg viewBox="0 0 20 20" className="w-4 h-4 text-white" fill="currentColor">
+                    <path d="M2 6a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/>
+                  </svg>
+                </div>
+                <span>MahaTicket (महाटिकिट)</span>
+                <span className="text-[9px] text-[#ea580c] bg-[#ea580c]/10 px-1.5 py-0.5 rounded border border-[#ea580c]/20 font-black">MH</span>
+              </div>
+              <p className="mt-1 text-[#9ca3af] text-[11px]">महाराष्ट्र • पुणे • मुंबई • ठाणे • नाशिक • नागपूर • कोल्हापूर</p>
+              <p className="mt-0.5 text-[#9ca3af] text-[11px]">Maharashtra-First Theatre & Events Ticketing Platform</p>
             </div>
-            <p className="mt-1 text-[#9ca3af] text-[11px]">
-              पुणे • मुंबई • ठाणे • नाशिक • नागपूर • कोल्हापूर • संभाजीनगर • सोलापूर
-            </p>
+
+            {/* App Download Buttons */}
+            <div className="flex items-center gap-3">
+              {/* Play Store Button — link added later */}
+              <a
+                href="#"
+                onClick={(e) => e.preventDefault()}
+                title="Coming soon on Google Play Store"
+                className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white transition border border-slate-700 shadow-sm group"
+              >
+                {/* Google Play Icon SVG */}
+                <svg viewBox="0 0 24 24" className="w-5 h-5 shrink-0" fill="currentColor">
+                  <path d="M3.18 23.76c.37.2.8.2 1.18.02l13.26-7.16-2.9-2.9-11.54 9.98c0 0 0 .06 0 .06zM.5 1.57C.19 1.96 0 2.51 0 3.16v17.68c0 .65.19 1.2.5 1.59l.08.08 9.9-9.9v-.23L.58 1.49.5 1.57zM19.97 10.37l-2.76-1.49-3.18 3.18 3.18 3.18 2.78-1.5c.79-.43.79-1.94-.02-2.37zm-17.67 12.7l11.19-9.67-3.01-3.01L2.3 23.07z"/>
+                </svg>
+                <div className="text-left">
+                  <p className="text-[9px] text-slate-400 leading-none">Coming Soon</p>
+                  <p className="text-xs font-bold leading-tight">Google Play</p>
+                </div>
+              </a>
+
+              {/* APK Download — direct install */}
+              <a
+                href="#"
+                onClick={(e) => e.preventDefault()}
+                title="Download APK directly (coming soon)"
+                className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-orange-50 border border-orange-200 hover:bg-orange-100 text-[#ea580c] transition group"
+              >
+                <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <path d="M12 16l-4-4h2.5V4h3v8H16l-4 4zm-6 2h12v2H6v-2z" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                <div className="text-left">
+                  <p className="text-[9px] text-[#ea580c]/70 leading-none">Direct</p>
+                  <p className="text-[11px] font-bold leading-tight">APK</p>
+                </div>
+              </a>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-center sm:justify-end gap-x-3 gap-y-2 text-[#6b7280] font-normal text-xs">
-            <button
-              onClick={() => setPartnerModalOpen(true)}
-              className="hover:text-[#ea580c] transition"
-            >
-              Partner With Us
-            </button>
-            <span className="text-[#d1d5db]">•</span>
-            <Link href="/about" className="hover:text-[#ea580c] transition">
-              About
-            </Link>
-            <span className="text-[#d1d5db]">•</span>
-            <Link href="/terms" className="hover:text-[#ea580c] transition">
-              Terms
-            </Link>
-            <span className="text-[#d1d5db]">•</span>
-            <Link href="/privacy" className="hover:text-[#ea580c] transition">
-              Privacy
-            </Link>
-            <span className="text-[#d1d5db]">•</span>
-            <Link href="/refund" className="hover:text-[#ea580c] transition">
-              Refunds
-            </Link>
-            <span className="text-[#d1d5db]">•</span>
-            <Link href="/contact" className="hover:text-[#ea580c] transition">
-              Contact
-            </Link>
-            <span className="text-[#d1d5db]">•</span>
-            <span>© {new Date().getFullYear()} Kalpkrut Infotech</span>
+          {/* Divider */}
+          <div className="border-t border-[#f3f4f6]" />
+
+          {/* Bottom: Links */}
+          <div className="flex flex-wrap items-center justify-between gap-y-3 gap-x-2">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[#6b7280]">
+              <button onClick={() => setPartnerModalOpen(true)} className="hover:text-[#ea580c] transition font-medium">Partner With Us</button>
+              <Link href="/about" className="hover:text-[#ea580c] transition">About</Link>
+              <Link href="/terms" className="hover:text-[#ea580c] transition">Terms</Link>
+              <Link href="/privacy" className="hover:text-[#ea580c] transition">Privacy</Link>
+              <Link href="/refund" className="hover:text-[#ea580c] transition">Refunds</Link>
+              <Link href="/contact" className="hover:text-[#ea580c] transition">Contact</Link>
+            </div>
+            <span className="text-[#9ca3af]">© {new Date().getFullYear()} Kalpkrut Infotech Pvt. Ltd.</span>
           </div>
         </div>
       </footer>
 
       {/* Mobile Bottom Navigation (Home, Explore, Tickets, Offers, Profile) */}
+
       <MTBottomNavigation
         activeTab={activeNavTab}
         onTabChange={handleNavTabChange}

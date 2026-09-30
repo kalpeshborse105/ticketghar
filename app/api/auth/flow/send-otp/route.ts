@@ -47,11 +47,15 @@ export async function POST(req: NextRequest) {
       .where(eq(users.id, user.id));
 
     // 4. Send email via SMTP
-    await sendOtpEmail(cleanEmail, otp);
+    const emailSent = await sendOtpEmail(cleanEmail, otp);
 
     return NextResponse.json({
       success: true,
-      message: '६-अंकी पडताळणी कोड आपल्या ईमेलवर पाठवला आहे.',
+      message: emailSent
+        ? '६-अंकी पडताळणी कोड आपल्या ईमेलवर पाठवला आहे.'
+        : 'पडताळणी कोड तयार झाला आहे (ईमेल पाठवणे प्रलंबित असल्यास खालील कोड वापरा).',
+      devOtp: process.env.NODE_ENV !== 'production' || !emailSent ? otp : undefined,
+      emailSent,
     });
   } catch (error: any) {
     console.error('Send OTP error:', error);

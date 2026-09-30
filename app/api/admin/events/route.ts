@@ -52,9 +52,12 @@ export async function POST(request: NextRequest) {
       castCrew,
     } = body;
 
-    if (!title || !titleMr || !category || !organizerId || !venueId) {
+    const finalOrganizerId = organizerId ? parseInt(String(organizerId), 10) : 1;
+    const finalVenueId = venueId ? parseInt(String(venueId), 10) : 1;
+
+    if (!title || !titleMr || !category) {
       return NextResponse.json(
-        { error: 'Missing required event fields (title, Marathi title, category, organizer, venue).' },
+        { error: 'Missing required event fields (title, Marathi title, category).' },
         { status: 400 }
       );
     }
@@ -72,8 +75,8 @@ export async function POST(request: NextRequest) {
         slug,
         category,
         categoryMr: categoryMr || 'कार्यक्रम',
-        organizerId: parseInt(organizerId, 10),
-        venueId: parseInt(venueId, 10),
+        organizerId: finalOrganizerId,
+        venueId: finalVenueId,
         language: language || 'Marathi',
         ageGuidance: ageGuidance || 'U',
         durationMinutes: durationMinutes ? parseInt(durationMinutes, 10) : 150,

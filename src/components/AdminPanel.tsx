@@ -528,11 +528,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const sessionStartTime =
+        newEventForm.sessionDate && newEventForm.sessionTime
+          ? `${newEventForm.sessionDate}T${newEventForm.sessionTime}:00`
+          : new Date(Date.now() + 86400000 * 2).toISOString();
+
       const res = await fetch('/api/admin/events', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...newEventForm,
+          sessionStartTime,
+          organizerId: newEventForm.organizerId || 1,
+          venueId: newEventForm.venueId || 1,
+          ticketPrice: 35000,
           actorId: 'admin_user',
           actorRole: activeRole,
         }),
