@@ -2146,6 +2146,36 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </div>
               </div>
 
+              {/* Client & Admin Dimension Size Guide */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200 flex items-start gap-3.5 shadow-sm">
+                <Megaphone className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <h4 className="font-bold text-amber-300 text-sm">
+                    जाहिरात व बॅनर अचूक आकार मार्गदर्शक (Official Ad Dimensions Guide):
+                  </h4>
+                  <p className="text-slate-300 text-xs leading-relaxed">
+                    क्लायंट आणि आयोजकांकडून जाहिरात डिझाइन मागवताना खालील अचूक आकारांची (Dimensions) मागणी करा जेणेकरून इमेज क्रॉप न होता परिपूर्ण दिसेल:
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 text-[11px]">
+                    <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-0.5">
+                      <span className="font-bold text-amber-400">१. मुख्य जाहिरात पट्टी (Ad Banner):</span>
+                      <p className="font-mono text-white text-xs">1200 × 200 px</p>
+                      <p className="text-slate-400 text-[10px]">मोबाईलसाठी: 600 × 200 px</p>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-0.5">
+                      <span className="font-bold text-amber-400">२. टॉप हिरो कॅरोसेल (Hero Carousel):</span>
+                      <p className="font-mono text-white text-xs">1240 × 380 px</p>
+                      <p className="text-slate-400 text-[10px]">Widescreen गुणोत्तर 24:9 / 16:9</p>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-0.5">
+                      <span className="font-bold text-amber-400">३. ॲप व वेब टाइमर पॉपअप (Popup):</span>
+                      <p className="font-mono text-white text-xs">600 × 900 px</p>
+                      <p className="text-slate-400 text-[10px]">पोर्ट्रेट गुणोत्तर 2:3 (Poster)</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* Banners & Popups List */}
               <div className="space-y-4">
                 {announcementsList.length === 0 ? (
@@ -2689,14 +2719,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   }
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-amber-400 font-bold"
                 >
+                  <option value="ad_banner">
+                    📢 मुख्य जाहिरात बॅनर पट्टी (Ad Banner Strip - 1200×200 px Desktop / 600×200 px Mobile)
+                  </option>
                   <option value="popup_poster">
-                    📱 ॲप व वेबसाइट पॉपअप पोस्टर (Timed Popup Ad with Timer)
+                    📱 ॲप व वेबसाइट पॉपअप पोस्टर (Timed Popup Ad with Timer - 600×900 px)
                   </option>
                   <option value="hero_banner">
-                    🌟 मुख्य हिरो कॅरोसेल बॅनर (Hero Carousel Banner)
+                    🌟 मुख्य हिरो कॅरोसेल बॅनर (Hero Carousel Banner - 1240×380 px)
                   </option>
                   <option value="mid_banner">
-                    🎗️ मिडल स्ट्रिप बॅनर (Middle Section Banner)
+                    🎗️ मिडल स्ट्रिप बॅनर (Middle Section Banner - 1200×200 px)
                   </option>
                   <option value="general_notification">
                     📢 सामान्य सूचना पट्टी (Top Notification Notice)
@@ -2766,10 +2799,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   </label>
                   <span className="text-[10px] text-amber-400 font-bold">
                     {newAnnouncementForm.category === 'hero_banner'
-                      ? '📐 शिफारस आकार: 1240 × 380 px (3.25:1)'
-                      : newAnnouncementForm.category === 'mid_banner'
-                      ? '📐 शिफारस आकार: 1200 × 200 px (6:1)'
-                      : '📐 शिफारस आकार: 600 × 900 px (2:3)'}
+                      ? '📐 शिफारस: 1240 × 380 px (Hero)'
+                      : newAnnouncementForm.category === 'ad_banner' || newAnnouncementForm.category === 'mid_banner'
+                      ? '📐 शिफारस: 1200 × 200 px (Desktop) / 600 × 200 px (Mobile)'
+                      : '📐 शिफारस: 600 × 900 px (Popup 2:3)'}
                   </span>
                 </div>
                 <input

@@ -12,6 +12,9 @@ import {
   Sparkles,
   Info,
   Check,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
 } from 'lucide-react';
 
 interface SeatMapModalProps {
@@ -46,6 +49,41 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
   const [sections, setSections] = useState<any[]>([]);
   const [selectedSeatIds, setSelectedSeatIds] = useState<number[]>([]);
   const [isHolding, setIsHolding] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState<number>(1);
+  const touchStartDistRef = React.useRef<number | null>(null);
+
+  const handleZoomIn = () => setZoomLevel((prev) => Math.min(2.0, Number((prev + 0.15).toFixed(2))));
+  const handleZoomOut = () => setZoomLevel((prev) => Math.max(0.7, Number((prev - 0.15).toFixed(2))));
+  const handleResetZoom = () => setZoomLevel(1);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      touchStartDistRef.current = dist;
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && touchStartDistRef.current !== null) {
+      const currentDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const delta = (currentDist - touchStartDistRef.current) / 300;
+      setZoomLevel((prev) => {
+        const next = Math.max(0.7, Math.min(2.0, Number((prev + delta).toFixed(2))));
+        return next;
+      });
+      touchStartDistRef.current = currentDist;
+    }
+  };
+
+  const handleTouchEnd = () => {
+    touchStartDistRef.current = null;
+  };
 
   // Fetch real-time seat inventory for this session
   const fetchSessionSeats = useCallback(async () => {
@@ -241,7 +279,39 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
         )}
 
         {/* Seat Layout Canvas Area */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50 space-y-6">
+        <div className="flex-1 overflow-y-auto overflow-x-auto p-3 sm:p-6 bg-slate-50 relative space-y-4 touch-pan-x touch-pan-y">
+          {/* Floating Interactive Zoom Bar (BookMyShow / Cinema style) */}
+          <div className="sticky top-2 z-20 flex justify-end px-2 pointer-events-none mb-[-36px]">
+            <div className="pointer-events-auto flex items-center gap-1 bg-white/95 backdrop-blur-md px-2 py-1 rounded-2xl border border-slate-200 shadow-md text-slate-700">
+              <button
+                type="button"
+                onClick={handleZoomOut}
+                disabled={zoomLevel <= 0.7}
+                className="p-1.5 rounded-xl hover:bg-slate-100 disabled:opacity-30 text-slate-700 transition cursor-pointer"
+                title="Zoom Out"
+              >
+                <ZoomOut className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={handleResetZoom}
+                className="px-2 py-1 text-[11px] font-mono font-bold hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                title="Reset 100%"
+              >
+                {Math.round(zoomLevel * 100)}%
+              </button>
+              <button
+                type="button"
+                onClick={handleZoomIn}
+                disabled={zoomLevel >= 2.0}
+                className="p-1.5 rounded-xl hover:bg-slate-100 disabled:opacity-30 text-slate-700 transition cursor-pointer"
+                title="Zoom In"
+              >
+                <ZoomIn className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
           {loading ? (
             <div className="py-20 flex flex-col items-center justify-center space-y-4 text-slate-500">
               <div className="flex items-end gap-2 animate-pulse">
@@ -276,7 +346,13 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
               </button>
             </div>
           ) : (
-            <div className="space-y-6 max-w-2xl mx-auto">
+            <div
+              className="space-y-6 max-w-2xl mx-auto transition-transform duration-150 ease-out origin-top"
+              style={{ transform: `scale(${zoomLevel})` }}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+            >
               {/* Realistic Theater Stage with spotlight & glow */}
               <div className="relative flex flex-col items-center pt-2 pb-5">
                 <div className="w-full max-w-lg h-10 bg-gradient-to-b from-orange-400/25 via-orange-300/5 to-transparent rounded-t-[120px] pointer-events-none" />

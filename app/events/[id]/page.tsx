@@ -95,6 +95,8 @@ export default function EventDetailPage() {
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [confirmedBooking, setConfirmedBooking] = useState<any>(null);
   const [showVideoModal, setShowVideoModal] = useState(false);
+  const [sessionSort, setSessionSort] = useState<'time_asc' | 'price_asc' | 'price_desc'>('time_asc');
+  const [timeFilter, setTimeFilter] = useState<'all' | 'morning' | 'afternoon' | 'evening' | 'night'>('all');
 
   useEffect(() => {
     if (!eventId) return;
@@ -185,12 +187,47 @@ export default function EventDetailPage() {
     )
   );
 
-  const filteredSessions =
-    selectedDate === 'all'
-      ? activeSessions
-      : activeSessions.filter(
-          (s) => new Date(s.sessionStartTime).toISOString().split('T')[0] === selectedDate
-        );
+  const filteredSessions = React.useMemo(() => {
+    let list =
+      selectedDate === 'all'
+        ? [...activeSessions]
+        : activeSessions.filter(
+            (s) => new Date(s.sessionStartTime).toISOString().split('T')[0] === selectedDate
+          );
+
+    // Filter by time of day (BookMyShow style)
+    if (timeFilter !== 'all') {
+      list = list.filter((s) => {
+        const hour = new Date(s.sessionStartTime).getHours();
+        if (timeFilter === 'morning') return hour < 12;
+        if (timeFilter === 'afternoon') return hour >= 12 && hour < 16;
+        if (timeFilter === 'evening') return hour >= 16 && hour < 20;
+        if (timeFilter === 'night') return hour >= 20;
+        return true;
+      });
+    }
+
+    // Sort by price or time
+    if (sessionSort === 'price_asc') {
+      list.sort((a, b) => {
+        const pA = a.ticketTypes?.length > 0 ? Math.min(...a.ticketTypes.map((t: any) => t.price)) : 30000;
+        const pB = b.ticketTypes?.length > 0 ? Math.min(...b.ticketTypes.map((t: any) => t.price)) : 30000;
+        return pA - pB;
+      });
+    } else if (sessionSort === 'price_desc') {
+      list.sort((a, b) => {
+        const pA = a.ticketTypes?.length > 0 ? Math.max(...a.ticketTypes.map((t: any) => t.price)) : 30000;
+        const pB = b.ticketTypes?.length > 0 ? Math.max(...b.ticketTypes.map((t: any) => t.price)) : 30000;
+        return pB - pA;
+      });
+    } else {
+      list.sort(
+        (a, b) => new Date(a.sessionStartTime).getTime() - new Date(b.sessionStartTime).getTime()
+      );
+    }
+
+    return list;
+  }, [activeSessions, selectedDate, timeFilter, sessionSort]);
 
   const categoryLabel: Record<string, string> = {
     plays: 'नाटक व रंगभूमी',
@@ -534,12 +571,12 @@ export default function EventDetailPage() {
             </div>
           </div>
 
-          {/* Modern Date Tab Pills — BookMyShow style */}
+          {/* Modern Date Tab Pills — BookMyShow style swipeable */}
           {uniqueDates.length > 1 && (
-            <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none -mx-1 px-1">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none flex-nowrap touch-pan-x -mx-1 px-1">
               <button
                 onClick={() => setSelectedDate('all')}
-                className={`px-4 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition border ${
+                className={`flex items-center justify-center px-4 py-2 rounded-2xl text-xs font-black whitespace-nowrap transition border shrink-0 ${
                   selectedDate === 'all'
                     ? 'bg-[#ea580c] text-white shadow-md shadow-orange-500/20 border-transparent'
                     : 'bg-white text-slate-700 hover:bg-slate-50 border-slate-200'
@@ -557,20 +594,61 @@ export default function EventDetailPage() {
                   <button
                     key={dateStr}
                     onClick={() => setSelectedDate(dateStr)}
-                    className={`flex flex-col items-center min-w-[56px] px-3 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition border ${
+                    className={`flex flex-col items-center min-w-[56px] sm:min-w-[64px] px-3 py-1.5 rounded-2xl whitespace-nowrap transition border shrink-0 cursor-pointer ${
                       isSelected
-                        ? 'bg-orange-50 border-[#ea580c] text-[#ea580c] shadow-sm'
-                        : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                        ? 'bg-gradient-to-b from-orange-500 to-[#ea580c] text-white border-[#ea580c] shadow-md shadow-orange-500/30'
+                        : 'bg-white border-slate-200 text-slate-700 hover:border-orange-300 hover:bg-slate-50'
                     }`}
                   >
-                    <span className="text-[9px] uppercase tracking-wide opacity-70">{dayName}</span>
-                    <span className={`text-lg font-black leading-tight ${isSelected ? 'text-[#ea580c]' : 'text-slate-900'}`}>{dayNumber}</span>
-                    <span className="text-[9px] uppercase tracking-wide opacity-70">{monthName}</span>
+                    <span className={`text-[10px] uppercase font-bold tracking-wider ${isSelected ? 'text-white/90' : 'text-slate-500'}`}>{dayName}</span>
+                    <span className="text-base sm:text-lg font-black leading-tight">{dayNumber}</span>
+                    <span className={`text-[10px] font-bold ${isSelected ? 'text-white/90' : 'text-slate-500'}`}>{monthName}</span>
                   </button>
                 );
               })}
             </div>
           )}
+
+          {/* BookMyShow Style Time-of-Day Filter & Sorting Row */}
+          <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1 border-t border-slate-100">
+            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none flex-nowrap">
+              <span className="text-[11px] font-bold text-slate-500 shrink-0">वेळ:</span>
+              {[
+                { id: 'all', label: 'सर्व वेळा' },
+                { id: 'morning', label: '🌅 सकाळ (१२ पूर्वी)' },
+                { id: 'afternoon', label: '☀️ दुपार (१२-४)' },
+                { id: 'evening', label: '🌆 संध्याकाळ (४-८)' },
+                { id: 'night', label: '🌙 रात्री (८ नंतर)' },
+              ].map((tf) => (
+                <button
+                  key={tf.id}
+                  type="button"
+                  onClick={() => setTimeFilter(tf.id as any)}
+                  className={`text-[11px] font-bold px-2.5 py-1 rounded-xl transition whitespace-nowrap cursor-pointer shrink-0 border ${
+                    timeFilter === tf.id
+                      ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                      : 'bg-slate-50 text-slate-600 hover:text-slate-900 border-slate-200 hover:border-orange-300'
+                  }`}
+                >
+                  {tf.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-1.5 text-xs ml-auto">
+              <span className="text-[11px] font-bold text-slate-500">क्रमवारी:</span>
+              <select
+                value={sessionSort}
+                onChange={(e) => setSessionSort(e.target.value as any)}
+                aria-label="शो क्रमवारी"
+                className="bg-slate-50 border border-slate-200 text-slate-700 text-[11px] font-bold rounded-xl px-2 py-1 outline-none hover:border-orange-300 cursor-pointer"
+              >
+                <option value="time_asc">⚡ वेळेनुसार (लवकर आधी)</option>
+                <option value="price_asc">💰 दर: कमी ते जास्त</option>
+                <option value="price_desc">💎 दर: जास्त ते कमी</option>
+              </select>
+            </div>
+          </div>
 
           {/* Session Cards */}
           {filteredSessions.length === 0 ? (

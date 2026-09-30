@@ -89,6 +89,7 @@ export default function HomePage() {
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [confirmedBookingResult, setConfirmedBookingResult] = useState<any | null>(null);
   const [announcements, setAnnouncements] = useState<any[]>([]);
+  const [sortBy, setSortBy] = useState<'date' | 'price_asc' | 'price_desc'>('date');
 
   useEffect(() => {
     setMounted(true);
@@ -296,8 +297,34 @@ export default function HomePage() {
     addToast('success', language === 'mr' ? 'तिकीट यशस्वीरीत्या बुक झाले!' : 'Booking confirmed successfully!');
   };
 
+  // Sort events dynamically
+  const sortedEvents = React.useMemo(() => {
+    const list = [...events];
+    if (sortBy === 'price_asc') {
+      list.sort((a, b) => {
+        const pA = a.sessions?.[0]?.ticketTypes?.[0]?.price || 30000;
+        const pB = b.sessions?.[0]?.ticketTypes?.[0]?.price || 30000;
+        return pA - pB;
+      });
+    } else if (sortBy === 'price_desc') {
+      list.sort((a, b) => {
+        const pA = a.sessions?.[0]?.ticketTypes?.[0]?.price || 30000;
+        const pB = b.sessions?.[0]?.ticketTypes?.[0]?.price || 30000;
+        return pB - pA;
+      });
+    } else {
+      // Default: soonest date
+      list.sort((a, b) => {
+        const tA = a.sessions?.[0]?.sessionStartTime ? new Date(a.sessions[0].sessionStartTime).getTime() : 0;
+        const tB = b.sessions?.[0]?.sessionStartTime ? new Date(b.sessions[0].sessionStartTime).getTime() : 0;
+        return tA - tB;
+      });
+    }
+    return list;
+  }, [events, sortBy]);
+
   // Filter theatre/plays events for Marathi spotlight
-  const theatreEvents = events.filter(
+  const theatreEvents = sortedEvents.filter(
     (e) => e.category === 'plays' || e.title.includes('Sahi')
   );
 
@@ -418,8 +445,8 @@ export default function HomePage() {
           </div>
         ) : (
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-5 space-y-5">
-            {/* Top Hero Banner — BookMyShow / Ticketalay Multi-Slide Carousel */}
-            {!searchQuery && selectedCategory === 'all' && priceRange === 2000 && selectedDate === 'all' && !customDate && (
+            {/* Top Hero Banner — Constant BookMyShow / Ticketalay Multi-Slide Carousel */}
+            {!searchQuery.trim() && (
               <HeroBanner
                 events={events}
                 announcements={announcements}
@@ -428,30 +455,65 @@ export default function HomePage() {
               />
             )}
 
-            {/* BookMyShow Style City Excitement Showcase */}
-            <div className="bg-gradient-to-r from-orange-50 via-amber-50/40 to-white border border-orange-200/80 rounded-2xl p-3 sm:p-4 flex items-center justify-between shadow-xs">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-xl bg-[#ea580c] flex items-center justify-center text-white shadow-sm shadow-orange-500/20 shrink-0">
-                  <MapPin className="w-4 h-4" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 font-serif">
-                      {selectedCity === 'महाराष्ट्र (All)' ? 'महाराष्ट्रातील लोकप्रिय नाटके व प्रयोग' : `${selectedCity} शहरातील विशेष नाटके व कार्यक्रम`}
-                    </h3>
-                    {/* <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200 uppercase">
-                      Live
-                    </span> */}
+            {/* Advertisement & Upcoming Showcase Banner Space (Recommended: 1200 x 200 px desktop / 600 x 200 px mobile) */}
+            {(() => {
+              const adBanner = announcements.find(
+                (a) => a.active !== 0 && (a.category === 'ad_banner' || a.category === 'mid_banner')
+              );
+
+              if (adBanner && adBanner.imageUrl) {
+                return (
+                  <div className="w-full overflow-hidden rounded-2xl border border-slate-200 shadow-xs hover:shadow-md transition group">
+                    <a
+                      href={adBanner.ctaUrl || '#'}
+                      target={adBanner.ctaUrl?.startsWith('http') ? '_blank' : '_self'}
+                      rel="noreferrer"
+                      className="block relative w-full aspect-[24/5] sm:aspect-[28/5] min-h-[80px] sm:min-h-[120px] max-h-[180px] bg-slate-900"
+                    >
+                      <img
+                        src={adBanner.imageUrl}
+                        alt={adBanner.title}
+                        className="w-full h-full object-cover object-center group-hover:scale-[1.01] transition-transform duration-500"
+                      />
+                      <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded bg-black/60 backdrop-blur-xs text-[9px] font-bold text-slate-300 border border-white/20 uppercase">
+                        जाहिरात (Ad)
+                      </div>
+                    </a>
                   </div>
-                  <p className="text-[11px] text-slate-500">
-                    आपल्या जवळच्या नाट्यगृहातील आजचे व या आठवड्यातील प्रयोग
-                  </p>
+                );
+              }
+
+              return (
+                <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-orange-600 via-amber-600 to-rose-600 p-3 sm:p-4 text-white shadow-xs">
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 relative z-10">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white shrink-0">
+                        <Sparkles className="w-4 h-4 text-amber-300" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-black/30 text-amber-300 border border-amber-300/30">
+                            जाहिरात व आगामी नाटके
+                          </span>
+                          <span className="text-[10px] text-white/80 hidden sm:inline">
+                            शिफारस केलेला आकार: 1200 × 200 px (Desktop) / 600 × 200 px (Mobile)
+                          </span>
+                        </div>
+                        <h3 className="text-xs sm:text-sm font-extrabold mt-0.5">
+                          आपल्या नाटकाची वा कार्यक्रमाची जाहिरात येथे करा — लाखो नाट्यप्रेमींपर्यंत पोहोचा
+                        </h3>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setPartnerModalOpen(true)}
+                      className="px-3.5 py-1.5 rounded-xl bg-white text-slate-900 hover:bg-orange-50 font-bold text-xs shadow-xs transition whitespace-nowrap active:scale-95"
+                    >
+                      जाहिरात द्या / संपर्क
+                    </button>
+                  </div>
                 </div>
-              </div>
-              <div className="hidden sm:flex items-center gap-1.5 text-xs font-bold text-[#ea580c] bg-white px-3 py-1.5 rounded-xl border border-orange-200 shadow-xs">
-                <span>📍 {selectedCity}</span>
-              </div>
-            </div>
+              );
+            })()}
 
             {/* Category Navigation Pills — Centralized */}
             <div className="space-y-1.5">
@@ -486,7 +548,9 @@ export default function HomePage() {
               customDate={customDate}
               onCustomDateChange={setCustomDate}
               onResetFilters={handleResetFilters}
-              totalFiltered={events.length}
+              totalFiltered={sortedEvents.length}
+              sortBy={sortBy}
+              onSortByChange={setSortBy}
             />
 
             {/* Section 1: Marathi Theatre Spotlight */}
@@ -506,7 +570,7 @@ export default function HomePage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4.5">
                   {theatreEvents.map((evt) => (
                     <EventCard
                       key={evt.id}
@@ -531,7 +595,7 @@ export default function HomePage() {
                       : CATEGORIES.find((c) => c.id === selectedCategory)?.labelMr || 'कार्यक्रम'}
                   </h2>
                   <p className="text-[11px] text-[#6b7280]">
-                    {selectedCity} • {events.length} {language === 'mr' ? 'कार्यक्रम उपलब्ध' : 'events available'}
+                    {selectedCity} • {sortedEvents.length} {language === 'mr' ? 'कार्यक्रम उपलब्ध' : 'events available'}
                     {priceRange < 2000 && ` • कमाल ₹${priceRange}`}
                     {customDate ? ` • तारीख: ${customDate}` : selectedDate !== 'all' ? ` • ${selectedDate}` : ''}
                   </p>
@@ -547,8 +611,8 @@ export default function HomePage() {
               </div>
 
               {loading ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 py-4">
-                  {[1, 2, 3, 4, 5, 6].map((n) => (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4.5 py-4">
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
                     <MTEventCardSkeleton key={n} />
                   ))}
                 </div>
@@ -560,7 +624,7 @@ export default function HomePage() {
                   actionText={language === 'mr' ? 'पुन्हा प्रयत्न करा' : 'Retry'}
                   onAction={fetchEvents}
                 />
-              ) : events.length === 0 ? (
+              ) : sortedEvents.length === 0 ? (
                 <MTEmptyState
                   type="events"
                   title={language === 'mr' ? 'या निवडीसाठी कोणतेही कार्यक्रम नाहीत' : 'No events found'}
@@ -573,8 +637,8 @@ export default function HomePage() {
                   onAction={handleResetFilters}
                 />
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {events.map((evt) => (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4.5">
+                  {sortedEvents.map((evt) => (
                     <EventCard
                       key={evt.id}
                       event={evt}

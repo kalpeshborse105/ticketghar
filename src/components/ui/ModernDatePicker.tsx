@@ -80,15 +80,15 @@ export const ModernDatePicker: React.FC<ModernDatePickerProps> = ({
 
   return (
     <div className="space-y-2">
-      {/* Horizontal BookMyShow style Quick Date Strip */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+      {/* Horizontal BookMyShow style Quick Date Strip — Smooth swipeable on mobile */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none flex-nowrap touch-pan-x -mx-1 px-1">
         {/* All Dates pill */}
         <button
           type="button"
           onClick={() => onSelectDate('all', '')}
-          className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer active:scale-95 ${
+          className={`flex items-center justify-center px-3.5 py-2 rounded-2xl text-xs font-black transition whitespace-nowrap cursor-pointer active:scale-95 shrink-0 ${
             selectedDate === 'all' && !customDate
-              ? 'bg-[#ea580c] text-white shadow-xs'
+              ? 'bg-[#ea580c] text-white shadow-md shadow-orange-500/25 border border-transparent'
               : 'bg-white text-slate-700 hover:text-[#ea580c] border border-slate-200 hover:border-orange-300'
           }`}
         >
@@ -107,17 +107,20 @@ export const ModernDatePicker: React.FC<ModernDatePickerProps> = ({
                 else if (q.isTomorrow) onSelectDate('tomorrow', q.dateStr);
                 else onSelectDate(q.dateStr, q.dateStr);
               }}
-              className={`flex flex-col items-center justify-center min-w-[58px] px-2 py-1 rounded-xl text-xs transition cursor-pointer active:scale-95 ${
+              className={`flex flex-col items-center justify-center min-w-[56px] sm:min-w-[64px] px-2.5 py-1.5 rounded-2xl transition cursor-pointer active:scale-95 shrink-0 border ${
                 isSelected
-                  ? 'bg-[#ea580c] text-white font-bold shadow-xs'
-                  : 'bg-white text-slate-800 hover:text-[#ea580c] border border-slate-200 hover:border-orange-300'
+                  ? 'bg-gradient-to-b from-orange-500 to-[#ea580c] text-white border-[#ea580c] shadow-md shadow-orange-500/30'
+                  : 'bg-white text-slate-800 hover:text-[#ea580c] border-slate-200 hover:border-orange-300'
               }`}
             >
-              <span className="text-[10px] font-semibold opacity-90">
+              <span className={`text-[10px] font-bold uppercase tracking-wider ${isSelected ? 'text-white/90' : 'text-slate-500'}`}>
                 {q.isToday ? (language === 'mr' ? 'आज' : 'Today') : q.isTomorrow ? (language === 'mr' ? 'उद्या' : 'Tom') : q.dayName}
               </span>
-              <span className="text-xs font-black">
-                {q.dateNum} {q.monthName}
+              <span className="text-sm sm:text-base font-black leading-tight">
+                {q.dateNum}
+              </span>
+              <span className={`text-[10px] font-bold ${isSelected ? 'text-white/90' : 'text-slate-500'}`}>
+                {q.monthName}
               </span>
             </button>
           );
@@ -127,10 +130,10 @@ export const ModernDatePicker: React.FC<ModernDatePickerProps> = ({
         <button
           type="button"
           onClick={() => setCalendarOpen(true)}
-          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer active:scale-95 ${
+          className={`flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-xs font-bold transition whitespace-nowrap cursor-pointer active:scale-95 shrink-0 border ${
             customDate && !quickDays.some((q) => q.dateStr === customDate)
-              ? 'bg-slate-900 text-white shadow-xs'
-              : 'bg-slate-50 text-slate-700 hover:text-[#ea580c] border border-slate-200 hover:border-orange-300'
+              ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+              : 'bg-slate-50 text-slate-700 hover:text-[#ea580c] border-slate-200 hover:border-orange-300'
           }`}
         >
           <CalendarIcon className="w-3.5 h-3.5 text-[#ea580c]" />
