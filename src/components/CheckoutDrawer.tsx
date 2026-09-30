@@ -1,21 +1,18 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { EventItem, EventSessionItem, PricingBreakdown } from '../lib/types.ts';
+import { EventItem, EventSessionItem } from '../lib/types.ts';
 import { Language, translations } from '../lib/i18n.ts';
 import {
   X,
   Clock,
   ShieldCheck,
   Tag,
-  CheckCircle,
   CreditCard,
-  QrCode,
   Smartphone,
   Building,
   ArrowRight,
   AlertCircle,
-  Sparkles,
 } from 'lucide-react';
 
 interface CheckoutDrawerProps {
@@ -50,7 +47,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
 
   // Coupon State
   const [couponInput, setCouponInput] = useState('');
-  const [couponApplied, setCouponApplied] = useState<string | null>(null);
+  const [, setCouponApplied] = useState<string | null>(null);
   const [couponDiscount, setCouponDiscount] = useState<number>(0);
   const [couponMessage, setCouponMessage] = useState<string | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
@@ -62,7 +59,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Hold Countdown Timer
-  const [timeLeft, setTimeLeft] = useState<number>(480); // 8 mins in seconds
+  const [timeLeft, setTimeLeft] = useState<number>(480);
 
   useEffect(() => {
     const expireTime = new Date(holdData.holdExpiresAt).getTime();
@@ -87,7 +84,6 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
   const faceValueTotal = holdData.faceValueTotal;
   const platformFeeTotal = (event.convenienceFeeValue || 3000) * ticketCount;
   const gstTotal = Math.round((platformFeeTotal * (event.gstPercent || 18)) / 100);
-  const gatewayCostEst = Math.round((faceValueTotal + platformFeeTotal + gstTotal) * 0.02);
   const grossSubtotal = faceValueTotal + platformFeeTotal + gstTotal;
   const grandTotal = Math.max(0, grossSubtotal - couponDiscount);
 
@@ -151,135 +147,120 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
           userName: userName.trim(),
           userEmail: userEmail.trim().toLowerCase(),
           userPhone: userPhone.trim(),
-          couponCode: couponApplied,
-          holdSummary: {
-            faceValueTotal,
-          },
-          paymentDetails: {
-            gateway: `Razorpay - ${paymentMethod.toUpperCase()}`,
-            razorpayOrderId: `rzp_ord_${Date.now()}`,
-            razorpayPaymentId: `rzp_pay_${Date.now()}`,
-            idempotencyKey: `idem_checkout_${Date.now()}_${holdData.seatIds.join('_')}`,
-          },
+          paymentMethod,
+          appliedCoupon: couponInput || null,
         }),
       });
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Payment confirmation failed');
+        throw new Error(data.error || 'Booking confirmation failed.');
       }
 
-      // Notify parent of success
       onSuccess(data);
     } catch (err: any) {
       console.error(err);
-      setErrorMessage(err.message || 'Payment processing error');
+      setErrorMessage(err.message || 'Payment processing failed. Please retry.');
     } finally {
       setIsProcessing(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/85 backdrop-blur-md flex items-center justify-end animate-in fade-in duration-200">
-      <div className="relative w-full max-w-lg bg-slate-900 border-l border-slate-800 h-full min-h-screen shadow-2xl flex flex-col justify-between overflow-y-auto">
-        {/* Top Header with countdown */}
-        <div>
-          <div className="p-5 border-b border-slate-800 bg-slate-950 flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-bold text-white font-serif">
-                {language === 'mr' ? 'सुरक्षित चेकआउट' : 'Secure Checkout'}
-              </h2>
-              <p className="text-xs text-slate-400 mt-0.5">
-                {language === 'mr' ? event.titleMr : event.title}
-              </p>
-            </div>
-            <button
-              onClick={onClose}
-              className="p-2 rounded-full bg-slate-800 text-slate-400 hover:text-white"
-            >
-              <X className="w-5 h-5" />
-            </button>
+    <div className="fixed inset-0 z-50 overflow-hidden bg-black/80 flex justify-end">
+      <div className="relative w-full max-w-lg bg-[#111827] border-l border-[#243044] shadow-2xl flex flex-col h-full overflow-hidden">
+        {/* Drawer Header */}
+        <div className="px-5 py-4 border-b border-[#243044] flex items-center justify-between bg-[#0a0e17]">
+          <div>
+            <h2 className="text-base font-bold text-white">
+              {t.proceedToCheckout}
+            </h2>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {language === 'mr' ? event.titleMr : event.title}
+            </p>
           </div>
-
-          {/* Seat Hold Expiration Countdown Banner */}
-          <div
-            className={`px-5 py-2.5 flex items-center justify-between text-xs font-semibold ${
-              timeLeft <= 120
-                ? 'bg-rose-500/20 text-rose-300 border-b border-rose-500/30'
-                : 'bg-amber-500/15 text-amber-400 border-b border-amber-500/30'
-            }`}
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg bg-[#1a2333] text-slate-400 hover:text-white border border-[#243044] transition"
           >
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 animate-pulse" />
-              <span>{t.holdNotice}</span>
-            </div>
-            <span className="font-mono text-sm font-extrabold bg-slate-950/60 px-2 py-0.5 rounded border border-current">
-              {formatCountdown(timeLeft)}
-            </span>
-          </div>
+            <X className="w-4 h-4" />
+          </button>
+        </div>
 
-          {/* Contact Details Form */}
-          <div className="p-5 space-y-4 border-b border-slate-800">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400">
+        {/* Hold Countdown Strip */}
+        <div className="px-4 py-2 bg-[#1a2333] border-b border-[#243044] flex items-center justify-between text-xs">
+          <div className="flex items-center gap-1.5 text-amber-400 font-medium">
+            <Clock className="w-3.5 h-3.5" />
+            <span>{t.holdNotice}</span>
+          </div>
+          <span className="font-mono font-bold text-[#ea580c] bg-[#0a0e17] px-2 py-0.5 rounded border border-[#243044]">
+            {formatCountdown(timeLeft)}
+          </span>
+        </div>
+
+        {/* Scrollable Form Body */}
+        <div className="flex-1 overflow-y-auto divide-y divide-[#243044]">
+          {/* 1. Customer Information */}
+          <div className="p-4 space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[#ea580c]">
               १. {t.contactDetails}
             </h3>
 
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               <div>
-                <label className="text-xs font-medium text-slate-300 block mb-1">
+                <label className="block text-xs font-medium text-slate-300 mb-1">
                   {t.fullName} *
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="उदा. सचिन जयंत पाटील"
+                  placeholder="सचिन पाटील / Sachin Patil"
                   value={userName}
                   onChange={(e) => setUserName(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  className="w-full bg-[#0a0e17] border border-[#243044] rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-[#ea580c]"
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-medium text-slate-300 block mb-1">
-                    {t.phone} *
-                  </label>
-                  <input
-                    type="tel"
-                    required
-                    placeholder="+91 98200 12345"
-                    value={userPhone}
-                    onChange={(e) => setUserPhone(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-slate-300 block mb-1">
-                    {t.email} *
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    placeholder="user@gmail.com"
-                    value={userEmail}
-                    onChange={(e) => setUserEmail(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
-                  />
-                </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">
+                  {t.email} * (तिकीट ईमेलवर पाठवले जाईल)
+                </label>
+                <input
+                  type="email"
+                  required
+                  placeholder="sachin.patil@example.com"
+                  value={userEmail}
+                  onChange={(e) => setUserEmail(e.target.value)}
+                  className="w-full bg-[#0a0e17] border border-[#243044] rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-[#ea580c]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">
+                  {t.phone} * (तिकीट व्हॉट्सॲपवर पाठवले जाईल)
+                </label>
+                <input
+                  type="tel"
+                  required
+                  placeholder="+91 98233 44556"
+                  value={userPhone}
+                  onChange={(e) => setUserPhone(e.target.value)}
+                  className="w-full bg-[#0a0e17] border border-[#243044] rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-[#ea580c]"
+                />
               </div>
             </div>
           </div>
 
-          {/* Transparent Price Breakdown */}
-          <div className="p-5 border-b border-slate-800 space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400">
-              २. {t.ticketSummary} ({ticketCount} {language === 'mr' ? 'तिकीट' : 'tickets'})
+          {/* 2. Order Breakdown & Pricing */}
+          <div className="p-4 space-y-3 bg-[#0a0e17]">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[#ea580c]">
+              २. {t.ticketSummary}
             </h3>
 
-            <div className="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800 space-y-2 text-xs">
+            <div className="space-y-1.5 text-xs">
               <div className="flex justify-between text-slate-300">
                 <span>
-                  {t.faceValue} ({holdData.heldSeats.map((s) => s.seatCode).join(', ')})
+                  {t.faceValue} ({ticketCount} {language === 'mr' ? 'जागा' : 'seats'})
                 </span>
                 <span className="font-semibold text-white">
                   ₹{(faceValueTotal / 100).toFixed(0)}
@@ -287,35 +268,27 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
               </div>
 
               <div className="flex justify-between text-slate-400">
-                <span>
-                  {t.convenienceFee} (₹{((event.convenienceFeeValue || 3000) / 100).toFixed(0)} × {ticketCount})
-                </span>
+                <span>{t.convenienceFee}</span>
                 <span>₹{(platformFeeTotal / 100).toFixed(0)}</span>
               </div>
 
               <div className="flex justify-between text-slate-400">
                 <span>{t.tax}</span>
-                <span>₹{(gstTotal / 100).toFixed(2)}</span>
-              </div>
-
-              <div className="flex justify-between text-slate-500 text-[11px]">
-                <span>{t.gatewayCost} (अंतर्भूत / Absorbed in platform)</span>
-                <span>₹{(gatewayCostEst / 100).toFixed(0)}</span>
+                <span>₹{(gstTotal / 100).toFixed(0)}</span>
               </div>
 
               {couponDiscount > 0 && (
-                <div className="flex justify-between text-emerald-400 font-bold border-t border-slate-800 pt-2">
-                  <span className="flex items-center gap-1">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    {t.couponDiscount} ({couponApplied})
-                  </span>
+                <div className="flex justify-between text-emerald-400 font-medium">
+                  <span>{t.couponDiscount}</span>
                   <span>-₹{(couponDiscount / 100).toFixed(0)}</span>
                 </div>
               )}
 
-              <div className="flex justify-between text-sm sm:text-base font-extrabold text-amber-400 border-t border-slate-800 pt-2">
+              <div className="pt-2 border-t border-[#243044] flex justify-between text-sm font-bold text-white">
                 <span>{t.grandTotal}</span>
-                <span>₹{(grandTotal / 100).toFixed(0)}</span>
+                <span className="text-base text-[#ea580c]">
+                  ₹{(grandTotal / 100).toFixed(0)}
+                </span>
               </div>
             </div>
 
@@ -323,19 +296,19 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
             <div className="space-y-2 pt-1">
               <div className="flex gap-2">
                 <div className="relative flex-1">
-                  <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                   <input
                     type="text"
-                    placeholder="कूपन कोड प्रविष्ट करा (e.g. MAHA50)"
+                    placeholder="कूपन कोड (e.g. MAHA50)"
                     value={couponInput}
                     onChange={(e) => setCouponInput(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-9 pr-3 py-1.5 text-xs text-white uppercase placeholder-slate-500"
+                    className="w-full bg-[#111827] border border-[#243044] rounded-lg pl-8 pr-3 py-1.5 text-xs text-white uppercase placeholder-slate-500"
                   />
                 </div>
                 <button
                   type="button"
                   onClick={() => handleApplyCoupon()}
-                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-400 font-bold text-xs border border-slate-700 transition"
+                  className="px-3 py-1.5 rounded-lg bg-[#1a2333] hover:bg-[#243044] text-[#ea580c] font-medium text-xs border border-[#243044] transition"
                 >
                   {t.applyCoupon}
                 </button>
@@ -343,14 +316,14 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
 
               {/* Quick Coupon Suggestions */}
               <div className="flex items-center gap-2 text-[11px] text-slate-400">
-                <span>उपलब्ध ऑफर्स:</span>
+                <span>ऑफर्स:</span>
                 <button
                   type="button"
                   onClick={() => {
                     setCouponInput('MAHA50');
                     handleApplyCoupon('MAHA50');
                   }}
-                  className="px-1.5 py-0.5 rounded bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 font-mono font-bold border border-amber-500/30"
+                  className="px-1.5 py-0.5 rounded bg-[#ea580c]/10 hover:bg-[#ea580c]/20 text-[#ea580c] font-mono font-medium border border-[#ea580c]/30"
                 >
                   MAHA50 (₹५० सूट)
                 </button>
@@ -360,7 +333,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
                     setCouponInput('NATAK10');
                     handleApplyCoupon('NATAK10');
                   }}
-                  className="px-1.5 py-0.5 rounded bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 font-mono font-bold border border-amber-500/30"
+                  className="px-1.5 py-0.5 rounded bg-[#ea580c]/10 hover:bg-[#ea580c]/20 text-[#ea580c] font-mono font-medium border border-[#ea580c]/30"
                 >
                   NATAK10 (१०% सूट)
                 </button>
@@ -370,58 +343,58 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
                 <p className="text-xs text-emerald-400 font-medium">{couponMessage}</p>
               )}
               {couponError && (
-                <p className="text-xs text-rose-400 font-medium">{couponError}</p>
+                <p className="text-xs text-red-400 font-medium">{couponError}</p>
               )}
             </div>
           </div>
 
-          {/* Payment Method Selector (Indian Gateway Simulator) */}
-          <div className="p-5 space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400">
-              ३. पेमेंट पद्धत (Razorpay / Indian Gateway)
+          {/* 3. Payment Method Selector */}
+          <div className="p-4 space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[#ea580c]">
+              ३. पेमेंट पद्धत (Razorpay Gateway)
             </h3>
 
             <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
                 onClick={() => setPaymentMethod('upi')}
-                className={`flex flex-col items-center justify-center p-3 rounded-xl border text-xs font-semibold transition ${
+                className={`flex flex-col items-center justify-center p-2.5 rounded-lg border text-xs font-medium transition ${
                   paymentMethod === 'upi'
-                    ? 'bg-amber-500/20 border-amber-500 text-amber-300'
-                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                    ? 'bg-[#ea580c]/10 border-[#ea580c] text-[#ea580c]'
+                    : 'bg-[#0a0e17] border-[#243044] text-slate-400 hover:border-slate-600'
                 }`}
               >
-                <Smartphone className="w-5 h-5 mb-1" />
+                <Smartphone className="w-4 h-4 mb-1" />
                 <span>UPI / QR</span>
               </button>
               <button
                 type="button"
                 onClick={() => setPaymentMethod('card')}
-                className={`flex flex-col items-center justify-center p-3 rounded-xl border text-xs font-semibold transition ${
+                className={`flex flex-col items-center justify-center p-2.5 rounded-lg border text-xs font-medium transition ${
                   paymentMethod === 'card'
-                    ? 'bg-amber-500/20 border-amber-500 text-amber-300'
-                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                    ? 'bg-[#ea580c]/10 border-[#ea580c] text-[#ea580c]'
+                    : 'bg-[#0a0e17] border-[#243044] text-slate-400 hover:border-slate-600'
                 }`}
               >
-                <CreditCard className="w-5 h-5 mb-1" />
+                <CreditCard className="w-4 h-4 mb-1" />
                 <span>Cards</span>
               </button>
               <button
                 type="button"
                 onClick={() => setPaymentMethod('netbanking')}
-                className={`flex flex-col items-center justify-center p-3 rounded-xl border text-xs font-semibold transition ${
+                className={`flex flex-col items-center justify-center p-2.5 rounded-lg border text-xs font-medium transition ${
                   paymentMethod === 'netbanking'
-                    ? 'bg-amber-500/20 border-amber-500 text-amber-300'
-                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                    ? 'bg-[#ea580c]/10 border-[#ea580c] text-[#ea580c]'
+                    : 'bg-[#0a0e17] border-[#243044] text-slate-400 hover:border-slate-600'
                 }`}
               >
-                <Building className="w-5 h-5 mb-1" />
+                <Building className="w-4 h-4 mb-1" />
                 <span>NetBanking</span>
               </button>
             </div>
 
             {paymentMethod === 'upi' && (
-              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs space-y-2">
+              <div className="p-3 bg-[#0a0e17] rounded-lg border border-[#243044] text-xs space-y-1.5">
                 <span className="text-slate-400 block">
                   Google Pay, PhonePe, Paytm, BHIM UPI द्वारे त्वरित पेमेंट:
                 </span>
@@ -430,7 +403,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
                   placeholder="आपला UPI ID प्रविष्ट करा (e.g. mobile@upi)"
                   value={upiId}
                   onChange={(e) => setUpiId(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-500"
+                  className="w-full bg-[#111827] border border-[#243044] rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-500"
                 />
               </div>
             )}
@@ -438,20 +411,20 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
         </div>
 
         {/* Bottom Sticky Action Bar */}
-        <div className="p-5 border-t border-slate-800 bg-slate-950 space-y-3">
+        <div className="p-4 border-t border-[#243044] bg-[#0a0e17] space-y-2.5 safe-bottom">
           {errorMessage && (
-            <div className="p-2.5 rounded-lg bg-rose-500/20 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+            <div className="p-2 rounded-lg bg-red-950/60 border border-red-800 text-red-300 text-xs flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{errorMessage}</span>
             </div>
           )}
 
           <div className="flex items-center justify-between text-xs text-slate-400">
-            <span className="flex items-center gap-1.5">
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              <span>२५६-बिट सुरक्षित पेमेंट आणि पडताळणी</span>
+            <span className="flex items-center gap-1">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+              <span>सुरक्षित पेमेंट आणि त्वरित QR तिकीट</span>
             </span>
-            <span className="font-extrabold text-base text-amber-400">
+            <span className="font-bold text-sm text-[#ea580c]">
               ₹{(grandTotal / 100).toFixed(0)}
             </span>
           </div>
@@ -459,11 +432,11 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
           <button
             disabled={isProcessing || timeLeft <= 0}
             onClick={handleConfirmPayment}
-            className="w-full flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 hover:from-amber-600 hover:to-amber-800 disabled:opacity-50 text-slate-950 font-extrabold text-sm shadow-xl transition cursor-pointer"
+            className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-lg bg-[#ea580c] hover:bg-[#c2410c] disabled:opacity-50 text-white font-semibold text-xs sm:text-sm shadow-sm transition active:scale-98"
           >
             {isProcessing ? (
               <>
-                <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 <span>पेमेंट पडताळत आहे आणि QR तिकीट बनवत आहे...</span>
               </>
             ) : (

@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="mr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MahaTicket - Booking Confirmed</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background-color: #0a0e17;
+      color: #f8fafc;
+      margin: 0;
+      padding: 20px;
+    }
+    .ticket-container {
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #111827;
+      border: 1px solid #243044;
+      border-radius: 16px;
+      overflow: hidden;
+    }
+    .header {
+      background-color: #ea580c;
+      padding: 24px;
+      text-align: center;
+      color: #ffffff;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 800;
+    }
+    .header p {
+      margin: 4px 0 0 0;
+      font-size: 13px;
+      opacity: 0.9;
+    }
+    .body {
+      padding: 24px;
+    }
+    .event-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 4px;
+    }
+    .event-cat {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      color: #ea580c;
+      background-color: rgba(234, 88, 12, 0.1);
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-bottom: 16px;
+    }
+    .details-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 24px;
+    }
+    .details-table td {
+      padding: 8px 0;
+      border-bottom: 1px solid #243044;
+      font-size: 13px;
+    }
+    .details-table .label {
+      color: #94a3b8;
+      width: 40%;
+    }
+    .details-table .value {
+      color: #f8fafc;
+      font-weight: 600;
+      text-align: right;
+    }
+    .qr-section {
+      text-align: center;
+      padding: 16px;
+      background-color: #0a0e17;
+      border-radius: 12px;
+      border: 1px solid #243044;
+      margin-bottom: 24px;
+    }
+    .qr-section img {
+      width: 140px;
+      height: 140px;
+      margin: 0 auto 12px auto;
+      display: block;
+      border-radius: 8px;
+      background: #ffffff;
+      padding: 8px;
+    }
+    .qr-hint {
+      font-size: 11px;
+      color: #94a3b8;
+    }
+    .footer {
+      padding: 16px 24px;
+      background-color: #0d131f;
+      border-top: 1px solid #243044;
+      text-align: center;
+      font-size: 11px;
+      color: #64748b;
+    }
+  </style>
+</head>
+<body>
+  <div class="ticket-container">
+    <div class="header">
+      <h1>MahaTicket (महाटिकिट)</h1>
+      <p>Booking Confirmed! आपले तिकीट निश्चित झाले आहे</p>
+    </div>
+    <div class="body">
+      <div class="event-title">{{EVENT_TITLE}}</div>
+      <div class="event-cat">{{EVENT_CATEGORY}}</div>
+
+      <table class="details-table">
+        <tr>
+          <td class="label">ऑर्डर क्र. (Order No.)</td>
+          <td class="value" style="color: #ea580c; font-family: monospace;">{{ORDER_NUMBER}}</td>
+        </tr>
+        <tr>
+          <td class="label">सभागृह (Venue)</td>
+          <td class="value">{{VENUE_NAME}}</td>
+        </tr>
+        <tr>
+          <td class="label">दिनांक व वेळ (Showtime)</td>
+          <td class="value">{{SHOW_DATE_TIME}}</td>
+        </tr>
+        <tr>
+          <td class="label">आसने (Seats)</td>
+          <td class="value" style="color: #ea580c;">{{SEATS_LIST}}</td>
+        </tr>
+        <tr>
+          <td class="label">ग्राहक नाव (Attendee)</td>
+          <td class="value">{{ATTENDEE_NAME}}</td>
+        </tr>
+        <tr>
+          <td class="label">एकूण रक्कम (Grand Total)</td>
+          <td class="value" style="font-size: 15px;">₹{{GRAND_TOTAL}}</td>
+        </tr>
+      </table>
+
+      <div class="qr-section">
+        <img src="{{QR_DATA_URL}}" alt="Gate Entry QR" />
+        <div class="qr-hint">सभागृहाच्या प्रवेशद्वारावर हा QR कोड दाखवा (Present at Entrance)</div>
+        <div style="font-family: monospace; font-size: 11px; color: #ea580c; margin-top: 4px;">{{TICKET_CODE}}</div>
+      </div>
+    </div>
+    <div class="footer">
+      MahaTicket • Kalpkrut Infotech • Maharashtra-First Ticket Discovery & Booking Platform
+    </div>
+  </div>
+</body>
+</html>

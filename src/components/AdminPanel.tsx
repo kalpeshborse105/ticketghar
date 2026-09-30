@@ -387,15 +387,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition text-xs font-semibold"
             title="Return to Customer App"
           >
-            <ArrowLeft className="w-4 h-4 text-amber-400" />
+            <ArrowLeft className="w-4 h-4 text-[#ea580c]" />
             <span>{language === 'mr' ? 'ग्राहक ॲपवर परत जा' : 'Back to App'}</span>
           </button>
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-extrabold text-base sm:text-lg font-serif">
-                TicketGhar Control Center
+              <span className="font-extrabold text-base sm:text-lg">
+                MahaTicket Control Center (महाटिकिट नियंत्रण कक्ष)
               </span>
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#ea580c]/10 text-[#ea580c] border border-[#ea580c]/30">
                 PROD BACKEND
               </span>
             </div>
@@ -643,8 +643,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     <span>डेटाबेस व सुरक्षा तपशील (Database State)</span>
                   </h3>
                   <div className="text-xs text-slate-300 space-y-1">
-                    <p>• <strong>इंजिन:</strong> PostgreSQL 16 (Google Cloud SQL Developer)</p>
-                    <p>• <strong>रीजन:</strong> asia-southeast1 (Near-zero latency)</p>
+                    <p>• <strong>इंजिन:</strong> PostgreSQL 16 (Supabase Relational Database)</p>
+                    <p>• <strong>रीजन:</strong> asia-southeast1 / ap-south-1 (Near-zero latency)</p>
                     <p>• <strong>इन्व्हेंटरी मॉडेल:</strong> Database-Authoritative 8-min Atomic Holds</p>
                   </div>
                   <button

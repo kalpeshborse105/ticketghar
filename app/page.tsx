@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { translations } from '@/src/lib/i18n';
 import { Language, EventCategory, EventItem, EventSessionItem } from '@/src/lib/types';
 import { Header } from '@/src/components/Header';
@@ -12,7 +12,10 @@ import { CheckoutDrawer } from '@/src/components/CheckoutDrawer';
 import { TicketPassModal } from '@/src/components/TicketPassModal';
 import { MyTicketsView } from '@/src/components/MyTicketsView';
 import { PartnerWithUsModal } from '@/src/components/PartnerWithUsModal';
-import { AdminPanel } from '@/src/components/AdminPanel';
+import { MTBottomNavigation, NavTab } from '@/src/components/ui/MTBottomNavigation';
+import { MTSkeleton } from '@/src/components/ui/MTSkeleton';
+import { MTEmptyState } from '@/src/components/ui/MTEmptyState';
+import { MTToastContainer, ToastMessage } from '@/src/components/ui/MTToast';
 import { useOnlineStatus } from '@/hooks/use-pwa';
 import {
   Sparkles,
@@ -26,9 +29,8 @@ import {
   AlertTriangle,
   RefreshCw,
   Building2,
+  Tag,
   ShieldCheck,
-  MapPin,
-  Calendar,
 } from 'lucide-react';
 
 const CATEGORIES: { id: EventCategory; labelEn: string; labelMr: string; icon: any }[] = [
@@ -56,8 +58,9 @@ export default function HomePage() {
   const [selectedCity, setSelectedCity] = useState('महाराष्ट्र (All)');
   const [selectedCategory, setSelectedCategory] = useState<EventCategory>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeNavTab, setActiveNavTab] = useState<NavTab>('home');
 
-  // NEW: Price range & Date filter state
+  // Price range & Date filter state
   const [priceRange, setPriceRange] = useState<number>(2000);
   const [selectedDate, setSelectedDate] = useState<string>('all');
   const [customDate, setCustomDate] = useState<string>('');
@@ -68,8 +71,11 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
 
   // Surface view controllers
-  const [viewState, setViewState] = useState<'home' | 'my_tickets' | 'admin'>('home');
+  const [viewState, setViewState] = useState<'home' | 'my_tickets' | 'offers' | 'profile'>('home');
   const [partnerModalOpen, setPartnerModalOpen] = useState(false);
+
+  // Toasts
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   // Booking Flow State
   const [selectedEventForBooking, setSelectedEventForBooking] = useState<EventItem | null>(null);
@@ -79,17 +85,29 @@ export default function HomePage() {
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [confirmedBookingResult, setConfirmedBookingResult] = useState<any | null>(null);
 
-  // Reset all filters
+  const addToast = (type: 'success' | 'error' | 'warning' | 'info', message: string) => {
+    const id = `${Date.now()}-${Math.random()}`;
+    setToasts((prev) => [...prev, { id, type, message }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 4000);
+  };
+
+  const handleDismissToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
   const handleResetFilters = () => {
     setPriceRange(2000);
     setSelectedDate('all');
     setCustomDate('');
     setSelectedCategory('all');
     setSearchQuery('');
+    addToast('info', language === 'mr' ? 'फिल्टर रीसेट केले आहेत' : 'Filters reset');
   };
 
   // Fetch Events from API
-  const fetchEvents = async () => {
+  const fetchEvents = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -118,37 +136,52 @@ export default function HomePage() {
       const data = await res.json();
       setEvents(data.events || []);
 
-      // Cache event cards in localStorage for offline availability
       if (typeof window !== 'undefined') {
         try {
-          localStorage.setItem('ticketghar_cached_events', JSON.stringify(data.events || []));
-        } catch (e) {
+          localStorage.setItem('mahaticket_cached_events', JSON.stringify(data.events || []));
+        } catch {
           // ignore cache error
         }
       }
     } catch (err: any) {
       console.warn('Network error fetching events:', err);
-      // Fallback to offline cached events
       if (typeof window !== 'undefined') {
-        const cached = localStorage.getItem('ticketghar_cached_events');
+        const cached = localStorage.getItem('mahaticket_cached_events') || localStorage.getItem('ticketghar_cached_events');
         if (cached) {
           try {
             setEvents(JSON.parse(cached));
             setError(null);
             setLoading(false);
             return;
-          } catch (e) {}
+          } catch {}
         }
       }
       setError(err.message || 'Error loading events');
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedCity, selectedCategory, searchQuery, priceRange, selectedDate, customDate]);
 
   useEffect(() => {
     fetchEvents();
-  }, [selectedCity, selectedCategory, searchQuery, priceRange, selectedDate, customDate]);
+  }, [fetchEvents]);
+
+  // Handle Bottom Nav Changes
+  const handleNavTabChange = (tab: NavTab) => {
+    setActiveNavTab(tab);
+    if (tab === 'home') {
+      setViewState('home');
+      setSelectedCategory('all');
+    } else if (tab === 'explore') {
+      setViewState('home');
+    } else if (tab === 'tickets') {
+      setViewState('my_tickets');
+    } else if (tab === 'offers') {
+      setViewState('offers');
+    } else if (tab === 'profile') {
+      setViewState('profile');
+    }
+  };
 
   // Initiate booking from event card
   const handleSelectEvent = (event: EventItem) => {
@@ -164,23 +197,15 @@ export default function HomePage() {
     setCheckoutHoldData(holdData);
     setSeatMapOpen(false);
     setCheckoutOpen(true);
+    addToast('success', language === 'mr' ? 'जागा ८ मिनिटांसाठी आरक्षित केल्या आहेत' : 'Seats held for 8 minutes');
   };
 
   // From Checkout to Success Ticket Pass
   const handleBookingConfirmed = (result: any) => {
     setCheckoutOpen(false);
     setConfirmedBookingResult(result);
+    addToast('success', language === 'mr' ? 'तिकीट यशस्वीरीत्या बुक झाले!' : 'Booking confirmed successfully!');
   };
-
-  // Render Admin Surface if active
-  if (viewState === 'admin') {
-    return (
-      <AdminPanel
-        language={language}
-        onBack={() => setViewState('home')}
-      />
-    );
-  }
 
   // Filter theatre/plays events for Marathi spotlight
   const theatreEvents = events.filter(
@@ -188,11 +213,14 @@ export default function HomePage() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950">
+    <div className="min-h-screen bg-[#0a0e17] text-slate-100 flex flex-col font-sans selection:bg-[#ea580c] selection:text-white">
+      {/* Toast Notifications */}
+      <MTToastContainer toasts={toasts} onDismiss={handleDismissToast} />
+
       {/* Offline Status Alert Banner */}
       {mounted && !isOnline && (
-        <div className="bg-amber-600 px-4 py-2 text-center text-xs font-bold text-slate-950 flex items-center justify-center gap-2 shadow-lg sticky top-0 z-50">
-          <AlertTriangle className="w-4 h-4 fill-current shrink-0" />
+        <div className="bg-[#ea580c] px-4 py-2 text-center text-xs font-bold text-white flex items-center justify-center gap-2 sticky top-0 z-50">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
           <span>{t.offlineBanner}</span>
         </div>
       )}
@@ -205,247 +233,298 @@ export default function HomePage() {
         onCityChange={setSelectedCity}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        onOpenMyTickets={() => setViewState('my_tickets')}
+        onOpenMyTickets={() => {
+          setViewState('my_tickets');
+          setActiveNavTab('tickets');
+        }}
         onOpenPartnerModal={() => setPartnerModalOpen(true)}
-        onOpenAdmin={() => setViewState('admin')}
-        onHomeClick={() => setViewState('home')}
+        onHomeClick={() => {
+          setViewState('home');
+          setActiveNavTab('home');
+        }}
+        onCategorySelect={(cat) => {
+          setViewState('home');
+          setSelectedCategory(cat as EventCategory);
+        }}
       />
 
-      {/* Render My Tickets or Discovery Content */}
-      {viewState === 'my_tickets' ? (
-        <MyTicketsView
-          language={language}
-          onBack={() => setViewState('home')}
-          onViewTicket={(data) => setConfirmedBookingResult(data)}
-        />
-      ) : (
-        <div className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-6 sm:space-y-8">
-          {/* Top Hero Banner */}
-          {!searchQuery && selectedCategory === 'all' && priceRange === 2000 && selectedDate === 'all' && !customDate && (
-            <HeroBanner
-              events={events}
-              language={language}
-              onSelectEvent={handleSelectEvent}
-            />
-          )}
-
-          {/* Category Navigation Pills */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-              {CATEGORIES.map((cat) => {
-                const Icon = cat.icon;
-                const isSelected = selectedCategory === cat.id;
-                return (
-                  <button
-                    key={cat.id}
-                    onClick={() => setSelectedCategory(cat.id)}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap cursor-pointer transform active:scale-95 ${
-                      isSelected
-                        ? 'bg-amber-500 text-slate-950 font-bold shadow-lg shadow-amber-500/20 ring-2 ring-amber-400/50'
-                        : 'bg-slate-900/90 text-slate-300 hover:text-white border border-slate-800 hover:border-slate-700'
-                    }`}
-                  >
-                    <Icon className={`w-4 h-4 ${isSelected ? 'text-slate-950' : 'text-amber-400'}`} />
-                    <span>{language === 'mr' ? cat.labelMr : cat.labelEn}</span>
-                  </button>
-                );
-              })}
+      {/* Main Content Area */}
+      <main className="flex-1 pb-20 md:pb-6">
+        {viewState === 'my_tickets' ? (
+          <MyTicketsView
+            language={language}
+            onBack={() => {
+              setViewState('home');
+              setActiveNavTab('home');
+            }}
+            onViewTicket={(data) => setConfirmedBookingResult(data)}
+          />
+        ) : viewState === 'offers' ? (
+          <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
+            <h1 className="text-xl font-bold text-white flex items-center gap-2">
+              <Tag className="w-5 h-5 text-[#ea580c]" />
+              <span>{language === 'mr' ? 'विशेष सवलती व ऑफर्स' : 'Special Offers & Promo Codes'}</span>
+            </h1>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="bg-[#111827] border border-[#243044] rounded-xl p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono font-bold text-base text-[#ea580c]">MAHA50</span>
+                  <span className="text-xs bg-emerald-950 text-emerald-400 px-2 py-0.5 rounded border border-emerald-800">सक्रिय (Active)</span>
+                </div>
+                <p className="text-sm text-slate-200">₹५० थेट सवलत</p>
+                <p className="text-xs text-slate-400">किमान ₹३०० च्या बुकिंगवर लागू. चेकआउट दरम्यान कूपन लागू करा.</p>
+              </div>
+              <div className="bg-[#111827] border border-[#243044] rounded-xl p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono font-bold text-base text-[#ea580c]">NATAK10</span>
+                  <span className="text-xs bg-emerald-950 text-emerald-400 px-2 py-0.5 rounded border border-emerald-800">सक्रिय (Active)</span>
+                </div>
+                <p className="text-sm text-slate-200">१०% सवलत (कमाल ₹१०० पर्यंत)</p>
+                <p className="text-xs text-slate-400">मराठी नाटके व संगीत मैफिलींवर उपलब्ध.</p>
+              </div>
             </div>
           </div>
+        ) : viewState === 'profile' ? (
+          <div className="max-w-md mx-auto px-4 py-10 space-y-6 text-center">
+            <div className="w-16 h-16 rounded-full bg-[#111827] border border-[#243044] flex items-center justify-center mx-auto text-[#ea580c]">
+              <ShieldCheck className="w-8 h-8" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-white">महाटिकिट वापरकर्ता खाते</h2>
+              <p className="text-xs text-slate-400 mt-1">आपली बुक केलेली सर्व तिकिटे आपल्या फोनवर उपलब्ध आहेत.</p>
+            </div>
+            <div className="bg-[#111827] border border-[#243044] rounded-xl p-4 text-left space-y-3">
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-400">पसंतीचे शहर:</span>
+                <span className="text-white font-medium">{selectedCity}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-400">भाषा:</span>
+                <span className="text-[#ea580c] font-medium">{language === 'mr' ? 'मराठी' : 'English'}</span>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setViewState('my_tickets');
+                setActiveNavTab('tickets');
+              }}
+              className="w-full py-2.5 rounded-lg bg-[#ea580c] hover:bg-[#c2410c] text-white text-xs font-semibold"
+            >
+              {t.myTickets}
+            </button>
+          </div>
+        ) : (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-5 space-y-5">
+            {/* Top Hero Banner */}
+            {!searchQuery && selectedCategory === 'all' && priceRange === 2000 && selectedDate === 'all' && !customDate && (
+              <HeroBanner
+                events={events}
+                language={language}
+                onSelectEvent={handleSelectEvent}
+              />
+            )}
 
-          {/* Interactive Catalog Filter Bar: Price Range Slider + Date Picker Dropdown */}
-          <CatalogFilterBar
-            language={language}
-            priceRange={priceRange}
-            onPriceRangeChange={setPriceRange}
-            selectedDate={selectedDate}
-            onDateChange={setSelectedDate}
-            customDate={customDate}
-            onCustomDateChange={setCustomDate}
-            onResetFilters={handleResetFilters}
-            totalFiltered={events.length}
-          />
+            {/* Category Navigation Pills */}
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 scrollbar-none">
+                {CATEGORIES.map((cat) => {
+                  const Icon = cat.icon;
+                  const isSelected = selectedCategory === cat.id;
+                  return (
+                    <button
+                      key={cat.id}
+                      onClick={() => setSelectedCategory(cat.id)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap cursor-pointer active:scale-95 ${
+                        isSelected
+                          ? 'bg-[#ea580c] text-white shadow-sm font-semibold'
+                          : 'bg-[#111827] text-slate-300 hover:text-white border border-[#243044] hover:bg-[#1a2333]'
+                      }`}
+                    >
+                      <Icon className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : 'text-[#ea580c]'}`} />
+                      <span>{language === 'mr' ? cat.labelMr : cat.labelEn}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-          {/* Section 1: Marathi Theatre Spotlight (मराठी रंगभूमी विशेष) */}
-          {selectedCategory === 'all' && !searchQuery && priceRange === 2000 && selectedDate === 'all' && !customDate && theatreEvents.length > 0 && (
-            <div className="space-y-4 pt-2">
-              <div className="flex items-center justify-between">
+            {/* Interactive Catalog Filter Bar */}
+            <CatalogFilterBar
+              language={language}
+              priceRange={priceRange}
+              onPriceRangeChange={setPriceRange}
+              selectedDate={selectedDate}
+              onDateChange={setSelectedDate}
+              customDate={customDate}
+              onCustomDateChange={setCustomDate}
+              onResetFilters={handleResetFilters}
+              totalFiltered={events.length}
+            />
+
+            {/* Section 1: Marathi Theatre Spotlight */}
+            {selectedCategory === 'all' && !searchQuery && priceRange === 2000 && selectedDate === 'all' && !customDate && theatreEvents.length > 0 && (
+              <div className="space-y-3 pt-1">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center">
+                  <div className="w-7 h-7 rounded-lg bg-[#ea580c]/10 text-[#ea580c] border border-[#ea580c]/30 flex items-center justify-center">
                     <Theater className="w-4 h-4" />
                   </div>
                   <div>
-                    <h2 className="text-xl sm:text-2xl font-black text-white font-serif tracking-tight">
+                    <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
                       {t.theatreSpotlight}
                     </h2>
-                    <p className="text-xs text-slate-400">
-                      महाराष्ट्रातील नामवंत रंगमंदिरांमधील लोकप्रिय व पुरस्कृत नाटके
+                    <p className="text-[11px] text-slate-400">
+                      महाराष्ट्रातील नामवंत रंगमंदिरांमधील लोकप्रिय व सुवर्णमहोत्सवी नाटके
                     </p>
                   </div>
                 </div>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                {theatreEvents.map((evt) => (
-                  <EventCard
-                    key={evt.id}
-                    event={evt}
-                    language={language}
-                    onSelect={handleSelectEvent}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Section 2: All Events / Filtered Catalog */}
-          <div className="space-y-4 pt-2">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div>
-                <h2 className="text-xl sm:text-2xl font-black text-white font-serif tracking-tight">
-                  {selectedCategory === 'all'
-                    ? language === 'mr'
-                      ? 'आगामी कार्यक्रम (Upcoming Experiences)'
-                      : 'Upcoming Experiences'
-                    : CATEGORIES.find((c) => c.id === selectedCategory)?.labelMr || 'कार्यक्रम'}
-                </h2>
-                <p className="text-xs text-slate-400">
-                  {selectedCity} • {events.length} कार्यक्रम उपलब्ध
-                  {priceRange < 2000 && ` • कमाल ₹${priceRange}`}
-                  {customDate ? ` • तारीख: ${customDate}` : selectedDate !== 'all' ? ` • ${selectedDate}` : ''}
-                </p>
-              </div>
-
-              <button
-                onClick={fetchEvents}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-400 hover:text-white transition"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">रिफ्रेश</span>
-              </button>
-            </div>
-
-            {loading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 py-8">
-                {[1, 2, 3].map((n) => (
-                  <div
-                    key={n}
-                    className="bg-slate-900/60 rounded-2xl h-80 animate-pulse border border-slate-800 p-4 space-y-3"
-                  >
-                    <div className="w-full h-44 bg-slate-800 rounded-xl" />
-                    <div className="w-3/4 h-5 bg-slate-800 rounded" />
-                    <div className="w-1/2 h-4 bg-slate-800 rounded" />
-                  </div>
-                ))}
-              </div>
-            ) : error ? (
-              <div className="p-8 text-center bg-slate-900 rounded-2xl border border-slate-800 space-y-3">
-                <AlertTriangle className="w-8 h-8 text-amber-500 mx-auto" />
-                <h3 className="text-base font-bold text-white">{error}</h3>
-                <button
-                  onClick={fetchEvents}
-                  className="px-4 py-2 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs"
-                >
-                  पुन्हा प्रयत्न करा
-                </button>
-              </div>
-            ) : events.length === 0 ? (
-              <div className="py-16 text-center bg-slate-900/50 rounded-2xl border border-slate-800 p-8 space-y-3">
-                <Theater className="w-10 h-10 text-slate-600 mx-auto" />
-                <h3 className="text-base font-bold text-white">
-                  या फिल्टर किंवा बजेटनुसार सध्या कार्यक्रम उपलब्ध नाहीत
-                </h3>
-                <p className="text-xs text-slate-400 max-w-md mx-auto">
-                  आपले बजेट वाढवून पहा किंवा फिल्टर रीसेट करून महाराष्ट्रातील इतर शहरांमधील नाटके व कार्यक्रम शोधा.
-                </p>
-                <button
-                  onClick={handleResetFilters}
-                  className="mt-2 px-5 py-2.5 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs shadow-lg hover:bg-amber-400 transition"
-                >
-                  सर्व फिल्टर रीसेट करा (Show All Events)
-                </button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                {events.map((evt) => (
-                  <EventCard
-                    key={evt.id}
-                    event={evt}
-                    language={language}
-                    onSelect={handleSelectEvent}
-                  />
-                ))}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {theatreEvents.map((evt) => (
+                    <EventCard
+                      key={evt.id}
+                      event={evt}
+                      language={language}
+                      onSelect={handleSelectEvent}
+                    />
+                  ))}
+                </div>
               </div>
             )}
-          </div>
 
-          {/* Producer & Organizer Banner with quick admin entry */}
-          <div className="rounded-3xl bg-gradient-to-r from-amber-950/60 via-slate-900 to-slate-900 border border-amber-500/30 p-6 sm:p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl">
-            <div className="space-y-2 max-w-xl text-center md:text-left">
-              <span className="text-xs uppercase font-extrabold tracking-widest text-amber-400 flex items-center justify-center md:justify-start gap-1.5">
-                <Building2 className="w-4 h-4" />
-                <span>नाट्य व कार्यक्रम आयोजकांसाठी</span>
-              </span>
-              <h3 className="text-xl sm:text-2xl font-bold text-white font-serif">
-                आपला कार्यक्रम तिकीटघरवर सूचीबद्ध करा
-              </h3>
-              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                पारदर्शक लेजर, सुरक्षित पेमेंट, थेट गेट स्कॅनर सपोर्ट आणि महाराष्ट्रातील लक्षावधी रसिकांपर्यंत थेट पोहोच.
-              </p>
+            {/* Section 2: All Events / Filtered Catalog */}
+            <div className="space-y-3 pt-2">
+              <div className="flex items-center justify-between border-b border-[#243044] pb-2">
+                <div>
+                  <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
+                    {selectedCategory === 'all'
+                      ? language === 'mr'
+                        ? 'आगामी कार्यक्रम (Upcoming Experiences)'
+                        : 'Upcoming Experiences'
+                      : CATEGORIES.find((c) => c.id === selectedCategory)?.labelMr || 'कार्यक्रम'}
+                  </h2>
+                  <p className="text-[11px] text-slate-400">
+                    {selectedCity} • {events.length} {language === 'mr' ? 'कार्यक्रम उपलब्ध' : 'events available'}
+                    {priceRange < 2000 && ` • कमाल ₹${priceRange}`}
+                    {customDate ? ` • तारीख: ${customDate}` : selectedDate !== 'all' ? ` • ${selectedDate}` : ''}
+                  </p>
+                </div>
+
+                <button
+                  onClick={fetchEvents}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded bg-[#111827] border border-[#243044] text-xs text-slate-300 hover:text-white transition"
+                >
+                  <RefreshCw className="w-3 h-3 text-[#ea580c]" />
+                  <span className="hidden sm:inline">{language === 'mr' ? 'ताजे करा' : 'Refresh'}</span>
+                </button>
+              </div>
+
+              {loading ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 py-4">
+                  {[1, 2, 3].map((n) => (
+                    <div key={n} className="bg-[#111827] rounded-xl border border-[#243044] p-3 space-y-3">
+                      <MTSkeleton className="w-full h-40" />
+                      <MTSkeleton variant="text" width="70%" />
+                      <MTSkeleton variant="text" width="40%" />
+                    </div>
+                  ))}
+                </div>
+              ) : error ? (
+                <MTEmptyState
+                  type="general"
+                  title={language === 'mr' ? 'माहिती लोड करण्यात अडचण आली' : 'Unable to load events'}
+                  description={language === 'mr' ? 'कृपया इंटरनेट कनेक्शन तपासा किंवा पुन्हा प्रयत्न करा.' : 'Please verify connection and retry.'}
+                  actionText={language === 'mr' ? 'पुन्हा प्रयत्न करा' : 'Retry'}
+                  onAction={fetchEvents}
+                />
+              ) : events.length === 0 ? (
+                <MTEmptyState
+                  type="events"
+                  title={language === 'mr' ? 'या निवडीसाठी कोणतेही कार्यक्रम नाहीत' : 'No events found'}
+                  description={
+                    language === 'mr'
+                      ? 'आपले बजेट किंवा तारीख बदलून पहा किंवा सर्व शहरांमधील कार्यक्रम शोधा.'
+                      : 'Try broadening your budget, clearing date filters, or selecting All Maharashtra.'
+                  }
+                  actionText={language === 'mr' ? 'सर्व कार्यक्रम पहा' : 'Show All Events'}
+                  onAction={handleResetFilters}
+                />
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {events.map((evt) => (
+                    <EventCard
+                      key={evt.id}
+                      event={evt}
+                      language={language}
+                      onSelect={handleSelectEvent}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
-            <div className="flex flex-col sm:flex-row items-center gap-3">
+
+            {/* Producer & Organizer Banner */}
+            <div className="rounded-xl bg-[#111827] border border-[#243044] p-5 sm:p-6 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm">
+              <div className="space-y-1.5 max-w-xl text-center md:text-left">
+                <span className="text-[11px] uppercase font-bold tracking-wider text-[#ea580c] flex items-center justify-center md:justify-start gap-1">
+                  <Building2 className="w-3.5 h-3.5" />
+                  <span>नाट्य व कार्यक्रम आयोजकांसाठी</span>
+                </span>
+                <h3 className="text-base sm:text-lg font-bold text-white">
+                  आपला कार्यक्रम महाटिकिटवर सूचीबद्ध करा
+                </h3>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  पारदर्शक लेजर, थेट बँक खात्यात सेटलमेंट, मोफत व्हॉट्सॲप डिजिटल पास, आणि सभागृह गेट स्कॅनर सपोर्ट.
+                </p>
+              </div>
               <button
                 onClick={() => setPartnerModalOpen(true)}
-                className="px-6 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-extrabold text-xs sm:text-sm shadow-xl transition transform hover:scale-105 whitespace-nowrap cursor-pointer"
+                className="px-5 py-2.5 rounded-lg bg-[#ea580c] hover:bg-[#c2410c] text-white font-semibold text-xs shadow-sm transition active:scale-95 whitespace-nowrap"
               >
                 {t.partnerWithUs}
               </button>
-              <button
-                onClick={() => setViewState('admin')}
-                className="px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-amber-400 font-semibold text-xs sm:text-sm transition whitespace-nowrap flex items-center gap-1.5"
-              >
-                <ShieldCheck className="w-4 h-4" />
-                <span>ॲडमिन कंट्रोल कक्ष</span>
-              </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </main>
 
       {/* Footer */}
-      <footer className="border-t border-slate-900 bg-slate-950/90 py-8 px-4 sm:px-8 mt-12 text-xs text-slate-500">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
+      <footer className="border-t border-[#243044] bg-[#0d131f] py-6 px-4 sm:px-8 text-xs text-slate-500 hidden md:block">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
           <div>
-            <div className="flex items-center justify-center sm:justify-start gap-2 text-slate-300 font-bold text-sm">
-              <span className="font-serif">TicketGhar (तिकीटघर)</span>
-              <span className="text-[10px] text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+            <div className="flex items-center justify-center sm:justify-start gap-2 text-slate-200 font-bold text-sm">
+              <span>MahaTicket (महाटिकिट)</span>
+              <span className="text-[10px] text-[#ea580c] bg-[#ea580c]/10 px-1.5 py-0.2 rounded border border-[#ea580c]/20">
                 महाराष्ट्र
               </span>
             </div>
-            <p className="mt-1 text-slate-500">
-              पुणे • मुंबई • नागपूर • नाशिक • ठाणे • संभाजीनगर • कोल्हापूर • सोलापूर • सांगली
+            <p className="mt-1 text-slate-400 text-[11px]">
+              पुणे • मुंबई • ठाणे • नाशिक • नागपूर • कोल्हापूर • संभाजीनगर • सोलापूर
             </p>
           </div>
 
-          <div className="flex items-center gap-4 text-slate-400 font-medium">
+          <div className="flex items-center gap-4 text-slate-400 font-normal text-xs">
             <button
               onClick={() => setPartnerModalOpen(true)}
-              className="hover:text-amber-400 transition"
+              className="hover:text-[#ea580c] transition"
             >
-              आयोजक नोंदणी
+              आयोजक नोंदणी (Partner With Us)
             </button>
-            <button
-              onClick={() => setViewState('admin')}
-              className="hover:text-amber-400 transition flex items-center gap-1 text-amber-400"
-            >
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>प्रशासक लॉगिन (Admin)</span>
-            </button>
-            <span className="text-slate-600">|</span>
+            <span>•</span>
+            <span className="text-slate-400">नियम व अटी (Terms)</span>
+            <span>•</span>
+            <span className="text-slate-400">गोपनीयता धोरण (Privacy)</span>
+            <span>•</span>
             <span>© {new Date().getFullYear()} Kalpkrut Infotech</span>
           </div>
         </div>
       </footer>
+
+      {/* Mobile Bottom Navigation (Home, Explore, Tickets, Offers, Profile) */}
+      <MTBottomNavigation
+        activeTab={activeNavTab}
+        onTabChange={handleNavTabChange}
+        language={language}
+      />
 
       {/* MODAL 1: Interactive Seat Map */}
       {seatMapOpen && selectedEventForBooking && selectedSessionForBooking && (
@@ -458,7 +537,7 @@ export default function HomePage() {
         />
       )}
 
-      {/* MODAL 2: Transparent Checkout Drawer */}
+      {/* MODAL 2: Checkout Drawer */}
       {checkoutOpen && selectedEventForBooking && selectedSessionForBooking && checkoutHoldData && (
         <CheckoutDrawer
           event={selectedEventForBooking}
@@ -479,7 +558,7 @@ export default function HomePage() {
         />
       )}
 
-      {/* MODAL 4: Partner With Us / Producer Application */}
+      {/* MODAL 4: Partner With Us */}
       {partnerModalOpen && (
         <PartnerWithUsModal
           language={language}

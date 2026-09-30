@@ -1,17 +1,14 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { EventItem, EventSessionItem, SeatItem } from '../lib/types.ts';
+import React, { useState, useEffect, useCallback } from 'react';
+import { EventItem, EventSessionItem } from '../lib/types.ts';
 import { Language, translations } from '../lib/i18n.ts';
 import {
   X,
   Clock,
-  ShieldAlert,
-  CheckCircle2,
   AlertCircle,
   Accessibility,
   ArrowRight,
-  Ticket,
 } from 'lucide-react';
 
 interface SeatMapModalProps {
@@ -45,7 +42,7 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
   const [isHolding, setIsHolding] = useState(false);
 
   // Fetch real-time seat inventory for this session
-  const fetchSessionSeats = async () => {
+  const fetchSessionSeats = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -61,11 +58,11 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [session.id]);
 
   useEffect(() => {
     fetchSessionSeats();
-  }, [session.id]);
+  }, [fetchSessionSeats]);
 
   // Handle seat click
   const toggleSeatSelection = (seat: any) => {
@@ -112,7 +109,6 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
         throw new Error(data.error || 'Seat hold expired or unavailable.');
       }
 
-      // Success: pass hold token to checkout
       onProceedToCheckout({
         sessionId: session.id,
         seatIds: selectedSeatIds,
@@ -123,7 +119,6 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
     } catch (err: any) {
       console.error(err);
       setError(err.message || 'Selected seat(s) became unavailable. Please refresh.');
-      // Refresh seat statuses
       fetchSessionSeats();
       setSelectedSeatIds([]);
     } finally {
@@ -131,7 +126,6 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
     }
   };
 
-  // Partition seats into Balcony & Stall/Orchestra
   const balconySection = sections.find((s) => s.name.toLowerCase().includes('balcony'));
   const balconySeats = balconySection
     ? seats.filter((s) => s.sectionId === balconySection.id)
@@ -142,14 +136,12 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
     ? seats.filter((s) => s.sectionId === stallSection.id)
     : seats;
 
-  // Group seats by row
   const groupByRow = (seatList: any[]) => {
     const rows: { [key: string]: any[] } = {};
     for (const s of seatList) {
       if (!rows[s.rowLabel]) rows[s.rowLabel] = [];
       rows[s.rowLabel].push(s);
     }
-    // Sort each row by seat number
     for (const r in rows) {
       rows[r].sort((a, b) => a.seatNumber - b.seatNumber);
     }
@@ -160,16 +152,16 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
   const stallRows = groupByRow(stallSeats);
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
-      <div className="relative w-full max-w-4xl bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 flex items-center justify-center p-2 sm:p-4">
+      <div className="relative w-full max-w-4xl bg-[#111827] border border-[#243044] rounded-2xl shadow-xl flex flex-col max-h-[92vh] overflow-hidden">
         {/* Modal Header */}
-        <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/50">
+        <div className="px-4 py-3.5 border-b border-[#243044] flex items-center justify-between bg-[#0a0e17]">
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-lg sm:text-xl font-bold text-white font-serif">
+              <h2 className="text-base sm:text-lg font-bold text-white">
                 {language === 'mr' ? event.titleMr : event.title}
               </h2>
-              <span className="text-xs px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 font-semibold border border-amber-500/30">
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#ea580c]/10 text-[#ea580c] font-semibold border border-[#ea580c]/30">
                 {language === 'mr' ? event.categoryMr : event.category}
               </span>
             </div>
@@ -187,44 +179,44 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-full bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition"
+            className="p-1.5 rounded-lg bg-[#1a2333] text-slate-400 hover:text-white border border-[#243044] transition"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Error Alert if any */}
+        {/* Error Alert */}
         {error && (
-          <div className="mx-5 mt-4 p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs sm:text-sm flex items-center gap-2">
+          <div className="mx-4 mt-3 p-3 rounded-lg bg-red-950/60 border border-red-800 text-red-300 text-xs flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
         {/* Seat Legend */}
-        <div className="px-5 py-3 bg-slate-950/30 border-b border-slate-800 flex flex-wrap items-center justify-center gap-4 text-xs text-slate-300">
+        <div className="px-4 py-2.5 bg-[#0a0e17] border-b border-[#243044] flex flex-wrap items-center justify-center gap-3.5 text-xs text-slate-300">
           <div className="flex items-center gap-1.5">
-            <div className="w-4 h-4 rounded border-2 border-slate-600 bg-slate-800" />
+            <div className="w-3.5 h-3.5 rounded bg-[#1e293b] border border-[#334155]" />
             <span>{t.available}</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-4 h-4 rounded bg-amber-500 flex items-center justify-center text-slate-950 font-bold text-[10px]">
+            <div className="w-3.5 h-3.5 rounded bg-[#ea580c] flex items-center justify-center text-white font-bold text-[9px]">
               ✓
             </div>
             <span>{t.selected}</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-4 h-4 rounded bg-amber-600/30 border border-amber-500/50 flex items-center justify-center">
+            <div className="w-3.5 h-3.5 rounded bg-amber-900/50 border border-amber-600 flex items-center justify-center">
               <Clock className="w-2.5 h-2.5 text-amber-400" />
             </div>
             <span>{t.held}</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-4 h-4 rounded bg-slate-700 opacity-40 cursor-not-allowed" />
+            <div className="w-3.5 h-3.5 rounded bg-[#1e293b] opacity-40" />
             <span>{t.sold}</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-4 h-4 rounded border border-blue-500 bg-blue-900/40 flex items-center justify-center">
+            <div className="w-3.5 h-3.5 rounded border border-blue-500 bg-blue-950 flex items-center justify-center">
               <Accessibility className="w-2.5 h-2.5 text-blue-400" />
             </div>
             <span>{t.accessible}</span>
@@ -232,19 +224,19 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
         </div>
 
         {/* Scrollable Seat Grid Container */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto overflow-x-auto p-4 sm:p-6 space-y-6">
           {loading ? (
-            <div className="flex flex-col items-center justify-center py-16 text-slate-400 gap-3">
-              <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
-              <p className="text-sm">आसनव्यवस्था तपासत आहे... (Loading Seat Map)</p>
+            <div className="flex flex-col items-center justify-center py-12 text-slate-400 gap-3">
+              <div className="w-6 h-6 border-2 border-[#ea580c] border-t-transparent rounded-full animate-spin" />
+              <p className="text-xs">आसनव्यवस्था तपासत आहे... (Loading Seat Map)</p>
             </div>
           ) : (
-            <>
+            <div className="min-w-[480px]">
               {/* Stage Visual */}
               <div className="w-full flex flex-col items-center mb-6">
-                <div className="w-3/4 h-2.5 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 rounded-t-full shadow-lg shadow-amber-500/20" />
-                <div className="w-3/4 py-1.5 bg-slate-950 border-x border-b border-amber-500/30 rounded-b-xl text-center">
-                  <span className="text-xs font-bold tracking-widest text-amber-400 uppercase">
+                <div className="w-3/4 h-2 bg-[#ea580c] rounded-t-full shadow-sm" />
+                <div className="w-3/4 py-1 bg-[#0a0e17] border-x border-b border-[#243044] rounded-b-lg text-center">
+                  <span className="text-[11px] font-semibold tracking-wider text-[#ea580c] uppercase">
                     {t.stageThisWay}
                   </span>
                 </div>
@@ -252,37 +244,37 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
 
               {/* Stall / Orchestra Section */}
               {Object.keys(stallRows).length > 0 && (
-                <div className="space-y-2.5 bg-slate-950/40 p-4 rounded-2xl border border-slate-800">
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-                    <span className="text-xs font-bold text-amber-400 uppercase tracking-wide">
+                <div className="space-y-2 bg-[#0a0e17] p-3.5 rounded-xl border border-[#243044]">
+                  <div className="flex items-center justify-between pb-2 border-b border-[#243044]">
+                    <span className="text-xs font-semibold text-[#ea580c] uppercase tracking-wide">
                       {language === 'mr' ? stallSection?.nameMr || 'स्टॉल' : stallSection?.name || 'Stall Floor'}
                     </span>
-                    <span className="text-xs font-semibold text-slate-400">
+                    <span className="text-xs font-medium text-slate-400">
                       ₹{((stallSection?.basePrice || 35000) / 100).toFixed(0)}
                     </span>
                   </div>
 
-                  <div className="flex flex-col items-center gap-2 pt-2">
+                  <div className="flex flex-col items-center gap-1.5 pt-2">
                     {Object.entries(stallRows).map(([rowLabel, rowSeats]) => (
-                      <div key={rowLabel} className="flex items-center gap-2 sm:gap-3">
-                        <span className="w-5 text-xs font-extrabold text-slate-400 text-center">
+                      <div key={rowLabel} className="flex items-center gap-2">
+                        <span className="w-5 text-xs font-semibold text-slate-400 text-center">
                           {rowLabel}
                         </span>
-                        <div className="flex items-center gap-1.5 sm:gap-2">
+                        <div className="flex items-center gap-1.5">
                           {rowSeats.map((seat) => {
                             const isSelected = selectedSeatIds.includes(seat.seatId);
                             const isBooked = seat.status === 'booked';
                             const isHeld = seat.status === 'held' && !isSelected;
 
-                            let seatStyle = 'bg-slate-800 border border-slate-600 hover:border-amber-400 text-slate-300';
+                            let seatStyle = 'bg-[#1e293b] border border-[#334155] hover:border-[#ea580c] text-slate-300';
                             if (isSelected) {
-                              seatStyle = 'bg-amber-500 border-amber-400 text-slate-950 font-bold shadow-md shadow-amber-500/30';
+                              seatStyle = 'bg-[#ea580c] border-[#ea580c] text-white font-bold shadow-sm';
                             } else if (isBooked) {
-                              seatStyle = 'bg-slate-800/40 border-slate-800 text-slate-600 cursor-not-allowed';
+                              seatStyle = 'bg-[#1e293b]/40 border-[#243044] text-slate-600 cursor-not-allowed';
                             } else if (isHeld) {
                               seatStyle = 'bg-amber-950/40 border-amber-600/50 text-amber-400 cursor-not-allowed';
                             } else if (seat.isAccessible) {
-                              seatStyle = 'bg-blue-950/30 border-blue-500/70 text-blue-300 hover:border-blue-400';
+                              seatStyle = 'bg-blue-950/40 border-blue-500 text-blue-300 hover:border-blue-400';
                             }
 
                             return (
@@ -290,7 +282,7 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
                                 key={seat.seatId}
                                 disabled={isBooked || isHeld}
                                 onClick={() => toggleSeatSelection(seat)}
-                                className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg text-[10px] sm:text-xs flex items-center justify-center transition-all transform active:scale-95 ${seatStyle}`}
+                                className={`w-7 h-7 sm:w-8 sm:h-8 rounded text-[10px] sm:text-xs flex items-center justify-center transition-all duration-150 active:scale-90 ${seatStyle}`}
                                 title={`${seat.seatCode} (₹${((seat.price || 35000) / 100).toFixed(0)})`}
                               >
                                 {isSelected ? '✓' : seat.seatNumber}
@@ -298,7 +290,7 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
                             );
                           })}
                         </div>
-                        <span className="w-5 text-xs font-extrabold text-slate-400 text-center">
+                        <span className="w-5 text-xs font-semibold text-slate-400 text-center">
                           {rowLabel}
                         </span>
                       </div>
@@ -309,33 +301,33 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
 
               {/* Balcony Section */}
               {Object.keys(balconyRows).length > 0 && (
-                <div className="space-y-2.5 bg-slate-950/40 p-4 rounded-2xl border border-slate-800">
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-                    <span className="text-xs font-bold text-amber-400 uppercase tracking-wide">
+                <div className="space-y-2 bg-[#0a0e17] p-3.5 rounded-xl border border-[#243044] mt-4">
+                  <div className="flex items-center justify-between pb-2 border-b border-[#243044]">
+                    <span className="text-xs font-semibold text-[#ea580c] uppercase tracking-wide">
                       {language === 'mr' ? balconySection?.nameMr || 'बाल्कनी' : balconySection?.name || 'Balcony Lounge'}
                     </span>
-                    <span className="text-xs font-semibold text-slate-400">
+                    <span className="text-xs font-medium text-slate-400">
                       ₹{((balconySection?.basePrice || 50000) / 100).toFixed(0)}
                     </span>
                   </div>
 
-                  <div className="flex flex-col items-center gap-2 pt-2">
+                  <div className="flex flex-col items-center gap-1.5 pt-2">
                     {Object.entries(balconyRows).map(([rowLabel, rowSeats]) => (
-                      <div key={rowLabel} className="flex items-center gap-2 sm:gap-3">
-                        <span className="w-5 text-xs font-extrabold text-slate-400 text-center">
+                      <div key={rowLabel} className="flex items-center gap-2">
+                        <span className="w-5 text-xs font-semibold text-slate-400 text-center">
                           {rowLabel}
                         </span>
-                        <div className="flex items-center gap-1.5 sm:gap-2">
+                        <div className="flex items-center gap-1.5">
                           {rowSeats.map((seat) => {
                             const isSelected = selectedSeatIds.includes(seat.seatId);
                             const isBooked = seat.status === 'booked';
                             const isHeld = seat.status === 'held' && !isSelected;
 
-                            let seatStyle = 'bg-slate-800 border border-slate-600 hover:border-amber-400 text-slate-300';
+                            let seatStyle = 'bg-[#1e293b] border border-[#334155] hover:border-[#ea580c] text-slate-300';
                             if (isSelected) {
-                              seatStyle = 'bg-amber-500 border-amber-400 text-slate-950 font-bold shadow-md shadow-amber-500/30';
+                              seatStyle = 'bg-[#ea580c] border-[#ea580c] text-white font-bold shadow-sm';
                             } else if (isBooked) {
-                              seatStyle = 'bg-slate-800/40 border-slate-800 text-slate-600 cursor-not-allowed';
+                              seatStyle = 'bg-[#1e293b]/40 border-[#243044] text-slate-600 cursor-not-allowed';
                             } else if (isHeld) {
                               seatStyle = 'bg-amber-950/40 border-amber-600/50 text-amber-400 cursor-not-allowed';
                             }
@@ -345,7 +337,7 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
                                 key={seat.seatId}
                                 disabled={isBooked || isHeld}
                                 onClick={() => toggleSeatSelection(seat)}
-                                className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg text-[10px] sm:text-xs flex items-center justify-center transition-all transform active:scale-95 ${seatStyle}`}
+                                className={`w-7 h-7 sm:w-8 sm:h-8 rounded text-[10px] sm:text-xs flex items-center justify-center transition-all duration-150 active:scale-90 ${seatStyle}`}
                                 title={`${seat.seatCode} (₹${((seat.price || 50000) / 100).toFixed(0)})`}
                               >
                                 {isSelected ? '✓' : seat.seatNumber}
@@ -353,7 +345,7 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
                             );
                           })}
                         </div>
-                        <span className="w-5 text-xs font-extrabold text-slate-400 text-center">
+                        <span className="w-5 text-xs font-semibold text-slate-400 text-center">
                           {rowLabel}
                         </span>
                       </div>
@@ -361,12 +353,12 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
                   </div>
                 </div>
               )}
-            </>
+            </div>
           )}
         </div>
 
         {/* Modal Footer: Selection tray & Checkout button */}
-        <div className="p-4 sm:p-5 border-t border-slate-800 bg-slate-950 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="p-3.5 sm:p-4 border-t border-[#243044] bg-[#0a0e17] flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="w-full sm:w-auto">
             <div className="flex items-center gap-2">
               <span className="text-xs text-slate-400">
@@ -377,7 +369,7 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
                   selectedSeats.map((s) => (
                     <span
                       key={s.seatId}
-                      className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 font-bold text-xs border border-amber-500/30"
+                      className="px-1.5 py-0.5 rounded bg-[#ea580c]/10 text-[#ea580c] font-semibold text-[11px] border border-[#ea580c]/30"
                     >
                       {s.seatCode}
                     </span>
@@ -392,11 +384,8 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
 
             <div className="mt-1 flex items-baseline gap-2">
               <span className="text-xs text-slate-400">{t.grandTotal}:</span>
-              <span className="text-lg sm:text-xl font-extrabold text-amber-400">
+              <span className="text-base sm:text-lg font-bold text-[#ea580c]">
                 ₹{(estTotal / 100).toFixed(0)}
-              </span>
-              <span className="text-[10px] text-slate-400">
-                (शुल्क व करासह / incl. convenience fee & GST)
               </span>
             </div>
           </div>
@@ -404,11 +393,11 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
           <button
             disabled={selectedSeatIds.length === 0 || isHolding}
             onClick={handleHoldAndProceed}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 hover:from-amber-600 hover:to-amber-800 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-extrabold text-sm shadow-xl transition cursor-pointer"
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-[#ea580c] hover:bg-[#c2410c] disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-xs sm:text-sm shadow-sm transition active:scale-95"
           >
             {isHolding ? (
               <>
-                <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 <span>आरक्षित करत आहे...</span>
               </>
             ) : (
