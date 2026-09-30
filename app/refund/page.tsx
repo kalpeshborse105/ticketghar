@@ -14,7 +14,7 @@ export default function RefundPage() {
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center gap-4">
           <Link 
             href="/" 
-            className="flex items-center gap-2 text-sm text-[#6366f1] hover:text-[#4f46e5] transition"
+            className="flex items-center gap-2 text-sm text-orange-600 hover:text-orange-700 transition"
           >
             <ArrowLeft className="w-4 h-4" />
             <span>Back to MahaTicket</span>
@@ -27,7 +27,7 @@ export default function RefundPage() {
         {/* Title */}
         <div className="space-y-2">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-[#6366f1]/10 text-[#6366f1] flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-orange-50 text-orange-600 border border-orange-200 flex items-center justify-center">
               <RefreshCw className="w-5 h-5" />
             </div>
             <h1 className="text-3xl font-bold text-[#111827]">Cancellation & Refund Policy</h1>
@@ -132,7 +132,7 @@ export default function RefundPage() {
               <li>If approved, refunds will be processed to your original payment method</li>
             </ol>
             <p className="text-sm text-[#374151] leading-relaxed mt-3">
-              Alternatively, contact us at <Link href="/contact" className="text-[#6366f1] hover:underline">support@mahaticket.in</Link> with your booking ID.
+              Alternatively, contact us at <Link href="/contact" className="text-orange-600 hover:underline">support@mahaticket.in</Link> with your booking ID.
             </p>
           </section>
 
@@ -184,7 +184,7 @@ export default function RefundPage() {
               If you have a dispute regarding cancellation or refund:
             </p>
             <ul className="list-disc list-inside space-y-2 text-sm text-[#374151] leading-relaxed">
-              <li>First, contact MahaTicket support at <Link href="/contact" className="text-[#6366f1] hover:underline">support@mahaticket.in</Link></li>
+              <li>First, contact MahaTicket support at <Link href="/contact" className="text-orange-600 hover:underline">support@mahaticket.in</Link></li>
               <li>Provide your booking ID, payment receipt, and detailed explanation</li>
               <li>We will mediate between you and the event organizer</li>
               <li>Resolution typically takes 5-7 business days</li>
@@ -202,7 +202,7 @@ export default function RefundPage() {
             <div className="bg-[#f5f5f5] rounded-lg p-4 text-sm text-[#374151] space-y-1 mt-3">
               <p><strong>Email:</strong> support@mahaticket.in</p>
               <p><strong>Phone:</strong> +91-XXXXX-XXXXX (Mon-Sat, 10 AM - 7 PM)</p>
-              <p><strong>Support:</strong> <Link href="/contact" className="text-[#6366f1] hover:underline">Contact Page</Link></p>
+              <p><strong>Support:</strong> <Link href="/contact" className="text-orange-600 hover:underline">Contact Page</Link></p>
             </div>
           </section>
 
@@ -210,13 +210,13 @@ export default function RefundPage() {
 
         {/* Footer Links */}
         <div className="flex flex-wrap gap-4 justify-center text-xs text-[#6b7280]">
-          <Link href="/terms" className="hover:text-[#6366f1] transition">Terms of Use</Link>
+          <Link href="/terms" className="hover:text-orange-600 transition">Terms of Use</Link>
           <span>•</span>
-          <Link href="/privacy" className="hover:text-[#6366f1] transition">Privacy Policy</Link>
+          <Link href="/privacy" className="hover:text-orange-600 transition">Privacy Policy</Link>
           <span>•</span>
-          <Link href="/contact" className="hover:text-[#6366f1] transition">Contact Support</Link>
+          <Link href="/contact" className="hover:text-orange-600 transition">Contact Support</Link>
           <span>•</span>
-          <Link href="/about" className="hover:text-[#6366f1] transition">About MahaTicket</Link>
+          <Link href="/about" className="hover:text-orange-600 transition">About MahaTicket</Link>
         </div>
       </main>
     </div>

@@ -26,111 +26,238 @@ function collectPdf(doc: PDFKit.PDFDocument): Promise<Buffer> {
 }
 
 /**
- * Generate a real PDF Buffer for a MahaTicket pass (not HTML).
+ * Generate a high-fidelity BookMyShow-style M-Ticket PDF pass
  */
 export async function generateTicketPdfBuffer(input: TicketPdfInput): Promise<Buffer> {
   const doc = new PDFDocument({
     size: 'A4',
-    margin: 48,
+    margin: 36,
     info: {
-      Title: `MahaTicket Pass ${input.ticketCode}`,
-      Author: 'MahaTicket',
-      Subject: 'Event admission ticket',
+      Title: `MahaTicket Admission Pass - ${input.orderNumber}`,
+      Author: 'MahaTicket (महाटिकिट)',
+      Subject: 'Official Admission M-Ticket Pass',
+      Keywords: 'ticket, bookmyshow, mahaticket, m-ticket, admission',
     },
   });
 
   const done = collectPdf(doc);
 
-  // Header
+  const pageWidth = doc.page.width;
+  const margin = 36;
+  const contentWidth = pageWidth - margin * 2;
+
+  // 1. Top Brand Banner (BookMyShow / Cinemax Style Orange header)
+  doc.rect(margin, margin, contentWidth, 54).fill('#ea580c');
+
   doc
-    .fillColor('#4F46E5')
-    .fontSize(22)
+    .fillColor('#FFFFFF')
+    .fontSize(20)
     .font('Helvetica-Bold')
-    .text('MahaTicket', { continued: false });
-  doc
-    .fillColor('#6B7280')
+    .text('MahaTicket', margin + 18, margin + 12, { continued: true })
     .fontSize(11)
     .font('Helvetica')
-    .text('महाटिकिट — Official Admission Pass');
+    .text('  |  Official Admission Pass (M-Ticket)', { baseline: 'middle' });
 
-  doc.moveDown(0.5);
   doc
-    .strokeColor('#E5E7EB')
+    .fillColor('#FED7AA')
+    .fontSize(9)
+    .font('Helvetica')
+    .text('Maharashtra First Event & Cultural Ticket Marketplace', margin + 18, margin + 35);
+
+  // 2. Ticket Body Card Background
+  const cardTop = margin + 54;
+  const cardHeight = 670;
+  doc
+    .rect(margin, cardTop, contentWidth, cardHeight)
+    .fillAndStroke('#FFFFFF', '#E2E8F0');
+
+  let currentY = cardTop + 20;
+
+  // 3. Event Title & Category
+  doc
+    .fillColor('#ea580c')
+    .fontSize(10)
+    .font('Helvetica-Bold')
+    .text('LIVE PERFORMANCE / EVENT ADMISSION', margin + 20, currentY);
+
+  currentY += 16;
+
+  doc
+    .fillColor('#0F172A')
+    .fontSize(18)
+    .font('Helvetica-Bold')
+    .text(input.eventTitle, margin + 20, currentY, { width: contentWidth - 40 });
+
+  currentY += 28;
+
+  // Thin separator
+  doc
+    .strokeColor('#E2E8F0')
     .lineWidth(1)
-    .moveTo(48, doc.y)
-    .lineTo(547, doc.y)
+    .moveTo(margin + 20, currentY)
+    .lineTo(margin + contentWidth - 20, currentY)
     .stroke();
-  doc.moveDown(1);
 
-  doc.fillColor('#111827').fontSize(16).font('Helvetica-Bold').text(input.eventTitle, {
-    width: 500,
-  });
-  doc.moveDown(0.8);
+  currentY += 16;
 
-  const amount = `INR ${(input.faceValuePaise / 100).toFixed(0)}`;
-  const rows: [string, string][] = [
+  // 4. Booking Details Two-Column Grid
+  const col1X = margin + 20;
+  const col2X = margin + (contentWidth / 2) + 10;
+  const labelWidth = 100;
+  const valueWidth = (contentWidth / 2) - 120;
+
+  const leftRows: [string, string][] = [
     ['Booking ID', input.orderNumber],
-    ['Ticket ID', input.ticketCode],
+    ['Show Date & Time', input.showtime],
     ['Venue', input.venueName],
-    ['Date & Time', input.showtime],
-    ['Seat', input.seatCode],
-    ['Attendee', input.attendeeName],
-    ['Amount', amount],
-    ['Status', input.status],
   ];
 
-  doc.fontSize(11).font('Helvetica');
-  for (const [label, value] of rows) {
-    doc.fillColor('#6B7280').text(label, { continued: false, width: 140 });
-    doc
-      .moveUp()
-      .fillColor('#111827')
-      .font('Helvetica-Bold')
-      .text(value || '—', 200, doc.y, { width: 320 });
-    doc.font('Helvetica');
-    doc.moveDown(0.45);
+  const rightRows: [string, string][] = [
+    ['Attendee Name', input.attendeeName || 'Guest Attendee'],
+    ['Seats Assigned', input.seatCode],
+    ['Total Amount', `INR ${(input.faceValuePaise / 100).toFixed(2)} (PAID)`],
+  ];
+
+  let leftY = currentY;
+  doc.fontSize(10);
+  for (const [label, val] of leftRows) {
+    doc.fillColor('#64748B').font('Helvetica').text(label, col1X, leftY, { width: labelWidth });
+    doc.fillColor('#0F172A').font('Helvetica-Bold').text(val, col1X + labelWidth, leftY, { width: valueWidth });
+    leftY += 26;
   }
 
-  doc.moveDown(0.6);
+  let rightY = currentY;
+  for (const [label, val] of rightRows) {
+    doc.fillColor('#64748B').font('Helvetica').text(label, col2X, rightY, { width: labelWidth });
+    doc.fillColor(label === 'Seats Assigned' ? '#ea580c' : '#0F172A').font('Helvetica-Bold').text(val, col2X + labelWidth, rightY, { width: valueWidth });
+    rightY += 26;
+  }
 
-  // QR
-  const qrPng = await QRCode.toBuffer(input.qrPayload || input.ticketCode, {
+  currentY = Math.max(leftY, rightY) + 10;
+
+  // 5. Perforated Dashed Tear Line (Cinema Ticket Stub effect)
+  doc
+    .strokeColor('#94A3B8')
+    .lineWidth(1)
+    .dash(4, { space: 4 })
+    .moveTo(margin, currentY)
+    .lineTo(margin + contentWidth, currentY)
+    .stroke()
+    .undash();
+
+  currentY += 18;
+
+  // 6. Central Unified QR Code (BookMyShow Style)
+  // Encodes the verified public URL so phone cameras and scanners directly open the ticket pass!
+  const publicShareUrl = getTicketShareUrl(input.ticketCode);
+  const qrTarget = input.qrPayload.startsWith('http') ? input.qrPayload : publicShareUrl;
+
+  const qrPng = await QRCode.toBuffer(qrTarget, {
     type: 'png',
-    width: 180,
-    margin: 1,
+    width: 200,
+    margin: 2,
     errorCorrectionLevel: 'M',
+    color: {
+      dark: '#0F172A',
+      light: '#FFFFFF',
+    },
   });
 
-  const qrX = (doc.page.width - 180) / 2;
-  doc.image(qrPng, qrX, doc.y, { width: 180, height: 180 });
-  doc.moveDown(12);
-  doc
-    .fillColor('#6B7280')
-    .fontSize(10)
-    .text('Show this QR at the venue gate for entry.', { align: 'center' });
+  const qrSize = 150;
+  const qrX = margin + (contentWidth - qrSize) / 2;
 
-  const shareUrl = getTicketShareUrl(input.ticketCode);
-  doc.moveDown(0.5);
+  // QR container with light background and subtle border
   doc
-    .fillColor('#4F46E5')
+    .rect(qrX - 10, currentY - 5, qrSize + 20, qrSize + 20)
+    .fillAndStroke('#F8FAFC', '#CBD5E1');
+
+  doc.image(qrPng, qrX, currentY + 5, { width: qrSize, height: qrSize });
+
+  currentY += qrSize + 28;
+
+  doc
+    .fillColor('#ea580c')
+    .fontSize(11)
+    .font('Helvetica-Bold')
+    .text('SCAN FOR GATE ENTRY & LIVE VERIFICATION', margin + 20, currentY, {
+      align: 'center',
+      width: contentWidth - 40,
+    });
+
+  currentY += 16;
+
+  doc
+    .fillColor('#475569')
     .fontSize(9)
-    .text(shareUrl, { align: 'center', link: shareUrl });
+    .font('Helvetica')
+    .text('Point mobile camera at QR code or tap the link below:', margin + 20, currentY, {
+      align: 'center',
+      width: contentWidth - 40,
+    });
 
-  doc.moveDown(1.5);
+  currentY += 14;
+
   doc
-    .fillColor('#9CA3AF')
+    .fillColor('#0284c7')
+    .fontSize(9)
+    .font('Helvetica-Bold')
+    .text(publicShareUrl, margin + 20, currentY, {
+      align: 'center',
+      width: contentWidth - 40,
+      link: publicShareUrl,
+    });
+
+  currentY += 24;
+
+  // 7. Important Instructions Box
+  doc
+    .rect(margin + 20, currentY, contentWidth - 40, 100)
+    .fillAndStroke('#F1F5F9', '#E2E8F0');
+
+  doc
+    .fillColor('#0F172A')
+    .fontSize(9)
+    .font('Helvetica-Bold')
+    .text('IMPORTANT INSTRUCTIONS / सूचना', margin + 30, currentY + 10);
+
+  const instructions = [
+    '• Please present this digital M-Ticket on your phone or a printed copy at the entry gate.',
+    '• Gates open 30 minutes prior to showtime. Please arrive at least 15 minutes before commencement.',
+    '• Outside food and beverages are strictly not allowed inside the auditorium / cinema hall.',
+    '• Handover this pass to the gate scanner operator for instant laser/camera validation.',
+  ];
+
+  let instY = currentY + 25;
+  doc.fontSize(8).font('Helvetica').fillColor('#475569');
+  for (const inst of instructions) {
+    doc.text(inst, margin + 30, instY, { width: contentWidth - 60 });
+    instY += 16;
+  }
+
+  currentY += 114;
+
+  // 8. Footer Trust Marks
+  doc
+    .fillColor('#94A3B8')
     .fontSize(8)
+    .font('Helvetica')
     .text(
-      'MahaTicket support · Keep this pass safe · Non-transferable unless organizer allows · Do not share QR publicly.',
-      { align: 'center', width: 480 }
+      'MahaTicket Official Ticketing Partner · Customer Support: support@mahaticket.kalpkrutinfotech.com · Non-Transferable',
+      margin + 20,
+      currentY,
+      { align: 'center', width: contentWidth - 40 }
     );
 
   if (input.securityHash) {
-    doc.moveDown(0.4);
+    currentY += 12;
     doc
-      .fillColor('#D1D5DB')
+      .fillColor('#CBD5E1')
       .fontSize(7)
-      .text(`SEC ${input.securityHash.slice(0, 32)}…`, { align: 'center' });
+      .font('Helvetica')
+      .text(`HMAC SEC: ${input.securityHash.slice(0, 36)}...`, margin + 20, currentY, {
+        align: 'center',
+        width: contentWidth - 40,
+      });
   }
 
   doc.end();

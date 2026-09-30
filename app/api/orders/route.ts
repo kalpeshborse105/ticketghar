@@ -4,6 +4,7 @@ import { orders, events, venues, eventSessions, tickets, ticketTypes, users } fr
 import { eq, desc, and } from 'drizzle-orm';
 import QRCode from 'qrcode';
 import { createClient } from '@/src/lib/supabase/server.ts';
+import { getCustomerSession } from '@/src/lib/auth-service';
 
 export async function GET(request: Request) {
   try {
@@ -12,9 +13,23 @@ export async function GET(request: Request) {
     const email = searchParams.get('email');
     const ticketCode = searchParams.get('ticketCode');
 
-    // Get authenticated user
-    const supabase = await createClient();
-    const { data: { user: authUser } } = await supabase.auth.getUser();
+    // Get authenticated user via cookie session or Supabase
+    const customerSession = await getCustomerSession();
+    let authUser: { id: string | number; email?: string } | null = customerSession;
+
+    if (!authUser) {
+      try {
+        const supabase = await createClient();
+        const {
+          data: { user: supaUser },
+        } = await supabase.auth.getUser();
+        if (supaUser) {
+          authUser = { id: supaUser.id, email: supaUser.email };
+        }
+      } catch {
+        // non-blocking
+      }
+    }
 
     // Guest ticket lookup by order number or ticket code (public access)
     if (orderNumber || ticketCode) {
@@ -96,28 +111,16 @@ export async function GET(request: Request) {
     }
 
     // List user's orders - requires authentication
-    if (!authUser) {
+    if (!authUser || !authUser.email) {
       return NextResponse.json(
         { error: 'Authentication required to list orders' },
         { status: 401 }
       );
     }
 
-    // Get user from database using Supabase UID
-    const dbUsers = await db
-      .select()
-      .from(users)
-      .where(eq(users.uid, authUser.id))
-      .limit(1);
+    const cleanUserEmail = authUser.email.trim().toLowerCase();
 
-    if (dbUsers.length === 0) {
-      // User authenticated but not in our database yet
-      return NextResponse.json({ orders: [] });
-    }
-
-    const dbUser = dbUsers[0];
-
-    // Fetch orders for this user
+    // Find orders for this user by userId or userEmail
     const userOrders = await db
       .select({
         order: orders,
@@ -129,7 +132,7 @@ export async function GET(request: Request) {
       .innerJoin(events, eq(orders.eventId, events.id))
       .innerJoin(venues, eq(events.venueId, venues.id))
       .innerJoin(eventSessions, eq(orders.sessionId, eventSessions.id))
-      .where(eq(orders.userId, dbUser.id))
+      .where(eq(orders.userEmail, cleanUserEmail))
       .orderBy(desc(orders.createdAt))
       .limit(50);
 

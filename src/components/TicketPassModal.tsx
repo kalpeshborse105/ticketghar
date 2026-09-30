@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Language, translations } from '../lib/i18n.ts';
+import { QRCodeSVG } from 'qrcode.react';
 import {
   CheckCircle,
   Download,
@@ -12,6 +13,9 @@ import {
   ShieldCheck,
   X,
   Mail,
+  Loader2,
+  Printer,
+  CheckCircle2,
 } from 'lucide-react';
 import {
   buildBookingWhatsAppMessage,
@@ -36,6 +40,8 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
     'idle'
   );
   const [emailMessage, setEmailMessage] = useState('');
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadSuccess, setDownloadSuccess] = useState(false);
 
   // Save to offline cache (localStorage)
   useEffect(() => {
@@ -61,47 +67,51 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
     }
   }, [order, event, tickets, pricing]);
 
-  // Auto-email to order email (no popup) — reports real provider status
+  const primaryTicket = tickets[0]?.ticketCode;
+  const eventTitle = language === 'mr' ? event?.titleMr || event?.title : event?.title;
+  const venueName = language === 'mr' ? event?.venue?.nameMr || event?.venue?.name : event?.venue?.name;
+  const seatsList = tickets.map((tk: any) => tk.seatCode).join(', ');
+  const ticketUrl = primaryTicket ? getTicketShareUrl(primaryTicket) : '';
+
+  // Auto-email verification on mount
   useEffect(() => {
-    if (!tickets?.[0]?.ticketCode || !order?.userEmail) return;
+    if (!primaryTicket || !order?.userEmail) return;
     let cancelled = false;
     (async () => {
       setEmailStatus('sending');
       try {
-        const res = await fetch(`/api/tickets/${tickets[0].ticketCode}/email`, {
+        const res = await fetch(`/api/tickets/${primaryTicket}/email`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
+          body: JSON.stringify({ email: order.userEmail }),
         });
         const data = await res.json();
         if (cancelled) return;
         if (data.sent) {
           setEmailStatus('sent');
           setEmailMessage(
-            language === 'mr' ? 'ईमेल पाठवला.' : `Email sent to ${data.recipient || order.userEmail}`
+            language === 'mr'
+              ? `ईमेल पाठवला: ${data.recipient || order.userEmail}`
+              : `Email sent to ${data.recipient || order.userEmail}`
           );
         } else if (data.configured === false) {
           setEmailStatus('pending');
           setEmailMessage(
             language === 'mr'
-              ? 'तिकीट निश्चित. ईमेल सेवा सध्या कॉन्फिगर केलेली नाही.'
-              : 'Ticket confirmed. Email delivery pending (provider not configured).'
+              ? 'तिकीट निश्चित. ईमेल सेवा लवकरच सुरू होईल.'
+              : 'Booking confirmed. SMTP delivery queued.'
           );
         } else {
           setEmailStatus('failed');
           setEmailMessage(
-            language === 'mr'
-              ? 'तिकीट निश्चित. ईमेल अयशस्वी — पुन्हा प्रयत्न करा.'
-              : 'Ticket confirmed. Email delivery failed — you can retry.'
+            language === 'mr' ? 'तिकीट निश्चित. ईमेल पुन्हा पाठवा.' : 'Booking confirmed. You can retry email.'
           );
         }
       } catch {
         if (!cancelled) {
           setEmailStatus('failed');
           setEmailMessage(
-            language === 'mr'
-              ? 'तिकीट निश्चित. ईमेल अयशस्वी.'
-              : 'Ticket confirmed. Email could not be sent.'
+            language === 'mr' ? 'तिकीट निश्चित.' : 'Booking confirmed.'
           );
         }
       }
@@ -109,12 +119,7 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [tickets, order?.userEmail, language]);
-
-  const eventTitle = language === 'mr' ? event?.titleMr || event?.title : event?.title;
-  const venueName = language === 'mr' ? event?.venue?.nameMr || event?.venue?.name : event?.venue?.name;
-  const seatNames = tickets.map((tk: any) => tk.seatCode).join(', ');
-  const primaryTicket = tickets[0]?.ticketCode;
+  }, [primaryTicket, order?.userEmail, language]);
 
   const handleWhatsApp = () => {
     if (!primaryTicket) return;
@@ -125,49 +130,49 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
       eventTitle: eventTitle || 'Event',
       venueName: venueName || 'Venue',
       dateTime,
-      seats: seatNames,
+      seats: `${seatsList} (${tickets.length} Tickets)`,
       bookingId: order.orderNumber,
       ticketCode: primaryTicket,
     });
     window.open(buildWhatsAppShareUrl(message), '_blank', 'noopener,noreferrer');
   };
 
-  const handleShare = async () => {
-    const ticketUrl = primaryTicket ? getTicketShareUrl(primaryTicket) : '';
-    const shareMessage = `MahaTicket 🎟️\nBooking Confirmed!\n\nEvent: ${eventTitle}\nVenue: ${venueName}\nSeats: ${seatNames}\nBooking ID: ${order.orderNumber}\n\n${ticketUrl}`;
-
-    if (typeof navigator !== 'undefined' && navigator.share) {
-      try {
-        await navigator.share({
-          title: `MahaTicket - ${eventTitle}`,
-          text: shareMessage,
-          url: ticketUrl || undefined,
-        });
-      } catch {
-        /* cancelled */
-      }
-    } else {
-      await navigator.clipboard.writeText(shareMessage);
-    }
-  };
-
   const handleDownloadPDF = async () => {
     if (!primaryTicket) return;
     try {
-      const res = await fetch(`/api/tickets/${primaryTicket}/pdf`);
-      const type = res.headers.get('content-type') || '';
-      if (!res.ok || !type.includes('pdf')) {
-        throw new Error('Invalid PDF response');
+      setIsDownloading(true);
+      setDownloadSuccess(false);
+
+      const downloadEndpoint = `/api/tickets/${primaryTicket}/pdf?download=1`;
+      const res = await fetch(downloadEndpoint);
+      if (!res.ok) {
+        throw new Error('PDF route failed');
       }
+
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = `MahaTicket-${order.orderNumber}.pdf`;
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
-    } catch {
-      alert(language === 'mr' ? 'PDF डाउनलोड करण्यात त्रुटी' : 'Error downloading PDF');
+
+      setDownloadSuccess(true);
+      setTimeout(() => setDownloadSuccess(false), 4000);
+    } catch (err) {
+      console.error('PDF download error:', err);
+      // Fallback: direct window.open
+      window.open(`/api/tickets/${primaryTicket}/pdf`, '_blank');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const handlePrint = () => {
+    if (typeof window !== 'undefined') {
+      window.print();
     }
   };
 
@@ -178,33 +183,37 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
       const res = await fetch(`/api/tickets/${primaryTicket}/email`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ email: order.userEmail }),
       });
       const data = await res.json();
       if (data.sent) {
         setEmailStatus('sent');
-        setEmailMessage(language === 'mr' ? 'ईमेल पाठवला.' : `Email sent to ${data.recipient}`);
+        setEmailMessage(
+          language === 'mr' ? `ईमेल पाठवला: ${data.recipient}` : `Email sent to ${data.recipient}`
+        );
       } else {
         setEmailStatus(data.configured === false ? 'pending' : 'failed');
-        setEmailMessage(data.message || 'Email not sent');
+        setEmailMessage(data.message || 'Email delivery not configured.');
       }
     } catch {
       setEmailStatus('failed');
+      setEmailMessage('Failed to trigger email.');
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 flex items-center justify-center p-3 sm:p-6">
-      <div className="relative w-full max-w-xl bg-white border border-[#e5e7eb] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh]">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6">
+      <div className="relative w-full max-w-xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] border border-slate-200">
+        
         {/* Top Celebration Bar */}
-        <div className="px-5 py-3.5 bg-emerald-600 text-white flex items-center justify-between">
+        <div className="px-5 py-3.5 bg-[#ea580c] text-white flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <CheckCircle className="w-5 h-5 text-emerald-100" />
+            <CheckCircle className="w-5 h-5 text-white" />
             <div>
-              <h2 className="font-bold text-sm sm:text-base leading-tight">
+              <h2 className="font-extrabold text-sm sm:text-base leading-tight">
                 {t.bookingSuccess}
               </h2>
-              <p className="text-xs text-emerald-50 font-mono">
+              <p className="text-xs text-orange-100 font-mono">
                 {t.orderNumber}: {order.orderNumber}
               </p>
             </div>
@@ -212,151 +221,150 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
           <button
             onClick={onClose}
             className="p-1 rounded-lg bg-black/20 hover:bg-black/30 text-white transition"
+            title="Close"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Printable Pass Container */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-[#fafafa]">
-          {/* Main Ticket Card */}
-          <div className="bg-white rounded-xl border border-[#e5e7eb] p-5 shadow-md relative overflow-hidden">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-slate-50">
+          
+          {/* Main BookMyShow Style M-Ticket Pass */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
+            
             {/* Header: Title and Event Info */}
-            <div className="border-b border-[#e5e7eb] pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="border-b border-slate-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
-                <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-[#6366f1]/10 text-[#6366f1] border border-[#6366f1]/30">
-                  {language === 'mr' ? event.categoryMr : event.category}
+                <span className="text-[10px] uppercase font-extrabold px-2 py-0.5 rounded bg-orange-100 text-[#ea580c] border border-orange-200">
+                  {language === 'mr' ? event.categoryMr || 'कार्यक्रम' : event.category || 'Event'}
                 </span>
-                <h3 className="text-base sm:text-lg font-bold text-[#111827] mt-1">
-                  {language === 'mr' ? event.titleMr : event.title}
+                <h3 className="text-lg sm:text-xl font-black text-slate-900 mt-1.5">
+                  {eventTitle}
                 </h3>
-                <p className="text-xs text-[#6b7280] mt-0.5">
-                  {language === 'mr' ? event.title : event.titleMr}
-                </p>
+                {event.titleMr && language === 'en' && (
+                  <p className="text-xs text-slate-600">{event.titleMr}</p>
+                )}
               </div>
 
               <div className="text-left sm:text-right">
-                <span className="text-xs text-[#6b7280] block">{t.grandTotal}</span>
-                <span className="text-base sm:text-lg font-bold text-[#6366f1] font-mono">
+                <span className="text-xs text-slate-600 block">{t.grandTotal}</span>
+                <span className="text-lg sm:text-xl font-black text-[#ea580c] font-mono">
                   ₹{(order.grandTotal / 100).toFixed(0)}
                 </span>
-                <span className="text-[10px] text-emerald-600 block font-medium">
+                <span className="text-[10px] text-emerald-600 block font-bold">
                   ✓ PAID (MahaTicket Verified)
                 </span>
               </div>
             </div>
 
             {/* Event Timing & Venue */}
-            <div className="py-3 border-b border-[#e5e7eb] grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-              <div className="flex items-center gap-2 text-[#111827]">
-                <Calendar className="w-3.5 h-3.5 text-[#6366f1] shrink-0" />
+            <div className="py-2 border-b border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="flex items-start gap-2 text-slate-900">
+                <Calendar className="w-4 h-4 text-[#ea580c] shrink-0 mt-0.5" />
                 <div>
-                  <span className="text-[#9ca3af] block text-[10px]">तारीख व वार / Date</span>
-                  <span className="font-semibold text-[#111827]">
-                    {new Date(order.createdAt).toLocaleDateString(
-                      language === 'mr' ? 'mr-IN' : 'en-IN',
-                      { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }
-                    )}
+                  <span className="text-slate-600 block text-[10px] font-bold uppercase">तारीख व वेळ / Showtime</span>
+                  <span className="font-bold text-slate-900">
+                    {order.createdAt
+                      ? new Date(order.createdAt).toLocaleDateString(
+                          language === 'mr' ? 'mr-IN' : 'en-IN',
+                          { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }
+                        )
+                      : 'Today'}
                   </span>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 text-[#111827]">
-                <MapPin className="w-3.5 h-3.5 text-[#6366f1] shrink-0" />
+              <div className="flex items-start gap-2 text-slate-900">
+                <MapPin className="w-4 h-4 text-[#ea580c] shrink-0 mt-0.5" />
                 <div>
-                  <span className="text-[#9ca3af] block text-[10px]">सभागृह / Venue</span>
-                  <span className="font-semibold text-[#111827] truncate block">
-                    {language === 'mr' ? event.venue?.nameMr || 'सभागृह' : event.venue?.name}
+                  <span className="text-slate-600 block text-[10px] font-bold uppercase">सभागृह / Venue</span>
+                  <span className="font-bold text-slate-900 truncate block">
+                    {venueName}
                   </span>
-                  <span className="text-[#9ca3af] block text-[10px]">
-                    {event.venue?.address || event.venue?.city}
+                  <span className="text-slate-600 block text-[11px]">
+                    {event.venue?.address || event.venue?.city || 'Pune'}
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* Individual Passes List with Compact QR */}
-            <div className="pt-3 space-y-3">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-[#6366f1] flex items-center gap-1.5">
-                <Ticket className="w-3.5 h-3.5" />
-                <span>प्रवेशिका व अधिकृत QR कोड ({tickets.length} Passes)</span>
-              </h4>
+            {/* Single Unified QR Code Pass (BookMyShow Style for all 1-5 tickets) */}
+            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex flex-col items-center text-center space-y-3">
+              {/* Central Scannable QR */}
+              <div className="p-2.5 bg-white rounded-xl border border-slate-300 shadow-sm">
+                <QRCodeSVG
+                  value={ticketUrl}
+                  size={160}
+                  level="M"
+                  includeMargin={true}
+                />
+              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {tickets.map((tk: any, i: number) => (
-                  <div
-                    key={tk.id || i}
-                    className="p-3 bg-[#fafafa] rounded-lg border border-[#e5e7eb] flex flex-col items-center text-center space-y-1.5"
-                  >
-                    {/* Compact QR Code Canvas */}
-                    <div className="p-1.5 bg-white rounded-lg border border-[#d1d5db] shadow-sm">
-                      {tk.qrDataUrl ? (
-                        <img
-                          src={tk.qrDataUrl}
-                          alt="Gate Entry QR"
-                          className="w-28 h-28 object-contain"
-                        />
-                      ) : (
-                        <div className="w-28 h-28 flex items-center justify-center text-xs text-[#9ca3af]">
-                          QR Pass
-                        </div>
-                      )}
-                    </div>
+              <div className="space-y-1">
+                <span className="text-xs font-black uppercase text-[#ea580c] tracking-wide block">
+                  प्रवेश द्वारावर हा QR कोड दाखवा (Scan for Venue Entry)
+                </span>
+                <p className="text-[11px] text-slate-600 max-w-sm">
+                  This single unified QR covers all {tickets.length} seats in this booking.
+                </p>
+              </div>
 
-                    <div>
-                      <span className="text-[10px] text-[#9ca3af] block uppercase tracking-wide">
-                        आसन क्रमांक / Seat
-                      </span>
-                      <span className="text-sm font-bold text-[#6366f1] font-mono">
-                        {tk.seatCode}
-                      </span>
-                    </div>
+              {/* Seats Badge Grid */}
+              <div className="w-full pt-2 border-t border-slate-200">
+                <div className="text-[10px] uppercase font-bold text-slate-600 mb-1">
+                  आरक्षित आसने / Booked Seats ({tickets.length} Passes):
+                </div>
+                <div className="flex flex-wrap justify-center gap-1.5">
+                  {tickets.map((tk: any, i: number) => (
+                    <span
+                      key={tk.id || i}
+                      className="px-2.5 py-1 rounded-md bg-white border border-orange-300 text-[#ea580c] font-black text-xs font-mono shadow-2xs"
+                    >
+                      {tk.seatCode}
+                    </span>
+                  ))}
+                </div>
+              </div>
 
-                    <div className="text-[11px] text-[#111827] font-medium">
-                      <span>{tk.attendeeName || order.userName}</span>
-                    </div>
-
-                    <div className="text-[9px] font-mono text-[#9ca3af] truncate max-w-[150px]">
-                      {tk.ticketCode}
-                    </div>
-                  </div>
-                ))}
+              <div className="text-xs text-slate-800 font-medium">
+                ग्राहक: <span className="font-bold">{order.userName}</span>
               </div>
             </div>
 
             {/* Verification Notice */}
-            <div className="mt-4 pt-3 border-t border-[#e5e7eb] flex items-center justify-between text-[10px] text-[#9ca3af]">
-              <div className="flex items-center gap-1.5 text-emerald-600 font-medium">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>महाटिकिट डिजिटल स्वाक्षरी सत्यापित (HMAC SHA-256)</span>
+            <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-600">
+              <div className="flex items-center gap-1.5 text-emerald-600 font-bold">
+                <ShieldCheck className="w-4 h-4" />
+                <span>HMAC SHA-256 Verified Official Pass</span>
               </div>
-              <span className="text-[#9ca3af] font-mono">Gate Entry Pass</span>
+              <span className="font-mono text-[10px] text-slate-600">M-TICKET</span>
             </div>
           </div>
         </div>
 
-        {/* Email delivery status (auto — no popup) */}
+        {/* Email delivery status banner */}
         {emailMessage ? (
-          <div className="px-4 py-2 border-t border-[#e5e7eb] bg-[#fafafa] text-xs text-[#6b7280] flex items-center justify-between gap-2">
+          <div className="px-4 py-2 border-t border-slate-200 bg-orange-50/60 text-xs text-slate-700 flex items-center justify-between gap-2">
             <span>
-              {emailStatus === 'sent' ? '✓ ' : emailStatus === 'pending' ? '⏳ ' : emailStatus === 'failed' ? '!' : ''}
+              {emailStatus === 'sent' ? '✓ ' : emailStatus === 'pending' ? '⏳ ' : emailStatus === 'failed' ? '! ' : ''}
               {emailMessage}
             </span>
             {(emailStatus === 'failed' || emailStatus === 'pending') && (
               <button
                 type="button"
                 onClick={handleRetryEmail}
-                className="text-[#6366f1] font-semibold shrink-0"
+                className="text-[#ea580c] font-bold shrink-0 hover:underline"
               >
-                Retry Email
+                Retry
               </button>
             )}
           </div>
         ) : null}
 
         {/* Bottom Actions */}
-        <div className="p-3.5 sm:p-4 border-t border-[#e5e7eb] bg-white flex flex-wrap items-center justify-between gap-2 safe-bottom">
-          <p className="text-xs text-[#6b7280] hidden sm:block">
+        <div className="p-3.5 sm:p-4 border-t border-slate-200 bg-white flex flex-wrap items-center justify-between gap-2 safe-bottom">
+          <p className="text-xs text-slate-600 hidden sm:block">
             {t.showAtGate}
           </p>
 
@@ -364,34 +372,49 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
             <button
               type="button"
               onClick={handleDownloadPDF}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-white hover:bg-[#f5f5f5] text-[#111827] font-medium text-xs border border-[#e5e7eb] hover:border-[#6366f1] transition"
+              disabled={isDownloading}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#ea580c] hover:bg-[#c2410c] text-white font-bold text-xs shadow-sm transition active:scale-95 disabled:opacity-50"
             >
-              <Download className="w-3.5 h-3.5 text-[#6366f1]" />
-              <span>Download PDF</span>
+              {isDownloading ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Downloading...</span>
+                </>
+              ) : downloadSuccess ? (
+                <>
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Downloaded!</span>
+                </>
+              ) : (
+                <>
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download PDF</span>
+                </>
+              )}
             </button>
 
             <button
               type="button"
-              onClick={handleRetryEmail}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-white hover:bg-[#f5f5f5] text-[#111827] font-medium text-xs border border-[#e5e7eb] hover:border-[#6366f1] transition"
+              onClick={handlePrint}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs border border-slate-300 transition"
             >
-              <Mail className="w-3.5 h-3.5 text-[#6366f1]" />
-              <span>Email</span>
+              <Printer className="w-3.5 h-3.5 text-slate-600" />
+              <span>Print</span>
             </button>
 
             <button
               type="button"
               onClick={handleWhatsApp}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-white hover:bg-[#f5f5f5] text-[#111827] font-medium text-xs border border-[#e5e7eb] hover:border-[#6366f1] transition"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-[#25D366] hover:bg-[#20ba59] text-white font-semibold text-xs transition"
             >
-              <Share2 className="w-3.5 h-3.5 text-[#25D366]" />
+              <Share2 className="w-3.5 h-3.5" />
               <span>WhatsApp</span>
             </button>
 
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 sm:flex-none px-4 py-2 rounded-lg bg-[#6366f1] hover:bg-[#4f46e5] text-white font-semibold text-xs shadow-sm transition active:scale-95"
+              className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm transition active:scale-95"
             >
               {t.backToHome}
             </button>

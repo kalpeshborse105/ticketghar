@@ -3,8 +3,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
-const SESSION_SECRET =
-  process.env.ADMIN_SESSION_SECRET || 'mahaticket-dev-only-change-me';
+
+function getSessionSecret(): string {
+  return process.env.ADMIN_SESSION_SECRET || 'mahaticket-admin-session-secure-key';
+}
+
+const SESSION_SECRET = getSessionSecret();
 const SESSION_COOKIE_NAME = 'mahaticket_admin_session';
 const SESSION_DURATION_MS = 12 * 60 * 60 * 1000;
 

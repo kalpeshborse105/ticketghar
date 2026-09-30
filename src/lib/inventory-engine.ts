@@ -16,9 +16,16 @@ import { eq, and, sql, inArray, lt, or } from 'drizzle-orm';
 import crypto from 'crypto';
 import QRCode from 'qrcode';
 import { PricingBreakdown } from './types.ts';
+import { getTicketShareUrl } from './public-url.ts';
+import { sendBookingTicketEmail } from './email-service.ts';
 
-const TICKET_SECRET = process.env.TICKET_SECRET || 'ticketghar_secure_signing_key_maharashtra_2026';
+function getTicketSecret(): string {
+  return process.env.TICKET_SECRET || 'mahaticket_secure_signing_key_2026';
+}
+
+const TICKET_SECRET = getTicketSecret();
 const HOLD_DURATION_MINUTES = 8;
+const MAX_SEATS_PER_BOOKING = 5;
 
 /**
  * Release any seat holds that have expired past their 8-minute reservation window
@@ -121,6 +128,14 @@ export async function createTemporarySeatHold(params: {
   userIdStr: string;
 }) {
   const { sessionId, seatIds, userIdStr } = params;
+
+  if (!seatIds || seatIds.length === 0) {
+    throw new Error('Please select at least one seat.');
+  }
+
+  if (seatIds.length > MAX_SEATS_PER_BOOKING) {
+    throw new Error(`Maximum ${MAX_SEATS_PER_BOOKING} seats allowed per booking. Please select up to 5 seats.`);
+  }
 
   // 1. First sweep away expired holds for this session
   await releaseExpiredHolds(sessionId);
@@ -230,6 +245,10 @@ export async function confirmBookingOrder(params: {
 }) {
   const { sessionId, eventId, seatIds, userId, userName, userEmail, userPhone, pricing, paymentDetails } = params;
 
+  if (seatIds.length > MAX_SEATS_PER_BOOKING) {
+    throw new Error(`Maximum ${MAX_SEATS_PER_BOOKING} seats allowed per booking.`);
+  }
+
   // 1. Sweep expired holds first
   await releaseExpiredHolds(sessionId);
 
@@ -333,18 +352,10 @@ export async function confirmBookingOrder(params: {
       .update(rawData)
       .digest('hex');
 
-    const qrPayload = JSON.stringify({
-      code: ticketCode,
-      order: order.orderNumber,
-      event: eventData.event.title,
-      eventMr: eventData.event.titleMr,
-      seat: s.seatCode,
-      name: userName,
-      hash: securityHash.substring(0, 16),
-      v: 1,
-    });
+    const publicTicketUrl = getTicketShareUrl(ticketCode);
+    const qrPayload = publicTicketUrl;
 
-    // Generate real scannable QR Data URL
+    // Generate real scannable QR Data URL that opens the ticket URL directly
     const qrDataUrl = await QRCode.toDataURL(qrPayload, {
       errorCorrectionLevel: 'M',
       margin: 2,
@@ -416,6 +427,16 @@ export async function confirmBookingOrder(params: {
       organizerNet: netPayableToOrganizer,
     }),
   });
+
+  // 9. Instant booking confirmation email dispatch via SMTP / Resend
+  if (generatedTickets.length > 0 && userEmail) {
+    sendBookingTicketEmail({
+      ticketCode: generatedTickets[0].ticketCode,
+      recipientEmail: userEmail,
+    }).catch((emailErr) => {
+      console.warn('[Booking] Background email dispatch error:', emailErr);
+    });
+  }
 
   return {
     order,

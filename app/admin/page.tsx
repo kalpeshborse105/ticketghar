@@ -136,7 +136,7 @@ export default function AdminPage() {
               <button
                 type="submit"
                 disabled={loginLoading || !password}
-                className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-extrabold text-sm transition flex items-center justify-center gap-2"
+                className="w-full py-3 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-extrabold text-sm transition flex items-center justify-center gap-2 shadow-md"
               >
                 <Lock className="w-4 h-4" />
                 <span>{loginLoading ? 'Authenticating...' : 'Login to Admin Panel'}</span>

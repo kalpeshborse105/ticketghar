@@ -13,6 +13,7 @@ import { CheckoutDrawer } from '@/src/components/CheckoutDrawer';
 import { TicketPassModal } from '@/src/components/TicketPassModal';
 import { MyTicketsView } from '@/src/components/MyTicketsView';
 import { PartnerWithUsModal } from '@/src/components/PartnerWithUsModal';
+import { AuthModal } from '@/src/components/AuthModal';
 import { MTBottomNavigation, NavTab } from '@/src/components/ui/MTBottomNavigation';
 import { MTSkeleton } from '@/src/components/ui/MTSkeleton';
 import { MTEmptyState } from '@/src/components/ui/MTEmptyState';
@@ -51,6 +52,38 @@ export default function HomePage() {
   const t = translations[language];
   const isOnline = useOnlineStatus();
 
+  // Navigation and Filtering State
+  const [selectedCity, setSelectedCity] = useState('महाराष्ट्र (All)');
+  const [selectedCategory, setSelectedCategory] = useState<EventCategory>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeNavTab, setActiveNavTab] = useState<NavTab>('home');
+
+  // Price range & Date filter state
+  const [priceRange, setPriceRange] = useState<number>(2000);
+  const [selectedDate, setSelectedDate] = useState<string>('all');
+  const [customDate, setCustomDate] = useState<string>('');
+
+  // Events Data
+  const [events, setEvents] = useState<EventItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Surface view controllers
+  const [viewState, setViewState] = useState<'home' | 'my_tickets' | 'offers' | 'profile'>('home');
+  const [partnerModalOpen, setPartnerModalOpen] = useState(false);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+
+  // Toasts
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  // Booking Flow State
+  const [selectedEventForBooking, setSelectedEventForBooking] = useState<EventItem | null>(null);
+  const [selectedSessionForBooking, setSelectedSessionForBooking] = useState<EventSessionItem | null>(null);
+  const [seatMapOpen, setSeatMapOpen] = useState(false);
+  const [checkoutHoldData, setCheckoutHoldData] = useState<any | null>(null);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [confirmedBookingResult, setConfirmedBookingResult] = useState<any | null>(null);
+
   useEffect(() => {
     setMounted(true);
     
@@ -75,37 +108,6 @@ export default function HomePage() {
         .catch(err => console.error('Failed to load booking:', err));
     }
   }, []);
-
-  // Navigation and Filtering State
-  const [selectedCity, setSelectedCity] = useState('महाराष्ट्र (All)');
-  const [selectedCategory, setSelectedCategory] = useState<EventCategory>('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeNavTab, setActiveNavTab] = useState<NavTab>('home');
-
-  // Price range & Date filter state
-  const [priceRange, setPriceRange] = useState<number>(2000);
-  const [selectedDate, setSelectedDate] = useState<string>('all');
-  const [customDate, setCustomDate] = useState<string>('');
-
-  // Events Data
-  const [events, setEvents] = useState<EventItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  // Surface view controllers
-  const [viewState, setViewState] = useState<'home' | 'my_tickets' | 'offers' | 'profile'>('home');
-  const [partnerModalOpen, setPartnerModalOpen] = useState(false);
-
-  // Toasts
-  const [toasts, setToasts] = useState<ToastMessage[]>([]);
-
-  // Booking Flow State
-  const [selectedEventForBooking, setSelectedEventForBooking] = useState<EventItem | null>(null);
-  const [selectedSessionForBooking, setSelectedSessionForBooking] = useState<EventSessionItem | null>(null);
-  const [seatMapOpen, setSeatMapOpen] = useState(false);
-  const [checkoutHoldData, setCheckoutHoldData] = useState<any | null>(null);
-  const [checkoutOpen, setCheckoutOpen] = useState(false);
-  const [confirmedBookingResult, setConfirmedBookingResult] = useState<any | null>(null);
 
   const addToast = (type: 'success' | 'error' | 'warning' | 'info', message: string) => {
     const id = `${Date.now()}-${Math.random()}`;
@@ -216,7 +218,16 @@ export default function HomePage() {
     } else if (tab === 'explore') {
       setViewState('home');
     } else if (tab === 'tickets') {
-      setViewState('my_tickets');
+      fetch('/api/auth/flow/session')
+        .then((r) => r.json())
+        .then((data) => {
+          if (!data.user) {
+            setAuthModalOpen(true);
+          } else {
+            setViewState('my_tickets');
+          }
+        })
+        .catch(() => setViewState('my_tickets'));
     } else if (tab === 'offers') {
       setViewState('offers');
     } else if (tab === 'profile') {
@@ -254,7 +265,7 @@ export default function HomePage() {
   );
 
   return (
-    <div className="min-h-screen bg-[#fafafa] text-[#111827] flex flex-col font-sans selection:bg-[#6366f1] selection:text-white">
+    <div className="min-h-screen bg-[#fafafa] text-[#111827] flex flex-col font-sans selection:bg-[#ea580c] selection:text-white">
       {/* Toast Notifications */}
       <MTToastContainer toasts={toasts} onDismiss={handleDismissToast} />
 
@@ -303,13 +314,13 @@ export default function HomePage() {
         ) : viewState === 'offers' ? (
           <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
             <h1 className="text-xl font-bold text-[#111827] flex items-center gap-2">
-              <Tag className="w-5 h-5 text-[#6366f1]" />
+              <Tag className="w-5 h-5 text-[#ea580c]" />
               <span>{language === 'mr' ? 'विशेष सवलती व ऑफर्स' : 'Special Offers & Promo Codes'}</span>
             </h1>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="bg-white border border-[#e5e7eb] rounded-xl p-4 space-y-2 shadow-sm">
                 <div className="flex items-center justify-between">
-                  <span className="font-mono font-bold text-base text-[#6366f1]">MAHA50</span>
+                  <span className="font-mono font-bold text-base text-[#ea580c]">MAHA50</span>
                   <span className="text-xs bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded border border-emerald-200">सक्रिय (Active)</span>
                 </div>
                 <p className="text-sm text-[#111827]">₹५० थेट सवलत</p>
@@ -317,7 +328,7 @@ export default function HomePage() {
               </div>
               <div className="bg-white border border-[#e5e7eb] rounded-xl p-4 space-y-2 shadow-sm">
                 <div className="flex items-center justify-between">
-                  <span className="font-mono font-bold text-base text-[#6366f1]">NATAK10</span>
+                  <span className="font-mono font-bold text-base text-[#ea580c]">NATAK10</span>
                   <span className="text-xs bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded border border-emerald-200">सक्रिय (Active)</span>
                 </div>
                 <p className="text-sm text-[#111827]">१०% सवलत (कमाल ₹१०० पर्यंत)</p>
@@ -327,7 +338,7 @@ export default function HomePage() {
           </div>
         ) : viewState === 'profile' ? (
           <div className="max-w-md mx-auto px-4 py-10 space-y-6 text-center">
-            <div className="w-16 h-16 rounded-full bg-[#f5f5f5] border border-[#e5e7eb] flex items-center justify-center mx-auto text-[#6366f1]">
+            <div className="w-16 h-16 rounded-full bg-[#f5f5f5] border border-[#e5e7eb] flex items-center justify-center mx-auto text-[#ea580c]">
               <ShieldCheck className="w-8 h-8" />
             </div>
             <div>
@@ -341,7 +352,7 @@ export default function HomePage() {
               </div>
               <div className="flex justify-between text-xs">
                 <span className="text-[#6b7280]">भाषा:</span>
-                <span className="text-[#6366f1] font-medium">{language === 'mr' ? 'मराठी' : 'English'}</span>
+                <span className="text-[#ea580c] font-medium">{language === 'mr' ? 'मराठी' : 'English'}</span>
               </div>
             </div>
             <button
@@ -349,7 +360,7 @@ export default function HomePage() {
                 setViewState('my_tickets');
                 setActiveNavTab('tickets');
               }}
-              className="w-full py-2.5 rounded-lg bg-[#6366f1] hover:bg-[#4f46e5] text-white text-xs font-semibold shadow-sm transition"
+              className="w-full py-2.5 rounded-lg bg-[#ea580c] hover:bg-[#c2410c] text-white text-xs font-semibold shadow-sm transition"
             >
               {t.myTickets}
             </button>
@@ -377,11 +388,11 @@ export default function HomePage() {
                       onClick={() => setSelectedCategory(cat.id)}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap cursor-pointer active:scale-95 ${
                         isSelected
-                          ? 'bg-[#6366f1] text-white shadow-sm font-semibold'
-                          : 'bg-white text-[#6b7280] hover:text-[#111827] border border-[#e5e7eb] hover:bg-[#f5f5f5] hover:border-[#6366f1]'
+                          ? 'bg-[#ea580c] text-white shadow-sm font-semibold'
+                          : 'bg-white text-[#6b7280] hover:text-[#111827] border border-[#e5e7eb] hover:bg-[#f5f5f5] hover:border-[#ea580c]'
                       }`}
                     >
-                      <Icon className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : 'text-[#6366f1]'}`} />
+                      <Icon className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : 'text-[#ea580c]'}`} />
                       <span>{language === 'mr' ? cat.labelMr : cat.labelEn}</span>
                     </button>
                   );
@@ -406,7 +417,7 @@ export default function HomePage() {
             {selectedCategory === 'all' && !searchQuery && priceRange === 2000 && selectedDate === 'all' && !customDate && theatreEvents.length > 0 && (
               <div className="space-y-3 pt-1">
                 <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-[#6366f1]/10 text-[#6366f1] border border-[#6366f1]/30 flex items-center justify-center">
+                  <div className="w-7 h-7 rounded-lg bg-[#ea580c]/10 text-[#ea580c] border border-[#ea580c]/30 flex items-center justify-center">
                     <Theater className="w-4 h-4" />
                   </div>
                   <div>
@@ -452,9 +463,9 @@ export default function HomePage() {
 
                 <button
                   onClick={fetchEvents}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded bg-white border border-[#e5e7eb] text-xs text-[#6b7280] hover:text-[#111827] hover:border-[#6366f1] transition"
+                  className="flex items-center gap-1 px-2.5 py-1 rounded bg-white border border-[#e5e7eb] text-xs text-[#6b7280] hover:text-[#111827] hover:border-[#ea580c] transition"
                 >
-                  <RefreshCw className="w-3 h-3 text-[#6366f1]" />
+                  <RefreshCw className="w-3 h-3 text-[#ea580c]" />
                   <span className="hidden sm:inline">{language === 'mr' ? 'ताजे करा' : 'Refresh'}</span>
                 </button>
               </div>
@@ -506,7 +517,7 @@ export default function HomePage() {
             {/* Producer & Organizer Banner */}
             <div className="rounded-xl bg-white border border-[#e5e7eb] p-5 sm:p-6 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm">
               <div className="space-y-1.5 max-w-xl text-center md:text-left">
-                <span className="text-[11px] uppercase font-bold tracking-wider text-[#6366f1] flex items-center justify-center md:justify-start gap-1">
+                <span className="text-[11px] uppercase font-bold tracking-wider text-[#ea580c] flex items-center justify-center md:justify-start gap-1">
                   <Building2 className="w-3.5 h-3.5" />
                   <span>नाट्य व कार्यक्रम आयोजकांसाठी</span>
                 </span>
@@ -519,7 +530,7 @@ export default function HomePage() {
               </div>
               <button
                 onClick={() => setPartnerModalOpen(true)}
-                className="px-5 py-2.5 rounded-lg bg-[#6366f1] hover:bg-[#4f46e5] text-white font-semibold text-xs shadow-sm transition active:scale-95 whitespace-nowrap"
+                className="px-5 py-2.5 rounded-lg bg-[#ea580c] hover:bg-[#c2410c] text-white font-semibold text-xs shadow-sm transition active:scale-95 whitespace-nowrap"
               >
                 {t.partnerWithUs}
               </button>
@@ -534,7 +545,7 @@ export default function HomePage() {
           <div>
             <div className="flex items-center justify-center sm:justify-start gap-2 text-[#111827] font-bold text-sm">
               <span>MahaTicket (महाटिकिट)</span>
-              <span className="text-[10px] text-[#6366f1] bg-[#6366f1]/10 px-1.5 py-0.2 rounded border border-[#6366f1]/20">
+              <span className="text-[10px] text-[#ea580c] bg-[#ea580c]/10 px-1.5 py-0.2 rounded border border-[#ea580c]/20">
                 महाराष्ट्र
               </span>
             </div>
@@ -546,28 +557,28 @@ export default function HomePage() {
           <div className="flex flex-wrap items-center justify-center sm:justify-end gap-x-3 gap-y-2 text-[#6b7280] font-normal text-xs">
             <button
               onClick={() => setPartnerModalOpen(true)}
-              className="hover:text-[#6366f1] transition"
+              className="hover:text-[#ea580c] transition"
             >
               Partner With Us
             </button>
             <span className="text-[#d1d5db]">•</span>
-            <Link href="/about" className="hover:text-[#6366f1] transition">
+            <Link href="/about" className="hover:text-[#ea580c] transition">
               About
             </Link>
             <span className="text-[#d1d5db]">•</span>
-            <Link href="/terms" className="hover:text-[#6366f1] transition">
+            <Link href="/terms" className="hover:text-[#ea580c] transition">
               Terms
             </Link>
             <span className="text-[#d1d5db]">•</span>
-            <Link href="/privacy" className="hover:text-[#6366f1] transition">
+            <Link href="/privacy" className="hover:text-[#ea580c] transition">
               Privacy
             </Link>
             <span className="text-[#d1d5db]">•</span>
-            <Link href="/refund" className="hover:text-[#6366f1] transition">
+            <Link href="/refund" className="hover:text-[#ea580c] transition">
               Refunds
             </Link>
             <span className="text-[#d1d5db]">•</span>
-            <Link href="/contact" className="hover:text-[#6366f1] transition">
+            <Link href="/contact" className="hover:text-[#ea580c] transition">
               Contact
             </Link>
             <span className="text-[#d1d5db]">•</span>
@@ -622,6 +633,14 @@ export default function HomePage() {
           onClose={() => setPartnerModalOpen(false)}
         />
       )}
+
+      {/* MODAL 5: Customer Sign In / Sign Up */}
+      <AuthModal
+        isOpen={authModalOpen}
+        initialMessage="तिकिटे पाहण्यासाठी कृपया लॉगिन करा (Please sign in to view your tickets)"
+        onClose={() => setAuthModalOpen(false)}
+        onSuccess={() => setViewState('my_tickets')}
+      />
     </div>
   );
 }

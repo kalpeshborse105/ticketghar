@@ -9,6 +9,9 @@ import {
   AlertCircle,
   Accessibility,
   ArrowRight,
+  Sparkles,
+  Info,
+  Check,
 } from 'lucide-react';
 
 interface SeatMapModalProps {
@@ -25,6 +28,8 @@ interface SeatMapModalProps {
   }) => void;
 }
 
+const MAX_BOOKING_SEATS = 5;
+
 export const SeatMapModal: React.FC<SeatMapModalProps> = ({
   event,
   session,
@@ -35,6 +40,7 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
   const t = translations[language];
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [warningMessage, setWarningMessage] = useState<string | null>(null);
   const [venueData, setVenueData] = useState<any>(null);
   const [seats, setSeats] = useState<any[]>([]);
   const [sections, setSections] = useState<any[]>([]);
@@ -68,11 +74,17 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
   const toggleSeatSelection = (seat: any) => {
     if (seat.status === 'booked' || seat.status === 'held') return;
 
+    setWarningMessage(null);
+
     if (selectedSeatIds.includes(seat.seatId)) {
       setSelectedSeatIds((prev) => prev.filter((id) => id !== seat.seatId));
     } else {
-      if (selectedSeatIds.length >= 8) {
-        alert(language === 'mr' ? 'एका वेळी जास्तीत जास्त ८ जागा निवडता येतील.' : 'Maximum 8 seats allowed per booking.');
+      if (selectedSeatIds.length >= MAX_BOOKING_SEATS) {
+        setWarningMessage(
+          language === 'mr'
+            ? `एका वेळी जास्तीत जास्त ${MAX_BOOKING_SEATS} जागा निवडता येतील. अधिक जागांसाठी दुसरी ऑर्डर करा.`
+            : `Maximum ${MAX_BOOKING_SEATS} seats allowed per booking. Please place another order for more seats.`
+        );
         return;
       }
       setSelectedSeatIds((prev) => [...prev, seat.seatId]);
@@ -86,7 +98,7 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
   const estGst = Math.round((estPlatformFee * (event.gstPercent || 18)) / 100);
   const estTotal = subtotalPaise + estPlatformFee + estGst;
 
-  // Handle temporary hold
+  // Handle temporary hold and proceed to booking
   const handleHoldAndProceed = async () => {
     if (selectedSeatIds.length === 0) return;
 
@@ -138,198 +150,228 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
 
   const groupByRow = (seatList: any[]) => {
     const rows: { [key: string]: any[] } = {};
-    for (const s of seatList) {
-      if (!rows[s.rowLabel]) rows[s.rowLabel] = [];
-      rows[s.rowLabel].push(s);
-    }
-    for (const r in rows) {
-      rows[r].sort((a, b) => a.seatNumber - b.seatNumber);
-    }
+    seatList.forEach((s) => {
+      const row = s.rowLabel || 'A';
+      if (!rows[row]) rows[row] = [];
+      rows[row].push(s);
+    });
+    // Sort seats numerically within row
+    Object.keys(rows).forEach((row) => {
+      rows[row].sort((a, b) => a.seatNumber - b.seatNumber);
+    });
     return rows;
   };
 
-  const balconyRows = groupByRow(balconySeats);
   const stallRows = groupByRow(stallSeats);
+  const balconyRows = groupByRow(balconySeats);
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 flex items-center justify-center p-2 sm:p-4">
-      <div className="relative w-full max-w-4xl bg-white border border-[#e5e7eb] rounded-2xl shadow-xl flex flex-col max-h-[92vh] overflow-hidden">
-        {/* Modal Header */}
-        <div className="px-4 py-3.5 border-b border-[#e5e7eb] flex items-center justify-between bg-[#fafafa]">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 md:p-6">
+      <div className="relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[96vh] border border-slate-200">
+        
+        {/* Modal Top Header */}
+        <div className="px-4 sm:px-6 py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-base sm:text-lg font-bold text-[#111827]">
-                {language === 'mr' ? event.titleMr : event.title}
-              </h2>
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#6366f1]/10 text-[#6366f1] font-semibold border border-[#6366f1]/30">
-                {language === 'mr' ? event.categoryMr : event.category}
+              <span className="text-xs uppercase font-extrabold px-2 py-0.5 rounded bg-[#ea580c] text-white">
+                BookMyShow Style
               </span>
+              <h2 className="text-base sm:text-lg font-black text-white truncate max-w-[280px] sm:max-w-md">
+                {language === 'mr' ? event.titleMr || event.title : event.title}
+              </h2>
             </div>
-            <p className="text-xs text-[#6b7280] mt-0.5">
-              {venueData?.name} ({venueData?.city}) •{' '}
-              {new Date(session.sessionStartTime).toLocaleDateString(
-                language === 'mr' ? 'mr-IN' : 'en-IN',
-                { weekday: 'short', day: 'numeric', month: 'short' }
-              )}{' '}
-              {new Date(session.sessionStartTime).toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
+            <p className="text-xs text-slate-400 mt-0.5">
+              {venueData?.nameMr || venueData?.name || event.venue?.name} ·{' '}
+              {session.sessionStartTime
+                ? new Date(session.sessionStartTime).toLocaleString('en-IN', {
+                    weekday: 'short',
+                    day: 'numeric',
+                    month: 'short',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })
+                : 'Showtime'}
             </p>
           </div>
+
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg bg-[#f5f5f5] text-[#6b7280] hover:text-[#111827] border border-[#e5e7eb] transition"
+            className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
+            title="Close"
           >
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Error Alert */}
-        {error && (
-          <div className="mx-4 mt-3 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>{error}</span>
+        {/* Legend Indicator Bar */}
+        <div className="px-4 sm:px-6 py-2.5 bg-slate-100 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-4 sm:gap-6 flex-wrap">
+            <div className="flex items-center gap-2">
+              <div className="w-5 h-5 rounded border-2 border-slate-300 bg-white" />
+              <span className="text-slate-700 font-medium">उपलब्ध (Available)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-5 h-5 rounded bg-[#ea580c] text-white flex items-center justify-center font-bold text-[10px] shadow-sm">
+                ✓
+              </div>
+              <span className="text-slate-900 font-bold">निवडलेली (Selected)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-5 h-5 rounded bg-slate-300 border border-slate-300" />
+              <span className="text-slate-500 font-medium">विकलेली (Sold)</span>
+            </div>
           </div>
-        )}
 
-        {/* Seat Legend */}
-        <div className="px-4 py-2.5 bg-[#fafafa] border-b border-[#e5e7eb] flex flex-wrap items-center justify-center gap-3.5 text-xs text-[#111827]">
-          <div className="flex items-center gap-1.5">
-            <div className="w-3.5 h-3.5 rounded bg-white border border-[#d1d5db]" />
-            <span>{t.available}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3.5 h-3.5 rounded bg-[#6366f1] flex items-center justify-center text-white font-bold text-[9px]">
-              ✓
-            </div>
-            <span>{t.selected}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3.5 h-3.5 rounded bg-amber-100 border border-amber-400 flex items-center justify-center">
-              <Clock className="w-2.5 h-2.5 text-amber-600" />
-            </div>
-            <span>{t.held}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3.5 h-3.5 rounded bg-[#e5e7eb] opacity-60" />
-            <span>{t.sold}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3.5 h-3.5 rounded border border-blue-400 bg-blue-50 flex items-center justify-center">
-              <Accessibility className="w-2.5 h-2.5 text-blue-600" />
-            </div>
-            <span>{t.accessible}</span>
+          <div className="text-[11px] font-semibold text-[#ea580c] bg-orange-100/80 px-2.5 py-1 rounded-full border border-orange-200">
+            ★ कमाल मर्यादा: एका वेळी ५ तिकीटे (Max 5 tickets)
           </div>
         </div>
 
-        {/* Scrollable Seat Grid Container */}
-        <div className="flex-1 overflow-y-auto overflow-x-auto p-4 sm:p-6 space-y-6 bg-[#fafafa]">
+        {/* Warning Notification if > 5 seats attempted */}
+        {warningMessage && (
+          <div className="px-4 py-2 bg-amber-50 border-b border-amber-200 text-amber-800 text-xs font-semibold flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>{warningMessage}</span>
+            </div>
+            <button
+              onClick={() => setWarningMessage(null)}
+              className="text-amber-800 hover:text-amber-950 font-bold"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        {/* Seat Layout Canvas Area */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50 space-y-6">
           {loading ? (
-            <div className="flex flex-col items-center justify-center py-12 text-[#6b7280] gap-3">
-              <div className="w-6 h-6 border-2 border-[#6366f1] border-t-transparent rounded-full animate-spin" />
-              <p className="text-xs">आसनव्यवस्था तपासत आहे... (Loading Seat Map)</p>
+            <div className="py-20 flex flex-col items-center justify-center space-y-3 text-slate-500">
+              <div className="w-8 h-8 border-3 border-[#ea580c] border-t-transparent rounded-full animate-spin" />
+              <p className="text-sm font-medium">सभागृह आसन व्यवस्था लोड होत आहे...</p>
+            </div>
+          ) : error ? (
+            <div className="py-16 text-center space-y-3">
+              <AlertCircle className="w-10 h-10 text-red-500 mx-auto" />
+              <p className="text-sm font-medium text-slate-800">{error}</p>
+              <button
+                onClick={fetchSessionSeats}
+                className="px-4 py-1.5 rounded-lg bg-[#ea580c] text-white text-xs font-bold shadow-sm"
+              >
+                पुन्हा प्रयत्न करा
+              </button>
             </div>
           ) : (
-            <div className="min-w-[480px]">
-              {/* Stage Visual */}
-              <div className="w-full flex flex-col items-center mb-6">
-                <div className="w-3/4 h-2 bg-[#6366f1] rounded-t-full shadow-sm" />
-                <div className="w-3/4 py-1 bg-white border-x border-b border-[#e5e7eb] rounded-b-lg text-center shadow-sm">
-                  <span className="text-[11px] font-semibold tracking-wider text-[#6366f1] uppercase">
-                    {t.stageThisWay}
-                  </span>
+            <div className="space-y-6 max-w-2xl mx-auto">
+              
+              {/* BookMyShow Style Curved Screen / Stage Representation */}
+              <div className="flex flex-col items-center pt-2 pb-4">
+                <div className="w-full max-w-md h-3.5 bg-gradient-to-b from-[#ea580c] via-orange-400 to-transparent rounded-t-[100px] shadow-md opacity-90" />
+                <div className="w-full max-w-lg border-t-2 border-dashed border-[#ea580c]/50 mt-1" />
+                <div className="flex items-center gap-1.5 text-[11px] font-black uppercase text-slate-700 tracking-widest mt-2">
+                  <span>🎭 ऑल आईज ऑन स्टेज · SCREEN / STAGE THIS WAY</span>
                 </div>
               </div>
 
-              {/* Stall / Orchestra Section */}
-              {Object.keys(stallRows).length > 0 && (
-                <div className="space-y-2 bg-white p-3.5 rounded-xl border border-[#e5e7eb] shadow-sm">
-                  <div className="flex items-center justify-between pb-2 border-b border-[#e5e7eb]">
-                    <span className="text-xs font-semibold text-[#6366f1] uppercase tracking-wide">
-                      {language === 'mr' ? stallSection?.nameMr || 'स्टॉल' : stallSection?.name || 'Stall Floor'}
-                    </span>
-                    <span className="text-xs font-medium text-[#6b7280]">
-                      ₹{((stallSection?.basePrice || 35000) / 100).toFixed(0)}
+              {/* STALL / EXECUTIVE SECTION */}
+              <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#ea580c]" />
+                    <span className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wide">
+                      {language === 'mr' ? stallSection?.nameMr || 'स्टॉल क्लास' : stallSection?.name || 'Stall Executive'}
                     </span>
                   </div>
-
-                  <div className="flex flex-col items-center gap-1.5 pt-2">
-                    {Object.entries(stallRows).map(([rowLabel, rowSeats]) => (
-                      <div key={rowLabel} className="flex items-center gap-2">
-                        <span className="w-5 text-xs font-semibold text-[#6b7280] text-center">
-                          {rowLabel}
-                        </span>
-                        <div className="flex items-center gap-1.5">
-                          {rowSeats.map((seat) => {
-                            const isSelected = selectedSeatIds.includes(seat.seatId);
-                            const isBooked = seat.status === 'booked';
-                            const isHeld = seat.status === 'held' && !isSelected;
-
-                            let seatStyle = 'bg-white border border-[#d1d5db] hover:border-[#6366f1] text-[#111827]';
-                            if (isSelected) {
-                              seatStyle = 'bg-[#6366f1] border-[#6366f1] text-white font-bold shadow-sm';
-                            } else if (isBooked) {
-                              seatStyle = 'bg-[#e5e7eb] border-[#e5e7eb] text-[#9ca3af] cursor-not-allowed';
-                            } else if (isHeld) {
-                              seatStyle = 'bg-amber-100 border-amber-400 text-amber-700 cursor-not-allowed';
-                            } else if (seat.isAccessible) {
-                              seatStyle = 'bg-blue-50 border-blue-400 text-blue-700 hover:border-blue-500';
-                            }
-
-                            return (
-                              <button
-                                key={seat.seatId}
-                                disabled={isBooked || isHeld}
-                                onClick={() => toggleSeatSelection(seat)}
-                                className={`w-7 h-7 sm:w-8 sm:h-8 rounded text-[10px] sm:text-xs flex items-center justify-center transition-all duration-150 active:scale-90 ${seatStyle}`}
-                                title={`${seat.seatCode} (₹${((seat.price || 35000) / 100).toFixed(0)})`}
-                              >
-                                {isSelected ? '✓' : seat.seatNumber}
-                              </button>
-                            );
-                          })}
-                        </div>
-                        <span className="w-5 text-xs font-semibold text-[#6b7280] text-center">
-                          {rowLabel}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                  <span className="text-xs sm:text-sm font-black text-[#ea580c] font-mono">
+                    ₹{((stallSection?.basePrice || 30000) / 100).toFixed(0)}
+                  </span>
                 </div>
-              )}
 
-              {/* Balcony Section */}
+                {/* Rows Grid */}
+                <div className="flex flex-col items-center gap-2 pt-2 overflow-x-auto pb-2">
+                  {Object.entries(stallRows).map(([rowLabel, rowSeats]) => (
+                    <div key={rowLabel} className="flex items-center gap-2 min-w-max">
+                      <span className="w-5 text-xs font-black text-slate-400 text-center select-none">
+                        {rowLabel}
+                      </span>
+                      <div className="flex items-center gap-1.5 sm:gap-2">
+                        {rowSeats.map((seat) => {
+                          const isSelected = selectedSeatIds.includes(seat.seatId);
+                          const isBooked = seat.status === 'booked';
+                          const isHeld = seat.status === 'held' && !isSelected;
+
+                          let seatClass =
+                            'bg-white border-2 border-slate-300 text-slate-800 hover:border-[#ea580c] hover:scale-105 active:scale-95';
+                          if (isSelected) {
+                            seatClass =
+                              'bg-[#ea580c] border-[#ea580c] text-white font-black scale-105 shadow-md shadow-orange-500/30';
+                          } else if (isBooked) {
+                            seatClass =
+                              'bg-slate-200 border-slate-200 text-slate-400 cursor-not-allowed';
+                          } else if (isHeld) {
+                            seatClass =
+                              'bg-amber-100 border-amber-300 text-amber-700 cursor-not-allowed';
+                          }
+
+                          return (
+                            <button
+                              key={seat.seatId}
+                              disabled={isBooked || isHeld}
+                              onClick={() => toggleSeatSelection(seat)}
+                              className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg text-[10px] sm:text-xs flex items-center justify-center transition-all duration-150 font-mono font-bold ${seatClass}`}
+                              title={`${seat.seatCode} (₹${((seat.price || 30000) / 100).toFixed(0)})`}
+                            >
+                              {isSelected ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : seat.seatNumber}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <span className="w-5 text-xs font-black text-slate-400 text-center select-none">
+                        {rowLabel}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* BALCONY / VIP LOUNGE SECTION */}
               {Object.keys(balconyRows).length > 0 && (
-                <div className="space-y-2 bg-white p-3.5 rounded-xl border border-[#e5e7eb] shadow-sm mt-4">
-                  <div className="flex items-center justify-between pb-2 border-b border-[#e5e7eb]">
-                    <span className="text-xs font-semibold text-[#6366f1] uppercase tracking-wide">
-                      {language === 'mr' ? balconySection?.nameMr || 'बाल्कनी' : balconySection?.name || 'Balcony Lounge'}
-                    </span>
-                    <span className="text-xs font-medium text-[#6b7280]">
-                      ₹{((balconySection?.basePrice || 50000) / 100).toFixed(0)}
+                <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                  <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                      <span className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wide">
+                        {language === 'mr' ? balconySection?.nameMr || 'बाल्कनी लाउंज' : balconySection?.name || 'Balcony Lounge'}
+                      </span>
+                    </div>
+                    <span className="text-xs sm:text-sm font-black text-[#ea580c] font-mono">
+                      ₹{((balconySection?.basePrice || 40000) / 100).toFixed(0)}
                     </span>
                   </div>
 
-                  <div className="flex flex-col items-center gap-1.5 pt-2">
+                  <div className="flex flex-col items-center gap-2 pt-2 overflow-x-auto pb-2">
                     {Object.entries(balconyRows).map(([rowLabel, rowSeats]) => (
-                      <div key={rowLabel} className="flex items-center gap-2">
-                        <span className="w-5 text-xs font-semibold text-[#6b7280] text-center">
+                      <div key={rowLabel} className="flex items-center gap-2 min-w-max">
+                        <span className="w-5 text-xs font-black text-slate-400 text-center select-none">
                           {rowLabel}
                         </span>
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 sm:gap-2">
                           {rowSeats.map((seat) => {
                             const isSelected = selectedSeatIds.includes(seat.seatId);
                             const isBooked = seat.status === 'booked';
                             const isHeld = seat.status === 'held' && !isSelected;
 
-                            let seatStyle = 'bg-white border border-[#d1d5db] hover:border-[#6366f1] text-[#111827]';
+                            let seatClass =
+                              'bg-white border-2 border-slate-300 text-slate-800 hover:border-[#ea580c] hover:scale-105 active:scale-95';
                             if (isSelected) {
-                              seatStyle = 'bg-[#6366f1] border-[#6366f1] text-white font-bold shadow-sm';
+                              seatClass =
+                                'bg-[#ea580c] border-[#ea580c] text-white font-black scale-105 shadow-md shadow-orange-500/30';
                             } else if (isBooked) {
-                              seatStyle = 'bg-[#e5e7eb] border-[#e5e7eb] text-[#9ca3af] cursor-not-allowed';
+                              seatClass =
+                                'bg-slate-200 border-slate-200 text-slate-400 cursor-not-allowed';
                             } else if (isHeld) {
-                              seatStyle = 'bg-amber-100 border-amber-400 text-amber-700 cursor-not-allowed';
+                              seatClass =
+                                'bg-amber-100 border-amber-300 text-amber-700 cursor-not-allowed';
                             }
 
                             return (
@@ -337,15 +379,15 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
                                 key={seat.seatId}
                                 disabled={isBooked || isHeld}
                                 onClick={() => toggleSeatSelection(seat)}
-                                className={`w-7 h-7 sm:w-8 sm:h-8 rounded text-[10px] sm:text-xs flex items-center justify-center transition-all duration-150 active:scale-90 ${seatStyle}`}
-                                title={`${seat.seatCode} (₹${((seat.price || 50000) / 100).toFixed(0)})`}
+                                className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg text-[10px] sm:text-xs flex items-center justify-center transition-all duration-150 font-mono font-bold ${seatClass}`}
+                                title={`${seat.seatCode} (₹${((seat.price || 40000) / 100).toFixed(0)})`}
                               >
-                                {isSelected ? '✓' : seat.seatNumber}
+                                {isSelected ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : seat.seatNumber}
                               </button>
                             );
                           })}
                         </div>
-                        <span className="w-5 text-xs font-semibold text-[#6b7280] text-center">
+                        <span className="w-5 text-xs font-black text-slate-400 text-center select-none">
                           {rowLabel}
                         </span>
                       </div>
@@ -357,43 +399,50 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
           )}
         </div>
 
-        {/* Modal Footer: Selection tray & Checkout button */}
-        <div className="p-3.5 sm:p-4 border-t border-[#e5e7eb] bg-[#fafafa] flex flex-col sm:flex-row items-center justify-between gap-3 safe-bottom">
+        {/* Attractive BookMyShow Bottom Action Bar (No depressing raw price shout) */}
+        <div className="p-4 sm:p-5 border-t border-slate-200 bg-white flex flex-col sm:flex-row items-center justify-between gap-3 safe-bottom">
           <div className="w-full sm:w-auto">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-[#6b7280]">
-                {language === 'mr' ? 'निवडलेली आसने' : 'Selected Seats'}:
-              </span>
-              <div className="flex flex-wrap gap-1">
-                {selectedSeats.length > 0 ? (
-                  selectedSeats.map((s) => (
-                    <span
-                      key={s.seatId}
-                      className="px-1.5 py-0.5 rounded bg-[#6366f1]/10 text-[#6366f1] font-semibold text-[11px] border border-[#6366f1]/30"
-                    >
-                      {s.seatCode}
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-xs text-[#9ca3af]">
-                    {language === 'mr' ? 'कोणतीही जागा निवडली नाही' : 'No seats selected'}
+            {selectedSeats.length > 0 ? (
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-black text-slate-900">
+                    {selectedSeats.length} {language === 'mr' ? 'जागा निवडल्या' : 'Seats Selected'}:
                   </span>
-                )}
+                  <div className="flex flex-wrap gap-1">
+                    {selectedSeats.map((s) => (
+                      <span
+                        key={s.seatId}
+                        className="px-2 py-0.5 rounded-md bg-orange-100 text-[#ea580c] font-black text-xs font-mono border border-orange-200"
+                      >
+                        {s.seatCode}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-600">
+                  {language === 'mr'
+                    ? '८ मिनिटांसाठी आरक्षित राहतील · कन्फर्म करण्यासाठी पुढे जा'
+                    : 'Held for 8 minutes · Click Confirm Booking to proceed'}
+                </p>
               </div>
-            </div>
-
-            <div className="mt-1 flex items-baseline gap-2">
-              <span className="text-xs text-[#6b7280]">{t.grandTotal}:</span>
-              <span className="text-base sm:text-lg font-bold text-[#6366f1]">
-                ₹{(estTotal / 100).toFixed(0)}
-              </span>
-            </div>
+            ) : (
+              <div className="space-y-0.5">
+                <span className="text-xs font-bold text-slate-700">
+                  {language === 'mr' ? 'आपली आवडती जागा निवडा' : 'Select your preferred seats'}
+                </span>
+                <p className="text-[11px] text-slate-600">
+                  {language === 'mr'
+                    ? 'एका वेळी कमाल ५ जागा निवडता येतील'
+                    : 'Maximum 5 tickets allowed per booking'}
+                </p>
+              </div>
+            )}
           </div>
 
           <button
             disabled={selectedSeatIds.length === 0 || isHolding}
             onClick={handleHoldAndProceed}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-xs sm:text-sm shadow-sm transition active:scale-95"
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-7 py-3 rounded-xl bg-[#ea580c] hover:bg-[#c2410c] disabled:opacity-40 disabled:cursor-not-allowed text-white font-extrabold text-sm shadow-lg shadow-orange-500/25 transition active:scale-95"
           >
             {isHolding ? (
               <>
@@ -402,7 +451,15 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
               </>
             ) : (
               <>
-                <span>{t.proceedToCheckout}</span>
+                <span>
+                  {selectedSeatIds.length > 0
+                    ? language === 'mr'
+                      ? `बुकिंग निश्चित करा (${selectedSeatIds.length})`
+                      : `Confirm Booking (${selectedSeatIds.length} Seats)`
+                    : language === 'mr'
+                    ? 'जागा निवडा'
+                    : 'Select Seats'}
+                </span>
                 <ArrowRight className="w-4 h-4" />
               </>
             )}

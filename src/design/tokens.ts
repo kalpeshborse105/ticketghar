@@ -4,11 +4,11 @@
 
 export const tokens = {
   colors: {
-    // Primary: Elegant violet-indigo (controlled, not overwhelming)
-    primary: '#6366f1', // Indigo-500
-    primaryHover: '#4f46e5', // Indigo-600
-    primaryLight: '#eef2ff', // Indigo-50
-    primaryMuted: '#6366f120',
+    // Primary: Warm orange (Cinemax / BookMyShow brand identity)
+    primary: '#ea580c', // Orange-600
+    primaryHover: '#c2410c', // Orange-700
+    primaryLight: '#fff7ed', // Orange-50
+    primaryMuted: '#ea580c20',
     
     // Secondary/Accent: Complementary amber for CTAs
     accent: '#f59e0b', // Amber-500
@@ -40,7 +40,7 @@ export const tokens = {
     // Seat map colors (light theme)
     seatAvailable: '#f5f5f5', // Neutral-100
     seatAvailableBorder: '#d1d5db', // Gray-300
-    seatSelected: '#6366f1', // Primary
+    seatSelected: '#ea580c', // Primary Warm Orange
     seatHeld: '#fbbf24', // Amber-400
     seatBooked: '#e5e7eb', // Gray-200
     seatBookedText: '#9ca3af', // Gray-400

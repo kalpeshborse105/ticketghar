@@ -18,8 +18,8 @@ export const MTChip: React.FC<MTChipProps> = ({
 }) => {
   const sizeStyles = size === 'sm' ? 'px-2.5 py-1 text-xs gap-1 h-7' : 'px-3.5 py-1.5 text-sm gap-1.5 h-9';
   const stateStyles = active
-    ? 'bg-[#6366f1] text-white border-[#6366f1] font-medium shadow-sm'
-    : 'bg-white text-[#6b7280] border-[#e5e7eb] hover:bg-[#f5f5f5] hover:text-[#111827] hover:border-[#6366f1]';
+    ? 'bg-[#ea580c] text-white border-[#ea580c] font-medium shadow-sm'
+    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900 hover:border-[#ea580c]';
 
   return (
     <button

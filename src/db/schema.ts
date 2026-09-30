@@ -11,6 +11,9 @@ export const users = pgTable('users', {
   role: text('role').notNull().default('customer'), // 'customer' | 'super_admin' | 'operations' | 'finance' | 'scanner'
   preferredLanguage: text('preferred_language').notNull().default('mr'), // 'mr' | 'en'
   city: text('city').notNull().default('Pune'),
+  passwordHash: text('password_hash'),
+  otpCode: text('otp_code'),
+  otpExpiresAt: timestamp('otp_expires_at'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -106,6 +109,7 @@ export const events = pgTable('events', {
   bannerUrl: text('banner_url'),
   status: text('status').notNull().default('published'), // 'draft' | 'published' | 'unpublish' | 'cancelled'
   featured: integer('featured').notNull().default(0),
+  castCrew: text('cast_crew'),
   convenienceFeeType: text('convenience_fee_type').notNull().default('flat'),
   convenienceFeeValue: integer('convenience_fee_value').notNull().default(3000), // in paise (3000 = ₹30)
   gstPercent: integer('gst_percent').notNull().default(18), // 18% on convenience fee
@@ -272,6 +276,7 @@ export const coupons = pgTable('coupons', {
   endsAt: timestamp('ends_at'),
   eventId: integer('event_id'),
   city: text('city'),
+  usedCount: integer('used_count').default(0),
   active: integer('active').notNull().default(1),
   createdAt: timestamp('created_at').defaultNow(),
 });

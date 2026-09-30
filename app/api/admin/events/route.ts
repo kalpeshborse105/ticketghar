@@ -49,6 +49,7 @@ export async function POST(request: NextRequest) {
       status,
       sessionStartTime,
       ticketPrice,
+      castCrew,
     } = body;
 
     if (!title || !titleMr || !category || !organizerId || !venueId) {
@@ -80,6 +81,7 @@ export async function POST(request: NextRequest) {
         descriptionMr: descriptionMr || titleMr,
         posterUrl: posterUrl || 'https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?auto=format&fit=crop&w=800&q=80',
         bannerUrl: bannerUrl || null,
+        castCrew: typeof castCrew === 'string' ? castCrew : castCrew ? JSON.stringify(castCrew) : null,
         convenienceFeeValue: convenienceFeeValue ? parseInt(convenienceFeeValue, 10) : 3000,
         status: status || 'published',
       })
@@ -135,13 +137,34 @@ export async function PATCH(request: NextRequest) {
   if (authError) return authError;
   try {
     const body = await request.json();
-    const { eventId, status, featured, actorId } = body;
+    const {
+      eventId,
+      title,
+      titleMr,
+      description,
+      descriptionMr,
+      posterUrl,
+      bannerUrl,
+      castCrew,
+      status,
+      featured,
+      actorId,
+    } = body;
 
     if (!eventId) {
       return NextResponse.json({ error: 'Event ID required' }, { status: 400 });
     }
 
     const updatePayload: any = {};
+    if (title !== undefined) updatePayload.title = title;
+    if (titleMr !== undefined) updatePayload.titleMr = titleMr;
+    if (description !== undefined) updatePayload.description = description;
+    if (descriptionMr !== undefined) updatePayload.descriptionMr = descriptionMr;
+    if (posterUrl !== undefined) updatePayload.posterUrl = posterUrl;
+    if (bannerUrl !== undefined) updatePayload.bannerUrl = bannerUrl;
+    if (castCrew !== undefined) {
+      updatePayload.castCrew = typeof castCrew === 'string' ? castCrew : castCrew ? JSON.stringify(castCrew) : null;
+    }
     if (status !== undefined) updatePayload.status = status;
     if (featured !== undefined) updatePayload.featured = featured;
 
@@ -164,5 +187,39 @@ export async function PATCH(request: NextRequest) {
   } catch (error: any) {
     console.error('Error updating event:', error);
     return NextResponse.json({ error: 'Failed to update event' }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  const authError = requireAdmin(request);
+  if (authError) return authError;
+  try {
+    const { searchParams } = new URL(request.url);
+    const eventId = searchParams.get('id');
+
+    if (!eventId) {
+      return NextResponse.json({ error: 'Event ID required' }, { status: 400 });
+    }
+
+    // Unpublish / archive rather than hard deleting to protect booking relations
+    const [archived] = await db
+      .update(events)
+      .set({ status: 'unpublish' })
+      .where(eq(events.id, parseInt(eventId, 10)))
+      .returning();
+
+    await db.insert(auditLogs).values({
+      actorId: 'admin',
+      actorRole: 'super_admin',
+      action: 'EVENT_UNPUBLISHED',
+      entityType: 'event',
+      entityId: String(eventId),
+      details: JSON.stringify({ status: 'unpublish' }),
+    });
+
+    return NextResponse.json({ success: true, event: archived });
+  } catch (error: any) {
+    console.error('Error archiving event:', error);
+    return NextResponse.json({ error: 'Failed to archive event' }, { status: 500 });
   }
 }

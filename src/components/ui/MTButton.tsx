@@ -26,11 +26,11 @@ export const MTButton: React.FC<MTButtonProps> = ({
   const baseStyles = 'inline-flex items-center justify-center font-medium transition-all active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2';
 
   const variantStyles = {
-    primary: 'bg-[#6366f1] hover:bg-[#4f46e5] text-white shadow-sm focus:ring-[#6366f1]/50',
+    primary: 'bg-[#ea580c] hover:bg-[#c2410c] text-white shadow-sm focus:ring-[#ea580c]/50',
     accent: 'bg-[#f59e0b] hover:bg-[#d97706] text-white shadow-sm focus:ring-[#f59e0b]/50',
-    secondary: 'bg-[#f5f5f5] hover:bg-[#e5e5e5] text-[#111827] border border-[#e5e7eb] focus:ring-[#6366f1]/30',
-    outline: 'bg-transparent hover:bg-[#f5f5f5] text-[#111827] border border-[#e5e7eb] hover:border-[#6366f1] focus:ring-[#6366f1]/30',
-    ghost: 'bg-transparent hover:bg-[#f5f5f5] text-[#6b7280] hover:text-[#111827]',
+    secondary: 'bg-slate-100 hover:bg-slate-200 text-slate-900 border border-slate-200 focus:ring-[#ea580c]/30',
+    outline: 'bg-transparent hover:bg-slate-100 text-slate-900 border border-slate-200 hover:border-[#ea580c] focus:ring-[#ea580c]/30',
+    ghost: 'bg-transparent hover:bg-slate-100 text-slate-600 hover:text-slate-900',
     danger: 'bg-[#ef4444] hover:bg-[#dc2626] text-white shadow-sm focus:ring-[#ef4444]/50',
   }[variant];
 

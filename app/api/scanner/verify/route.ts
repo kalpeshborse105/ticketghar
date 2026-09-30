@@ -4,7 +4,11 @@ import { tickets, ticketScans, events, orders, eventSessions, users } from '@/sr
 import { eq, desc } from 'drizzle-orm';
 import crypto from 'crypto';
 
-const TICKET_SECRET = process.env.TICKET_SECRET || 'ticketghar_secure_signing_key_maharashtra_2026';
+function getTicketSecret(): string {
+  return process.env.TICKET_SECRET || 'mahaticket_secure_signing_key_2026';
+}
+
+const TICKET_SECRET = getTicketSecret();
 
 export async function POST(request: Request) {
   try {
@@ -18,9 +22,12 @@ export async function POST(request: Request) {
       );
     }
 
-    // Try parsing as JSON if it came from QR scanner
+    // Extract code if scanned string is a full ticket URL or JSON
     let targetCode = ticketCodeOrPayload.trim();
-    if (ticketCodeOrPayload.startsWith('{')) {
+    if (targetCode.includes('/tickets/')) {
+      const parts = targetCode.split('/tickets/');
+      targetCode = decodeURIComponent(parts[1].split('?')[0].split('#')[0].trim());
+    } else if (ticketCodeOrPayload.startsWith('{')) {
       try {
         const parsed = JSON.parse(ticketCodeOrPayload);
         if (parsed.code) {

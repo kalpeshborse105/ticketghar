@@ -14,7 +14,7 @@ export default function ContactPage() {
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center gap-4">
           <Link 
             href="/" 
-            className="flex items-center gap-2 text-sm text-[#6366f1] hover:text-[#4f46e5] transition"
+            className="flex items-center gap-2 text-sm text-orange-600 hover:text-orange-700 transition"
           >
             <ArrowLeft className="w-4 h-4" />
             <span>Back to MahaTicket</span>
@@ -27,7 +27,7 @@ export default function ContactPage() {
         {/* Title */}
         <div className="space-y-2">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-[#6366f1]/10 text-[#6366f1] flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-orange-50 text-orange-600 border border-orange-200 flex items-center justify-center">
               <MessageCircle className="w-5 h-5" />
             </div>
             <h1 className="text-3xl font-bold text-[#111827]">Contact Us</h1>
@@ -41,15 +41,15 @@ export default function ContactPage() {
           {/* Email Support */}
           <div className="bg-white rounded-xl border border-[#e5e7eb] p-6 space-y-3 shadow-sm hover:shadow-md transition">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-[#6366f1]/10 text-[#6366f1] flex items-center justify-center">
+              <div className="w-10 h-10 rounded-lg bg-orange-50 text-orange-600 border border-orange-200 flex items-center justify-center">
                 <Mail className="w-5 h-5" />
               </div>
               <h3 className="text-lg font-bold text-[#111827]">Email Support</h3>
             </div>
             <div className="space-y-2 text-sm text-[#374151]">
-              <p><strong>General Inquiries:</strong> <a href="mailto:support@mahaticket.in" className="text-[#6366f1] hover:underline">support@mahaticket.in</a></p>
-              <p><strong>Booking Issues:</strong> <a href="mailto:bookings@mahaticket.in" className="text-[#6366f1] hover:underline">bookings@mahaticket.in</a></p>
-              <p><strong>Partner/Organizer:</strong> <a href="mailto:partners@mahaticket.in" className="text-[#6366f1] hover:underline">partners@mahaticket.in</a></p>
+              <p><strong>General Inquiries:</strong> <a href="mailto:support@mahaticket.in" className="text-orange-600 hover:underline">support@mahaticket.in</a></p>
+              <p><strong>Booking Issues:</strong> <a href="mailto:bookings@mahaticket.in" className="text-orange-600 hover:underline">bookings@mahaticket.in</a></p>
+              <p><strong>Partner/Organizer:</strong> <a href="mailto:partners@mahaticket.in" className="text-orange-600 hover:underline">partners@mahaticket.in</a></p>
             </div>
             <p className="text-xs text-[#6b7280]">Response time: Within 24-48 hours</p>
           </div>
@@ -63,7 +63,7 @@ export default function ContactPage() {
               <h3 className="text-lg font-bold text-[#111827]">Phone Support</h3>
             </div>
             <div className="space-y-2 text-sm text-[#374151]">
-              <p><strong>Customer Care:</strong> <a href="tel:+91XXXXXXXXXX" className="text-[#6366f1] hover:underline">+91-XXXXX-XXXXX</a></p>
+              <p><strong>Customer Care:</strong> <a href="tel:+91XXXXXXXXXX" className="text-orange-600 hover:underline">+91-XXXXX-XXXXX</a></p>
               <p><strong>Hours:</strong> Monday to Saturday</p>
               <p><strong>Timing:</strong> 10:00 AM - 7:00 PM IST</p>
             </div>
@@ -79,7 +79,7 @@ export default function ContactPage() {
               <h3 className="text-lg font-bold text-[#111827]">WhatsApp Support</h3>
             </div>
             <div className="space-y-2 text-sm text-[#374151]">
-              <p><strong>Quick Help:</strong> <a href="https://wa.me/91XXXXXXXXXX" className="text-[#6366f1] hover:underline">+91-XXXXX-XXXXX</a></p>
+              <p><strong>Quick Help:</strong> <a href="https://wa.me/91XXXXXXXXXX" className="text-orange-600 hover:underline">+91-XXXXX-XXXXX</a></p>
               <p>Send us your booking ID and query directly on WhatsApp for faster resolution.</p>
             </div>
             <p className="text-xs text-[#6b7280]">Available during business hours</p>
@@ -106,7 +106,7 @@ export default function ContactPage() {
         {/* FAQ Section */}
         <div className="bg-white rounded-xl border border-[#e5e7eb] p-6 sm:p-8 space-y-6">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-[#6366f1]/10 text-[#6366f1] flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-orange-50 text-orange-600 border border-orange-200 flex items-center justify-center">
               <HelpCircle className="w-5 h-5" />
             </div>
             <h2 className="text-2xl font-bold text-[#111827]">Frequently Asked Questions</h2>
@@ -128,7 +128,7 @@ export default function ContactPage() {
                 Can I cancel or reschedule my booking?
               </summary>
               <p className="text-sm text-[#374151] mt-2 leading-relaxed">
-                Cancellation policies vary by event organizer. Please check the specific event's policy during booking or visit our <Link href="/refund" className="text-[#6366f1] hover:underline">Refund Policy</Link> page for detailed information.
+                Cancellation policies vary by event organizer. Please check the specific event's policy during booking or visit our <Link href="/refund" className="text-orange-600 hover:underline">Refund Policy</Link> page for detailed information.
               </p>
             </details>
 
@@ -155,7 +155,7 @@ export default function ContactPage() {
                 Is my payment information secure?
               </summary>
               <p className="text-sm text-[#374151] mt-2 leading-relaxed">
-                Yes! We use industry-standard encryption and trusted payment gateways (Razorpay/Stripe). We never store your card details or sensitive payment information. Read our <Link href="/privacy" className="text-[#6366f1] hover:underline">Privacy Policy</Link> for more details.
+                Yes! We use industry-standard encryption and trusted payment gateways (Razorpay/Stripe). We never store your card details or sensitive payment information. Read our <Link href="/privacy" className="text-orange-600 hover:underline">Privacy Policy</Link> for more details.
               </p>
             </details>
 
@@ -184,13 +184,13 @@ export default function ContactPage() {
 
         {/* Footer Links */}
         <div className="flex flex-wrap gap-4 justify-center text-xs text-[#6b7280]">
-          <Link href="/terms" className="hover:text-[#6366f1] transition">Terms of Use</Link>
+          <Link href="/terms" className="hover:text-orange-600 transition">Terms of Use</Link>
           <span>•</span>
-          <Link href="/privacy" className="hover:text-[#6366f1] transition">Privacy Policy</Link>
+          <Link href="/privacy" className="hover:text-orange-600 transition">Privacy Policy</Link>
           <span>•</span>
-          <Link href="/refund" className="hover:text-[#6366f1] transition">Refund Policy</Link>
+          <Link href="/refund" className="hover:text-orange-600 transition">Refund Policy</Link>
           <span>•</span>
-          <Link href="/about" className="hover:text-[#6366f1] transition">About MahaTicket</Link>
+          <Link href="/about" className="hover:text-orange-600 transition">About MahaTicket</Link>
         </div>
       </main>
     </div>

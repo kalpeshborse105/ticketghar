@@ -42,7 +42,7 @@ export const MTBottomNavigation: React.FC<MTBottomNavigationProps> = ({
               type="button"
               onClick={() => onTabChange(item.id)}
               className={`relative flex flex-col items-center justify-center py-1.5 px-3 min-w-[56px] transition-colors focus:outline-none ${
-                isActive ? 'text-[#6366f1]' : 'text-[#9ca3af] hover:text-[#6b7280]'
+                isActive ? 'text-[#ea580c]' : 'text-[#9ca3af] hover:text-[#6b7280]'
               }`}
             >
               <div className="relative">
@@ -53,11 +53,11 @@ export const MTBottomNavigation: React.FC<MTBottomNavigationProps> = ({
                   </span>
                 )}
               </div>
-              <span className={`text-[11px] mt-1 font-medium truncate ${isActive ? 'text-[#6366f1] font-semibold' : ''}`}>
+              <span className={`text-[11px] mt-1 font-medium truncate ${isActive ? 'text-[#ea580c] font-semibold' : ''}`}>
                 {item.label}
               </span>
               {isActive && (
-                <div className="absolute top-0 w-8 h-0.5 bg-[#6366f1] rounded-full" />
+                <div className="absolute top-0 w-8 h-0.5 bg-[#ea580c] rounded-full" />
               )}
             </button>
           );

@@ -51,14 +51,14 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
         <div className="absolute inset-0 flex flex-col justify-end p-4 sm:p-6 lg:p-8 max-w-2xl">
           {/* Badges */}
           <div className="flex flex-wrap items-center gap-2 mb-2">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-[#6366f1] text-white shadow-sm">
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-orange-600 text-white shadow-sm">
               <Sparkles className="w-3 h-3" />
               {language === 'mr' ? 'विशेष शिफारस' : 'Featured'}
             </span>
-            <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-white/90 text-[#111827] border border-white/20">
+            <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-white/90 text-slate-900 border border-white/20">
               {displayCategory}
             </span>
-            <span className="px-2 py-0.5 rounded text-[11px] font-normal bg-white/80 text-[#6b7280] border border-white/20">
+            <span className="px-2 py-0.5 rounded text-[11px] font-normal bg-white/80 text-slate-600 border border-white/20">
               {current.language} • {current.durationMinutes} {language === 'mr' ? 'मिनिटे' : 'mins'}
             </span>
           </div>
@@ -71,13 +71,13 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
           {/* Subtitle / Venue & Timing */}
           <div className="flex flex-wrap items-center gap-y-1 gap-x-2.5 text-xs sm:text-sm text-slate-200 mb-3">
             <div className="flex items-center gap-1">
-              <MapPin className="w-3.5 h-3.5 text-[#6366f1] shrink-0" />
+              <MapPin className="w-3.5 h-3.5 text-orange-400 shrink-0" />
               <span className="font-medium text-white">{venueName}</span>
               <span className="text-slate-300">({current.venue?.city})</span>
             </div>
             {current.sessions && current.sessions.length > 0 && (
               <div className="flex items-center gap-1 text-slate-200">
-                <Calendar className="w-3.5 h-3.5 text-[#6366f1] shrink-0" />
+                <Calendar className="w-3.5 h-3.5 text-orange-400 shrink-0" />
                 <span>
                   {new Date(current.sessions[0].sessionStartTime).toLocaleDateString(
                     language === 'mr' ? 'mr-IN' : 'en-IN',
@@ -99,11 +99,11 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
           <div className="flex items-center gap-2.5">
             <button
               onClick={() => onSelectEvent(current)}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#6366f1] hover:bg-[#4f46e5] text-white font-semibold text-xs sm:text-sm shadow-md transition active:scale-95"
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs sm:text-sm shadow-md transition active:scale-95"
             >
               <Ticket className="w-4 h-4" />
               <span>{t.bookNow}</span>
-              <span className="text-xs bg-white/20 px-1.5 py-0.5 rounded font-medium ml-1">
+              <span className="text-xs bg-black/20 px-1.5 py-0.5 rounded font-medium ml-1">
                 ₹{(current.minPrice || 35000) / 100} {language === 'mr' ? 'पासून' : 'onwards'}
               </span>
             </button>
@@ -128,7 +128,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
                   key={i}
                   onClick={() => setCurrentIndex(i)}
                   className={`h-1 rounded-full transition-all ${
-                    i === currentIndex ? 'w-5 bg-[#6366f1]' : 'w-1.5 bg-white/50'
+                    i === currentIndex ? 'w-5 bg-orange-500' : 'w-1.5 bg-white/50'
                   }`}
                 />
               ))}

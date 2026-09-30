@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS public.users (
   preferred_language TEXT NOT NULL DEFAULT 'mr'
     CHECK (preferred_language IN ('mr', 'en')),
   city TEXT NOT NULL DEFAULT 'Pune',
+  password_hash TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -159,6 +160,7 @@ CREATE TABLE IF NOT EXISTS public.events (
   convenience_fee_value INTEGER NOT NULL DEFAULT 3000,
   gst_percent INTEGER NOT NULL DEFAULT 18,
   cancellation_policy TEXT NOT NULL DEFAULT 'cancellable_up_to_4hr',
+  cast_crew TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -568,6 +570,10 @@ BEGIN
       FOR SELECT USING (active = 1);
   END IF;
 END $$;
+
+-- Idempotent column migrations for existing instances
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password_hash TEXT;
+ALTER TABLE public.events ADD COLUMN IF NOT EXISTS cast_crew TEXT;
 
 -- NOTE: App connects with Postgres role that bypasses RLS (direct SQL via pg Pool).
 -- Browser must never receive service-role / DB password.

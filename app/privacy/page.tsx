@@ -14,7 +14,7 @@ export default function PrivacyPage() {
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center gap-4">
           <Link 
             href="/" 
-            className="flex items-center gap-2 text-sm text-[#6366f1] hover:text-[#4f46e5] transition"
+            className="flex items-center gap-2 text-sm text-orange-600 hover:text-orange-700 transition"
           >
             <ArrowLeft className="w-4 h-4" />
             <span>Back to MahaTicket</span>
@@ -27,7 +27,7 @@ export default function PrivacyPage() {
         {/* Title */}
         <div className="space-y-2">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-[#6366f1]/10 text-[#6366f1] flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-orange-50 text-orange-600 border border-orange-200 flex items-center justify-center">
               <Shield className="w-5 h-5" />
             </div>
             <h1 className="text-3xl font-bold text-[#111827]">Privacy Policy</h1>
@@ -136,7 +136,7 @@ export default function PrivacyPage() {
               <li><strong>Opt-out:</strong> Unsubscribe from promotional emails and marketing communications</li>
             </ul>
             <p className="text-sm text-[#374151] leading-relaxed mt-3">
-              To exercise these rights, contact us at <Link href="/contact" className="text-[#6366f1] hover:underline">privacy@mahaticket.in</Link>
+              To exercise these rights, contact us at <Link href="/contact" className="text-orange-600 hover:underline">privacy@mahaticket.in</Link>
             </p>
           </section>
 
@@ -173,7 +173,7 @@ export default function PrivacyPage() {
             </p>
             <div className="bg-[#f5f5f5] rounded-lg p-4 text-sm text-[#374151] space-y-1 mt-3">
               <p><strong>Email:</strong> privacy@mahaticket.in</p>
-              <p><strong>Support:</strong> <Link href="/contact" className="text-[#6366f1] hover:underline">Contact Page</Link></p>
+              <p><strong>Support:</strong> <Link href="/contact" className="text-orange-600 hover:underline">Contact Page</Link></p>
               <p><strong>Address:</strong> Kalpkrut Infotech, Pune, Maharashtra, India</p>
             </div>
           </section>
@@ -182,13 +182,13 @@ export default function PrivacyPage() {
 
         {/* Footer Links */}
         <div className="flex flex-wrap gap-4 justify-center text-xs text-[#6b7280]">
-          <Link href="/terms" className="hover:text-[#6366f1] transition">Terms of Use</Link>
+          <Link href="/terms" className="hover:text-orange-600 transition">Terms of Use</Link>
           <span>•</span>
-          <Link href="/refund" className="hover:text-[#6366f1] transition">Refund Policy</Link>
+          <Link href="/refund" className="hover:text-orange-600 transition">Refund Policy</Link>
           <span>•</span>
-          <Link href="/contact" className="hover:text-[#6366f1] transition">Contact Support</Link>
+          <Link href="/contact" className="hover:text-orange-600 transition">Contact Support</Link>
           <span>•</span>
-          <Link href="/about" className="hover:text-[#6366f1] transition">About MahaTicket</Link>
+          <Link href="/about" className="hover:text-orange-600 transition">About MahaTicket</Link>
         </div>
       </main>
     </div>

@@ -14,7 +14,7 @@ export default function TermsPage() {
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center gap-4">
           <Link 
             href="/" 
-            className="flex items-center gap-2 text-sm text-[#6366f1] hover:text-[#4f46e5] transition"
+            className="flex items-center gap-2 text-sm text-orange-600 hover:text-orange-700 transition"
           >
             <ArrowLeft className="w-4 h-4" />
             <span>Back to MahaTicket</span>
@@ -68,7 +68,7 @@ export default function TermsPage() {
           <section className="space-y-3">
             <h2 className="text-xl font-bold text-[#111827]">4. Cancellation and Refunds</h2>
             <p className="text-sm text-[#374151] leading-relaxed">
-              Cancellation and refund policies vary by event and are determined by the event organizer. Please refer to our detailed <Link href="/refund" className="text-[#6366f1] hover:underline">Cancellation & Refund Policy</Link> for more information.
+              Cancellation and refund policies vary by event and are determined by the event organizer. Please refer to our detailed <Link href="/refund" className="text-orange-600 hover:underline">Cancellation & Refund Policy</Link> for more information.
             </p>
             <p className="text-sm text-[#374151] leading-relaxed">
               Generally, tickets are non-refundable unless the event is cancelled by the organizer.
@@ -108,7 +108,7 @@ export default function TermsPage() {
           <section className="space-y-3">
             <h2 className="text-xl font-bold text-[#111827]">8. Privacy</h2>
             <p className="text-sm text-[#374151] leading-relaxed">
-              Your use of MahaTicket is also governed by our <Link href="/privacy" className="text-[#6366f1] hover:underline">Privacy Policy</Link>. We are committed to protecting your personal information and using it responsibly.
+              Your use of MahaTicket is also governed by our <Link href="/privacy" className="text-orange-600 hover:underline">Privacy Policy</Link>. We are committed to protecting your personal information and using it responsibly.
             </p>
           </section>
 
@@ -129,7 +129,7 @@ export default function TermsPage() {
           <section className="space-y-3">
             <h2 className="text-xl font-bold text-[#111827]">11. Contact Us</h2>
             <p className="text-sm text-[#374151] leading-relaxed">
-              If you have any questions about these Terms of Use, please visit our <Link href="/contact" className="text-[#6366f1] hover:underline">Contact page</Link> or email us at support@mahaticket.in.
+              If you have any questions about these Terms of Use, please visit our <Link href="/contact" className="text-orange-600 hover:underline">Contact page</Link> or email us at support@mahaticket.in.
             </p>
           </section>
 
@@ -137,13 +137,13 @@ export default function TermsPage() {
 
         {/* Footer Links */}
         <div className="flex flex-wrap gap-4 justify-center text-xs text-[#6b7280]">
-          <Link href="/privacy" className="hover:text-[#6366f1] transition">Privacy Policy</Link>
+          <Link href="/privacy" className="hover:text-orange-600 transition">Privacy Policy</Link>
           <span>•</span>
-          <Link href="/refund" className="hover:text-[#6366f1] transition">Refund Policy</Link>
+          <Link href="/refund" className="hover:text-orange-600 transition">Refund Policy</Link>
           <span>•</span>
-          <Link href="/contact" className="hover:text-[#6366f1] transition">Contact Support</Link>
+          <Link href="/contact" className="hover:text-orange-600 transition">Contact Support</Link>
           <span>•</span>
-          <Link href="/about" className="hover:text-[#6366f1] transition">About MahaTicket</Link>
+          <Link href="/about" className="hover:text-orange-600 transition">About MahaTicket</Link>
         </div>
       </main>
     </div>

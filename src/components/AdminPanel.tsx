@@ -30,6 +30,9 @@ import {
   KeyRound,
   Server,
   FileCode,
+  Megaphone,
+  Bell,
+  Tag,
 } from 'lucide-react';
 
 interface AdminPanelProps {
@@ -49,8 +52,7 @@ type AdminTab =
   | 'users'
   | 'coupons'
   | 'announcements'
-  | 'audit_logs'
-  | 'system_db';
+  | 'audit_logs';
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
   language,
@@ -127,6 +129,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [announcementsList, setAnnouncementsList] = useState<any[]>([]);
   const [loadingAnnouncements, setLoadingAnnouncements] = useState(false);
   const [showCreateAnnouncementModal, setShowCreateAnnouncementModal] = useState(false);
+  const [newAnnouncementForm, setNewAnnouncementForm] = useState({
+    title: '',
+    message: '',
+    category: 'popup_poster', // 'popup_poster' | 'hero_banner' | 'mid_banner' | 'general_notification'
+    imageUrl: '',
+    ctaLabel: 'आताच बुक करा',
+    ctaUrl: '',
+    city: '',
+    startsAt: '',
+    endsAt: '',
+    active: 1,
+  });
+  const [isSubmittingAnnouncement, setIsSubmittingAnnouncement] = useState(false);
 
   // Audit Logs Data
   const [auditLogsList, setAuditLogsList] = useState<any[]>([]);
@@ -423,6 +438,71 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
+  // Action: Create Announcement / Banner
+  const handleCreateAnnouncement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAnnouncementForm.title.trim() || !newAnnouncementForm.message.trim()) {
+      alert('कृपया शीर्षक आणि संदेश प्रविष्ट करा');
+      return;
+    }
+
+    try {
+      setIsSubmittingAnnouncement(true);
+      const res = await fetch('/api/admin/announcements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...newAnnouncementForm,
+          actorId: 'admin_official',
+        }),
+      });
+
+      if (res.ok) {
+        setShowCreateAnnouncementModal(false);
+        setNewAnnouncementForm({
+          title: '',
+          message: '',
+          category: 'popup_poster',
+          imageUrl: '',
+          ctaLabel: 'आताच बुक करा',
+          ctaUrl: '',
+          city: '',
+          startsAt: '',
+          endsAt: '',
+          active: 1,
+        });
+        fetchAnnouncements();
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Failed to create announcement');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error creating announcement');
+    } finally {
+      setIsSubmittingAnnouncement(false);
+    }
+  };
+
+  // Action: Toggle Announcement Active Status
+  const handleToggleAnnouncementActive = async (id: number, currentActive: number) => {
+    try {
+      const res = await fetch('/api/admin/announcements', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          announcementId: id,
+          active: currentActive === 1 ? 0 : 1,
+          actorId: 'admin_official',
+        }),
+      });
+      if (res.ok) {
+        fetchAnnouncements();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   // Action: Create New Venue
   const handleCreateVenue = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -666,18 +746,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             <FileCode className="w-4 h-4 text-rose-400" />
             <span>ऑडिट लॉग्स (Audit Trail)</span>
           </button>
-
-          <button
-            onClick={() => setActiveTab('system_db')}
-            className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
-              activeTab === 'system_db'
-                ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
-                : 'text-slate-300 hover:bg-slate-800'
-            }`}
-          >
-            <Database className="w-4 h-4 text-sky-400" />
-            <span>डेटाबेस व सिस्टीम मॅन्युअल</span>
-          </button>
         </nav>
 
         {/* Content Area */}
@@ -779,19 +847,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
                 <div className="p-5 bg-slate-900 border border-slate-800 rounded-2xl space-y-3">
                   <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    <Database className="w-4 h-4 text-sky-400" />
-                    <span>डेटाबेस व सुरक्षा तपशील (Database State)</span>
+                    <Megaphone className="w-4 h-4 text-amber-400" />
+                    <span>जाहिरात व बॅनर मोहीम (Announcements & Ads)</span>
                   </h3>
                   <div className="text-xs text-slate-300 space-y-1">
-                    <p>• <strong>इंजिन:</strong> PostgreSQL 16 (Supabase Relational Database)</p>
-                    <p>• <strong>रीजन:</strong> asia-southeast1 / ap-south-1 (Near-zero latency)</p>
-                    <p>• <strong>इन्व्हेंटरी मॉडेल:</strong> Database-Authoritative 8-min Atomic Holds</p>
+                    <p>• <strong>मोबाईल / वेब ॲड पॉपअप:</strong> टाइमर-आधारित जाहिरात व ऑफर पोस्टर</p>
+                    <p>• <strong>मुख्य बॅनर:</strong> होमपेज टॉप कॅरोसेल व मिडल स्ट्रिप बॅनर</p>
+                    <p>• <strong>थेट रीडायरेक्ट:</strong> क्लिकवर इच्छित पेज किंवा बाह्य लिंकवर नेणे</p>
                   </div>
                   <button
-                    onClick={() => setActiveTab('system_db')}
-                    className="text-xs text-sky-400 hover:underline font-semibold flex items-center gap-1 pt-1"
+                    onClick={() => setActiveTab('announcements')}
+                    className="text-xs text-amber-400 hover:underline font-semibold flex items-center gap-1 pt-1"
                   >
-                    <span>सिस्टीम मॅन्युअल आणि .env वाचा →</span>
+                    <span>बॅनर व जाहिरात मोहीम व्यवस्थापित करा →</span>
                   </button>
                 </div>
               </div>
@@ -1439,58 +1507,133 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
           )}
 
-          {/* TAB 10: ANNOUNCEMENTS */}
+          {/* TAB 10: ANNOUNCEMENTS & BANNERS */}
           {activeTab === 'announcements' && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="text-xl sm:text-2xl font-extrabold text-white font-serif">
-                    जाहिराती व सूचना (System Announcements)
+                    बॅनर्स व जाहिरात व्यवस्थापन (Banners & Popups)
                   </h2>
                   <p className="text-xs text-slate-400">
-                    Platform-wide notifications and promotional banners
+                    हिरो बॅनर, मध्यम स्ट्रिप बॅनर आणि ॲप/वेबसाइटवर दिसणारे टाइमरयुक्त पॉपअप पोस्टर्स
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => alert('Create Announcement - Coming Soon')}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-sky-500 text-slate-950 font-bold text-xs shadow-lg hover:bg-sky-400 transition"
+                    onClick={() => setShowCreateAnnouncementModal(true)}
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#ea580c] hover:bg-[#c2410c] text-white font-bold text-xs shadow-lg transition active:scale-95"
                   >
                     <Plus className="w-4 h-4" />
-                    <span>नवीन जाहिरात</span>
+                    <span>नवीन बॅनर / पॉपअप जोडा</span>
                   </button>
                   <button
                     onClick={fetchAnnouncements}
-                    className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300"
+                    className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white"
+                    title="Refresh"
                   >
                     <RefreshCw className="w-4 h-4" />
                   </button>
                 </div>
               </div>
 
+              {/* Banners & Popups List */}
               <div className="space-y-4">
-                {announcementsList.map((a) => (
-                  <div key={a.id} className="p-5 bg-slate-900 border border-slate-800 rounded-2xl space-y-3">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h3 className="text-base font-bold text-white">{a.title}</h3>
-                        <p className="text-xs text-slate-400 mt-1">{a.message}</p>
-                      </div>
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                        a.active === 1 
-                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                          : 'bg-slate-700 text-slate-300'
-                      }`}>
-                        {a.active === 1 ? 'ACTIVE' : 'INACTIVE'}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-4 text-xs text-slate-500">
-                      {a.city && <span>📍 {a.city}</span>}
-                      {a.category && <span>🏷️ {a.category}</span>}
-                      {a.startsAt && <span>⏰ {new Date(a.startsAt).toLocaleDateString()} - {a.endsAt && new Date(a.endsAt).toLocaleDateString()}</span>}
-                    </div>
+                {announcementsList.length === 0 ? (
+                  <div className="p-8 text-center bg-slate-900 border border-slate-800 rounded-2xl text-slate-400 text-sm">
+                    कोणतेही बॅनर किंवा पॉपअप उपलब्ध नाहीत. &quot;नवीन बॅनर / पॉपअप जोडा&quot; बटणावर क्लिक करा.
                   </div>
-                ))}
+                ) : (
+                  announcementsList.map((a) => {
+                    const isPopup = a.category === 'popup_poster';
+                    const isHero = a.category === 'hero_banner';
+                    const isMid = a.category === 'mid_banner';
+
+                    const categoryBadge = isPopup
+                      ? { label: '📱 ॲप व वेब टाइमर पॉपअप (Popup Ad)', color: 'bg-rose-500/20 text-rose-300 border-rose-500/30' }
+                      : isHero
+                      ? { label: '🌟 मुख्य हिरो बॅनर (Hero Carousel)', color: 'bg-amber-500/20 text-amber-300 border-amber-500/30' }
+                      : isMid
+                      ? { label: '🎗️ मिडल स्ट्रिप बॅनर (Middle Banner)', color: 'bg-blue-500/20 text-blue-300 border-blue-500/30' }
+                      : { label: '📢 सूचना पट्टी (Notice)', color: 'bg-slate-700 text-slate-200 border-slate-600' };
+
+                    return (
+                      <div
+                        key={a.id}
+                        className="p-5 bg-slate-900 border border-slate-800 rounded-2xl space-y-4 hover:border-slate-700 transition"
+                      >
+                        <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
+                          <div className="flex items-start gap-4 flex-1">
+                            {a.imageUrl && (
+                              <img
+                                src={a.imageUrl}
+                                alt={a.title}
+                                className="w-20 h-20 sm:w-28 sm:h-20 rounded-xl object-cover border border-slate-700 shrink-0 bg-slate-950"
+                              />
+                            )}
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${categoryBadge.color}`}>
+                                  {categoryBadge.label}
+                                </span>
+                                {a.city && (
+                                  <span className="text-[10px] text-slate-400">
+                                    📍 {a.city}
+                                  </span>
+                                )}
+                              </div>
+                              <h3 className="text-base font-bold text-white mt-1">{a.title}</h3>
+                              <p className="text-xs text-slate-300 line-clamp-2">{a.message}</p>
+                              {a.ctaUrl && (
+                                <p className="text-[11px] text-[#ea580c] font-medium flex items-center gap-1 mt-1">
+                                  <span>लिंक: {a.ctaUrl}</span>
+                                  {a.ctaLabel && <span className="text-slate-400">({a.ctaLabel})</span>}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex sm:flex-col items-center sm:items-end gap-2 shrink-0 w-full sm:w-auto justify-between sm:justify-start">
+                            <span
+                              className={`px-3 py-1 rounded-full text-xs font-bold ${
+                                a.active === 1
+                                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                  : 'bg-slate-800 text-slate-400 border border-slate-700'
+                              }`}
+                            >
+                              {a.active === 1 ? '● LIVE / सक्रिय' : '○ PAUSED / बंद'}
+                            </span>
+
+                            <button
+                              onClick={() => handleToggleAnnouncementActive(a.id, a.active)}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition ${
+                                a.active === 1
+                                  ? 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white'
+                                  : 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/30'
+                              }`}
+                            >
+                              {a.active === 1 ? 'पॉझ करा (Pause)' : 'सुरू करा (Activate)'}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Validity Timer Bar */}
+                        {(a.startsAt || a.endsAt) && (
+                          <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
+                            <span className="flex items-center gap-1.5 text-amber-400">
+                              <Clock className="w-3.5 h-3.5" />
+                              <span>टाइमर शेड्युल (Schedule):</span>
+                            </span>
+                            <span>
+                              {a.startsAt ? new Date(a.startsAt).toLocaleString() : 'तातडीने सुरू'} —{' '}
+                              {a.endsAt ? new Date(a.endsAt).toLocaleString() : 'अनिश्चित काळासाठी'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
           )}
@@ -1553,109 +1696,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     ))}
                   </tbody>
                 </table>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 12: DATABASE & SYSTEM MANUAL (NEW FEATURE) */}
-          {activeTab === 'system_db' && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl sm:text-2xl font-extrabold text-white font-serif">
-                    डेटाबेस व सिस्टीम मॅन्युअल (Database & System Setup)
-                  </h2>
-                  <p className="text-xs text-slate-400">
-                    क्लाउड एसक्यूएल, पर्यावरण व्हेरिएबल्स (.env) आणि स्थानिक सेटअप मार्गदर्शक
-                  </p>
-                </div>
-              </div>
-
-              {/* Status Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl space-y-1.5">
-                  <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs uppercase">
-                    <Database className="w-4 h-4" />
-                    <span>Database Engine</span>
-                  </div>
-                  <p className="text-base font-bold text-white">PostgreSQL 16</p>
-                  <p className="text-[11px] text-slate-400">Google Cloud SQL Developer Edition</p>
-                </div>
-
-                <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl space-y-1.5">
-                  <div className="flex items-center gap-2 text-amber-400 font-bold text-xs uppercase">
-                    <Server className="w-4 h-4" />
-                    <span>Deployment Region</span>
-                  </div>
-                  <p className="text-base font-bold text-white">asia-southeast1</p>
-                  <p className="text-[11px] text-slate-400">Cloud SQL Instance: ai-studio-05ee5a93</p>
-                </div>
-
-                <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl space-y-1.5">
-                  <div className="flex items-center gap-2 text-sky-400 font-bold text-xs uppercase">
-                    <ShieldCheck className="w-4 h-4" />
-                    <span>Connection Pool</span>
-                  </div>
-                  <p className="text-base font-bold text-white">pg.Pool (Lazy Load)</p>
-                  <p className="text-[11px] text-slate-400">Object Method • Max 10 Connections</p>
-                </div>
-              </div>
-
-              {/* Environment Variables Reference */}
-              <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl space-y-4">
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <KeyRound className="w-4 h-4 text-amber-400" />
-                  <span>पर्यावरण व्हेरिएबल्स (.env.example & Production Variables)</span>
-                </h3>
-                <div className="bg-slate-950 p-4 rounded-xl font-mono text-xs text-slate-300 space-y-1.5 overflow-x-auto border border-slate-800">
-                  <p className="text-slate-500"># Cloud SQL / PostgreSQL Runtime Connection (Auto-injected in AI Studio):</p>
-                  <p>SQL_HOST=&quot;/cloudsql/...&quot; <span className="text-slate-500"># Unix socket or host</span></p>
-                  <p>SQL_DB_NAME=&quot;ai-studio-db&quot; <span className="text-slate-500"># PostgreSQL database name</span></p>
-                  <p>SQL_USER=&quot;...&quot; <span className="text-slate-500"># App runtime user with read/write</span></p>
-                  <p>SQL_PASSWORD=&quot;...&quot; <span className="text-slate-500"># App runtime password</span></p>
-                  <p>SQL_ADMIN_USER=&quot;...&quot; <span className="text-slate-500"># Schema Drizzle Kit migration user</span></p>
-                  <p>SQL_ADMIN_PASSWORD=&quot;...&quot; <span className="text-slate-500"># Schema migration password</span></p>
-                  <p className="text-slate-500 pt-2"># Payment Gateway (Razorpay Indian Provider):</p>
-                  <p>RAZORPAY_KEY_ID=&quot;rzp_test_...&quot; <span className="text-slate-500"># Public API Key</span></p>
-                  <p>RAZORPAY_KEY_SECRET=&quot;...&quot; <span className="text-slate-500"># Webhook HMAC verification secret</span></p>
-                  <p className="text-slate-500 pt-2"># Gemini AI & App Hosting:</p>
-                  <p>GEMINI_API_KEY=&quot;...&quot; <span className="text-slate-500"># Server-side injected</span></p>
-                  <p>APP_URL=&quot;https://...&quot; <span className="text-slate-500"># Current hosting URL</span></p>
-                </div>
-              </div>
-
-              {/* Step-by-Step Production Manual */}
-              <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl space-y-4">
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Terminal className="w-4 h-4 text-emerald-400" />
-                  <span>आपल्या संगणकावर / सर्व्हरवर कसे चालवावे? (Quick Start Commands)</span>
-                </h3>
-                <div className="space-y-3 text-xs text-slate-300">
-                  <div>
-                    <strong className="text-white block font-mono">1. Dependencies इन्स्टॉल करा:</strong>
-                    <div className="bg-slate-950 px-3 py-2 rounded-lg font-mono text-amber-300 mt-1">
-                      npm install # किंवा bun install
-                    </div>
-                  </div>
-                  <div>
-                    <strong className="text-white block font-mono">2. Database Schema अपडेट / मायग्रेट करा:</strong>
-                    <div className="bg-slate-950 px-3 py-2 rounded-lg font-mono text-amber-300 mt-1">
-                      npx drizzle-kit push --config=./src/db/drizzle.config.ts
-                    </div>
-                  </div>
-                  <div>
-                    <strong className="text-white block font-mono">3. प्रारंभिक डेटा (Events, Venues, Seats) सीड करा:</strong>
-                    <div className="bg-slate-950 px-3 py-2 rounded-lg font-mono text-amber-300 mt-1">
-                      bun run src/db/seed.ts
-                    </div>
-                  </div>
-                  <div>
-                    <strong className="text-white block font-mono">4. डेव्हलपमेंट सर्व्हर सुरू करा:</strong>
-                    <div className="bg-slate-950 px-3 py-2 rounded-lg font-mono text-amber-300 mt-1">
-                      npm run dev
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
           )}
@@ -1962,6 +2002,204 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 सेटलमेंट पूर्ण झाली (Confirm Payout)
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4: Create Announcement / Banner / Timed Popup */}
+      {showCreateAnnouncementModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 className="text-lg font-bold text-white font-serif">
+                नवीन बॅनर / पॉपअप पोस्टर जोडा (Create Banner & Timed Popup)
+              </h3>
+              <button
+                onClick={() => setShowCreateAnnouncementModal(false)}
+                className="p-1 rounded-lg bg-slate-800 text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateAnnouncement} className="space-y-4 text-xs">
+              <div>
+                <label className="text-slate-300 font-bold block mb-1">
+                  प्रकार (Type):
+                </label>
+                <select
+                  value={newAnnouncementForm.category}
+                  onChange={(e) =>
+                    setNewAnnouncementForm({ ...newAnnouncementForm, category: e.target.value })
+                  }
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-amber-400 font-bold"
+                >
+                  <option value="popup_poster">
+                    📱 ॲप व वेबसाइट पॉपअप पोस्टर (Timed Popup Ad with Timer)
+                  </option>
+                  <option value="hero_banner">
+                    🌟 मुख्य हिरो कॅरोसेल बॅनर (Hero Carousel Banner)
+                  </option>
+                  <option value="mid_banner">
+                    🎗️ मिडल स्ट्रिप बॅनर (Middle Section Banner)
+                  </option>
+                  <option value="general_notification">
+                    📢 सामान्य सूचना पट्टी (Top Notification Notice)
+                  </option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-300 font-bold block mb-1">
+                    शीर्षक (Title) *:
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="उदा. दिवाळी महानाटक महोत्सव २०२६"
+                    value={newAnnouncementForm.title}
+                    onChange={(e) =>
+                      setNewAnnouncementForm({ ...newAnnouncementForm, title: e.target.value })
+                    }
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-slate-300 font-bold block mb-1">
+                    लक्ष्यित शहर (Target City):
+                  </label>
+                  <select
+                    value={newAnnouncementForm.city}
+                    onChange={(e) =>
+                      setNewAnnouncementForm({ ...newAnnouncementForm, city: e.target.value })
+                    }
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white"
+                  >
+                    <option value="">सर्व महाराष्ट्र (All Maharashtra)</option>
+                    <option value="Pune">पुणे (Pune)</option>
+                    <option value="Mumbai">मुंबई (Mumbai)</option>
+                    <option value="Thane">ठाणे (Thane)</option>
+                    <option value="Nashik">नाशिक (Nashik)</option>
+                    <option value="Nagpur">नागपूर (Nagpur)</option>
+                    <option value="Kolhapur">कोल्हापूर (Kolhapur)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-slate-300 font-bold block mb-1">
+                  संदेश / माहिती (Description / Message) *:
+                </label>
+                <textarea
+                  required
+                  rows={2}
+                  placeholder="उदा. सर्व आघाडीच्या नाटकांवर मर्यादित कालावधीसाठी विशेष ऑफर..."
+                  value={newAnnouncementForm.message}
+                  onChange={(e) =>
+                    setNewAnnouncementForm({ ...newAnnouncementForm, message: e.target.value })
+                  }
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-300 font-bold block mb-1">
+                  इमेज URL (Poster / Banner Image Link):
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://images.example.com/banner.jpg"
+                  value={newAnnouncementForm.imageUrl}
+                  onChange={(e) =>
+                    setNewAnnouncementForm({ ...newAnnouncementForm, imageUrl: e.target.value })
+                  }
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-300 font-bold block mb-1">
+                    रीडायरेक्ट लिंक (Click Destination URL):
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="/events/1 किंवा https://..."
+                    value={newAnnouncementForm.ctaUrl}
+                    onChange={(e) =>
+                      setNewAnnouncementForm({ ...newAnnouncementForm, ctaUrl: e.target.value })
+                    }
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-slate-300 font-bold block mb-1">
+                    बटन लेबल (CTA Button Text):
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="उदा. आताच बुक करा / Book Now"
+                    value={newAnnouncementForm.ctaLabel}
+                    onChange={(e) =>
+                      setNewAnnouncementForm({ ...newAnnouncementForm, ctaLabel: e.target.value })
+                    }
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white"
+                  />
+                </div>
+              </div>
+
+              {/* Timer Schedule */}
+              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
+                <span className="text-[11px] font-bold text-amber-400 block">
+                  ⏰ डिस्प्ले टाइमर शेड्युल (Display Timer Window - Optional):
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] text-slate-400 block mb-0.5">सुरू होण्याची तारीख व वेळ:</label>
+                    <input
+                      type="datetime-local"
+                      value={newAnnouncementForm.startsAt}
+                      onChange={(e) =>
+                        setNewAnnouncementForm({ ...newAnnouncementForm, startsAt: e.target.value })
+                      }
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-[11px]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-slate-400 block mb-0.5">समाप्ती तारीख व वेळ:</label>
+                    <input
+                      type="datetime-local"
+                      value={newAnnouncementForm.endsAt}
+                      onChange={(e) =>
+                        setNewAnnouncementForm({ ...newAnnouncementForm, endsAt: e.target.value })
+                      }
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-[11px]"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateAnnouncementModal(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 font-semibold text-xs"
+                >
+                  रद्द करा
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingAnnouncement}
+                  className="px-5 py-2 rounded-xl bg-[#ea580c] hover:bg-[#c2410c] disabled:opacity-50 text-white font-bold text-xs shadow-lg transition active:scale-95"
+                >
+                  {isSubmittingAnnouncement ? 'जतन करत आहे...' : 'बॅनर प्रकाशित करा (Publish Banner)'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
