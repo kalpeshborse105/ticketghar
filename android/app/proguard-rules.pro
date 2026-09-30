@@ -2,7 +2,7 @@
 # MahaTicket Android App - ProGuard Rules
 
 # Keep BuildConfig
--keep class in.ticketghar.mahaticket.BuildConfig { *; }
+-keep class com.kalpkrutinfotech.mahaticket.BuildConfig { *; }
 
 # Retrofit
 -keepattributes Signature, InnerClasses, EnclosingMethod
@@ -27,8 +27,8 @@
 -keep class * implements com.google.gson.JsonDeserializer
 
 # Keep data models for Gson/Retrofit
--keep class in.ticketghar.mahaticket.data.api.** { *; }
--keep class in.ticketghar.mahaticket.model.** { *; }
+-keep class com.kalpkrutinfotech.mahaticket.data.api.** { *; }
+-keep class com.kalpkrutinfotech.mahaticket.model.** { *; }
 
 # OkHttp
 -dontwarn okhttp3.**

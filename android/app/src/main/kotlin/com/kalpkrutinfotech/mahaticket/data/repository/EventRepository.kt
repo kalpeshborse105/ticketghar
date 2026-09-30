@@ -1,0 +1,198 @@
+package com.kalpkrutinfotech.mahaticket.data.repository
+
+import com.kalpkrutinfotech.mahaticket.data.api.*
+import com.kalpkrutinfotech.mahaticket.data.db.CachedCity
+import com.kalpkrutinfotech.mahaticket.data.db.CachedEvent
+import com.kalpkrutinfotech.mahaticket.data.db.MahaDatabase
+import com.kalpkrutinfotech.mahaticket.model.EventItem
+import com.kalpkrutinfotech.mahaticket.model.SessionItem
+import com.kalpkrutinfotech.mahaticket.model.VenueItem
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+class EventRepository(
+    private val apiService: MahaTicketApiService,
+    private val database: MahaDatabase
+) {
+    
+    suspend fun getEvents(
+        city: String? = null,
+        category: String? = null,
+        search: String? = null,
+        isOnline: Boolean = true
+    ): Result<List<EventItem>> = withContext(Dispatchers.IO) {
+        try {
+            if (isOnline) {
+                val apiCity = if (city == "महाराष्ट्र (All)" || city == "all") null else city
+                val apiCategory = if (category == "all" || category == "सर्व कार्यक्रम") null else category
+                val response = apiService.getEvents(apiCity, apiCategory, search)
+                
+                if (response.isSuccessful && response.body() != null) {
+                    val eventsList = response.body()?.events ?: emptyList()
+                    
+                    // Cache in Room
+                    try {
+                        val cachedEvents = eventsList.map { it.toCachedEvent() }
+                        database.eventDao().insertEvents(cachedEvents)
+                    } catch (e: Exception) {
+                        // Caching failure shouldn't block network result
+                    }
+                    
+                    Result.success(eventsList.map { it.toEventItem() })
+                } else {
+                    val errorMsg = response.body()?.error ?: "कार्यक्रमांची यादी लोड करण्यात त्रुटी (HTTP ${response.code()})"
+                    Result.failure(Exception(errorMsg))
+                }
+            } else {
+                // Offline fallback
+                val cached = if (category != null && category != "all") {
+                    database.eventDao().getCachedEventsByCategory(category)
+                } else {
+                    database.eventDao().getAllCachedEvents()
+                }
+                Result.success(cached.map { it.toEventItem() })
+            }
+        } catch (e: Exception) {
+            // Network failure - attempt fallback to Room
+            try {
+                val cached = database.eventDao().getAllCachedEvents()
+                if (cached.isNotEmpty()) {
+                    Result.success(cached.map { it.toEventItem() })
+                } else {
+                    Result.failure(Exception(e.localizedMessage ?: "इंटरनेट कनेक्शन तपासा आणि पुन्हा प्रयत्न करा"))
+                }
+            } catch (fallbackError: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+    
+    suspend fun getEventDetails(eventId: Int, isOnline: Boolean = true): Result<EventItem> = 
+        withContext(Dispatchers.IO) {
+            try {
+                if (isOnline) {
+                    val response = apiService.getEventDetails(eventId)
+                    if (response.isSuccessful && response.body()?.event != null) {
+                        val event = response.body()!!.event!!
+                        try {
+                            database.eventDao().insertEvents(listOf(event.toCachedEvent()))
+                        } catch (e: Exception) {}
+                        Result.success(event.toEventItem())
+                    } else {
+                        Result.failure(Exception(response.body()?.error ?: "कार्यक्रम माहिती आढळली नाही"))
+                    }
+                } else {
+                    val cached = database.eventDao().getAllCachedEvents().find { it.id == eventId }
+                    if (cached != null) {
+                        Result.success(cached.toEventItem())
+                    } else {
+                        Result.failure(Exception("कार्यक्रम ऑफलाइन उपलब्ध नाही"))
+                    }
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+
+    suspend fun getCities(): Result<List<CityCatalogItem>> = withContext(Dispatchers.IO) {
+        try {
+            val response = apiService.getCities()
+            if (response.isSuccessful && response.body() != null) {
+                val catalog = response.body()?.catalog ?: emptyList()
+                Result.success(catalog)
+            } else {
+                Result.success(defaultCities())
+            }
+        } catch (e: Exception) {
+            Result.success(defaultCities())
+        }
+    }
+
+    suspend fun getCoupons(): Result<List<CouponResponse>> = withContext(Dispatchers.IO) {
+        try {
+            val response = apiService.getCoupons()
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()?.coupons ?: emptyList())
+            } else {
+                Result.failure(Exception("कूपन लोड करण्यात अयशस्वी"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getAnnouncements(city: String? = null): Result<List<AnnouncementResponse>> = withContext(Dispatchers.IO) {
+        try {
+            val response = apiService.getAnnouncements(city)
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()?.announcements ?: emptyList())
+            } else {
+                Result.failure(Exception("घोषणा लोड करण्यात अयशस्वी"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    private fun defaultCities(): List<CityCatalogItem> = listOf(
+        CityCatalogItem("Mumbai", "मुंबई"),
+        CityCatalogItem("Pune", "पुणे"),
+        CityCatalogItem("Nagpur", "नागपूर"),
+        CityCatalogItem("Nashik", "नाशिक"),
+        CityCatalogItem("Thane", "ठाणे"),
+        CityCatalogItem("Kolhapur", "कोल्हापूर")
+    )
+}
+
+// Mapper extensions
+fun EventResponse.toCachedEvent() = CachedEvent(
+    id = id,
+    title = title,
+    titleMr = titleMr ?: title,
+    category = category,
+    categoryMr = categoryMr ?: category,
+    language = language ?: "मराठी",
+    durationMinutes = durationMinutes ?: 120,
+    description = description ?: "",
+    posterUrl = posterUrl ?: "",
+    minPrice = minPrice,
+    venueName = venue?.name,
+    venueNameMr = venue?.nameMr,
+    city = venue?.city
+)
+
+fun EventResponse.toEventItem() = EventItem(
+    id = id,
+    title = title,
+    titleMr = titleMr ?: title,
+    category = category,
+    categoryMr = categoryMr ?: category,
+    language = language ?: "मराठी",
+    durationMinutes = durationMinutes ?: 120,
+    description = description ?: "",
+    posterUrl = posterUrl ?: "",
+    minPrice = minPrice,
+    venue = venue?.let {
+        VenueItem(it.id, it.name, it.nameMr ?: it.name, it.address ?: "", it.city ?: "महाराष्ट्र")
+    },
+    sessions = sessions?.map {
+        SessionItem(it.id, it.eventId, it.sessionStartTime, it.sessionEndTime ?: "", it.status)
+    }
+)
+
+fun CachedEvent.toEventItem() = EventItem(
+    id = id,
+    title = title,
+    titleMr = titleMr,
+    category = category,
+    categoryMr = categoryMr,
+    language = language,
+    durationMinutes = durationMinutes,
+    description = description,
+    posterUrl = posterUrl,
+    minPrice = minPrice,
+    venue = if (venueName != null) {
+        VenueItem(0, venueName, venueNameMr ?: venueName, "", city ?: "")
+    } else null,
+    sessions = null
+)

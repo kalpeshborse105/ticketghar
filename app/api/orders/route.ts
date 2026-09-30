@@ -110,6 +110,59 @@ export async function GET(request: Request) {
       });
     }
 
+    const phone = searchParams.get('phone');
+    if (phone && phone.trim()) {
+      const cleanPhone = phone.trim();
+      const phoneOrders = await db
+        .select({
+          order: orders,
+          event: events,
+          venue: venues,
+          session: eventSessions,
+        })
+        .from(orders)
+        .innerJoin(events, eq(orders.eventId, events.id))
+        .innerJoin(venues, eq(events.venueId, venues.id))
+        .innerJoin(eventSessions, eq(orders.sessionId, eventSessions.id))
+        .where(eq(orders.userPhone, cleanPhone))
+        .orderBy(desc(orders.createdAt))
+        .limit(50);
+
+      const enriched = await Promise.all(
+        phoneOrders.map(async (row) => {
+          const ticketList = await db
+            .select()
+            .from(tickets)
+            .where(eq(tickets.orderId, row.order.id));
+
+          const ticketsWithQr = await Promise.all(
+            ticketList.map(async (tk) => {
+              const qrDataUrl = await QRCode.toDataURL(tk.qrPayload, {
+                errorCorrectionLevel: 'M',
+                margin: 2,
+                width: 240,
+                color: { dark: '#0F172A', light: '#FFFFFF' },
+              });
+              return {
+                ...tk,
+                qrDataUrl,
+              };
+            })
+          );
+
+          return {
+            ...row.order,
+            event: row.event,
+            venue: row.venue,
+            session: row.session,
+            tickets: ticketsWithQr,
+          };
+        })
+      );
+
+      return NextResponse.json({ orders: enriched });
+    }
+
     // List user's orders - requires authentication
     if (!authUser || !authUser.email) {
       return NextResponse.json(

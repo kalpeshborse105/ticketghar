@@ -7,11 +7,11 @@ plugins {
 }
 
 android {
-    namespace = "in.ticketghar.mahaticket"
+    namespace = "com.kalpkrutinfotech.mahaticket"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "in.ticketghar.mahaticket"
+        applicationId = "com.kalpkrutinfotech.mahaticket"
         minSdk = 26
         targetSdk = 35
         versionCode = 1

@@ -3,6 +3,20 @@ import { db } from '@/src/db/index.ts';
 import { coupons } from '@/src/db/schema.ts';
 import { eq, and } from 'drizzle-orm';
 
+export async function GET() {
+  try {
+    const list = await db
+      .select()
+      .from(coupons)
+      .where(eq(coupons.active, 1));
+
+    return NextResponse.json({ coupons: list });
+  } catch (error: any) {
+    console.error('Failed to fetch coupons:', error);
+    return NextResponse.json({ error: 'Failed to fetch coupons' }, { status: 500 });
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const { code, amount } = await request.json();
