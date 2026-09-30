@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
-import { users, events, eventSessions } from '@/src/db/schema.ts';
-import { eq } from 'drizzle-orm';
+import { users, events, seatInventory, ticketTypes } from '@/src/db/schema.ts';
+import { eq, and, inArray } from 'drizzle-orm';
 import { confirmBookingOrder, calculatePricing } from '@/src/lib/inventory-engine.ts';
 
 export async function POST(request: Request) {
@@ -32,17 +32,11 @@ export async function POST(request: Request) {
       );
     }
 
-    // 1. Fetch Event
-    const [eventRecord] = await db
-      .select()
-      .from(events)
-      .where(eq(events.id, eventId));
-
+    const [eventRecord] = await db.select().from(events).where(eq(events.id, eventId));
     if (!eventRecord) {
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
     }
 
-    // 2. Find or register customer in users table
     let existingUser = await db
       .select()
       .from(users)
@@ -67,16 +61,39 @@ export async function POST(request: Request) {
       targetUserId = newUser.id;
     }
 
-    // 3. Compute verified pricing from DB authoritative seat prices
-    const { faceValueTotal } = body.holdSummary || { faceValueTotal: 0 };
-    const pricing = await calculatePricing(
-      eventRecord,
-      seatIds.length,
-      faceValueTotal,
-      couponCode
-    );
+    // Always recompute face value from DB — never trust client-only totals
+    const priceRows = await db
+      .select({ price: ticketTypes.price })
+      .from(seatInventory)
+      .innerJoin(ticketTypes, eq(seatInventory.ticketTypeId, ticketTypes.id))
+      .where(and(eq(seatInventory.sessionId, sessionId), inArray(seatInventory.seatId, seatIds)));
 
-    // 4. Execute atomic confirmation
+    const faceValueTotal = priceRows.reduce((sum, r) => sum + r.price, 0);
+    if (faceValueTotal <= 0) {
+      return NextResponse.json({ error: 'Unable to price selected seats.' }, { status: 400 });
+    }
+
+    const pricing = await calculatePricing(eventRecord, seatIds.length, faceValueTotal, couponCode);
+
+    const razorpayConfigured =
+      Boolean(process.env.RAZORPAY_KEY_ID) &&
+      Boolean(process.env.RAZORPAY_KEY_SECRET) &&
+      !String(process.env.RAZORPAY_KEY_ID).includes('YourKeyIdHere');
+
+    let resolvedPayment = paymentDetails;
+    if (!resolvedPayment) {
+      if (razorpayConfigured) {
+        return NextResponse.json(
+          { error: 'Payment details required.', paymentConfigured: true },
+          { status: 402 }
+        );
+      }
+      resolvedPayment = {
+        gateway: 'direct_confirm',
+        idempotencyKey: `idem_${Date.now()}_${targetUserId}`,
+      };
+    }
+
     const result = await confirmBookingOrder({
       sessionId,
       eventId,
@@ -86,12 +103,7 @@ export async function POST(request: Request) {
       userEmail: userEmail.trim().toLowerCase(),
       userPhone: userPhone.trim(),
       pricing,
-      paymentDetails: paymentDetails || {
-        gateway: 'Razorpay / UPI',
-        razorpayOrderId: `rzp_ord_${Date.now()}`,
-        razorpayPaymentId: `rzp_pay_${Date.now()}`,
-        idempotencyKey: `idem_${Date.now()}_${targetUserId}`,
-      },
+      paymentDetails: resolvedPayment,
     });
 
     return NextResponse.json({
@@ -100,6 +112,10 @@ export async function POST(request: Request) {
       tickets: result.tickets,
       event: result.event,
       pricing: result.pricing,
+      payment: {
+        configured: razorpayConfigured,
+        mode: resolvedPayment.gateway || 'direct_confirm',
+      },
     });
   } catch (error: any) {
     console.error('Confirmation error:', error);

@@ -7,7 +7,8 @@ import { createTemporarySeatHold, calculatePricing } from '@/src/lib/inventory-e
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { sessionId, seatIds, userIdStr, couponCode } = body;
+    const { sessionId, seatIds, userIdStr, userId, couponCode } = body;
+    const holderId = userIdStr || userId || 'guest-session-' + Date.now();
 
     if (!sessionId || !Array.isArray(seatIds) || seatIds.length === 0) {
       return NextResponse.json(
@@ -43,7 +44,7 @@ export async function POST(request: Request) {
     const holdResult = await createTemporarySeatHold({
       sessionId,
       seatIds,
-      userIdStr: userIdStr || 'guest-session-' + Date.now(),
+      userIdStr: holderId,
     });
 
     // 3. Compute itemized pricing

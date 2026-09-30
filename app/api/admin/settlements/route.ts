@@ -1,9 +1,12 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
 import { settlements, organizers, events, auditLogs } from '@/src/db/schema.ts';
 import { eq, desc } from 'drizzle-orm';
+import { requireAdmin } from '@/src/lib/admin-auth.ts';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const authError = requireAdmin(request);
+  if (authError) return authError;
   try {
     const list = await db
       .select({
@@ -50,7 +53,9 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const authError = requireAdmin(request);
+  if (authError) return authError;
   try {
     const body = await request.json();
     const { settlementId, status, payoutUtr, adminActor } = body;

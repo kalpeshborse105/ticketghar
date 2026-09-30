@@ -12,7 +12,7 @@ import {
   coupons,
   auditLogs,
 } from '../db/schema.ts';
-import { eq, and, sql, inArray, lt } from 'drizzle-orm';
+import { eq, and, sql, inArray, lt, or } from 'drizzle-orm';
 import crypto from 'crypto';
 import QRCode from 'qrcode';
 import { PricingBreakdown } from './types.ts';
@@ -166,10 +166,10 @@ export async function createTemporarySeatHold(params: {
     }
   }
 
-  // 4. Atomically mark seats as 'held' with 8-minute expiry
+  // 4. Race-safe hold: only transition available → held (or re-hold own expired/active hold)
   const expiresAt = new Date(Date.now() + HOLD_DURATION_MINUTES * 60 * 1000);
 
-  await db
+  const heldRows = await db
     .update(seatInventory)
     .set({
       status: 'held',
@@ -179,11 +179,20 @@ export async function createTemporarySeatHold(params: {
     .where(
       and(
         eq(seatInventory.sessionId, sessionId),
-        inArray(seatInventory.seatId, seatIds)
+        inArray(seatInventory.seatId, seatIds),
+        or(
+          eq(seatInventory.status, 'available'),
+          and(eq(seatInventory.status, 'held'), eq(seatInventory.heldByUserId, userIdStr))
+        )
       )
-    );
+    )
+    .returning({ seatId: seatInventory.seatId });
 
-  // Compute face value total
+  if (heldRows.length !== seatIds.length) {
+    throw new Error('One or more seats were just taken. Please reselect available seats.');
+  }
+
+  // Compute face value total (server-authoritative from ticket_types)
   const faceValueTotal = sessionInventories.reduce((sum, item) => sum + item.price, 0);
 
   return {
@@ -266,7 +275,7 @@ export async function confirmBookingOrder(params: {
 
   // 4. Create authoritative Order
   const randomSuffix = Math.floor(10000 + Math.random() * 90000);
-  const orderNumber = `TG-${new Date().getFullYear()}-${randomSuffix}`;
+  const orderNumber = `MT-${new Date().getFullYear()}-${randomSuffix}`;
 
   const [order] = await db
     .insert(orders)
@@ -282,14 +291,14 @@ export async function confirmBookingOrder(params: {
       ticketFaceValueTotal: pricing.ticketFaceValueTotal,
       platformFeeTotal: pricing.platformFeeTotal,
       taxTotal: pricing.taxTotal,
-      gatewayCostEstimate: pricing.gatewayCostEstimate,
-      discountTotal: pricing.discountTotal,
+      gatewayCostEstimate: pricing.gatewayCostEstimate || 0,
+      discountTotal: pricing.discountTotal || 0,
       grandTotal: pricing.grandTotal,
       currency: 'INR',
       paymentStatus: 'captured',
       orderStatus: 'confirmed',
-      razorpayOrderId: paymentDetails.razorpayOrderId || `rzp_order_${Date.now()}`,
-      razorpayPaymentId: paymentDetails.razorpayPaymentId || `rzp_pay_${Date.now()}`,
+      razorpayOrderId: paymentDetails.razorpayOrderId || null,
+      razorpayPaymentId: paymentDetails.razorpayPaymentId || null,
       idempotencyKey: paymentDetails.idempotencyKey || `idem_${orderNumber}`,
     })
     .returning();
@@ -315,7 +324,7 @@ export async function confirmBookingOrder(params: {
 
   for (let idx = 0; idx < currentSeats.length; idx++) {
     const s = currentSeats[idx];
-    const ticketCode = `TG-TK-${order.id}-${s.seatCode.replace(/[^A-Za-z0-9]/g, '')}-${idx + 1}`;
+    const ticketCode = `MT-TK-${order.id}-${s.seatCode.replace(/[^A-Za-z0-9]/g, '')}-${idx + 1}`;
 
     // Cryptographic signature: HMAC SHA256 of ticketCode + eventId + sessionId + seatCode
     const rawData = `${ticketCode}|${eventId}|${sessionId}|${s.seatCode}|${userName}`;

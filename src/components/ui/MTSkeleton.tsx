@@ -23,7 +23,7 @@ export const MTSkeleton: React.FC<MTSkeletonProps> = ({
 
   return (
     <div
-      className={`animate-pulse bg-[#1e293b] border border-[#243044]/50 ${variantStyles} ${className}`}
+      className={`animate-pulse bg-[#f5f5f5] border border-[#e5e7eb] ${variantStyles} ${className}`}
       style={{
         width: width ? (typeof width === 'number' ? `${width}px` : width) : undefined,
         height: height ? (typeof height === 'number' ? `${height}px` : height) : undefined,

@@ -12,7 +12,6 @@ export async function POST(
   try {
     const { ticketCode } = await params;
 
-    // Fetch ticket with order and event details
     const [ticketRecord] = await db
       .select({
         ticket: tickets,
@@ -26,10 +25,7 @@ export async function POST(
       .limit(1);
 
     if (!ticketRecord) {
-      return NextResponse.json(
-        { error: 'Ticket not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
     }
 
     const [eventRecord] = await db
@@ -39,56 +35,77 @@ export async function POST(
       .where(eq(events.id, ticketRecord.order.eventId))
       .limit(1);
 
-    // Read template
     const templatePath = path.join(process.cwd(), 'src/lib/templates/booking-confirmation.html');
-    let htmlContent = fs.readFileSync(templatePath, 'utf8');
+    let htmlContent = fs.existsSync(templatePath)
+      ? fs.readFileSync(templatePath, 'utf8')
+      : `<html><body><h1>MahaTicket</h1><p>{{EVENT_TITLE}}</p><p>{{TICKET_CODE}}</p></body></html>`;
 
-    // Replace template tags
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || '';
     htmlContent = htmlContent
-      .replace('{{EVENT_TITLE}}', eventRecord?.event.titleMr || eventRecord?.event.title || 'Event')
-      .replace('{{EVENT_CATEGORY}}', eventRecord?.event.categoryMr || 'कार्यक्रम')
-      .replace('{{ORDER_NUMBER}}', ticketRecord.order.orderNumber)
-      .replace('{{VENUE_NAME}}', eventRecord?.venue?.nameMr || eventRecord?.venue?.name || 'सभागृह')
+      .replace(/\{\{EVENT_TITLE\}\}/g, eventRecord?.event.titleMr || eventRecord?.event.title || 'Event')
+      .replace(/\{\{EVENT_CATEGORY\}\}/g, eventRecord?.event.categoryMr || 'कार्यक्रम')
+      .replace(/\{\{ORDER_NUMBER\}\}/g, ticketRecord.order.orderNumber)
+      .replace(/\{\{VENUE_NAME\}\}/g, eventRecord?.venue?.nameMr || eventRecord?.venue?.name || 'सभागृह')
       .replace(
-        '{{SHOW_DATE_TIME}}',
-        new Date(ticketRecord.session.sessionStartTime).toLocaleString('mr-IN', {
+        /\{\{SHOW_DATE_TIME\}\}/g,
+        new Date(ticketRecord.session.sessionStartTime!).toLocaleString('mr-IN', {
           dateStyle: 'medium',
           timeStyle: 'short',
         })
       )
-      .replace('{{SEATS_LIST}}', ticketRecord.ticket.seatCode)
-      .replace('{{ATTENDEE_NAME}}', ticketRecord.ticket.attendeeName)
-      .replace('{{GRAND_TOTAL}}', (ticketRecord.order.grandTotal / 100).toFixed(0))
-      .replace('{{TICKET_CODE}}', ticketRecord.ticket.ticketCode)
-      .replace('{{QR_DATA_URL}}', '');
+      .replace(/\{\{SEATS_LIST\}\}/g, ticketRecord.ticket.seatCode)
+      .replace(/\{\{ATTENDEE_NAME\}\}/g, ticketRecord.ticket.attendeeName)
+      .replace(/\{\{GRAND_TOTAL\}\}/g, (ticketRecord.order.grandTotal / 100).toFixed(0))
+      .replace(/\{\{TICKET_CODE\}\}/g, ticketRecord.ticket.ticketCode)
+      .replace(/\{\{QR_DATA_URL\}\}/g, '')
+      .replace(/\{\{TICKET_LINK\}\}/g, appUrl ? `${appUrl}/?ticket=${ticketRecord.ticket.ticketCode}` : ticketRecord.ticket.ticketCode);
 
-    // Check if email provider is configured
-    const smtpHost = process.env.SMTP_HOST;
-    const smtpUser = process.env.SMTP_USER;
     const resendApiKey = process.env.RESEND_API_KEY;
+    const from = process.env.EMAIL_FROM || 'MahaTicket <onboarding@resend.dev>';
+    const recipient = ticketRecord.order.userEmail;
 
-    if (!smtpHost && !resendApiKey && !smtpUser) {
+    if (!resendApiKey) {
       return NextResponse.json({
         success: false,
+        sent: false,
         configured: false,
-        recipient: ticketRecord.order.userEmail,
-        message:
-          'Email provider not configured in environment. Provide SMTP_HOST or RESEND_API_KEY in .env to dispatch live emails.',
+        recipient,
+        message: 'Email provider not configured. Set RESEND_API_KEY to send booking emails.',
       });
     }
 
-    // Provider is configured
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${resendApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from,
+        to: [recipient],
+        subject: `MahaTicket — Booking confirmed (${ticketRecord.order.orderNumber})`,
+        html: htmlContent,
+      }),
+    });
+
+    if (!res.ok) {
+      const detail = await res.text();
+      console.error('Resend error:', detail);
+      return NextResponse.json(
+        { success: false, sent: false, configured: true, message: 'Email provider rejected the send.' },
+        { status: 502 }
+      );
+    }
+
     return NextResponse.json({
       success: true,
+      sent: true,
       configured: true,
-      recipient: ticketRecord.order.userEmail,
-      message: `Booking confirmation email prepared for ${ticketRecord.order.userEmail}`,
+      recipient,
+      message: `Booking confirmation email sent to ${recipient}`,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Email dispatch error:', error);
-    return NextResponse.json(
-      { error: 'Failed to process email delivery' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Something went wrong. Please try again.' }, { status: 500 });
   }
 }

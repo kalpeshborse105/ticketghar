@@ -35,6 +35,7 @@ import {
 interface AdminPanelProps {
   language: Language;
   onBack: () => void;
+  onLogout?: () => void;
 }
 
 type AdminTab =
@@ -45,11 +46,16 @@ type AdminTab =
   | 'scanner'
   | 'leads'
   | 'orders'
+  | 'users'
+  | 'coupons'
+  | 'announcements'
+  | 'audit_logs'
   | 'system_db';
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
   language,
   onBack,
+  onLogout,
 }) => {
   const t = translations[language];
 
@@ -107,6 +113,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   // Orders Data
   const [orderList, setOrderList] = useState<any[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
+
+  // Users Data
+  const [usersList, setUsersList] = useState<any[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+
+  // Coupons Data
+  const [couponsList, setCouponsList] = useState<any[]>([]);
+  const [loadingCoupons, setLoadingCoupons] = useState(false);
+  const [showCreateCouponModal, setShowCreateCouponModal] = useState(false);
+
+  // Announcements Data
+  const [announcementsList, setAnnouncementsList] = useState<any[]>([]);
+  const [loadingAnnouncements, setLoadingAnnouncements] = useState(false);
+  const [showCreateAnnouncementModal, setShowCreateAnnouncementModal] = useState(false);
+
+  // Audit Logs Data
+  const [auditLogsList, setAuditLogsList] = useState<any[]>([]);
+  const [loadingAuditLogs, setLoadingAuditLogs] = useState(false);
 
   // Create Event Form
   const [newEventForm, setNewEventForm] = useState({
@@ -222,6 +246,70 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
+  // Fetch Users
+  const fetchUsers = async () => {
+    try {
+      setLoadingUsers(true);
+      const res = await fetch('/api/admin/users');
+      if (res.ok) {
+        const data = await res.json();
+        setUsersList(data.users || []);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  // Fetch Coupons
+  const fetchCoupons = async () => {
+    try {
+      setLoadingCoupons(true);
+      const res = await fetch('/api/admin/coupons');
+      if (res.ok) {
+        const data = await res.json();
+        setCouponsList(data.coupons || []);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingCoupons(false);
+    }
+  };
+
+  // Fetch Announcements
+  const fetchAnnouncements = async () => {
+    try {
+      setLoadingAnnouncements(true);
+      const res = await fetch('/api/admin/announcements');
+      if (res.ok) {
+        const data = await res.json();
+        setAnnouncementsList(data.announcements || []);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingAnnouncements(false);
+    }
+  };
+
+  // Fetch Audit Logs
+  const fetchAuditLogs = async () => {
+    try {
+      setLoadingAuditLogs(true);
+      const res = await fetch('/api/admin/audit-logs?limit=100');
+      if (res.ok) {
+        const data = await res.json();
+        setAuditLogsList(data.logs || []);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingAuditLogs(false);
+    }
+  };
+
   useEffect(() => {
     const timer = setTimeout(() => {
       if (activeTab === 'dashboard') fetchDashboard();
@@ -230,6 +318,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       if (activeTab === 'cities_venues') fetchVenues();
       if (activeTab === 'leads') fetchLeads();
       if (activeTab === 'orders') fetchOrders();
+      if (activeTab === 'users') fetchUsers();
+      if (activeTab === 'coupons') fetchCoupons();
+      if (activeTab === 'announcements') fetchAnnouncements();
+      if (activeTab === 'audit_logs') fetchAuditLogs();
     }, 0);
     return () => clearTimeout(timer);
   }, [activeTab]);
@@ -525,6 +617,54 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           >
             <Users className="w-4 h-4" />
             <span>आयोजक अर्ज (Leads)</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('users')}
+            className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
+              activeTab === 'users'
+                ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
+                : 'text-slate-300 hover:bg-slate-800'
+            }`}
+          >
+            <Users className="w-4 h-4 text-sky-400" />
+            <span>वापरकर्ते व्यवस्थापन (Users)</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('coupons')}
+            className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
+              activeTab === 'coupons'
+                ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
+                : 'text-slate-300 hover:bg-slate-800'
+            }`}
+          >
+            <KeyRound className="w-4 h-4 text-emerald-400" />
+            <span>कूपन्स व ऑफर्स (Coupons)</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('announcements')}
+            className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
+              activeTab === 'announcements'
+                ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
+                : 'text-slate-300 hover:bg-slate-800'
+            }`}
+          >
+            <HelpCircle className="w-4 h-4 text-amber-400" />
+            <span>जाहिराती (Announcements)</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('audit_logs')}
+            className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
+              activeTab === 'audit_logs'
+                ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
+                : 'text-slate-300 hover:bg-slate-800'
+            }`}
+          >
+            <FileCode className="w-4 h-4 text-rose-400" />
+            <span>ऑडिट लॉग्स (Audit Trail)</span>
           </button>
 
           <button
@@ -1172,7 +1312,252 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
           )}
 
-          {/* TAB 8: DATABASE & SYSTEM MANUAL (NEW FEATURE) */}
+          {/* TAB 8: USERS MANAGEMENT */}
+          {activeTab === 'users' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl sm:text-2xl font-extrabold text-white font-serif">
+                    वापरकर्ते व्यवस्थापन (Users & Roles)
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Staff members, role management, and access control
+                  </p>
+                </div>
+                <button
+                  onClick={fetchUsers}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-300"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>रिफ्रेश</span>
+                </button>
+              </div>
+
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-x-auto shadow-xl">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-800 bg-slate-950/60 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
+                      <th className="p-3.5">Email & Name</th>
+                      <th className="p-3.5">Role</th>
+                      <th className="p-3.5">City</th>
+                      <th className="p-3.5">Created</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {usersList.map((u) => (
+                      <tr key={u.id} className="hover:bg-slate-850 transition">
+                        <td className="p-3.5">
+                          <div className="font-semibold text-white">{u.fullName}</div>
+                          <div className="text-[10px] text-slate-400">{u.email}</div>
+                        </td>
+                        <td className="p-3.5">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                            {u.role}
+                          </span>
+                        </td>
+                        <td className="p-3.5 text-slate-300">{u.city}</td>
+                        <td className="p-3.5 text-slate-400 font-mono text-[10px]">
+                          {new Date(u.createdAt).toLocaleDateString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 9: COUPONS / OFFERS */}
+          {activeTab === 'coupons' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl sm:text-2xl font-extrabold text-white font-serif">
+                    कूपन्स व ऑफर्स (Discount Coupons)
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Promotional codes, discount management, and usage tracking
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => alert('Create Coupon - Coming Soon')}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500 text-slate-950 font-bold text-xs shadow-lg hover:bg-emerald-400 transition"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>नवीन कूपन</span>
+                  </button>
+                  <button
+                    onClick={fetchCoupons}
+                    className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-x-auto shadow-xl">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-800 bg-slate-950/60 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
+                      <th className="p-3.5">Code</th>
+                      <th className="p-3.5">Discount</th>
+                      <th className="p-3.5">Usage</th>
+                      <th className="p-3.5">Validity</th>
+                      <th className="p-3.5">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {couponsList.map((c) => (
+                      <tr key={c.id} className="hover:bg-slate-850 transition">
+                        <td className="p-3.5 font-mono font-bold text-amber-400">{c.code}</td>
+                        <td className="p-3.5 text-slate-300">
+                          {c.discountType === 'percentage' 
+                            ? `${c.discountValue / 100}%` 
+                            : `₹${c.discountValue / 100}`}
+                        </td>
+                        <td className="p-3.5 text-slate-300">
+                          {c.usedCount || 0} / {c.usageLimit || '∞'}
+                        </td>
+                        <td className="p-3.5 text-slate-400 font-mono text-[10px]">
+                          {c.startsAt && new Date(c.startsAt).toLocaleDateString()} - {c.endsAt && new Date(c.endsAt).toLocaleDateString()}
+                        </td>
+                        <td className="p-3.5">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            c.active === 1 
+                              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                              : 'bg-slate-700 text-slate-300'
+                          }`}>
+                            {c.active === 1 ? 'ACTIVE' : 'INACTIVE'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 10: ANNOUNCEMENTS */}
+          {activeTab === 'announcements' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl sm:text-2xl font-extrabold text-white font-serif">
+                    जाहिराती व सूचना (System Announcements)
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Platform-wide notifications and promotional banners
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => alert('Create Announcement - Coming Soon')}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-sky-500 text-slate-950 font-bold text-xs shadow-lg hover:bg-sky-400 transition"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>नवीन जाहिरात</span>
+                  </button>
+                  <button
+                    onClick={fetchAnnouncements}
+                    className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {announcementsList.map((a) => (
+                  <div key={a.id} className="p-5 bg-slate-900 border border-slate-800 rounded-2xl space-y-3">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <h3 className="text-base font-bold text-white">{a.title}</h3>
+                        <p className="text-xs text-slate-400 mt-1">{a.message}</p>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        a.active === 1 
+                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                          : 'bg-slate-700 text-slate-300'
+                      }`}>
+                        {a.active === 1 ? 'ACTIVE' : 'INACTIVE'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-4 text-xs text-slate-500">
+                      {a.city && <span>📍 {a.city}</span>}
+                      {a.category && <span>🏷️ {a.category}</span>}
+                      {a.startsAt && <span>⏰ {new Date(a.startsAt).toLocaleDateString()} - {a.endsAt && new Date(a.endsAt).toLocaleDateString()}</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 11: AUDIT LOGS */}
+          {activeTab === 'audit_logs' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl sm:text-2xl font-extrabold text-white font-serif">
+                    ऑडिट लॉग्स (Compliance & Audit Trail)
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    All admin actions, role changes, and system modifications
+                  </p>
+                </div>
+                <button
+                  onClick={fetchAuditLogs}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-300"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>रिफ्रेश</span>
+                </button>
+              </div>
+
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-x-auto shadow-xl">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-800 bg-slate-950/60 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
+                      <th className="p-3.5">Timestamp</th>
+                      <th className="p-3.5">Actor</th>
+                      <th className="p-3.5">Action</th>
+                      <th className="p-3.5">Entity</th>
+                      <th className="p-3.5">Details</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {auditLogsList.map((log) => (
+                      <tr key={log.id} className="hover:bg-slate-850 transition">
+                        <td className="p-3.5 font-mono text-[10px] text-slate-400">
+                          {new Date(log.createdAt).toLocaleString()}
+                        </td>
+                        <td className="p-3.5">
+                          <div className="text-slate-300 font-semibold">{log.actorId}</div>
+                          <div className="text-[10px] text-slate-500">{log.actorRole}</div>
+                        </td>
+                        <td className="p-3.5">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-500/20 text-sky-400 border border-sky-500/30">
+                            {log.action}
+                          </span>
+                        </td>
+                        <td className="p-3.5 text-slate-300">
+                          <div>{log.entityType}</div>
+                          <div className="text-[10px] text-slate-500">ID: {log.entityId}</div>
+                        </td>
+                        <td className="p-3.5 text-slate-400 font-mono text-[10px] max-w-xs truncate">
+                          {log.details}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 12: DATABASE & SYSTEM MANUAL (NEW FEATURE) */}
           {activeTab === 'system_db' && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">

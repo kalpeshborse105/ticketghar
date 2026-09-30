@@ -1,10 +1,13 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
 import { organizers, auditLogs } from '@/src/db/schema.ts';
 import { desc, eq } from 'drizzle-orm';
+import { requireAdmin } from '@/src/lib/admin-auth.ts';
 
 // GET all organizers with commercial terms
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const authError = requireAdmin(request);
+  if (authError) return authError;
   try {
     const list = await db.select().from(organizers).orderBy(desc(organizers.id));
     return NextResponse.json({ organizers: list });
@@ -18,7 +21,9 @@ export async function GET() {
 }
 
 // POST create verified organizer
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const authError = requireAdmin(request);
+  if (authError) return authError;
   try {
     const body = await request.json();
     const {
@@ -88,7 +93,9 @@ export async function POST(request: Request) {
 }
 
 // PATCH update organizer details, commission, and verification
-export async function PATCH(request: Request) {
+export async function PATCH(request: NextRequest) {
+  const authError = requireAdmin(request);
+  if (authError) return authError;
   try {
     const body = await request.json();
     const {

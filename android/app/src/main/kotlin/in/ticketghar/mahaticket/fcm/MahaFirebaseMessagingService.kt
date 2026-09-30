@@ -10,6 +10,9 @@ import androidx.core.app.NotificationCompat
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import `in`.ticketghar.mahaticket.MainActivity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class MahaFirebaseMessagingService : FirebaseMessagingService() {
 
@@ -69,6 +72,21 @@ class MahaFirebaseMessagingService : FirebaseMessagingService() {
     }
 
     private fun sendRegistrationToServer(token: String) {
-        // Asynchronously post to /api/notifications/register-token
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val deviceId = android.provider.Settings.Secure.getString(
+                    contentResolver,
+                    android.provider.Settings.Secure.ANDROID_ID
+                )
+                val request = `in`.ticketghar.mahaticket.data.api.RegisterTokenRequest(
+                    token = token,
+                    userId = deviceId,
+                    platform = "android"
+                )
+                `in`.ticketghar.mahaticket.data.api.RetrofitClient.apiService.registerFcmToken(request)
+            } catch (e: Exception) {
+                android.util.Log.e("MahaFCM", "Failed to register FCM token", e)
+            }
+        }
     }
 }

@@ -6,16 +6,18 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
+        android:name=".MahaTicketApp"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
-        android:label="MahaTicket"
+        android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@android:style/Theme.Material.NoActionBar">
+        android:theme="@style/Theme.MahaTicket">
 
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:theme="@style/Theme.MahaTicket.Splash"
             android:windowSoftInputMode="adjustResize"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden">
             <intent-filter>

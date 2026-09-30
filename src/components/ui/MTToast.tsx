@@ -23,31 +23,31 @@ export const MTToastContainer: React.FC<MTToastProps> = ({ toasts, onDismiss }) 
     <div className="fixed top-4 right-4 left-4 sm:left-auto sm:w-96 z-50 flex flex-col gap-2 pointer-events-none">
       {toasts.map((toast) => {
         const icons = {
-          success: <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />,
-          error: <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />,
-          warning: <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />,
-          info: <Info className="w-4 h-4 text-sky-400 shrink-0" />,
+          success: <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />,
+          error: <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />,
+          warning: <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />,
+          info: <Info className="w-4 h-4 text-blue-500 shrink-0" />,
         };
 
-        const borders = {
-          success: 'border-emerald-500/40',
-          error: 'border-rose-500/40',
-          warning: 'border-amber-500/40',
-          info: 'border-sky-500/40',
+        const backgrounds = {
+          success: 'bg-emerald-50 border-emerald-200',
+          error: 'bg-red-50 border-red-200',
+          warning: 'bg-amber-50 border-amber-200',
+          info: 'bg-blue-50 border-blue-200',
         };
 
         return (
           <div
             key={toast.id}
-            className={`pointer-events-auto flex items-center justify-between p-3 rounded-lg bg-[#111827] border ${borders[toast.type]} shadow-lg text-slate-100 text-xs sm:text-sm animate-in fade-in slide-in-from-top-2 duration-200`}
+            className={`pointer-events-auto flex items-center justify-between p-3 rounded-lg border ${backgrounds[toast.type]} shadow-lg text-[#111827] text-xs sm:text-sm animate-in fade-in slide-in-from-top-2 duration-200`}
           >
             <div className="flex items-center gap-2.5">
               {icons[toast.type]}
-              <span>{toast.message}</span>
+              <span className="font-medium">{toast.message}</span>
             </div>
             <button
               onClick={() => onDismiss(toast.id)}
-              className="text-slate-400 hover:text-slate-200 p-1"
+              className="text-[#6b7280] hover:text-[#111827] p-1 transition"
             >
               <X className="w-3.5 h-3.5" />
             </button>

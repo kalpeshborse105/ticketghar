@@ -30,8 +30,8 @@ export const MTBottomNavigation: React.FC<MTBottomNavigationProps> = ({
   ];
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0d131f] border-t border-[#243044] px-2 py-1 safe-bottom shadow-lg">
-      <div className="flex items-center justify-around max-w-lg mx-auto">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-[#e5e7eb] px-2 safe-bottom shadow-lg">
+      <div className="flex items-center justify-around max-w-lg mx-auto py-1">
         {items.map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
@@ -42,22 +42,22 @@ export const MTBottomNavigation: React.FC<MTBottomNavigationProps> = ({
               type="button"
               onClick={() => onTabChange(item.id)}
               className={`relative flex flex-col items-center justify-center py-1.5 px-3 min-w-[56px] transition-colors focus:outline-none ${
-                isActive ? 'text-[#ea580c]' : 'text-slate-400 hover:text-slate-200'
+                isActive ? 'text-[#6366f1]' : 'text-[#9ca3af] hover:text-[#6b7280]'
               }`}
             >
               <div className="relative">
                 <Icon className={`w-5 h-5 transition-transform ${isActive ? 'scale-110' : ''}`} />
                 {item.badge !== undefined && item.badge > 0 && (
-                  <span className="absolute -top-1 -right-2 bg-[#ea580c] text-white text-[10px] font-bold rounded-full h-4 min-w-[16px] px-1 flex items-center justify-center">
+                  <span className="absolute -top-1 -right-2 bg-[#ef4444] text-white text-[10px] font-bold rounded-full h-4 min-w-[16px] px-1 flex items-center justify-center shadow-sm">
                     {item.badge}
                   </span>
                 )}
               </div>
-              <span className={`text-[11px] mt-1 font-medium truncate ${isActive ? 'text-[#ea580c] font-semibold' : ''}`}>
+              <span className={`text-[11px] mt-1 font-medium truncate ${isActive ? 'text-[#6366f1] font-semibold' : ''}`}>
                 {item.label}
               </span>
               {isActive && (
-                <div className="absolute top-0 w-8 h-0.5 bg-[#ea580c] rounded-full" />
+                <div className="absolute top-0 w-8 h-0.5 bg-[#6366f1] rounded-full" />
               )}
             </button>
           );

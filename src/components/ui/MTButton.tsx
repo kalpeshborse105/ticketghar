@@ -3,7 +3,7 @@
 import React from 'react';
 
 interface MTButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
+  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'accent';
   size?: 'sm' | 'md' | 'lg';
   fullWidth?: boolean;
   isLoading?: boolean;
@@ -23,14 +23,15 @@ export const MTButton: React.FC<MTButtonProps> = ({
   disabled,
   ...props
 }) => {
-  const baseStyles = 'inline-flex items-center justify-center font-medium transition-all active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none rounded-lg focus:outline-none';
+  const baseStyles = 'inline-flex items-center justify-center font-medium transition-all active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2';
 
   const variantStyles = {
-    primary: 'bg-[#ea580c] hover:bg-[#c2410c] text-white shadow-sm',
-    secondary: 'bg-[#1e293b] hover:bg-[#334155] text-slate-100 border border-[#243044]',
-    outline: 'bg-transparent hover:bg-[#1a2333] text-slate-200 border border-[#243044]',
-    ghost: 'bg-transparent hover:bg-[#1a2333] text-slate-300',
-    danger: 'bg-[#ef4444] hover:bg-[#dc2626] text-white',
+    primary: 'bg-[#6366f1] hover:bg-[#4f46e5] text-white shadow-sm focus:ring-[#6366f1]/50',
+    accent: 'bg-[#f59e0b] hover:bg-[#d97706] text-white shadow-sm focus:ring-[#f59e0b]/50',
+    secondary: 'bg-[#f5f5f5] hover:bg-[#e5e5e5] text-[#111827] border border-[#e5e7eb] focus:ring-[#6366f1]/30',
+    outline: 'bg-transparent hover:bg-[#f5f5f5] text-[#111827] border border-[#e5e7eb] hover:border-[#6366f1] focus:ring-[#6366f1]/30',
+    ghost: 'bg-transparent hover:bg-[#f5f5f5] text-[#6b7280] hover:text-[#111827]',
+    danger: 'bg-[#ef4444] hover:bg-[#dc2626] text-white shadow-sm focus:ring-[#ef4444]/50',
   }[variant];
 
   const sizeStyles = {
@@ -48,7 +49,7 @@ export const MTButton: React.FC<MTButtonProps> = ({
       {...props}
     >
       {isLoading ? (
-        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+        <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin opacity-70" />
       ) : (
         leftIcon
       )}

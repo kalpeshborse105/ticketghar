@@ -19,9 +19,9 @@ export const MTCard: React.FC<MTCardProps> = ({
   return (
     <div
       className={`rounded-xl transition-all ${
-        elevated ? 'bg-[#1a2333] shadow-md' : 'bg-[#111827]'
-      } ${bordered ? 'border border-[#243044]' : ''} ${
-        interactive ? 'hover:border-[#ea580c] hover:-translate-y-0.5 cursor-pointer' : ''
+        elevated ? 'bg-white shadow-md' : 'bg-white'
+      } ${bordered ? 'border border-[#e5e7eb]' : ''} ${
+        interactive ? 'hover:border-[#6366f1] hover:shadow-lg hover:-translate-y-0.5 cursor-pointer' : ''
       } ${className}`}
       {...props}
     >

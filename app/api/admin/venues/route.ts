@@ -1,10 +1,13 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
 import { venues, venueSections, seats, auditLogs } from '@/src/db/schema.ts';
 import { desc, eq } from 'drizzle-orm';
+import { requireAdmin } from '@/src/lib/admin-auth.ts';
 
 // GET all venues
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const authError = requireAdmin(request);
+  if (authError) return authError;
   try {
     const venueList = await db.select().from(venues).orderBy(desc(venues.id));
 
@@ -33,7 +36,9 @@ export async function GET() {
 }
 
 // POST create new venue with custom city and sections
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const authError = requireAdmin(request);
+  if (authError) return authError;
   try {
     const body = await request.json();
     const {

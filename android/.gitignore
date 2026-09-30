@@ -1,0 +1,61 @@
+*.iml
+.gradle
+/local.properties
+/.idea
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+bin/
+gen/
+out/
+.navigation/
+captures/
+
+# Keystore files - NEVER commit!
+*.jks
+*.keystore
+
+# Google Services (Firebase) - Replace placeholder in production
+# google-services.json
+
+# Built application files
+*.apk
+*.aab
+
+# Generated files
+.gradle/
+build/
+.idea/
+*.iml
+local.properties
+
+# Android Studio
+.idea/
+.DS_Store
+*.swp
+*~
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Gradle cache
+.gradle/

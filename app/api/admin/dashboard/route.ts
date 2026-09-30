@@ -1,9 +1,12 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
 import { orders, tickets, settlements, events, partnerLeads, ticketScans, organizers } from '@/src/db/schema.ts';
 import { sql, desc, eq } from 'drizzle-orm';
+import { requireAdmin } from '@/src/lib/admin-auth.ts';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const authError = requireAdmin(request);
+  if (authError) return authError;
   try {
     // 1. Aggregate Order Financials
     const financialStats = await db

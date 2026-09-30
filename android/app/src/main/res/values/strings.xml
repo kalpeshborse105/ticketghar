@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MahaTicket</string>
+    <string name="app_name_mr">महाटिकिट</string>
+    <string name="app_tagline">महाराष्ट्राचे हक्काचे तिकीट व्यासपीठ</string>
+    
+    <!-- Navigation -->
+    <string name="nav_home">होम</string>
+    <string name="nav_explore">शोधा</string>
+    <string name="nav_tickets">तिकिटे</string>
+    <string name="nav_offers">ऑफर्स</string>
+    <string name="nav_profile">प्रोफाइल</string>
+    
+    <!-- Common Actions -->
+    <string name="action_book">बुक करा</string>
+    <string name="action_search">शोधा</string>
+    <string name="action_cancel">रद्द करा</string>
+    <string name="action_confirm">पुष्टी करा</string>
+    <string name="action_retry">पुन्हा प्रयत्न करा</string>
+    <string name="action_back">मागे</string>
+    
+    <!-- Event Categories -->
+    <string name="category_all">सर्व कार्यक्रम</string>
+    <string name="category_plays">नाटक</string>
+    <string name="category_music">संगीत</string>
+    <string name="category_comedy">कॉमेडी</string>
+    <string name="category_cultural">सांस्कृतिक</string>
+    
+    <!-- Booking Flow -->
+    <string name="select_seats">जागा निवडा</string>
+    <string name="selected_seats">निवडलेल्या जागा</string>
+    <string name="total_amount">एकूण रक्कम</string>
+    <string name="convenience_fee">सुविधा शुल्क</string>
+    <string name="grand_total">निव्वळ एकूण</string>
+    <string name="seat_availability">उपलब्ध जागा</string>
+    
+    <!-- Ticket Status -->
+    <string name="ticket_confirmed">तिकीट निश्चित</string>
+    <string name="ticket_pending">तिकीट प्रलंबित</string>
+    <string name="ticket_cancelled">तिकीट रद्द</string>
+    
+    <!-- Error Messages -->
+    <string name="error_network">इंटरनेट कनेक्शन तपासा</string>
+    <string name="error_generic">काहीतरी चुकले. पुन्हा प्रयत्न करा.</string>
+    <string name="error_seats_unavailable">निवडलेल्या जागा उपलब्ध नाहीत</string>
+    
+    <!-- Offline Mode -->
+    <string name="offline_mode">ऑफलाइन मोड</string>
+    <string name="offline_booking_disabled">बुकिंगसाठी इंटरनेट आवश्यक आहे</string>
+    <string name="cached_data_viewing">कॅश केलेला डेटा दाखवत आहोत</string>
+    
+    <!-- Notifications -->
+    <string name="notification_channel_name">MahaTicket Bookings &amp; Alerts</string>
+    <string name="notification_channel_desc">Booking confirmations, reminders, and digital pass updates</string>
+</resources>

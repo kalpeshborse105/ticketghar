@@ -63,7 +63,7 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
     const eventTitle = language === 'mr' ? event.titleMr : event.title;
     const venueName = language === 'mr' ? event.venue?.nameMr : event.venue?.name;
 
-    const shareMessage = `MahaTicket 🎟️\nBooking confirmed!\n\nEvent: ${eventTitle}\nVenue: ${venueName}\nSeats: ${seatNames}\nBooking ID: ${order.orderNumber}\n\nPresent this digital pass at the entrance gate.`;
+    const shareMessage = `MahaTicket 🎟️\nबुकिंग यशस्वी! / Booking Confirmed!\n\nEvent: ${eventTitle}\nVenue: ${venueName}\nSeats: ${seatNames}\nBooking ID: ${order.orderNumber}\n\nPresent this digital pass at the entrance gate.`;
 
     if (typeof navigator !== 'undefined' && navigator.share) {
       try {
@@ -85,66 +85,113 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
     }
   };
 
+  const handleDownloadPDF = async () => {
+    if (!tickets || tickets.length === 0) return;
+    try {
+      const ticketCode = tickets[0].ticketCode;
+      const res = await fetch(`/api/tickets/${ticketCode}/pdf`);
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `MahaTicket-${order.orderNumber}.pdf`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+      }
+    } catch (err) {
+      console.error('PDF download error:', err);
+      alert(language === 'mr' ? 'PDF डाउनलोड करण्यात त्रुटी' : 'Error downloading PDF');
+    }
+  };
+
+  const handleEmailTicket = async () => {
+    if (!tickets || tickets.length === 0) return;
+    const email = prompt(
+      language === 'mr'
+        ? 'तिकीट पाठवण्यासाठी ईमेल अॅड्रेस टाका:'
+        : 'Enter email address to send ticket:'
+    );
+    if (!email) return;
+    
+    try {
+      const ticketCode = tickets[0].ticketCode;
+      const res = await fetch(`/api/tickets/${ticketCode}/email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      if (res.ok) {
+        alert(language === 'mr' ? 'तिकीट ईमेल पाठवले!' : 'Ticket emailed successfully!');
+      } else {
+        throw new Error('Email send failed');
+      }
+    } catch (err) {
+      console.error('Email error:', err);
+      alert(language === 'mr' ? 'ईमेल पाठवण्यात त्रुटी' : 'Error sending email');
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 flex items-center justify-center p-3 sm:p-6">
-      <div className="relative w-full max-w-xl bg-[#111827] border border-[#243044] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh]">
+      <div className="relative w-full max-w-xl bg-white border border-[#e5e7eb] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh]">
         {/* Top Celebration Bar */}
-        <div className="px-5 py-3.5 bg-emerald-700 text-white flex items-center justify-between">
+        <div className="px-5 py-3.5 bg-emerald-600 text-white flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <CheckCircle className="w-5 h-5 text-emerald-200" />
+            <CheckCircle className="w-5 h-5 text-emerald-100" />
             <div>
               <h2 className="font-bold text-sm sm:text-base leading-tight">
                 {t.bookingSuccess}
               </h2>
-              <p className="text-xs text-emerald-100 font-mono">
+              <p className="text-xs text-emerald-50 font-mono">
                 {t.orderNumber}: {order.orderNumber}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg bg-black/20 hover:bg-black/40 text-white transition"
+            className="p-1 rounded-lg bg-black/20 hover:bg-black/30 text-white transition"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Printable Pass Container */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-[#fafafa]">
           {/* Main Ticket Card */}
-          <div className="bg-[#0a0e17] rounded-xl border border-[#243044] p-5 shadow-sm relative overflow-hidden">
+          <div className="bg-white rounded-xl border border-[#e5e7eb] p-5 shadow-md relative overflow-hidden">
             {/* Header: Title and Event Info */}
-            <div className="border-b border-[#243044] pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="border-b border-[#e5e7eb] pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
-                <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-[#ea580c]/10 text-[#ea580c] border border-[#ea580c]/30">
+                <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-[#6366f1]/10 text-[#6366f1] border border-[#6366f1]/30">
                   {language === 'mr' ? event.categoryMr : event.category}
                 </span>
-                <h3 className="text-base sm:text-lg font-bold text-white mt-1">
+                <h3 className="text-base sm:text-lg font-bold text-[#111827] mt-1">
                   {language === 'mr' ? event.titleMr : event.title}
                 </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <p className="text-xs text-[#6b7280] mt-0.5">
                   {language === 'mr' ? event.title : event.titleMr}
                 </p>
               </div>
 
               <div className="text-left sm:text-right">
-                <span className="text-xs text-slate-400 block">{t.grandTotal}</span>
-                <span className="text-base sm:text-lg font-bold text-[#ea580c] font-mono">
+                <span className="text-xs text-[#6b7280] block">{t.grandTotal}</span>
+                <span className="text-base sm:text-lg font-bold text-[#6366f1] font-mono">
                   ₹{(order.grandTotal / 100).toFixed(0)}
                 </span>
-                <span className="text-[10px] text-emerald-400 block font-medium">
+                <span className="text-[10px] text-emerald-600 block font-medium">
                   ✓ PAID (MahaTicket Verified)
                 </span>
               </div>
             </div>
 
             {/* Event Timing & Venue */}
-            <div className="py-3 border-b border-[#243044] grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-              <div className="flex items-center gap-2 text-slate-300">
-                <Calendar className="w-3.5 h-3.5 text-[#ea580c] shrink-0" />
+            <div className="py-3 border-b border-[#e5e7eb] grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              <div className="flex items-center gap-2 text-[#111827]">
+                <Calendar className="w-3.5 h-3.5 text-[#6366f1] shrink-0" />
                 <div>
-                  <span className="text-slate-400 block text-[10px]">तारीख व वार / Date</span>
-                  <span className="font-semibold text-white">
+                  <span className="text-[#9ca3af] block text-[10px]">तारीख व वार / Date</span>
+                  <span className="font-semibold text-[#111827]">
                     {new Date(order.createdAt).toLocaleDateString(
                       language === 'mr' ? 'mr-IN' : 'en-IN',
                       { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }
@@ -153,14 +200,14 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 text-slate-300">
-                <MapPin className="w-3.5 h-3.5 text-[#ea580c] shrink-0" />
+              <div className="flex items-center gap-2 text-[#111827]">
+                <MapPin className="w-3.5 h-3.5 text-[#6366f1] shrink-0" />
                 <div>
-                  <span className="text-slate-400 block text-[10px]">सभागृह / Venue</span>
-                  <span className="font-semibold text-white truncate block">
+                  <span className="text-[#9ca3af] block text-[10px]">सभागृह / Venue</span>
+                  <span className="font-semibold text-[#111827] truncate block">
                     {language === 'mr' ? event.venue?.nameMr || 'सभागृह' : event.venue?.name}
                   </span>
-                  <span className="text-slate-400 block text-[10px]">
+                  <span className="text-[#9ca3af] block text-[10px]">
                     {event.venue?.address || event.venue?.city}
                   </span>
                 </div>
@@ -169,7 +216,7 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
 
             {/* Individual Passes List with Compact QR */}
             <div className="pt-3 space-y-3">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-[#ea580c] flex items-center gap-1.5">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-[#6366f1] flex items-center gap-1.5">
                 <Ticket className="w-3.5 h-3.5" />
                 <span>प्रवेशिका व अधिकृत QR कोड ({tickets.length} Passes)</span>
               </h4>
@@ -178,10 +225,10 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
                 {tickets.map((tk: any, i: number) => (
                   <div
                     key={tk.id || i}
-                    className="p-3 bg-[#111827] rounded-lg border border-[#243044] flex flex-col items-center text-center space-y-1.5"
+                    className="p-3 bg-[#fafafa] rounded-lg border border-[#e5e7eb] flex flex-col items-center text-center space-y-1.5"
                   >
                     {/* Compact QR Code Canvas */}
-                    <div className="p-1.5 bg-white rounded-lg border border-slate-300">
+                    <div className="p-1.5 bg-white rounded-lg border border-[#d1d5db] shadow-sm">
                       {tk.qrDataUrl ? (
                         <img
                           src={tk.qrDataUrl}
@@ -189,26 +236,26 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
                           className="w-28 h-28 object-contain"
                         />
                       ) : (
-                        <div className="w-28 h-28 flex items-center justify-center text-xs text-slate-600">
+                        <div className="w-28 h-28 flex items-center justify-center text-xs text-[#9ca3af]">
                           QR Pass
                         </div>
                       )}
                     </div>
 
                     <div>
-                      <span className="text-[10px] text-slate-400 block uppercase tracking-wide">
+                      <span className="text-[10px] text-[#9ca3af] block uppercase tracking-wide">
                         आसन क्रमांक / Seat
                       </span>
-                      <span className="text-sm font-bold text-[#ea580c] font-mono">
+                      <span className="text-sm font-bold text-[#6366f1] font-mono">
                         {tk.seatCode}
                       </span>
                     </div>
 
-                    <div className="text-[11px] text-slate-300 font-medium">
+                    <div className="text-[11px] text-[#111827] font-medium">
                       <span>{tk.attendeeName || order.userName}</span>
                     </div>
 
-                    <div className="text-[9px] font-mono text-slate-500 truncate max-w-[150px]">
+                    <div className="text-[9px] font-mono text-[#9ca3af] truncate max-w-[150px]">
                       {tk.ticketCode}
                     </div>
                   </div>
@@ -217,42 +264,52 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
             </div>
 
             {/* Verification Notice */}
-            <div className="mt-4 pt-3 border-t border-[#243044] flex items-center justify-between text-[10px] text-slate-400">
-              <div className="flex items-center gap-1.5 text-emerald-400 font-medium">
+            <div className="mt-4 pt-3 border-t border-[#e5e7eb] flex items-center justify-between text-[10px] text-[#9ca3af]">
+              <div className="flex items-center gap-1.5 text-emerald-600 font-medium">
                 <ShieldCheck className="w-3.5 h-3.5" />
                 <span>महाटिकिट डिजिटल स्वाक्षरी सत्यापित (HMAC SHA-256)</span>
               </div>
-              <span className="text-slate-500 font-mono">Gate Entry Pass</span>
+              <span className="text-[#9ca3af] font-mono">Gate Entry Pass</span>
             </div>
           </div>
         </div>
 
         {/* Bottom Actions */}
-        <div className="p-3.5 sm:p-4 border-t border-[#243044] bg-[#0a0e17] flex flex-wrap items-center justify-between gap-2 safe-bottom">
-          <p className="text-xs text-slate-400 hidden sm:block">
+        <div className="p-3.5 sm:p-4 border-t border-[#e5e7eb] bg-white flex flex-wrap items-center justify-between gap-2 safe-bottom">
+          <p className="text-xs text-[#6b7280] hidden sm:block">
             {t.showAtGate}
           </p>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="flex items-center flex-wrap gap-2 w-full sm:w-auto">
             <button
-              onClick={handleShare}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[#1a2333] hover:bg-[#243044] text-white font-medium text-xs border border-[#243044] transition"
+              onClick={handleDownloadPDF}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-white hover:bg-[#f5f5f5] text-[#111827] font-medium text-xs border border-[#e5e7eb] hover:border-[#6366f1] transition"
             >
-              <Share2 className="w-3.5 h-3.5 text-[#ea580c]" />
-              <span>Share Pass</span>
+              <Download className="w-3.5 h-3.5 text-[#6366f1]" />
+              <span>Download PDF</span>
             </button>
 
             <button
-              onClick={handlePrint}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[#1a2333] hover:bg-[#243044] text-white font-medium text-xs border border-[#243044] transition"
+              onClick={handleEmailTicket}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-white hover:bg-[#f5f5f5] text-[#111827] font-medium text-xs border border-[#e5e7eb] hover:border-[#6366f1] transition"
             >
-              <Download className="w-3.5 h-3.5 text-slate-300" />
-              <span>{t.downloadTicket}</span>
+              <svg className="w-3.5 h-3.5 text-[#6366f1]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+              <span>Email</span>
+            </button>
+
+            <button
+              onClick={handleShare}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-white hover:bg-[#f5f5f5] text-[#111827] font-medium text-xs border border-[#e5e7eb] hover:border-[#6366f1] transition"
+            >
+              <Share2 className="w-3.5 h-3.5 text-[#6366f1]" />
+              <span>WhatsApp</span>
             </button>
 
             <button
               onClick={onClose}
-              className="flex-1 sm:flex-none px-4 py-2 rounded-lg bg-[#ea580c] hover:bg-[#c2410c] text-white font-semibold text-xs shadow-sm transition active:scale-95"
+              className="flex-1 sm:flex-none px-4 py-2 rounded-lg bg-[#6366f1] hover:bg-[#4f46e5] text-white font-semibold text-xs shadow-sm transition active:scale-95"
             >
               {t.backToHome}
             </button>

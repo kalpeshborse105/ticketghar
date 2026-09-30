@@ -1,10 +1,13 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
 import { users, auditLogs } from '@/src/db/schema.ts';
 import { desc, eq } from 'drizzle-orm';
+import { requireAdmin } from '@/src/lib/admin-auth.ts';
 
 // GET all users for admin role management
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const authError = requireAdmin(request);
+  if (authError) return authError;
   try {
     const list = await db
       .select({
@@ -32,7 +35,9 @@ export async function GET() {
 }
 
 // POST create or invite a staff / admin user
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const authError = requireAdmin(request);
+  if (authError) return authError;
   try {
     const body = await request.json();
     const { email, fullName, phoneNumber, role, city, preferredLanguage, actorId } = body;
@@ -88,7 +93,9 @@ export async function POST(request: Request) {
 }
 
 // PATCH update user role or profile
-export async function PATCH(request: Request) {
+export async function PATCH(request: NextRequest) {
+  const authError = requireAdmin(request);
+  if (authError) return authError;
   try {
     const body = await request.json();
     const { userId, role, fullName, phoneNumber, city, actorId } = body;

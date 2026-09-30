@@ -73,6 +73,18 @@ export const seats = pgTable('seats', {
   seatCode: text('seat_code').notNull(), // "BAL-A-01"
   tier: text('tier').notNull().default('standard'), // 'platinum' | 'gold' | 'silver'
   isAccessible: integer('is_accessible').notNull().default(0),
+  isBlocked: integer('is_blocked').notNull().default(0),
+});
+
+// Cities catalog
+export const cities = pgTable('cities', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull().unique(),
+  nameMr: text('name_mr').notNull(),
+  state: text('state').notNull().default('Maharashtra'),
+  isActive: integer('is_active').notNull().default(1),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: timestamp('created_at').defaultNow(),
 });
 
 // 6. Events
@@ -246,7 +258,7 @@ export const auditLogs = pgTable('audit_logs', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
-// 16. Coupons
+// 16. Coupons / Offers
 export const coupons = pgTable('coupons', {
   id: serial('id').primaryKey(),
   code: text('code').notNull().unique(),
@@ -254,7 +266,55 @@ export const coupons = pgTable('coupons', {
   discountValue: integer('discount_value').notNull(), // 1500 = 15% or ₹5000 = ₹50
   minOrderValue: integer('min_order_value').notNull().default(0),
   maxDiscount: integer('max_discount').notNull().default(10000), // in paise
+  usageLimit: integer('usage_limit'),
+  perUserLimit: integer('per_user_limit').default(1),
+  startsAt: timestamp('starts_at'),
+  endsAt: timestamp('ends_at'),
+  eventId: integer('event_id'),
+  city: text('city'),
   active: integer('active').notNull().default(1),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// 17. Announcements
+export const announcements = pgTable('announcements', {
+  id: serial('id').primaryKey(),
+  title: text('title').notNull(),
+  message: text('message').notNull(),
+  imageUrl: text('image_url'),
+  ctaLabel: text('cta_label'),
+  ctaUrl: text('cta_url'),
+  city: text('city'),
+  category: text('category'),
+  startsAt: timestamp('starts_at'),
+  endsAt: timestamp('ends_at'),
+  active: integer('active').notNull().default(1),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// 18. Device tokens (FCM)
+export const deviceTokens = pgTable('device_tokens', {
+  id: serial('id').primaryKey(),
+  userUid: text('user_uid'),
+  token: text('token').notNull().unique(),
+  platform: text('platform').notNull().default('android'),
+  appVersion: text('app_version'),
+  lastSeenAt: timestamp('last_seen_at').defaultNow(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// 19. Notification log (dedupe)
+export const notificationLog = pgTable('notification_log', {
+  id: serial('id').primaryKey(),
+  deviceTokenId: integer('device_token_id'),
+  userUid: text('user_uid'),
+  notificationType: text('notification_type').notNull(),
+  dedupeKey: text('dedupe_key').notNull().unique(),
+  title: text('title').notNull(),
+  body: text('body').notNull(),
+  dataJson: text('data_json'),
+  status: text('status').notNull().default('sent'),
   createdAt: timestamp('created_at').defaultNow(),
 });
 

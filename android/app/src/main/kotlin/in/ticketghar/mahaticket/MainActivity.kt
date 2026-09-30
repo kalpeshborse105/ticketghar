@@ -10,128 +10,168 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import `in`.ticketghar.mahaticket.model.*
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
 import `in`.ticketghar.mahaticket.theme.*
-import `in`.ticketghar.mahaticket.ui.screens.HomeScreen
+import `in`.ticketghar.mahaticket.ui.screens.*
+import `in`.ticketghar.mahaticket.ui.viewmodel.BookingViewModel
+import `in`.ticketghar.mahaticket.ui.viewmodel.EventViewModel
+import `in`.ticketghar.mahaticket.ui.viewmodel.BookingViewModelFactory
+import `in`.ticketghar.mahaticket.ui.viewmodel.EventViewModelFactory
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Install Android 12+ Splash Screen
+        installSplashScreen()
+        
         super.onCreate(savedInstanceState)
 
-        // Enable edge-to-edge window insets for status & gesture navigation bars
+        // Enable edge-to-edge window insets
         enableEdgeToEdge()
 
         setContent {
             MahaTicketTheme {
-                MahaTicketAppRoot()
+                MahaTicketRoot()
+            }
+        }
+    }
+}
+
+sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
+    data object Home : Screen("home", "होम", Icons.Default.Home)
+    data object Explore : Screen("explore", "शोधा", Icons.Default.Explore)
+    data object Tickets : Screen("tickets", "तिकिटे", Icons.Default.ConfirmationNumber)
+    data object Offers : Screen("offers", "ऑफर्स", Icons.Default.LocalOffer)
+    data object Profile : Screen("profile", "प्रोफाइल", Icons.Default.Person)
+}
+
+@Composable
+fun MahaTicketRoot() {
+    val navController = rememberNavController()
+    val app = androidx.compose.ui.platform.LocalContext.current.applicationContext as MahaTicketApp
+    
+    val eventViewModel: EventViewModel = viewModel(
+        factory = EventViewModelFactory(app.eventRepository, app.networkMonitor)
+    )
+    
+    val bookingViewModel: BookingViewModel = viewModel(
+        factory = BookingViewModelFactory(app.bookingRepository, app.networkMonitor)
+    )
+    
+    val isOnline by eventViewModel.isOnline.collectAsState()
+    
+    Scaffold(
+        modifier = Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.systemBars),
+        bottomBar = {
+            BottomNavigationBar(navController)
+        }
+    ) { innerPadding ->
+        Column(modifier = Modifier.padding(innerPadding)) {
+            // Offline banner
+            if (!isOnline) {
+                OfflineBanner()
+            }
+            
+            NavHost(
+                navController = navController,
+                startDestination = Screen.Home.route,
+                modifier = Modifier.weight(1f)
+            ) {
+                composable(Screen.Home.route) {
+                    HomeScreenWithViewModel(eventViewModel, navController)
+                }
+                composable(Screen.Explore.route) {
+                    ExploreScreen(eventViewModel)
+                }
+                composable(Screen.Tickets.route) {
+                    MyTicketsScreen(bookingViewModel)
+                }
+                composable(Screen.Offers.route) {
+                    OffersScreen()
+                }
+                composable(Screen.Profile.route) {
+                    ProfileScreen()
+                }
             }
         }
     }
 }
 
 @Composable
-fun MahaTicketAppRoot() {
-    var currentTab by remember { mutableStateOf(0) }
-    var selectedEvent by remember { mutableStateOf<EventItem?>(null) }
-
-    // Sample Maharashtra events for native runtime
-    val sampleEvents = remember {
-        listOf(
-            EventItem(
-                id = 1,
-                title = "Punha Sahi Re Sahi",
-                titleMr = "पुन्हा सही रे सही",
-                category = "plays",
-                categoryMr = "नाटक",
-                language = "Marathi",
-                durationMinutes = 165,
-                description = "Bharat Jadhav historic comedy masterpiece",
-                posterUrl = "https://picsum.photos/seed/punhasahi/600/800",
-                minPrice = 35000,
-                venue = VenueItem(1, "Bal Gandharva Ranga Mandir", "बालगंधर्व रंगमंदिर", "JM Road, Shivajinagar", "Pune"),
-                sessions = listOf(SessionItem(1, 1, "2026-10-05T19:30:00Z", "2026-10-05T22:15:00Z", "active"))
-            ),
-            EventItem(
-                id = 2,
-                title = "Bhadipa Live Comedy",
-                titleMr = "भाडिपा स्टँडअप कॉमेडी",
-                category = "comedy",
-                categoryMr = "कॉमेडी",
-                language = "Marathi",
-                durationMinutes = 120,
-                description = "Maharashtra biggest Marathi standup comedy show",
-                posterUrl = "https://picsum.photos/seed/bhadipa/600/800",
-                minPrice = 40000,
-                venue = VenueItem(2, "Shivaji Mandir", "श्री छत्रपती शिवाजी मंदिर", "Dadar West", "Mumbai"),
-                sessions = listOf(SessionItem(2, 2, "2026-10-06T20:00:00Z", "2026-10-06T22:00:00Z", "active"))
+fun BottomNavigationBar(navController: NavHostController) {
+    val screens = listOf(
+        Screen.Home,
+        Screen.Explore,
+        Screen.Tickets,
+        Screen.Offers,
+        Screen.Profile
+    )
+    
+    val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
+    
+    NavigationBar(
+        containerColor = MaterialTheme.colorScheme.surface,
+        tonalElevation = 4.dp
+    ) {
+        screens.forEach { screen ->
+            NavigationBarItem(
+                selected = currentRoute == screen.route,
+                onClick = {
+                    if (currentRoute != screen.route) {
+                        navController.navigate(screen.route) {
+                            popUpTo(Screen.Home.route) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
+                },
+                icon = { Icon(screen.icon, contentDescription = screen.title) },
+                label = { Text(screen.title, fontSize = 11.sp) },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                    indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             )
-        )
-    }
-
-    Scaffold(
-        modifier = Modifier
-            .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.systemBars),
-        containerColor = MahaDarkBackground,
-        bottomBar = {
-            NavigationBar(
-                containerColor = MahaSurface,
-                tonalElevation = 4.dp
-            ) {
-                val navItems = listOf(
-                    Triple(0, "होम", Icons.Default.Home),
-                    Triple(1, "शोधा", Icons.Default.Explore),
-                    Triple(2, "तिकिटे", Icons.Default.ConfirmationNumber),
-                    Triple(3, "ऑफर्स", Icons.Default.LocalOffer),
-                    Triple(4, "प्रोफाइल", Icons.Default.Person)
-                )
-
-                navItems.forEach { (index, title, icon) ->
-                    val isSelected = currentTab == index
-                    NavigationBarItem(
-                        selected = isSelected,
-                        onClick = {
-                            currentTab = index
-                            selectedEvent = null
-                        },
-                        icon = { Icon(icon, contentDescription = title) },
-                        label = { Text(title, fontSize = 11.sp) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = MahaOrange,
-                            selectedTextColor = MahaOrange,
-                            indicatorColor = MahaOrange.copy(alpha = 0.15f),
-                            unselectedIconColor = MahaTextSecondary,
-                            unselectedTextColor = MahaTextSecondary
-                        )
-                    )
-                }
-            }
         }
-    ) { innerPadding ->
-        Box(modifier = Modifier.padding(innerPadding)) {
-            when (currentTab) {
-                0 -> HomeScreen(
-                    events = sampleEvents,
-                    onSelectEvent = { selectedEvent = it }
-                )
-                2 -> Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = androidx.compose.ui.Alignment.Center
-                ) {
-                    Text(
-                        "आपण बुक केलेली सर्व तिकिटे येथे दिसतील",
-                        color = MahaTextSecondary,
-                        fontSize = 14.sp
-                    )
-                }
-                else -> HomeScreen(
-                    events = sampleEvents,
-                    onSelectEvent = { selectedEvent = it }
-                )
-            }
+    }
+}
+
+@Composable
+fun OfflineBanner() {
+    Surface(
+        color = MahaWarning.copy(alpha = 0.15f),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Default.Info,
+                contentDescription = null,
+                tint = MahaWarning,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                "ऑफलाइन मोड - कॅश केलेला डेटा दाखवत आहोत",
+                style = MaterialTheme.typography.bodySmall,
+                color = MahaTextPrimary
+            )
         }
     }
 }
