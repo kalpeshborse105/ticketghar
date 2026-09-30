@@ -1,31 +1,33 @@
-// POST /api/admin/login - Admin authentication endpoint
+// POST /api/admin/login - Admin & Organizer authentication endpoint
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateAdmin, setSessionCookie } from '@/src/lib/admin-auth.ts';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { password } = body;
+    const { password, email } = body;
 
     if (!password) {
       return NextResponse.json(
-        { error: 'Password is required' },
+        { error: 'पासवर्ड आवश्यक आहे (Password is required)' },
         { status: 400 }
       );
     }
 
-    const result = authenticateAdmin(password);
+    const result = await authenticateAdmin({ password, email });
 
     if (!result.success) {
       return NextResponse.json(
-        { error: result.error || 'Authentication failed' },
+        { error: result.error || 'प्रमाणीकरण अयशस्वी (Authentication failed)' },
         { status: 401 }
       );
     }
 
     const response = NextResponse.json({
       success: true,
-      message: 'Admin authenticated successfully',
+      role: result.role,
+      user: result.user,
+      message: 'प्रमाणीकरण यशस्वी (Authenticated successfully)',
     });
 
     // Set httpOnly session cookie
@@ -37,7 +39,7 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('Admin login error:', error);
     return NextResponse.json(
-      { error: 'Authentication error' },
+      { error: 'प्रमाणीकरण करताना त्रुटी आली' },
       { status: 500 }
     );
   }

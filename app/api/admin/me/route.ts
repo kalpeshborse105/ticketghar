@@ -1,4 +1,4 @@
-// GET /api/admin/me - Verify admin session and return status
+// GET /api/admin/me - Verify admin session and return role + profile
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAdminSession } from '@/src/lib/admin-auth.ts';
 
@@ -14,7 +14,8 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     authenticated: true,
-    role: 'super_admin',
+    role: verification.role || 'super_admin',
+    user: verification.user || null,
     message: 'Admin session valid',
   });
 }

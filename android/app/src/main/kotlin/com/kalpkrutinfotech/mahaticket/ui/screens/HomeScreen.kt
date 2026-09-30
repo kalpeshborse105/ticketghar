@@ -403,8 +403,8 @@ fun FeaturedHeroBanner(
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
                 Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.primary,
+                    shape = RoundedCornerShape(6.dp)
                 ) {
                     Text(
                         text = "विशेष शिफारस (Featured)",
@@ -424,15 +424,15 @@ fun FeaturedHeroBanner(
                         Text(
                             text = event.titleMr.ifBlank { event.title },
                             color = Color.White,
-                            fontSize = 18.sp,
+                            fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = "${event.venue?.nameMr ?: event.venue?.name ?: "पुणे"} • ₹${(event.minPrice ?: 30000) / 100} पासून",
+                            text = "${event.venue?.nameMr ?: event.venue?.name ?: "पुणे"} • ${event.venue?.city ?: "महाराष्ट्र"}",
                             color = Color.White.copy(alpha = 0.85f),
-                            fontSize = 13.sp
+                            fontSize = 12.sp
                         )
                     }
 
@@ -440,7 +440,7 @@ fun FeaturedHeroBanner(
                         onClick = onClick,
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                         shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                     ) {
                         Text("बुक करा", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
@@ -474,13 +474,13 @@ fun EventCardItem(
             shape = RoundedCornerShape(14.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             border = androidx.compose.foundation.BorderStroke(1.dp, MahaBorder),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
         ) {
             Column {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(170.dp)
+                        .height(150.dp)
                 ) {
                     AsyncImage(
                         model = event.posterUrl.ifBlank { "https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?w=800" },
@@ -494,31 +494,31 @@ fun EventCardItem(
                     Surface(
                         modifier = Modifier
                             .align(Alignment.TopStart)
-                            .padding(10.dp),
+                            .padding(8.dp),
                         shape = RoundedCornerShape(6.dp),
                         color = Color.Black.copy(alpha = 0.7f)
                     ) {
                         Text(
                             text = event.categoryMr.ifBlank { event.category.uppercase() },
                             color = Color.White,
-                            fontSize = 11.sp,
+                            fontSize = 10.sp,
                             fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
                 }
 
-                Column(modifier = Modifier.padding(14.dp)) {
+                Column(modifier = Modifier.padding(10.dp)) {
                     Text(
                         text = event.titleMr.ifBlank { event.title },
-                        fontSize = 16.sp,
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 2,
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
 
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -528,47 +528,44 @@ fun EventCardItem(
                             Icons.Default.LocationOn,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(14.dp)
+                            modifier = Modifier.size(13.dp)
                         )
                         Text(
                             text = "${event.venue?.nameMr ?: event.venue?.name ?: "नाट्यगृह"}, ${event.venue?.city ?: "महाराष्ट्र"}",
-                            fontSize = 12.sp,
+                            fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
-                            Text("किमान दर", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
-                            Text(
-                                "₹${(event.minPrice ?: 30000) / 100}",
-                                color = MaterialTheme.colorScheme.primary,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                        Text(
+                            text = event.venue?.city ?: "महाराष्ट्र",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
 
                         Button(
                             onClick = onClick,
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                             shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                         ) {
                             Icon(
                                 Icons.Default.ConfirmationNumber,
                                 contentDescription = null,
-                                modifier = Modifier.size(14.dp)
+                                modifier = Modifier.size(13.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("बुक करा", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            Text("बुक करा", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }

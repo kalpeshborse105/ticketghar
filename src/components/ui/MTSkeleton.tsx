@@ -1,38 +1,35 @@
 'use client';
 
 import React from 'react';
+import { Ticket } from 'lucide-react';
 
 interface MTSkeletonProps {
   className?: string;
-  variant?: 'rectangular' | 'circular' | 'text' | 'theater';
+  variant?: 'rectangular' | 'circular' | 'text' | 'ticket';
   width?: string | number;
   height?: string | number;
 }
 
-// Theater mask SVG shapes for cultural/theater app loading
-const TheaterMaskShimmer = () => (
-  <div className="relative flex items-center justify-center w-full h-full">
-    <div className="flex items-end gap-1">
-      {/* Happy Mask */}
-      <div className="animate-pulse">
-        <svg width="40" height="40" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="24" cy="24" r="22" fill="#f97316" opacity="0.15"/>
-          <circle cx="24" cy="24" r="22" stroke="#ea580c" strokeWidth="2" opacity="0.3"/>
-          <circle cx="17" cy="20" r="3" fill="#ea580c" opacity="0.3"/>
-          <circle cx="31" cy="20" r="3" fill="#ea580c" opacity="0.3"/>
-          <path d="M15 30 Q24 38 33 30" stroke="#ea580c" strokeWidth="2.5" strokeLinecap="round" fill="none" opacity="0.3"/>
-        </svg>
+// Unified Ticket Loader Animation — used across the entire platform
+export const MTTicketLoader: React.FC<{
+  message?: string;
+  submessage?: string;
+  className?: string;
+}> = ({
+  message = 'लोड होत आहे...',
+  submessage = 'महाटिकिट महाराष्ट्र',
+  className = '',
+}) => (
+  <div className={`flex flex-col items-center justify-center p-8 text-center space-y-3 ${className}`}>
+    <div className="relative">
+      <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white shadow-lg shadow-orange-500/30">
+        <Ticket className="w-7 h-7 -rotate-12 animate-pulse" />
       </div>
-      {/* Sad Mask */}
-      <div className="animate-pulse" style={{ animationDelay: '200ms' }}>
-        <svg width="36" height="36" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="24" cy="24" r="22" fill="#1e293b" opacity="0.08"/>
-          <circle cx="24" cy="24" r="22" stroke="#475569" strokeWidth="2" opacity="0.2"/>
-          <circle cx="17" cy="20" r="3" fill="#475569" opacity="0.2"/>
-          <circle cx="31" cy="20" r="3" fill="#475569" opacity="0.2"/>
-          <path d="M15 34 Q24 26 33 34" stroke="#475569" strokeWidth="2.5" strokeLinecap="round" fill="none" opacity="0.2"/>
-        </svg>
-      </div>
+      <div className="absolute -inset-1 rounded-2xl border-2 border-orange-500/30 animate-ping pointer-events-none" />
+    </div>
+    <div className="space-y-0.5">
+      <p className="text-xs font-extrabold text-slate-800">{message}</p>
+      {submessage && <p className="text-[10px] text-slate-400 font-medium">{submessage}</p>}
     </div>
   </div>
 );
@@ -43,25 +40,27 @@ export const MTSkeleton: React.FC<MTSkeletonProps> = ({
   width,
   height,
 }) => {
-  if (variant === 'theater') {
+  if (variant === 'ticket') {
     return (
       <div
-        className={`bg-gradient-to-br from-orange-50 to-slate-50 border border-orange-100 rounded-xl flex items-center justify-center ${className}`}
+        className={`bg-gradient-to-br from-orange-50 to-slate-50 border border-orange-100 rounded-2xl flex items-center justify-center ${className}`}
         style={{
           width: width ? (typeof width === 'number' ? `${width}px` : width) : undefined,
-          height: height ? (typeof height === 'number' ? `${height}px` : height) : '160px',
+          height: height ? (typeof height === 'number' ? `${height}px` : height) : '240px',
         }}
       >
-        <TheaterMaskShimmer />
+        <div className="w-10 h-10 rounded-xl bg-orange-100/70 text-orange-500 flex items-center justify-center animate-pulse">
+          <Ticket className="w-5 h-5 -rotate-12" />
+        </div>
       </div>
     );
   }
 
   const variantStyles = {
-    rectangular: 'rounded-lg',
+    rectangular: 'rounded-xl',
     circular: 'rounded-full',
-    text: 'rounded h-4 my-1',
-    theater: 'rounded-xl',
+    text: 'rounded h-3.5 my-1',
+    ticket: 'rounded-2xl',
   }[variant];
 
   return (
@@ -76,17 +75,17 @@ export const MTSkeleton: React.FC<MTSkeletonProps> = ({
   );
 };
 
-// Theater Event Card Skeleton — what shows while events are loading
+// Compact Ticketalay/BookMyShow Event Card Skeleton (Portrait 3:4 aspect)
 export const MTEventCardSkeleton = () => (
-  <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm">
-    {/* Poster area with theater mask */}
-    <MTSkeleton variant="theater" className="w-full" height="200px" />
+  <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-xs">
+    {/* Poster area matching portrait aspect ratio */}
+    <MTSkeleton variant="ticket" className="w-full aspect-[3/4]" height="auto" />
     <div className="p-3 space-y-2">
-      <MTSkeleton variant="text" width="75%" />
-      <MTSkeleton variant="text" width="50%" />
-      <div className="flex gap-2 pt-1">
-        <MTSkeleton variant="rectangular" width="60px" height="22px" className="rounded-full" />
-        <MTSkeleton variant="rectangular" width="80px" height="22px" className="rounded-full" />
+      <MTSkeleton variant="text" width="85%" />
+      <MTSkeleton variant="text" width="55%" />
+      <div className="flex items-center justify-between pt-2 border-t border-slate-50">
+        <MTSkeleton variant="text" width="40px" />
+        <MTSkeleton variant="rectangular" width="75px" height="26px" className="rounded-xl" />
       </div>
     </div>
   </div>

@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
         grandTotal: sql<number>`coalesce(sum(${orders.grandTotal}), 0)`,
       })
       .from(orders)
-      .where(eq(orders.paymentStatus, 'captured'));
+      .where(sql`${orders.paymentStatus} IN ('captured', 'paid', 'completed', 'confirmed')`);
 
     const stats = financialStats[0] || {
       totalOrders: 0,

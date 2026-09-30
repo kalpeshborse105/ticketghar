@@ -19,7 +19,14 @@ export async function GET(request: NextRequest) {
       .innerJoin(organizers, eq(events.organizerId, organizers.id))
       .orderBy(desc(events.createdAt));
 
-    return NextResponse.json({ events: list });
+    const formatted = list.map((item) => ({
+      ...item.event,
+      venue: item.venue,
+      organizer: item.organizer,
+      event: item.event,
+    }));
+
+    return NextResponse.json({ events: formatted });
   } catch (error: any) {
     console.error('Error fetching admin events:', error);
     return NextResponse.json({ error: 'Failed to fetch events' }, { status: 500 });

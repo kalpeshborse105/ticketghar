@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { ArrowLeft, RefreshCw } from 'lucide-react';
+import { Header } from '@/src/components/Header';
 
 export const metadata = {
   title: 'Cancellation & Refund Policy - MahaTicket (महाटिकिट)',
@@ -8,19 +9,22 @@ export const metadata = {
 
 export default function RefundPage() {
   return (
-    <div className="min-h-screen bg-[#fafafa] text-[#111827]">
-      {/* Header */}
-      <header className="bg-white border-b border-[#e5e7eb] sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center gap-4">
+    <div className="min-h-screen bg-slate-50 text-slate-900 pb-20">
+      {/* Persistent Website Header */}
+      <Header />
+
+      {/* Sub-bar Navigation */}
+      <div className="bg-white border-b border-slate-200">
+        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-4">
           <Link 
             href="/" 
-            className="flex items-center gap-2 text-sm text-orange-600 hover:text-orange-700 transition"
+            className="flex items-center gap-2 text-xs text-orange-600 hover:text-orange-700 font-bold transition cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span>Back to MahaTicket</span>
+            <span>मुख्य पृष्ठ (Back to Home)</span>
           </Link>
         </div>
-      </header>
+      </div>
 
       {/* Content */}
       <main className="max-w-4xl mx-auto px-4 py-8 space-y-8">

@@ -39,6 +39,8 @@ interface AdminPanelProps {
   language: Language;
   onBack: () => void;
   onLogout?: () => void;
+  initialRole?: 'super_admin' | 'organizer' | 'scanner' | 'operations' | 'finance';
+  currentUser?: any;
 }
 
 type AdminTab =
@@ -47,6 +49,8 @@ type AdminTab =
   | 'events'
   | 'cities_venues'
   | 'scanner'
+  | 'verified_tickets'
+  | 'screen_status'
   | 'leads'
   | 'orders'
   | 'users'
@@ -58,15 +62,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   language,
   onBack,
   onLogout,
+  initialRole = 'super_admin',
+  currentUser,
 }) => {
   const t = translations[language];
 
   // RBAC active role
   const [activeRole, setActiveRole] = useState<
-    'super_admin' | 'operations' | 'finance' | 'scanner'
-  >('super_admin');
+    'super_admin' | 'organizer' | 'operations' | 'finance' | 'scanner'
+  >(initialRole);
 
-  const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
+  const [activeTab, setActiveTab] = useState<AdminTab>(() => {
+    if (initialRole === 'organizer' || initialRole === 'scanner') {
+      return 'scanner';
+    }
+    return 'dashboard';
+  });
 
   // Dashboard Data
   const [kpiData, setKpiData] = useState<any>(null);
@@ -107,6 +118,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [gateName, setGateName] = useState('Main Entry Gate 1');
   const [scanLoading, setScanLoading] = useState(false);
   const [scanResult, setScanResult] = useState<any | null>(null);
+
+  // Verified Tickets State
+  const [ticketsList, setTicketsList] = useState<any[]>([]);
+  const [loadingTickets, setLoadingTickets] = useState(false);
+  const [ticketStatusFilter, setTicketStatusFilter] = useState<'all' | 'used' | 'issued'>('all');
+  const [ticketSearchQuery, setTicketSearchQuery] = useState('');
+  const [verifyingTicketId, setVerifyingTicketId] = useState<number | null>(null);
+
+  // Screen & Seat Layout State
+  const [selectedEventIdForSeats, setSelectedEventIdForSeats] = useState<number | null>(null);
+  const [selectedSessionIdForSeats, setSelectedSessionIdForSeats] = useState<number | null>(null);
+  const [seatMapData, setSeatMapData] = useState<any | null>(null);
+  const [loadingSeatMap, setLoadingSeatMap] = useState(false);
 
   // Partner Leads
   const [leads, setLeads] = useState<any[]>([]);
@@ -159,7 +183,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     durationMinutes: 150,
     description: '',
     descriptionMr: '',
-    posterUrl: 'https://picsum.photos/seed/natak1/600/800',
+    posterUrl: 'https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?auto=format&fit=crop&w=600&h=900&q=80',
+    bannerUrl: 'https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?auto=format&fit=crop&w=1240&h=380&q=80',
+    videoUrl: '',
     convenienceFeeValue: 3000,
     sessionDate: '2026-10-05',
     sessionTime: '19:30',
@@ -249,7 +275,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const fetchOrders = async () => {
     try {
       setLoadingOrders(true);
-      const res = await fetch('/api/orders');
+      const res = await fetch('/api/admin/orders');
       if (res.ok) {
         const data = await res.json();
         setOrderList(data.orders || []);
@@ -258,6 +284,75 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       console.error(e);
     } finally {
       setLoadingOrders(false);
+    }
+  };
+
+  // Fetch Verified & All Tickets
+  const fetchTickets = async () => {
+    try {
+      setLoadingTickets(true);
+      const url =
+        ticketStatusFilter !== 'all'
+          ? `/api/admin/tickets?status=${ticketStatusFilter}`
+          : '/api/admin/tickets';
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        setTicketsList(data.tickets || []);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingTickets(false);
+    }
+  };
+
+  // Manual instant verification
+  const handleManualVerifyTicket = async (ticket: any) => {
+    try {
+      setVerifyingTicketId(ticket.id);
+      const res = await fetch('/api/admin/tickets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticketId: ticket.id, gateName }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setTicketsList((prev) =>
+          prev.map((t) =>
+            t.id === ticket.id
+              ? {
+                  ...t,
+                  status: 'used',
+                  scannedAt: new Date().toISOString(),
+                  gateName,
+                }
+              : t
+          )
+        );
+      } else {
+        alert(data.message || 'पडताळणी अयशस्वी');
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setVerifyingTicketId(null);
+    }
+  };
+
+  // Fetch Live Seat Layout for Session
+  const fetchSeatMap = async (sessionId: number) => {
+    try {
+      setLoadingSeatMap(true);
+      const res = await fetch(`/api/sessions/${sessionId}/seats`);
+      if (res.ok) {
+        const data = await res.json();
+        setSeatMapData(data);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingSeatMap(false);
     }
   };
 
@@ -333,6 +428,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       if (activeTab === 'cities_venues') fetchVenues();
       if (activeTab === 'leads') fetchLeads();
       if (activeTab === 'orders') fetchOrders();
+      if (activeTab === 'verified_tickets') fetchTickets();
+      if (activeTab === 'screen_status') fetchEvents();
       if (activeTab === 'users') fetchUsers();
       if (activeTab === 'coupons') fetchCoupons();
       if (activeTab === 'announcements') fetchAnnouncements();
@@ -340,6 +437,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }, 0);
     return () => clearTimeout(timer);
   }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab === 'verified_tickets') {
+      fetchTickets();
+    }
+  }, [ticketStatusFilter]);
 
   // Action: Toggle Event Status (Publish/Unpublish)
   const handleToggleEventStatus = async (eventId: number, currentStatus: string) => {
@@ -541,6 +644,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           sessionStartTime,
           organizerId: newEventForm.organizerId || 1,
           venueId: newEventForm.venueId || 1,
+          castCrew: newEventForm.videoUrl ? JSON.stringify({ videoUrl: newEventForm.videoUrl }) : null,
           ticketPrice: 35000,
           actorId: 'admin_user',
           actorRole: activeRole,
@@ -624,137 +728,209 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       <div className="flex-1 flex flex-col md:flex-row">
         {/* Sidebar Nav */}
         <nav className="w-full md:w-64 bg-slate-900/60 border-r border-slate-800 p-3 sm:p-4 flex md:flex-col gap-1.5 overflow-x-auto shrink-0">
-          <button
-            onClick={() => setActiveTab('dashboard')}
-            className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
-              activeTab === 'dashboard'
-                ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
-                : 'text-slate-300 hover:bg-slate-800'
-            }`}
-          >
-            <LayoutDashboard className="w-4 h-4" />
-            <span>डॅशबोर्ड (KPIs)</span>
-          </button>
+          {/* Organizer / Scanner Dedicated Menu */}
+          {activeRole === 'organizer' || activeRole === 'scanner' ? (
+            <>
+              <div className="px-3 py-1.5 text-[11px] font-bold text-amber-400 uppercase tracking-wider hidden md:block">
+                आयोजक नियंत्रण (Organizer Tools)
+              </div>
 
-          <button
-            onClick={() => setActiveTab('events')}
-            className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
-              activeTab === 'events'
-                ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
-                : 'text-slate-300 hover:bg-slate-800'
-            }`}
-          >
-            <Calendar className="w-4 h-4" />
-            <span>कार्यक्रम व्यवस्थापन</span>
-          </button>
+              <button
+                onClick={() => setActiveTab('scanner')}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
+                  activeTab === 'scanner'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
+                    : 'text-slate-300 hover:bg-slate-800'
+                }`}
+              >
+                <QrCode className="w-4 h-4" />
+                <span>गेट स्कॅनर (QR Pass)</span>
+              </button>
 
-          <button
-            onClick={() => setActiveTab('cities_venues')}
-            className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
-              activeTab === 'cities_venues'
-                ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
-                : 'text-slate-300 hover:bg-slate-800'
-            }`}
-          >
-            <MapPin className="w-4 h-4 text-emerald-400" />
-            <span>शहरे व नाट्यगृहे (Cities)</span>
-          </button>
+              <button
+                onClick={() => setActiveTab('verified_tickets')}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
+                  activeTab === 'verified_tickets'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
+                    : 'text-slate-300 hover:bg-slate-800'
+                }`}
+              >
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <span>सत्यापित तिकिटे (Verified)</span>
+              </button>
 
-          <button
-            onClick={() => setActiveTab('settlements')}
-            className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
-              activeTab === 'settlements'
-                ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
-                : 'text-slate-300 hover:bg-slate-800'
-            }`}
-          >
-            <Banknote className="w-4 h-4" />
-            <span>सेटलमेंट लेजर</span>
-          </button>
+              <button
+                onClick={() => setActiveTab('screen_status')}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
+                  activeTab === 'screen_status'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
+                    : 'text-slate-300 hover:bg-slate-800'
+                }`}
+              >
+                <Layers className="w-4 h-4 text-sky-400" />
+                <span>स्क्रीन व आसन स्थिती (Seats)</span>
+              </button>
+            </>
+          ) : (
+            /* Super Admin / Full Staff Menu */
+            <>
+              <button
+                onClick={() => setActiveTab('dashboard')}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
+                  activeTab === 'dashboard'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
+                    : 'text-slate-300 hover:bg-slate-800'
+                }`}
+              >
+                <LayoutDashboard className="w-4 h-4" />
+                <span>डॅशबोर्ड (KPIs)</span>
+              </button>
 
-          <button
-            onClick={() => setActiveTab('orders')}
-            className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
-              activeTab === 'orders'
-                ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
-                : 'text-slate-300 hover:bg-slate-800'
-            }`}
-          >
-            <FileSpreadsheet className="w-4 h-4" />
-            <span>ऑर्डर्स व तिकिटे</span>
-          </button>
+              <button
+                onClick={() => setActiveTab('events')}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
+                  activeTab === 'events'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
+                    : 'text-slate-300 hover:bg-slate-800'
+                }`}
+              >
+                <Calendar className="w-4 h-4" />
+                <span>कार्यक्रम व्यवस्थापन</span>
+              </button>
 
-          <button
-            onClick={() => setActiveTab('scanner')}
-            className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
-              activeTab === 'scanner'
-                ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
-                : 'text-slate-300 hover:bg-slate-800'
-            }`}
-          >
-            <QrCode className="w-4 h-4" />
-            <span>गेट स्कॅनर (QR Pass)</span>
-          </button>
+              <button
+                onClick={() => setActiveTab('cities_venues')}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
+                  activeTab === 'cities_venues'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
+                    : 'text-slate-300 hover:bg-slate-800'
+                }`}
+              >
+                <MapPin className="w-4 h-4 text-emerald-400" />
+                <span>शहरे व नाट्यगृहे (Cities)</span>
+              </button>
 
-          <button
-            onClick={() => setActiveTab('leads')}
-            className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
-              activeTab === 'leads'
-                ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
-                : 'text-slate-300 hover:bg-slate-800'
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            <span>आयोजक अर्ज (Leads)</span>
-          </button>
+              <button
+                onClick={() => setActiveTab('scanner')}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
+                  activeTab === 'scanner'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
+                    : 'text-slate-300 hover:bg-slate-800'
+                }`}
+              >
+                <QrCode className="w-4 h-4" />
+                <span>गेट स्कॅनर (QR Pass)</span>
+              </button>
 
-          <button
-            onClick={() => setActiveTab('users')}
-            className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
-              activeTab === 'users'
-                ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
-                : 'text-slate-300 hover:bg-slate-800'
-            }`}
-          >
-            <Users className="w-4 h-4 text-sky-400" />
-            <span>वापरकर्ते व्यवस्थापन (Users)</span>
-          </button>
+              <button
+                onClick={() => setActiveTab('verified_tickets')}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
+                  activeTab === 'verified_tickets'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
+                    : 'text-slate-300 hover:bg-slate-800'
+                }`}
+              >
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <span>सत्यापित तिकिटे (Verified)</span>
+              </button>
 
-          <button
-            onClick={() => setActiveTab('coupons')}
-            className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
-              activeTab === 'coupons'
-                ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
-                : 'text-slate-300 hover:bg-slate-800'
-            }`}
-          >
-            <KeyRound className="w-4 h-4 text-emerald-400" />
-            <span>कूपन्स व ऑफर्स (Coupons)</span>
-          </button>
+              <button
+                onClick={() => setActiveTab('screen_status')}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
+                  activeTab === 'screen_status'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
+                    : 'text-slate-300 hover:bg-slate-800'
+                }`}
+              >
+                <Layers className="w-4 h-4 text-sky-400" />
+                <span>स्क्रीन व आसन स्थिती (Seats)</span>
+              </button>
 
-          <button
-            onClick={() => setActiveTab('announcements')}
-            className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
-              activeTab === 'announcements'
-                ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
-                : 'text-slate-300 hover:bg-slate-800'
-            }`}
-          >
-            <HelpCircle className="w-4 h-4 text-amber-400" />
-            <span>जाहिराती (Announcements)</span>
-          </button>
+              <button
+                onClick={() => setActiveTab('orders')}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
+                  activeTab === 'orders'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
+                    : 'text-slate-300 hover:bg-slate-800'
+                }`}
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>ऑर्डर्स व तिकिटे</span>
+              </button>
 
-          <button
-            onClick={() => setActiveTab('audit_logs')}
-            className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
-              activeTab === 'audit_logs'
-                ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
-                : 'text-slate-300 hover:bg-slate-800'
-            }`}
-          >
-            <FileCode className="w-4 h-4 text-rose-400" />
-            <span>ऑडिट लॉग्स (Audit Trail)</span>
-          </button>
+              <button
+                onClick={() => setActiveTab('settlements')}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
+                  activeTab === 'settlements'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
+                    : 'text-slate-300 hover:bg-slate-800'
+                }`}
+              >
+                <Banknote className="w-4 h-4" />
+                <span>सेटलमेंट लेजर</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('leads')}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
+                  activeTab === 'leads'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
+                    : 'text-slate-300 hover:bg-slate-800'
+                }`}
+              >
+                <Users className="w-4 h-4" />
+                <span>आयोजक अर्ज (Leads)</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('users')}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
+                  activeTab === 'users'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
+                    : 'text-slate-300 hover:bg-slate-800'
+                }`}
+              >
+                <Users className="w-4 h-4 text-sky-400" />
+                <span>वापरकर्ते व्यवस्थापन (Users)</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('coupons')}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
+                  activeTab === 'coupons'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
+                    : 'text-slate-300 hover:bg-slate-800'
+                }`}
+              >
+                <KeyRound className="w-4 h-4 text-emerald-400" />
+                <span>कूपन्स व ऑफर्स (Coupons)</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('announcements')}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
+                  activeTab === 'announcements'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
+                    : 'text-slate-300 hover:bg-slate-800'
+                }`}
+              >
+                <HelpCircle className="w-4 h-4 text-amber-400" />
+                <span>जाहिराती (Announcements)</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('audit_logs')}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
+                  activeTab === 'audit_logs'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
+                    : 'text-slate-300 hover:bg-slate-800'
+                }`}
+              >
+                <FileCode className="w-4 h-4 text-rose-400" />
+                <span>ऑडिट लॉग्स (Audit Trail)</span>
+              </button>
+            </>
+          )}
         </nav>
 
         {/* Content Area */}
@@ -917,48 +1093,61 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800">
-                    {adminEvents.map((evt) => (
-                      <tr key={evt.id} className="hover:bg-slate-850 transition">
-                        <td className="p-3.5">
-                          <div className="font-bold text-white text-sm">{evt.titleMr}</div>
-                          <div className="text-[11px] text-slate-400">{evt.title}</div>
-                          <span className="inline-block mt-1 px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold">
-                            {evt.category.toUpperCase()}
-                          </span>
-                        </td>
-                        <td className="p-3.5 text-slate-300">
-                          <div className="font-semibold">{evt.venue?.nameMr || evt.venue?.name}</div>
-                          <div className="text-[10px] text-slate-400">
-                            {evt.venue?.city}, महाराष्ट्र
-                          </div>
-                        </td>
-                        <td className="p-3.5 text-slate-300">
-                          <div className="font-semibold">{evt.organizer?.companyName}</div>
-                          <div className="text-[10px] text-slate-400">
-                            कमिशन: {(evt.organizer?.commissionRate / 100).toFixed(1)}%
-                          </div>
-                        </td>
-                        <td className="p-3.5">
-                          <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                              evt.status === 'published'
-                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                                : 'bg-slate-700 text-slate-300'
-                            }`}
-                          >
-                            {evt.status.toUpperCase()}
-                          </span>
-                        </td>
-                        <td className="p-3.5 text-right">
-                          <button
-                            onClick={() => handleToggleEventStatus(evt.id, evt.status)}
-                            className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-amber-400 transition"
-                          >
-                            {evt.status === 'published' ? 'मागे घ्या (Unpublish)' : 'प्रकाशित करा (Publish)'}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {adminEvents.map((evt) => {
+                      const categoryLabel = (evt.category || evt.event?.category || 'नाटक').toUpperCase();
+                      const statusLabel = (evt.status || evt.event?.status || 'published').toUpperCase();
+                      const titleMarathi = evt.titleMr || evt.event?.titleMr || evt.title || '';
+                      const titleEnglish = evt.title || evt.event?.title || '';
+                      const venueDisplayName = evt.venue?.nameMr || evt.venue?.name || 'नाट्यगृह';
+                      const venueCity = evt.venue?.city || 'महाराष्ट्र';
+                      const orgCompany = evt.organizer?.companyName || evt.organizer?.name || 'आयोजक';
+                      const commissionText = evt.organizer?.commissionRate
+                        ? `${(evt.organizer.commissionRate / 100).toFixed(1)}%`
+                        : '5.0%';
+
+                      return (
+                        <tr key={evt.id} className="hover:bg-slate-850 transition">
+                          <td className="p-3.5">
+                            <div className="font-bold text-white text-sm">{titleMarathi}</div>
+                            <div className="text-[11px] text-slate-400">{titleEnglish}</div>
+                            <span className="inline-block mt-1 px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold">
+                              {categoryLabel}
+                            </span>
+                          </td>
+                          <td className="p-3.5 text-slate-300">
+                            <div className="font-semibold">{venueDisplayName}</div>
+                            <div className="text-[10px] text-slate-400">
+                              {venueCity}, महाराष्ट्र
+                            </div>
+                          </td>
+                          <td className="p-3.5 text-slate-300">
+                            <div className="font-semibold">{orgCompany}</div>
+                            <div className="text-[10px] text-slate-400">
+                              कमिशन: {commissionText}
+                            </div>
+                          </td>
+                          <td className="p-3.5">
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                evt.status === 'published'
+                                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                  : 'bg-slate-700 text-slate-300'
+                              }`}
+                            >
+                              {statusLabel}
+                            </span>
+                          </td>
+                          <td className="p-3.5 text-right">
+                            <button
+                              onClick={() => handleToggleEventStatus(evt.id, evt.status)}
+                              className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-amber-400 transition"
+                            >
+                              {evt.status === 'published' ? 'मागे घ्या (Unpublish)' : 'प्रकाशित करा (Publish)'}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -1108,7 +1297,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                 : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
                             }`}
                           >
-                            {s.status.toUpperCase()}
+                            {(s.status || 'pending').toUpperCase()}
                           </span>
                         </td>
                         <td className="p-3.5 text-right">
@@ -1206,7 +1395,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         </td>
                         <td className="p-3.5">
                           <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                            {ord.paymentStatus.toUpperCase()}
+                            {(ord.paymentStatus || 'captured').toUpperCase()}
                           </span>
                         </td>
                       </tr>
@@ -1306,6 +1495,417 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
           )}
 
+          {/* TAB: VERIFIED TICKETS LIST */}
+          {activeTab === 'verified_tickets' && (
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-xl sm:text-2xl font-extrabold text-white font-serif">
+                    सत्यापित व जारी तिकिटे (Tickets & QR Verification List)
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    सर्व जारी तिकिटांची स्थिती, आसन क्रमांक, स्कॅनिंग वेळ व गेट तपशील
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={fetchTickets}
+                    disabled={loadingTickets}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-300 hover:text-white transition"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${loadingTickets ? 'animate-spin' : ''}`} />
+                    <span>रिफ्रेश</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Filters and Search Bar */}
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-3">
+                <div className="relative w-full md:w-80">
+                  <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="नाव, तिकीट कोड किंवा फोन शोधा..."
+                    value={ticketSearchQuery}
+                    onChange={(e) => setTicketSearchQuery(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  />
+                </div>
+
+                <div className="flex items-center gap-1.5 w-full md:w-auto overflow-x-auto">
+                  <button
+                    onClick={() => setTicketStatusFilter('all')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap ${
+                      ticketStatusFilter === 'all'
+                        ? 'bg-amber-500 text-slate-950 shadow-sm'
+                        : 'bg-slate-800 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    सर्व तिकिटे ({ticketsList.length})
+                  </button>
+
+                  <button
+                    onClick={() => setTicketStatusFilter('used')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap ${
+                      ticketStatusFilter === 'used'
+                        ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                        : 'bg-slate-800 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    सत्यापित / वापरलेली ({ticketsList.filter((t) => t.status === 'used').length})
+                  </button>
+
+                  <button
+                    onClick={() => setTicketStatusFilter('issued')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap ${
+                      ticketStatusFilter === 'issued'
+                        ? 'bg-sky-500 text-slate-950 shadow-sm'
+                        : 'bg-slate-800 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    प्रलंबित / जारी ({ticketsList.filter((t) => t.status === 'issued').length})
+                  </button>
+                </div>
+              </div>
+
+              {/* Tickets Table */}
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-800 bg-slate-950/60 text-slate-400 font-bold uppercase tracking-wider text-[11px]">
+                        <th className="p-3.5">प्रेक्षक / ग्राहक</th>
+                        <th className="p-3.5">तिकीट कोड व आसन</th>
+                        <th className="p-3.5">कार्यक्रम व शहर</th>
+                        <th className="p-3.5">किंमत</th>
+                        <th className="p-3.5">स्थिती</th>
+                        <th className="p-3.5">स्कॅन वेळ व गेट</th>
+                        <th className="p-3.5 text-right">कृती</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {ticketsList
+                        .filter((tk) => {
+                          if (!ticketSearchQuery.trim()) return true;
+                          const q = ticketSearchQuery.toLowerCase();
+                          return (
+                            (tk.attendeeName || '').toLowerCase().includes(q) ||
+                            (tk.ticketCode || '').toLowerCase().includes(q) ||
+                            (tk.seatCode || '').toLowerCase().includes(q) ||
+                            (tk.userPhone || '').toLowerCase().includes(q) ||
+                            (tk.eventTitleMr || '').toLowerCase().includes(q) ||
+                            (tk.orderNumber || '').toLowerCase().includes(q)
+                          );
+                        })
+                        .map((tk) => (
+                          <tr key={tk.id} className="hover:bg-slate-850/80 transition">
+                            <td className="p-3.5">
+                              <div className="font-bold text-white text-sm">
+                                {tk.attendeeName || 'ग्राहक'}
+                              </div>
+                              <div className="text-[11px] text-slate-400 font-mono">
+                                {tk.userPhone || tk.userEmail || 'संपर्क उपलब्ध नाही'}
+                              </div>
+                              <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                                Order: {tk.orderNumber}
+                              </div>
+                            </td>
+
+                            <td className="p-3.5">
+                              <div className="font-mono font-bold text-amber-400">
+                                {tk.ticketCode}
+                              </div>
+                              <span className="inline-block mt-1 px-2 py-0.5 bg-slate-800 border border-slate-700 rounded text-[11px] text-emerald-300 font-mono font-semibold">
+                                आसन: {tk.seatCode || 'सामान्य (General)'}
+                              </span>
+                            </td>
+
+                            <td className="p-3.5 text-slate-300">
+                              <div className="font-semibold text-white">
+                                {tk.eventTitleMr || tk.eventTitle}
+                              </div>
+                              <div className="text-[11px] text-slate-400">
+                                {tk.venueName}, {tk.city}
+                              </div>
+                            </td>
+
+                            <td className="p-3.5 font-mono font-bold text-white">
+                              ₹{((tk.price || 0) / 100).toFixed(0)}
+                            </td>
+
+                            <td className="p-3.5">
+                              <span
+                                className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase border ${
+                                  tk.status === 'used'
+                                    ? 'bg-emerald-950/60 text-emerald-400 border-emerald-500/40'
+                                    : tk.status === 'cancelled'
+                                    ? 'bg-rose-950/60 text-rose-400 border-rose-500/40'
+                                    : 'bg-sky-950/60 text-sky-400 border-sky-500/40'
+                                }`}
+                              >
+                                {tk.status === 'used'
+                                  ? 'सत्यापित (USED)'
+                                  : tk.status === 'cancelled'
+                                  ? 'रद्द (CANCELLED)'
+                                  : 'जारी (ISSUED)'}
+                              </span>
+                            </td>
+
+                            <td className="p-3.5 text-slate-400">
+                              {tk.scannedAt ? (
+                                <div className="space-y-0.5">
+                                  <div className="font-mono text-emerald-400 text-[11px]">
+                                    {new Date(tk.scannedAt).toLocaleTimeString()}
+                                  </div>
+                                  <div className="text-[10px] text-slate-500">
+                                    {tk.gateName || 'Main Gate'}
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-[11px] text-slate-500 italic">
+                                  स्कॅन प्रलंबित
+                                </span>
+                              )}
+                            </td>
+
+                            <td className="p-3.5 text-right">
+                              {tk.status === 'used' ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400 font-bold">
+                                  <Check className="w-3.5 h-3.5" />
+                                  <span>प्रवेशित</span>
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => handleManualVerifyTicket(tk)}
+                                  disabled={verifyingTicketId === tk.id}
+                                  className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-bold text-xs transition"
+                                >
+                                  {verifyingTicketId === tk.id ? '...' : 'पडताळा (Verify)'}
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+
+                      {ticketsList.length === 0 && !loadingTickets && (
+                        <tr>
+                          <td colSpan={7} className="p-8 text-center text-slate-400">
+                            कोणतेही तिकीट सापडले नाही.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: SCREEN & SEAT STATUS */}
+          {activeTab === 'screen_status' && (
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-xl sm:text-2xl font-extrabold text-white font-serif">
+                    स्क्रीन व आसन बुकिंग स्थिती (Live Screen & Seat Layout)
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    नाट्यगृह किंवा सभागृहामधील बुक झालेली, उपलब्ध आणि राखीव आसने थेट तपासा
+                  </p>
+                </div>
+
+                {selectedSessionIdForSeats && (
+                  <button
+                    onClick={() => fetchSeatMap(selectedSessionIdForSeats)}
+                    disabled={loadingSeatMap}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-300 hover:text-white transition"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${loadingSeatMap ? 'animate-spin' : ''}`} />
+                    <span>रिफ्रेश लेआउट</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Event & Session Selectors */}
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                      कार्यक्रम निवडा (Select Event):
+                    </label>
+                    <select
+                      value={selectedEventIdForSeats || ''}
+                      onChange={(e) => {
+                        const evId = Number(e.target.value);
+                        setSelectedEventIdForSeats(evId);
+                        setSelectedSessionIdForSeats(null);
+                        setSeatMapData(null);
+                      }}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer"
+                    >
+                      <option value="">-- कार्यक्रम निवडा --</option>
+                      {adminEvents.map((ev) => (
+                        <option key={ev.id} value={ev.id}>
+                          {ev.titleMr || ev.title} ({ev.venue?.nameMr || ev.venue?.name || 'नाट्यगृह'})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                      शो / सत्र वेळ निवडा (Select Session / Showtime):
+                    </label>
+                    {selectedEventIdForSeats ? (
+                      <button
+                        onClick={() => {
+                          const sessId = selectedEventIdForSeats;
+                          setSelectedSessionIdForSeats(sessId);
+                          fetchSeatMap(sessId);
+                        }}
+                        className="w-full py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition flex items-center justify-center gap-2"
+                      >
+                        <Eye className="w-4 h-4" />
+                        <span>थेट आसन मांडणी पहा (Load Seat Map)</span>
+                      </button>
+                    ) : (
+                      <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-500 italic text-center">
+                        आधी कार्यक्रम निवडा
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Seat Map Display */}
+              {loadingSeatMap && (
+                <div className="p-12 text-center bg-slate-900 border border-slate-800 rounded-3xl">
+                  <div className="w-10 h-10 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+                  <p className="text-xs text-slate-400">आसन व्यवस्थापन लोड होत आहे...</p>
+                </div>
+              )}
+
+              {seatMapData && !loadingSeatMap && (
+                <div className="space-y-6">
+                  {/* Real-time KPIs Bar */}
+                  {(() => {
+                    const allSeats = seatMapData.seats || [];
+                    const totalSeats = allSeats.length;
+                    const bookedSeats = allSeats.filter((s: any) => s.status === 'booked').length;
+                    const heldSeats = allSeats.filter((s: any) => s.status === 'held').length;
+                    const availableSeats = allSeats.filter((s: any) => s.status === 'available').length;
+                    const occupancy =
+                      totalSeats > 0 ? ((bookedSeats / totalSeats) * 100).toFixed(0) : '0';
+
+                    return (
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                        <div className="p-3.5 bg-slate-900 border border-slate-800 rounded-2xl text-center">
+                          <span className="text-[10px] text-slate-400 font-bold">एकूण क्षमता</span>
+                          <div className="text-xl font-extrabold text-white mt-0.5">{totalSeats}</div>
+                        </div>
+
+                        <div className="p-3.5 bg-rose-950/30 border border-rose-500/40 rounded-2xl text-center">
+                          <span className="text-[10px] text-rose-300 font-bold">🔴 बुक झालेली</span>
+                          <div className="text-xl font-extrabold text-rose-400 mt-0.5">{bookedSeats}</div>
+                        </div>
+
+                        <div className="p-3.5 bg-emerald-950/30 border border-emerald-500/40 rounded-2xl text-center">
+                          <span className="text-[10px] text-emerald-300 font-bold">🟢 उपलब्ध</span>
+                          <div className="text-xl font-extrabold text-emerald-400 mt-0.5">
+                            {availableSeats}
+                          </div>
+                        </div>
+
+                        <div className="p-3.5 bg-amber-950/30 border border-amber-500/40 rounded-2xl text-center">
+                          <span className="text-[10px] text-amber-300 font-bold">🟡 राखीव / होल्ड</span>
+                          <div className="text-xl font-extrabold text-amber-400 mt-0.5">{heldSeats}</div>
+                        </div>
+
+                        <div className="p-3.5 bg-sky-950/30 border border-sky-500/40 rounded-2xl text-center col-span-2 sm:col-span-1">
+                          <span className="text-[10px] text-sky-300 font-bold">भरती टक्केवारी</span>
+                          <div className="text-xl font-extrabold text-sky-400 mt-0.5">{occupancy}%</div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Stage / Screen Indicator */}
+                  <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div className="max-w-md mx-auto">
+                      <div className="h-3 w-full bg-gradient-to-r from-amber-500/20 via-amber-500 to-amber-500/20 rounded-t-full shadow-lg shadow-amber-500/20"></div>
+                      <p className="text-center text-[10px] tracking-widest text-slate-400 uppercase font-bold mt-1">
+                        रंगमंच / पडदा (STAGE / SCREEN)
+                      </p>
+                    </div>
+
+                    {/* Legend */}
+                    <div className="flex flex-wrap items-center justify-center gap-4 text-xs pt-2 border-t border-slate-800">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-3.5 h-3.5 rounded bg-emerald-500 shadow-sm"></span>
+                        <span className="text-slate-300">उपलब्ध (Available)</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-3.5 h-3.5 rounded bg-rose-500 shadow-sm"></span>
+                        <span className="text-slate-300">बुक केलेले (Booked)</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-3.5 h-3.5 rounded bg-amber-500 shadow-sm"></span>
+                        <span className="text-slate-300">राखीव (Held)</span>
+                      </div>
+                    </div>
+
+                    {/* Seat Grid */}
+                    <div className="space-y-6 pt-4">
+                      {['balcony', 'stall'].map((tierName) => {
+                        const tierSeats = (seatMapData.seats || []).filter(
+                          (s: any) => (s.tier || '').toLowerCase() === tierName
+                        );
+
+                        if (tierSeats.length === 0) return null;
+
+                        return (
+                          <div key={tierName} className="space-y-3">
+                            <h4 className="text-xs font-black uppercase tracking-wider text-amber-400 border-b border-slate-800 pb-1">
+                              {tierName === 'balcony'
+                                ? 'बालकनी (Balcony)'
+                                : 'स्टॉल / प्रथम श्रेणी (Stall)'}
+                            </h4>
+
+                            <div className="flex flex-wrap gap-2 justify-center max-h-96 overflow-y-auto p-2">
+                              {tierSeats.map((s: any) => {
+                                const isBooked = s.status === 'booked';
+                                const isHeld = s.status === 'held';
+
+                                return (
+                                  <div
+                                    key={s.seatId || s.seatCode}
+                                    title={`${s.seatCode} • ${(s.status || '').toUpperCase()} • ₹${
+                                      (s.price || 0) / 100
+                                    }`}
+                                    className={`w-9 h-8 rounded-lg flex items-center justify-center text-[10px] font-mono font-bold transition shadow-sm cursor-default ${
+                                      isBooked
+                                        ? 'bg-rose-600/90 text-white'
+                                        : isHeld
+                                        ? 'bg-amber-500/90 text-slate-950 font-black'
+                                        : 'bg-emerald-600/90 text-white'
+                                    }`}
+                                  >
+                                    {s.seatCode ? s.seatCode.split('-').pop() : s.seatNumber}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* TAB 7: PARTNER LEADS */}
           {activeTab === 'leads' && (
             <div className="space-y-6">
@@ -1336,7 +1936,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     <div className="space-y-1.5 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                          {l.category.toUpperCase()}
+                          {(l.category || 'other').toUpperCase()}
                         </span>
                         <span className="text-xs font-bold text-white">{l.eventName}</span>
                         <span
@@ -1348,7 +1948,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                               : 'bg-slate-700 text-slate-300'
                           }`}
                         >
-                          {l.status.toUpperCase()}
+                          {(l.status || 'new').toUpperCase()}
                         </span>
                       </div>
 
@@ -1928,6 +2528,52 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-slate-400 block text-xs">पोस्टर इमेज URL (Poster):</label>
+                    <span className="text-[10px] text-amber-400 font-bold">📐 600 × 900 px (2:3)</span>
+                  </div>
+                  <input
+                    type="url"
+                    value={newEventForm.posterUrl}
+                    onChange={(e) => setNewEventForm({ ...newEventForm, posterUrl: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white text-xs"
+                    placeholder="https://..."
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-slate-400 block text-xs">हिरो बॅनर इमेज URL (Banner):</label>
+                    <span className="text-[10px] text-amber-400 font-bold">📐 1240 × 380 px (3.25:1)</span>
+                  </div>
+                  <input
+                    type="url"
+                    value={newEventForm.bannerUrl}
+                    onChange={(e) => setNewEventForm({ ...newEventForm, bannerUrl: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white text-xs"
+                    placeholder="https://..."
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-slate-400 block mb-1 text-xs">
+                  यूट्यूब ट्रेलर / व्हिडिओ URL (YouTube Trailer Link - ऐच्छिक):
+                </label>
+                <input
+                  type="url"
+                  value={newEventForm.videoUrl}
+                  onChange={(e) => setNewEventForm({ ...newEventForm, videoUrl: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white text-xs"
+                  placeholder="https://www.youtube.com/watch?v=... किंवा https://youtu.be/..."
+                />
+                <p className="text-[10px] text-slate-500 mt-1">
+                  💡 बुकमायशोप्रमाणे कार्यक्रमाच्या पानावर 'ट्रेलर पहा' बटणाद्वारे हा व्हिडिओ थेट दिसेल.
+                </p>
+              </div>
+
               <div>
                 <label className="text-slate-400 block mb-1">मराठी वर्णन (Description):</label>
                 <textarea
@@ -2114,9 +2760,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               </div>
 
               <div>
-                <label className="text-slate-300 font-bold block mb-1">
-                  इमेज URL (Poster / Banner Image Link):
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-slate-300 font-bold block text-xs">
+                    इमेज URL (Poster / Banner Image Link):
+                  </label>
+                  <span className="text-[10px] text-amber-400 font-bold">
+                    {newAnnouncementForm.category === 'hero_banner'
+                      ? '📐 शिफारस आकार: 1240 × 380 px (3.25:1)'
+                      : newAnnouncementForm.category === 'mid_banner'
+                      ? '📐 शिफारस आकार: 1200 × 200 px (6:1)'
+                      : '📐 शिफारस आकार: 600 × 900 px (2:3)'}
+                  </span>
+                </div>
                 <input
                   type="url"
                   placeholder="https://images.example.com/banner.jpg"
@@ -2124,8 +2779,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   onChange={(e) =>
                     setNewAnnouncementForm({ ...newAnnouncementForm, imageUrl: e.target.value })
                   }
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white text-xs"
                 />
+                <p className="text-[10px] text-slate-500 mt-1">
+                  💡 वरील निश्चित आकाराची इमेज दिल्यास फ्रंटएंड हिरो सेक्शनवर इमेज परिपूर्ण (Full Visible) दिसेल, कोणतेही क्रॉपिंग होणार नाही.
+                </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

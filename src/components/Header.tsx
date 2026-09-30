@@ -20,16 +20,16 @@ import {
   TrendingUp,
 } from 'lucide-react';
 
-interface HeaderProps {
-  language: Language;
-  onLanguageChange: (lang: Language) => void;
-  selectedCity: string;
-  onCityChange: (city: string) => void;
-  searchQuery: string;
-  onSearchChange: (q: string) => void;
-  onOpenMyTickets: () => void;
-  onOpenPartnerModal: () => void;
-  onHomeClick: () => void;
+export interface HeaderProps {
+  language?: Language;
+  onLanguageChange?: (lang: Language) => void;
+  selectedCity?: string;
+  onCityChange?: (city: string) => void;
+  searchQuery?: string;
+  onSearchChange?: (q: string) => void;
+  onOpenMyTickets?: () => void;
+  onOpenPartnerModal?: () => void;
+  onHomeClick?: () => void;
   onCategorySelect?: (cat: string) => void;
   availableCities?: string[];
 }
@@ -87,11 +87,11 @@ const getCityFromApiName = (cityName: string): string | null => {
 };
 
 export const Header: React.FC<HeaderProps> = ({
-  language,
+  language: propLanguage,
   onLanguageChange,
-  selectedCity,
+  selectedCity: propSelectedCity,
   onCityChange,
-  searchQuery,
+  searchQuery: propSearchQuery,
   onSearchChange,
   onOpenMyTickets,
   onOpenPartnerModal,
@@ -99,6 +99,66 @@ export const Header: React.FC<HeaderProps> = ({
   onCategorySelect,
   availableCities,
 }) => {
+  const [internalLanguage, setInternalLanguage] = useState<Language>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('mahaticket_lang');
+      if (saved === 'en' || saved === 'mr') return saved;
+    }
+    return 'mr';
+  });
+  const language = propLanguage || internalLanguage;
+  const handleLanguageChange = (lang: Language) => {
+    if (onLanguageChange) {
+      onLanguageChange(lang);
+    } else {
+      setInternalLanguage(lang);
+      if (typeof window !== 'undefined') localStorage.setItem('mahaticket_lang', lang);
+    }
+  };
+
+  const [internalCity, setInternalCity] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(CITY_STORAGE_KEY);
+      if (saved) return saved;
+    }
+    return 'महाराष्ट्र (All)';
+  });
+  const selectedCity = propSelectedCity || internalCity;
+
+  const [internalSearch, setInternalSearch] = useState('');
+  const searchQuery = propSearchQuery !== undefined ? propSearchQuery : internalSearch;
+  const handleSearchChange = (q: string) => {
+    if (onSearchChange) {
+      onSearchChange(q);
+    } else {
+      setInternalSearch(q);
+    }
+  };
+
+  const handleHomeClickAction = () => {
+    if (onHomeClick) {
+      onHomeClick();
+    } else if (typeof window !== 'undefined') {
+      window.location.href = '/';
+    }
+  };
+
+  const handleOpenMyTickets = () => {
+    if (onOpenMyTickets) {
+      onOpenMyTickets();
+    } else if (typeof window !== 'undefined') {
+      window.location.href = '/profile';
+    }
+  };
+
+  const handleOpenPartnerModal = () => {
+    if (onOpenPartnerModal) {
+      onOpenPartnerModal();
+    } else if (typeof window !== 'undefined') {
+      window.location.href = '/contact';
+    }
+  };
+
   const t = translations[language];
   const { isInstallable, install } = usePWAInstall();
 
@@ -199,6 +259,22 @@ export const Header: React.FC<HeaderProps> = ({
     checkUserSession();
   }, []);
 
+  const handleCityChange = (city: string) => {
+    if (onCityChange) {
+      onCityChange(city);
+    } else {
+      setInternalCity(city);
+    }
+
+    if (typeof window !== 'undefined') {
+      if (city === 'महाराष्ट्र (All)') {
+        localStorage.removeItem(CITY_STORAGE_KEY);
+      } else {
+        localStorage.setItem(CITY_STORAGE_KEY, city);
+      }
+    }
+  };
+
   /*
    * ---------------------------------------------------------
    * LIVE CITY DETECTION
@@ -231,7 +307,7 @@ export const Header: React.FC<HeaderProps> = ({
         cityList.includes(savedCity)
       ) {
         if (!cancelled && savedCity !== selectedCity) {
-          onCityChange(savedCity);
+          handleCityChange(savedCity);
         }
         return;
       }
@@ -261,7 +337,7 @@ export const Header: React.FC<HeaderProps> = ({
         const detected = getCityFromApiName(String(geo.city || ''));
 
         if (detected && cityList.includes(detected)) {
-          onCityChange(detected);
+          handleCityChange(detected);
           localStorage.setItem(CITY_STORAGE_KEY, detected);
           setCityDetectedLive(true);
 
@@ -285,22 +361,7 @@ export const Header: React.FC<HeaderProps> = ({
     };
   }, [cityList, onCityChange, selectedCity]);
 
-  /*
-   * ---------------------------------------------------------
-   * Manual city selection
-   * ---------------------------------------------------------
-   */
-  const handleCityChange = (city: string) => {
-    onCityChange(city);
 
-    if (typeof window !== 'undefined') {
-      if (city === 'महाराष्ट्र (All)') {
-        localStorage.removeItem(CITY_STORAGE_KEY);
-      } else {
-        localStorage.setItem(CITY_STORAGE_KEY, city);
-      }
-    }
-  };
 
   /*
    * ---------------------------------------------------------
@@ -309,7 +370,7 @@ export const Header: React.FC<HeaderProps> = ({
    * 250ms debounce
    * Abort previous request
    * No-store API request
-   * Results update while typing
+   * Results update while typing across all cities & categories
    * ---------------------------------------------------------
    */
   useEffect(() => {
@@ -341,11 +402,7 @@ export const Header: React.FC<HeaderProps> = ({
         const params = new URLSearchParams();
 
         params.set('search', query);
-        params.set('limit', '6');
-
-        if (selectedCity && selectedCity !== 'महाराष्ट्र (All)') {
-          params.set('city', selectedCity);
-        }
+        params.set('limit', '8');
 
         const res = await fetch(`/api/events?${params.toString()}`, {
           method: 'GET',
@@ -360,7 +417,7 @@ export const Header: React.FC<HeaderProps> = ({
         const data = await res.json();
 
         setLiveResults(
-          Array.isArray(data.events) ? data.events.slice(0, 6) : [],
+          Array.isArray(data.events) ? data.events.slice(0, 8) : [],
         );
       } catch (error: any) {
         if (error?.name !== 'AbortError') {
@@ -384,7 +441,7 @@ export const Header: React.FC<HeaderProps> = ({
         searchAbortRef.current = null;
       }
     };
-  }, [searchQuery, selectedCity]);
+  }, [searchQuery]);
 
   /*
    * ---------------------------------------------------------
@@ -420,7 +477,7 @@ export const Header: React.FC<HeaderProps> = ({
     event: React.KeyboardEvent<HTMLInputElement>,
   ) => {
     if (event.key === 'Escape') {
-      onSearchChange('');
+      handleSearchChange('');
       setLiveResults([]);
       setSearchFocused(false);
       return;
@@ -469,7 +526,7 @@ export const Header: React.FC<HeaderProps> = ({
       return;
     }
 
-    onOpenMyTickets();
+    handleOpenMyTickets();
   };
 
   const handleProfileClick = () => {
@@ -495,7 +552,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   const handleSearchResultClick = (event: any) => {
     setSearchFocused(false);
-    onSearchChange('');
+    handleSearchChange('');
     setLiveResults([]);
 
     if (typeof window !== 'undefined') {
@@ -520,7 +577,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* BRAND */}
           <button
             type="button"
-            onClick={onHomeClick}
+            onClick={handleHomeClickAction}
             className="flex shrink-0 items-center gap-2 text-left"
             aria-label="MahaTicket Home"
           >
@@ -577,7 +634,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* LIVE SEARCH */}
           <div
             ref={searchRef}
-            className="relative min-w-0 flex-1"
+            className="relative min-w-0 flex-1 max-w-md lg:max-w-lg mx-auto"
           >
             <div className="relative">
 
@@ -586,17 +643,17 @@ export const Header: React.FC<HeaderProps> = ({
               <input
                 type="search"
                 value={searchQuery}
-                onChange={(event) => onSearchChange(event.target.value)}
+                onChange={(event) => handleSearchChange(event.target.value)}
                 onFocus={() => setSearchFocused(true)}
                 onKeyDown={handleSearchKeyDown}
                 placeholder={
                   language === 'mr'
-                    ? 'नाटक, संगीत, कार्यक्रम शोधा...'
-                    : 'Search plays, music, events...'
+                    ? 'नाटक, संगीत, शहर, कार्यक्रम शोधा...'
+                    : 'Search plays, music, cities, events...'
                 }
                 autoComplete="off"
                 spellCheck={false}
-                className="w-full rounded-xl border-2 border-slate-200 bg-slate-50 py-2.5 pl-10 pr-10 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#ea580c] focus:bg-white"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-10 pr-10 text-xs sm:text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#ea580c] focus:ring-2 focus:ring-orange-500/20 focus:bg-white shadow-xs"
                 aria-label="Search events"
               />
 
@@ -611,7 +668,7 @@ export const Header: React.FC<HeaderProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    onSearchChange('');
+                    handleSearchChange('');
                     setLiveResults([]);
                     setSearchFocused(false);
                   }}
@@ -737,7 +794,7 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <button
                 type="button"
-                onClick={() => onLanguageChange('en')}
+                onClick={() => handleLanguageChange('en')}
                 className={`min-w-[34px] rounded-lg px-2 py-1.5 text-[11px] font-black transition-all ${language === 'en'
                   ? 'bg-[#ea580c] text-white shadow-sm'
                   : 'text-slate-500 hover:bg-white hover:text-slate-800'
@@ -749,7 +806,7 @@ export const Header: React.FC<HeaderProps> = ({
 
               <button
                 type="button"
-                onClick={() => onLanguageChange('mr')}
+                onClick={() => handleLanguageChange('mr')}
                 className={`min-w-[34px] rounded-lg px-2 py-1.5 text-[11px] font-black transition-all ${language === 'mr'
                   ? 'bg-[#ea580c] text-white shadow-sm'
                   : 'text-slate-500 hover:bg-white hover:text-slate-800'
@@ -901,7 +958,7 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="flex shrink-0 items-center rounded-xl border border-slate-200 bg-slate-50 p-0.5">
             <button
               type="button"
-              onClick={() => onLanguageChange('en')}
+              onClick={() => handleLanguageChange('en')}
               className={`rounded-lg px-2.5 py-1.5 text-[10px] font-black transition ${language === 'en'
                 ? 'bg-[#ea580c] text-white shadow-sm'
                 : 'text-slate-500'
@@ -913,7 +970,7 @@ export const Header: React.FC<HeaderProps> = ({
 
             <button
               type="button"
-              onClick={() => onLanguageChange('mr')}
+              onClick={() => handleLanguageChange('mr')}
               className={`rounded-lg px-2.5 py-1.5 text-[10px] font-black transition ${language === 'mr'
                 ? 'bg-[#ea580c] text-white shadow-sm'
                 : 'text-slate-500'
@@ -991,7 +1048,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={() => {
-                onOpenPartnerModal();
+                handleOpenPartnerModal();
                 setMobileMenuOpen(false);
               }}
               className="flex w-full items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-bold text-slate-800"
@@ -1051,7 +1108,7 @@ export const Header: React.FC<HeaderProps> = ({
         onSuccess={() => {
           setAuthModalOpen(false);
           checkUserSession();
-          onOpenMyTickets();
+          handleOpenMyTickets();
         }}
       />
     </header>

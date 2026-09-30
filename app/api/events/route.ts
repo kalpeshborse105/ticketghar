@@ -44,7 +44,7 @@ export async function GET(request: Request) {
       );
     }
 
-    // Filter by text search if present
+    // Filter by text search if present (title, marathi title, venue, city, category, description)
     if (search && search.trim()) {
       const q = search.toLowerCase().trim();
       filtered = filtered.filter(
@@ -53,7 +53,11 @@ export async function GET(request: Request) {
           item.event.titleMr.toLowerCase().includes(q) ||
           item.venue.name.toLowerCase().includes(q) ||
           item.venue.nameMr.toLowerCase().includes(q) ||
-          item.event.category.toLowerCase().includes(q)
+          (item.venue.city && item.venue.city.toLowerCase().includes(q)) ||
+          item.event.category.toLowerCase().includes(q) ||
+          (item.event.categoryMr && item.event.categoryMr.toLowerCase().includes(q)) ||
+          (item.event.description && item.event.description.toLowerCase().includes(q)) ||
+          (item.event.descriptionMr && item.event.descriptionMr.toLowerCase().includes(q))
       );
     }
 

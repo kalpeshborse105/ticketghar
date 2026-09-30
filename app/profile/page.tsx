@@ -3,6 +3,8 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Header } from '@/src/components/Header';
+import { MTTicketLoader } from '@/src/components/ui/MTSkeleton';
 import {
   User,
   Mail,
@@ -112,11 +114,11 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-center space-y-3">
-          <Loader2 className="w-10 h-10 text-[#ea580c] animate-spin mx-auto" />
-          <p className="text-xs font-bold text-slate-700">आपले खाते लोड होत आहे...</p>
-        </div>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <MTTicketLoader
+          message="आपले खाते लोड होत आहे..."
+          submessage="महाटिकिट अधिकृत पोर्टल"
+        />
       </div>
     );
   }
@@ -126,12 +128,13 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 py-8 px-4 text-slate-900 pb-20">
-      <div className="max-w-3xl mx-auto space-y-6">
+    <div className="min-h-screen bg-slate-50 text-slate-900 pb-20">
+      <Header />
+      <div className="max-w-3xl mx-auto px-4 py-6 space-y-5">
         {/* Back Button */}
         <button
           onClick={() => router.push('/')}
-          className="flex items-center gap-2 text-xs font-bold text-slate-700 hover:text-[#ea580c] transition"
+          className="flex items-center gap-2 text-xs font-bold text-slate-700 hover:text-[#ea580c] transition cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>मुख्य पृष्ठावर परत जा (Back to Home)</span>

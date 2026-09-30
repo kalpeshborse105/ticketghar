@@ -34,6 +34,7 @@ import {
   Tag,
   ShieldCheck,
   MapPin,
+  Ticket,
 } from 'lucide-react';
 
 
@@ -417,43 +418,14 @@ export default function HomePage() {
           </div>
         ) : (
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-5 space-y-5">
-            {/* Top Hero Banner */}
+            {/* Top Hero Banner — BookMyShow / Ticketalay Multi-Slide Carousel */}
             {!searchQuery && selectedCategory === 'all' && priceRange === 2000 && selectedDate === 'all' && !customDate && (
               <HeroBanner
                 events={events}
+                announcements={announcements}
                 language={language}
                 onSelectEvent={handleSelectEvent}
               />
-            )}
-
-            {/* Active Announcements / Promotion Banners from Admin */}
-            {announcements.length > 0 && (
-              <div className="space-y-2.5">
-                {announcements.map((a) => (
-                  <div
-                    key={a.id}
-                    className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-orange-600 via-amber-600 to-orange-500 text-white p-3.5 sm:p-4 shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
-                  >
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-white/20 text-white uppercase tracking-wider">
-                          {a.category === 'flash_sale' ? '⚡ महा ऑफर' : '📢 सूचना'}
-                        </span>
-                        <h4 className="text-xs sm:text-sm font-extrabold">{a.title}</h4>
-                      </div>
-                      <p className="text-xs text-orange-100 leading-relaxed">{a.message}</p>
-                    </div>
-                    {a.ctaUrl && (
-                      <a
-                        href={a.ctaUrl}
-                        className="shrink-0 px-4 py-2 rounded-xl bg-white text-orange-600 font-extrabold text-xs shadow-md hover:bg-orange-50 transition active:scale-95"
-                      >
-                        {a.ctaLabel || 'अधिक माहिती'}
-                      </a>
-                    )}
-                  </div>
-                ))}
-              </div>
             )}
 
             {/* BookMyShow Style City Excitement Showcase */}
@@ -467,9 +439,9 @@ export default function HomePage() {
                     <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 font-serif">
                       {selectedCity === 'महाराष्ट्र (All)' ? 'महाराष्ट्रातील लोकप्रिय नाटके व प्रयोग' : `${selectedCity} शहरातील विशेष नाटके व कार्यक्रम`}
                     </h3>
-                    <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200 uppercase">
+                    {/* <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200 uppercase">
                       Live
-                    </span>
+                    </span> */}
                   </div>
                   <p className="text-[11px] text-slate-500">
                     आपल्या जवळच्या नाट्यगृहातील आजचे व या आठवड्यातील प्रयोग
@@ -765,24 +737,7 @@ export default function HomePage() {
 
               <div className="flex items-center gap-3">
                 <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-red-600 shadow-lg shadow-orange-500/20">
-                  <svg
-                    viewBox="0 0 24 24"
-                    className="h-6 w-6 text-white"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  >
-                    <path
-                      d="M4 5h16v14H4z"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="m8 9 3 3-3 3M13 15h3"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
+                  <Ticket className="h-6 w-6 -rotate-12 text-white" />
                 </div>
 
                 <div>
@@ -957,93 +912,84 @@ export default function HomePage() {
         ===================================================== */}
           <div className="mt-10 border-y border-white/10 py-6">
 
-            <div className="mb-4 flex items-center justify-between">
-              <h4 className="text-xs font-black uppercase tracking-wider text-white">
-                Discover Experiences
-              </h4>
+            <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex flex-wrap gap-2">
+                {[
+                  {
+                    id: 'plays',
+                    label: '🎭 नाटक',
+                    bg: 'bg-orange-500/10',
+                    border: 'border-orange-500/20',
+                    text: 'text-orange-400',
+                  },
+                  {
+                    id: 'music',
+                    label: '🎵 संगीत',
+                    bg: 'bg-purple-500/10',
+                    border: 'border-purple-500/20',
+                    text: 'text-purple-400',
+                  },
+                  {
+                    id: 'comedy',
+                    label: '😂 कॉमेडी',
+                    bg: 'bg-yellow-500/10',
+                    border: 'border-yellow-500/20',
+                    text: 'text-yellow-400',
+                  },
+                  {
+                    id: 'cultural',
+                    label: '🎉 सांस्कृतिक',
+                    bg: 'bg-pink-500/10',
+                    border: 'border-pink-500/20',
+                    text: 'text-pink-400',
+                  },
+                  {
+                    id: 'movies',
+                    label: '🎬 चित्रपट',
+                    bg: 'bg-blue-500/10',
+                    border: 'border-blue-500/20',
+                    text: 'text-blue-400',
+                  },
+                  {
+                    id: 'sports',
+                    label: '🏆 क्रीडा',
+                    bg: 'bg-emerald-500/10',
+                    border: 'border-emerald-500/20',
+                    text: 'text-emerald-400',
+                  },
+                  {
+                    id: 'workshops',
+                    label: '🎨 कार्यशाळा',
+                    bg: 'bg-cyan-500/10',
+                    border: 'border-cyan-500/20',
+                    text: 'text-cyan-400',
+                  },
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      setViewState('home');
+                      setSelectedCategory(item.id as EventCategory);
+                    }}
+                    className={`rounded-full border ${item.border} ${item.bg} ${item.text} px-3.5 py-2 text-[11px] font-bold transition-all hover:-translate-y-0.5 hover:bg-white/10 active:scale-95`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
 
-              <span className="text-[10px] font-medium text-slate-500">
-                Maharashtra
-              </span>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-
-              {[
-                {
-                  id: 'plays',
-                  label: '🎭 नाटक',
-                  bg: 'bg-orange-500/10',
-                  border: 'border-orange-500/20',
-                  text: 'text-orange-400',
-                },
-                {
-                  id: 'music',
-                  label: '🎵 संगीत',
-                  bg: 'bg-purple-500/10',
-                  border: 'border-purple-500/20',
-                  text: 'text-purple-400',
-                },
-                {
-                  id: 'comedy',
-                  label: '😂 कॉमेडी',
-                  bg: 'bg-yellow-500/10',
-                  border: 'border-yellow-500/20',
-                  text: 'text-yellow-400',
-                },
-                {
-                  id: 'cultural',
-                  label: '🎉 सांस्कृतिक',
-                  bg: 'bg-pink-500/10',
-                  border: 'border-pink-500/20',
-                  text: 'text-pink-400',
-                },
-                {
-                  id: 'movies',
-                  label: '🎬 चित्रपट',
-                  bg: 'bg-blue-500/10',
-                  border: 'border-blue-500/20',
-                  text: 'text-blue-400',
-                },
-                {
-                  id: 'sports',
-                  label: '🏆 क्रीडा',
-                  bg: 'bg-emerald-500/10',
-                  border: 'border-emerald-500/20',
-                  text: 'text-emerald-400',
-                },
-                {
-                  id: 'workshops',
-                  label: '🎨 कार्यशाळा',
-                  bg: 'bg-cyan-500/10',
-                  border: 'border-cyan-500/20',
-                  text: 'text-cyan-400',
-                },
-              ].map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    setViewState('home');
-                    setSelectedCategory(item.id as EventCategory);
-                  }}
-                  className={`rounded-full border ${item.border} ${item.bg} ${item.text} px-3.5 py-2 text-[11px] font-bold transition-all hover:-translate-y-0.5 hover:bg-white/10 active:scale-95`}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[10px] text-slate-500">
-
-              <div>
+              <div className="text-left sm:text-right">
                 <p className="text-[11px] font-semibold text-slate-400">
                   © {new Date().getFullYear()} Kalpkrut Infotech Pvt. Ltd.
                 </p>
 
-                <p className="mt-1 text-[9px] text-slate-600">
+                <p className="mt-0.5 text-[9px] text-slate-500">
                   MahaTicket is a Maharashtra-focused events & ticketing platform.
                 </p>
               </div>
             </div>
+
+
           </div>
 
           {/* =====================================================

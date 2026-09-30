@@ -15,7 +15,11 @@ import {
   CheckCircle2,
   Navigation,
   Award,
+  Play,
+  X,
 } from 'lucide-react';
+import { Header } from '@/src/components/Header';
+import { MTTicketLoader } from '@/src/components/ui/MTSkeleton';
 import { SeatMapModal } from '@/src/components/SeatMapModal';
 import { CheckoutDrawer } from '@/src/components/CheckoutDrawer';
 import { TicketPassModal } from '@/src/components/TicketPassModal';
@@ -64,36 +68,13 @@ interface EventDetail {
   }>;
 }
 
-// Theater Mask Loader — inspired by happy/sad mask concept
-function TheaterLoader() {
-  return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-      <div className="text-center space-y-4 p-8">
-        <div className="relative w-24 h-24 mx-auto">
-          {/* Happy mask */}
-          <div className="absolute left-0 top-0 w-12 h-12 animate-bounce" style={{ animationDelay: '0ms' }}>
-            <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="24" cy="24" r="22" fill="#ea580c" stroke="#c2410c" strokeWidth="2"/>
-              <circle cx="17" cy="20" r="3" fill="white"/>
-              <circle cx="31" cy="20" r="3" fill="white"/>
-              <path d="M15 30 Q24 38 33 30" stroke="white" strokeWidth="2.5" strokeLinecap="round" fill="none"/>
-            </svg>
-          </div>
-          {/* Sad mask */}
-          <div className="absolute right-0 bottom-0 w-12 h-12 animate-bounce" style={{ animationDelay: '300ms' }}>
-            <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="24" cy="24" r="22" fill="#1e293b" stroke="#0f172a" strokeWidth="2"/>
-              <circle cx="17" cy="20" r="3" fill="white"/>
-              <circle cx="31" cy="20" r="3" fill="white"/>
-              <path d="M15 34 Q24 26 33 34" stroke="white" strokeWidth="2.5" strokeLinecap="round" fill="none"/>
-            </svg>
-          </div>
-        </div>
-        <p className="text-sm font-bold text-slate-700">कार्यक्रमाचा तपशील लोड होत आहे...</p>
-        <p className="text-xs text-slate-500">MahaTicket अधिकृत बुकिंग पोर्टल</p>
-      </div>
-    </div>
-  );
+function getYouTubeEmbedUrl(url: string): string | null {
+  if (!url) return null;
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+  const match = url.match(regExp);
+  return match && match[2].length === 11
+    ? `https://www.youtube.com/embed/${match[2]}?autoplay=1`
+    : url;
 }
 
 export default function EventDetailPage() {
@@ -113,6 +94,7 @@ export default function EventDetailPage() {
   const [checkoutHoldData, setCheckoutHoldData] = useState<any>(null);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [confirmedBooking, setConfirmedBooking] = useState<any>(null);
+  const [showVideoModal, setShowVideoModal] = useState(false);
 
   useEffect(() => {
     if (!eventId) return;
@@ -158,7 +140,16 @@ export default function EventDetailPage() {
     }
   };
 
-  if (loading) return <TheaterLoader />;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <MTTicketLoader
+          message="कार्यक्रमाचा तपशील लोड होत आहे..."
+          submessage="MahaTicket अधिकृत बुकिंग पोर्टल"
+        />
+      </div>
+    );
+  }
 
   if (error || !event) {
     return (
@@ -238,79 +229,129 @@ export default function EventDetailPage() {
       ? Math.min(...activeSessions.flatMap((s) => s.ticketTypes.map((t) => t.price / 100)))
       : 0;
 
+  // Extract YouTube / Video URL from event (supports videoUrl, trailerUrl, or castCrew JSON / description)
+  const rawVideo =
+    (event as any).videoUrl ||
+    (event as any).trailerUrl ||
+    (parsedDbCast as any)?.videoUrl ||
+    (typeof (event as any).castCrew === 'string' && (event as any).castCrew.includes('youtu')
+      ? (event as any).castCrew.match(/https?:\/\/[^\s",]+/)?.[0]
+      : null) ||
+    (event.description && event.description.includes('youtu')
+      ? event.description.match(/https?:\/\/[^\s",]+/)?.[0]
+      : null);
+
+  const videoEmbedUrl = rawVideo ? getYouTubeEmbedUrl(rawVideo) : null;
+
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 pb-28">
-      {/* Top Navbar */}
-      <header className="bg-white/90 backdrop-blur-md border-b border-slate-200 sticky top-0 z-40">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
+    <div className="min-h-screen bg-slate-50 text-slate-900 pb-24">
+      {/* Constant Header across all pages */}
+      <Header />
+
+      {/* Sub-bar: Breadcrumb & Share */}
+      <div className="bg-white/95 border-b border-slate-200">
+        <div className="max-w-6xl mx-auto px-4 py-2.5 flex items-center justify-between gap-4">
           <Link
             href="/"
-            className="flex items-center gap-2 text-xs font-bold text-slate-700 hover:text-[#ea580c] transition group"
+            className="flex items-center gap-1.5 text-xs font-bold text-slate-700 hover:text-[#ea580c] transition cursor-pointer"
           >
-            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-            <span className="hidden sm:inline">मुख्य पानावर परत जा</span>
-            <span className="sm:hidden">परत</span>
+            <ArrowLeft className="w-4 h-4" />
+            <span>मुख्य पृष्ठ</span>
+            <span className="text-slate-300">/</span>
+            <span className="text-slate-500 font-semibold truncate max-w-[180px] sm:max-w-sm">
+              {event.titleMr || event.title}
+            </span>
           </Link>
-          <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse inline-block" />
-            <span className="hidden sm:inline">थेट आरक्षण उपलब्ध</span>
+
+          <div className="flex items-center gap-2">
+            {videoEmbedUrl && (
+              <button
+                type="button"
+                onClick={() => setShowVideoModal(true)}
+                className="flex items-center gap-1 px-3 py-1 rounded-xl bg-orange-50 hover:bg-orange-100 text-[#ea580c] text-xs font-extrabold transition border border-orange-200 cursor-pointer"
+              >
+                <Play className="w-3.5 h-3.5 fill-[#ea580c]" />
+                <span className="hidden sm:inline">ट्रेलर पहा</span>
+              </button>
+            )}
+
+            <div className="hidden sm:flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>थेट आरक्षण उपलब्ध</span>
+            </div>
+
+            <button
+              onClick={handleShare}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-bold text-slate-700 transition cursor-pointer"
+              title="लिंक शेअर करा"
+            >
+              <Share2 className="w-3.5 h-3.5 text-[#ea580c]" />
+              <span>{copiedLink ? 'कॉपी झाली ✓' : 'शेअर'}</span>
+            </button>
           </div>
-          <button
-            onClick={handleShare}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-xs font-semibold text-slate-700 transition"
-            title="लिंक कॉपी करा"
-          >
-            <Share2 className="w-3.5 h-3.5 text-[#ea580c]" />
-            <span>{copiedLink ? 'कॉपी झाली ✓' : 'शेअर'}</span>
-          </button>
         </div>
-      </header>
+      </div>
 
       {/* Hero Section */}
       <section className="relative bg-slate-950 text-white overflow-hidden">
         <div
-          className="absolute inset-0 opacity-20 filter blur-3xl scale-110 pointer-events-none"
+          className="absolute inset-0 opacity-25 filter blur-3xl scale-110 pointer-events-none"
           style={{
             backgroundImage: `url(${event.bannerUrl || event.posterUrl})`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
           }}
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/80 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/85 to-transparent" />
 
-        <div className="relative max-w-6xl mx-auto px-4 py-8 sm:py-12">
-          <div className="flex flex-col md:flex-row gap-6 md:gap-10 items-center md:items-start">
+        <div className="relative max-w-6xl mx-auto px-4 py-6 sm:py-8">
+          <div className="flex flex-col md:flex-row gap-6 md:gap-8 items-center md:items-start">
             {/* Poster Card */}
-            <div className="relative shrink-0 w-48 sm:w-56 md:w-64 rounded-2xl overflow-hidden shadow-2xl border-2 border-white/10 group">
+            <div className="relative shrink-0 w-44 sm:w-52 rounded-2xl overflow-hidden shadow-2xl border-2 border-white/10 group cursor-pointer">
               {event.posterUrl ? (
                 <img
                   src={event.posterUrl}
                   alt={event.title}
-                  className="w-full h-72 sm:h-80 object-cover transition-transform duration-300 group-hover:scale-105"
+                  className="w-full h-64 sm:h-72 object-cover transition-transform duration-300 group-hover:scale-105"
                 />
               ) : (
-                <div className="w-full h-72 sm:h-80 bg-slate-800 flex items-center justify-center">
+                <div className="w-full h-64 sm:h-72 bg-slate-800 flex items-center justify-center">
                   <Ticket className="w-16 h-16 text-slate-600" />
                 </div>
               )}
-              <div className="absolute top-3 left-3 bg-[#ea580c] text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider shadow">
+              <div className="absolute top-2.5 left-2.5 bg-[#ea580c] text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider shadow">
                 {event.language || 'मराठी'}
               </div>
+
+              {videoEmbedUrl && (
+                <button
+                  type="button"
+                  onClick={() => setShowVideoModal(true)}
+                  className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 hover:bg-black/60 text-white transition-all cursor-pointer"
+                >
+                  <div className="w-12 h-12 rounded-full bg-[#ea580c] flex items-center justify-center text-white shadow-xl transition-transform hover:scale-110">
+                    <Play className="w-6 h-6 ml-0.5 fill-white" />
+                  </div>
+                  <span className="text-[11px] font-black mt-2 text-white bg-black/70 px-2.5 py-0.5 rounded-full backdrop-blur-xs">
+                    ट्रेलर पहा
+                  </span>
+                </button>
+              )}
             </div>
 
             {/* Event Info */}
-            <div className="flex-1 space-y-4 text-center md:text-left">
+            <div className="flex-1 space-y-3.5 text-center md:text-left">
               <div className="flex flex-wrap items-center justify-center md:justify-start gap-2">
-                <span className="px-3 py-1 rounded-full text-xs font-bold bg-[#ea580c]/20 text-orange-400 border border-orange-500/30">
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#ea580c]/20 text-orange-400 border border-orange-500/30">
                   {event.categoryMr || categoryLabel[event.category] || event.category}
                 </span>
                 {event.ageGuidance && (
-                  <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-white/10 text-slate-200 border border-white/10">
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-white/10 text-slate-200 border border-white/10">
                     प्रमाणपत्र: {event.ageGuidance}
                   </span>
                 )}
                 {event.durationMinutes && (
-                  <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-white/10 text-slate-200 border border-white/10 flex items-center gap-1">
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-white/10 text-slate-200 border border-white/10 flex items-center gap-1">
                     <Clock className="w-3 h-3 text-[#ea580c]" />
                     <span>{event.durationMinutes} मिनिटे</span>
                   </span>
@@ -318,20 +359,20 @@ export default function EventDetailPage() {
               </div>
 
               <div>
-                <h1 className="text-2xl sm:text-4xl lg:text-5xl font-extrabold text-white font-serif tracking-tight leading-tight">
+                <h1 className="text-2xl sm:text-4xl font-extrabold text-white font-serif tracking-tight leading-tight">
                   {event.titleMr || event.title}
                 </h1>
                 {event.titleMr && event.title !== event.titleMr && (
-                  <p className="text-base sm:text-lg text-slate-400 font-medium mt-1">{event.title}</p>
+                  <p className="text-sm sm:text-base text-slate-400 font-medium mt-1">{event.title}</p>
                 )}
               </div>
 
-              <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-md px-3.5 py-1.5 rounded-xl border border-white/15 text-xs text-slate-200">
-                <Ticket className="w-4 h-4 text-orange-400" />
+              <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-md px-3 py-1 rounded-xl border border-white/15 text-xs text-slate-200">
+                <Ticket className="w-3.5 h-3.5 text-orange-400" />
                 <span>MahaTicket अधिकृत तिकीट आरक्षण</span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 text-xs max-w-xl">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 text-xs max-w-xl">
                 <div className="flex items-center gap-2.5 bg-white/5 p-2.5 rounded-xl border border-white/10">
                   <MapPin className="w-4 h-4 text-[#ea580c] shrink-0" />
                   <div className="text-left">
@@ -348,19 +389,59 @@ export default function EventDetailPage() {
                 </div>
               </div>
 
-              <div className="pt-2">
+              <div className="pt-2 flex flex-wrap items-center justify-center md:justify-start gap-3">
                 <a
                   href="#sessions"
-                  className="inline-flex items-center gap-2 px-8 py-3.5 rounded-2xl bg-[#ea580c] hover:bg-[#c2410c] text-white font-extrabold text-sm shadow-xl shadow-orange-500/30 transition-all active:scale-95"
+                  className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-[#ea580c] hover:bg-[#c2410c] text-white font-extrabold text-xs sm:text-sm shadow-xl shadow-orange-500/30 transition-all active:scale-95 cursor-pointer"
                 >
                   <Ticket className="w-4 h-4" />
                   <span>शो व जागा निवडा{minSessionPrice > 0 ? ` — ₹${minSessionPrice} पासून` : ''}</span>
                 </a>
+
+                {videoEmbedUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setShowVideoModal(true)}
+                    className="inline-flex items-center gap-1.5 px-5 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-extrabold text-xs sm:text-sm border border-white/20 backdrop-blur-xs transition active:scale-95 cursor-pointer"
+                  >
+                    <Play className="w-4 h-4 text-orange-400 fill-orange-400" />
+                    <span>ट्रेलर पहा</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>
         </div>
       </section>
+
+      {/* Video Trailer Modal */}
+      {showVideoModal && videoEmbedUrl && (
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="relative w-full max-w-4xl bg-slate-900 rounded-3xl overflow-hidden border border-slate-700 shadow-2xl">
+            <div className="flex items-center justify-between p-3.5 border-b border-slate-800 text-white">
+              <div className="flex items-center gap-2">
+                <Play className="w-4 h-4 text-[#ea580c]" />
+                <h3 className="text-xs sm:text-sm font-bold truncate">{event.titleMr || event.title} — अधिकृत ट्रेलर</h3>
+              </div>
+              <button
+                onClick={() => setShowVideoModal(false)}
+                className="p-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="relative aspect-video w-full bg-black">
+              <iframe
+                src={videoEmbedUrl}
+                title="Event Trailer"
+                className="w-full h-full border-0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       <main className="max-w-6xl mx-auto px-4 py-8 space-y-8">
 
