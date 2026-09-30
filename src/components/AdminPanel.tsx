@@ -1554,7 +1554,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       : isHero
                       ? { label: '🌟 मुख्य हिरो बॅनर (Hero Carousel)', color: 'bg-amber-500/20 text-amber-300 border-amber-500/30' }
                       : isMid
-                      ? { label: '🎗️ मिडल स्ट्रिप बॅनर (Middle Banner)', color: 'bg-blue-500/20 text-blue-300 border-blue-500/30' }
+                      ? { label: '🎗️ मिडल स्ट्रिप बॅनर (Middle Banner)', color: 'bg-orange-500/20 text-orange-300 border-orange-500/30' }
                       : { label: '📢 सूचना पट्टी (Notice)', color: 'bg-slate-700 text-slate-200 border-slate-600' };
 
                     return (

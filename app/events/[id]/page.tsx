@@ -67,73 +67,7 @@ interface EventDetail {
   }>;
 }
 
-// Authentic cast profiles tailored for Marathi theater & cultural performances
-const CAST_CREW_PROFILES: Record<string, Array<{ name: string; role: string; roleMr: string; image: string }>> = {
-  default: [
-    {
-      name: 'प्रशांत दामले',
-      role: 'Lead Actor',
-      roleMr: 'मुख्य कलाकार',
-      image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=250&q=80',
-    },
-    {
-      name: 'मुक्ता बर्वे',
-      role: 'Lead Actress',
-      roleMr: 'मुख्य अभिनेत्री',
-      image: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=250&q=80',
-    },
-    {
-      name: 'चंद्रकांत कुलकर्णी',
-      role: 'Director',
-      roleMr: 'दिग्दर्शक',
-      image: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=250&q=80',
-    },
-    {
-      name: 'क्षितिज पटवर्धन',
-      role: 'Writer / Playwright',
-      roleMr: 'लेखक / पटकथा',
-      image: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=250&q=80',
-    },
-    {
-      name: 'अशोक पत्की',
-      role: 'Music Director',
-      roleMr: 'संगीतकार',
-      image: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=250&q=80',
-    },
-    {
-      name: 'प्रदीप मुळ्ये',
-      role: 'Set Designer',
-      roleMr: 'नेपथ्यकार',
-      image: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=250&q=80',
-    },
-  ],
-  music: [
-    {
-      name: 'महेश काळे',
-      role: 'Classical Vocalist',
-      roleMr: 'शास्त्रीय गायक',
-      image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=250&q=80',
-    },
-    {
-      name: 'राहुल देशपांडे',
-      role: 'Classical Vocalist',
-      roleMr: 'गायक व संगीतकार',
-      image: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=250&q=80',
-    },
-    {
-      name: 'सत्यजित तळवलकर',
-      role: 'Tabla Maestro',
-      roleMr: 'तबला साथ',
-      image: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=250&q=80',
-    },
-    {
-      name: 'अजय जोगळेकर',
-      role: 'Harmonium Accompanist',
-      roleMr: 'संवादिनी साथ',
-      image: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=250&q=80',
-    },
-  ],
-};
+
 
 export default function EventDetailPage() {
   const params = useParams();
@@ -250,20 +184,21 @@ export default function EventDetailPage() {
     sports: 'क्रीडा (Sports)',
   };
 
-  let parsedDbCast: Array<{ name: string; role: string; roleMr: string; image: string }> | null = null;
+  let parsedDbCast: Array<{ name: string; role?: string; roleMr?: string; image?: string }> | null = null;
   if ((event as any).castCrew) {
     try {
-      const parsed = JSON.parse((event as any).castCrew);
+      const parsed = typeof (event as any).castCrew === 'string'
+        ? JSON.parse((event as any).castCrew)
+        : (event as any).castCrew;
       if (Array.isArray(parsed) && parsed.length > 0) {
         parsedDbCast = parsed;
       }
     } catch {
-      // fallback
+      // fallback if castCrew is not JSON
     }
   }
 
-  const castList =
-    parsedDbCast || (event.category === 'music' ? CAST_CREW_PROFILES.music : CAST_CREW_PROFILES.default);
+  const castList = parsedDbCast;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-28">
@@ -345,16 +280,10 @@ export default function EventDetailPage() {
                 )}
               </div>
 
-              {/* Rating & Audience Sentiment Badge */}
-              <div className="inline-flex items-center gap-3 bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/15">
-                <div className="flex items-center gap-1.5 text-amber-400">
-                  <Star className="w-5 h-5 fill-amber-400" />
-                  <span className="text-base font-extrabold text-white">९.४ / १०</span>
-                </div>
-                <div className="h-4 w-px bg-white/20" />
-                <span className="text-xs text-slate-300">
-                  <strong>१४,२५०+</strong> प्रेक्षकांची पसंती
-                </span>
+              {/* Official Ticketing Badge */}
+              <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-md px-3.5 py-1.5 rounded-xl border border-white/15 text-xs text-slate-200">
+                <Ticket className="w-4 h-4 text-orange-400" />
+                <span>MahaTicket अधिकृत तिकीट आरक्षण</span>
               </div>
 
               {/* Quick Info Specs */}
@@ -393,40 +322,50 @@ export default function EventDetailPage() {
 
       {/* Main Content Body */}
       <main className="max-w-6xl mx-auto px-4 py-8 space-y-10">
-        {/* BookMyShow Style Cast & Crew Carousel */}
-        <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-6">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-            <div>
-              <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 font-serif">
-                कलाकार व तंत्रज्ञ (Cast & Crew)
-              </h2>
-              <p className="text-xs text-slate-600">
-                रंगभूमीवरील आघाडीचे आणि लोकप्रिय कलाकार
-              </p>
-            </div>
-            <Award className="w-5 h-5 text-[#ea580c]" />
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
-            {castList.map((member, idx) => (
-              <div key={idx} className="flex flex-col items-center text-center space-y-2 group">
-                <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border-2 border-orange-200 p-0.5 shadow group-hover:border-[#ea580c] transition duration-200">
-                  <img
-                    src={member.image}
-                    alt={member.name}
-                    className="w-full h-full object-cover rounded-full group-hover:scale-105 transition duration-300"
-                  />
-                </div>
-                <div>
-                  <h4 className="text-xs sm:text-sm font-bold text-slate-900 group-hover:text-[#ea580c] transition">
-                    {member.name}
-                  </h4>
-                  <p className="text-[11px] text-slate-600 font-medium">{member.roleMr}</p>
-                </div>
+        {/* Real Database Cast & Crew Section (shown only if provided by organizer) */}
+        {castList && castList.length > 0 && (
+          <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-6">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div>
+                <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 font-serif">
+                  कलाकार व तंत्रज्ञ (Cast & Crew)
+                </h2>
+                <p className="text-xs text-slate-600">
+                  अधिकृत कलाकार आणि तंत्रज्ञ माहिती
+                </p>
               </div>
-            ))}
-          </div>
-        </section>
+              <Award className="w-5 h-5 text-[#ea580c]" />
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
+              {castList.map((member, idx) => (
+                <div key={idx} className="flex flex-col items-center text-center space-y-2 group">
+                  {member.image ? (
+                    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border-2 border-orange-200 p-0.5 shadow group-hover:border-[#ea580c] transition duration-200">
+                      <img
+                        src={member.image}
+                        alt={member.name}
+                        className="w-full h-full object-cover rounded-full group-hover:scale-105 transition duration-300"
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-orange-100 border-2 border-orange-200 flex items-center justify-center text-orange-600 font-bold text-lg">
+                      {member.name ? member.name[0] : 'C'}
+                    </div>
+                  )}
+                  <div>
+                    <h4 className="text-xs sm:text-sm font-bold text-slate-900 group-hover:text-[#ea580c] transition">
+                      {member.name}
+                    </h4>
+                    {(member.roleMr || member.role) && (
+                      <p className="text-[11px] text-slate-600 font-medium">{member.roleMr || member.role}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* About The Show & Synopsis */}
         <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-4">
@@ -458,21 +397,42 @@ export default function EventDetailPage() {
             </button>
           </div>
 
-          {/* Key Show Tags */}
-          <div className="pt-4 border-t border-slate-100 flex flex-wrap gap-2 text-xs">
-            <span className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg font-medium">
-              🎭 २ अंकी कौटुंबिक नाटक
-            </span>
-            <span className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg font-medium">
-              ☕ १० मिनिटे मध्यंतर
-            </span>
-            <span className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg font-medium">
-              ❄️ वातानुकूलित (Air Conditioned)
-            </span>
-            <span className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg font-medium">
-              🅿️ सुलभ वाहन पार्किंग
-            </span>
-          </div>
+          {/* Real Database Facility / Event Details */}
+          {(() => {
+            let facilitiesList: string[] = [];
+            if ((event.venue as any)?.facilities) {
+              try {
+                const parsed = typeof (event.venue as any).facilities === 'string'
+                  ? JSON.parse((event.venue as any).facilities)
+                  : (event.venue as any).facilities;
+                if (Array.isArray(parsed)) {
+                  facilitiesList = parsed;
+                }
+              } catch {
+                // ignore
+              }
+            }
+
+            return (
+              <div className="pt-4 border-t border-slate-100 flex flex-wrap gap-2 text-xs">
+                {event.language && (
+                  <span className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg font-medium">
+                    🗣️ {event.language}
+                  </span>
+                )}
+                {event.durationMinutes && (
+                  <span className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg font-medium">
+                    ⏱️ {event.durationMinutes} मिनिटे
+                  </span>
+                )}
+                {facilitiesList.map((fac, idx) => (
+                  <span key={idx} className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg font-medium">
+                    ✨ {fac}
+                  </span>
+                ))}
+              </div>
+            );
+          })()}
         </section>
 
         {/* Sessions & Seat Booking Bar - BookMyShow Experience */}

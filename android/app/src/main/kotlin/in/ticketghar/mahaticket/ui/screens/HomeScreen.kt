@@ -22,6 +22,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import coil.compose.AsyncImage
 import `in`.ticketghar.mahaticket.model.EventItem
 import `in`.ticketghar.mahaticket.theme.*
@@ -211,15 +213,27 @@ fun EventCardItem(
     event: EventItem,
     onClick: () -> Unit
 ) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MahaBorder),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    var isVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        isVisible = true
+    }
+
+    AnimatedVisibility(
+        visible = isVisible,
+        enter = fadeIn(animationSpec = tween(250)) + slideInVertically(
+            initialOffsetY = { 30 },
+            animationSpec = tween(250)
+        )
     ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onClick() },
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = androidx.compose.foundation.BorderStroke(1.dp, MahaBorder),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
         Column {
             Box(
                 modifier = Modifier
@@ -323,3 +337,5 @@ fun EventCardItem(
         }
     }
 }
+}
+

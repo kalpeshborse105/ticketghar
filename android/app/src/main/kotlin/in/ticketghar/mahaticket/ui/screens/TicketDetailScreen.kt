@@ -21,6 +21,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.alpha
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
 import coil.compose.AsyncImage
 import `in`.ticketghar.mahaticket.BuildConfig
 import `in`.ticketghar.mahaticket.theme.*
@@ -50,6 +55,21 @@ fun TicketDetailScreen(
             status = "confirmed"
         )
     }
+
+    var isCardVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        isCardVisible = true
+    }
+    val cardScale by animateFloatAsState(
+        targetValue = if (isCardVisible) 1f else 0.94f,
+        animationSpec = tween(durationMillis = 280),
+        label = "ticketCardScale"
+    )
+    val cardAlpha by animateFloatAsState(
+        targetValue = if (isCardVisible) 1f else 0f,
+        animationSpec = tween(durationMillis = 280),
+        label = "ticketCardAlpha"
+    )
 
     Scaffold(
         topBar = {
@@ -84,10 +104,13 @@ fun TicketDetailScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Ticket Card with QR
+            // Ticket Card with QR and entrance animation
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .scale(cardScale)
+                        .alpha(cardAlpha),
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     elevation = CardDefaults.cardElevation(4.dp)

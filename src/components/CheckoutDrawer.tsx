@@ -533,15 +533,15 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
                 onClick={() => setPaymentMethod('card')}
                 className={`flex flex-col items-center justify-center p-3 rounded-2xl border-2 text-xs font-bold transition ${
                   paymentMethod === 'card'
-                    ? 'bg-blue-50 border-blue-500 text-blue-900 shadow-sm'
+                    ? 'bg-orange-50 border-orange-500 text-orange-950 shadow-sm'
                     : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300'
                 }`}
               >
-                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 mb-1">
+                <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-700 mb-1">
                   <CreditCard className="w-4 h-4" />
                 </div>
                 <span>💳 Cards</span>
-                <span className="text-[10px] text-blue-600 font-medium mt-0.5">Visa · RuPay · Master</span>
+                <span className="text-[10px] text-orange-700 font-semibold mt-0.5">Visa · RuPay · Master</span>
               </button>
 
               {/* NetBanking Option */}

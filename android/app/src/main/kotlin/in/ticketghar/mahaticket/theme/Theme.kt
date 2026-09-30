@@ -9,7 +9,7 @@ import androidx.compose.ui.graphics.Color
 private val LightColorScheme = lightColorScheme(
     primary = MahaPrimaryLight,
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFEEF2FF), // Indigo-50
+    primaryContainer = MahaPrimaryLightSurface, // Orange-50
     onPrimaryContainer = MahaPrimaryDark,
     secondary = MahaSecondary,
     onSecondary = Color.White,

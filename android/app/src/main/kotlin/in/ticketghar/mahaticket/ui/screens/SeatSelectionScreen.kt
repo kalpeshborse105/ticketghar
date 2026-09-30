@@ -20,6 +20,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.alpha
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.lifecycle.viewmodel.compose.viewModel
 import `in`.ticketghar.mahaticket.MahaTicketApp
 import `in`.ticketghar.mahaticket.model.SeatItem
@@ -69,34 +74,58 @@ fun SeatSelectionScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text("आसन निवड", fontSize = 18.sp)
-                        if (timeRemaining != null) {
-                            Text(
-                                text = "वेळ उरली: ${timeRemaining!! / 60}:${String.format("%02d", timeRemaining!! % 60)}",
-                                fontSize = 12.sp,
-                                color = if (timeRemaining!! < 120) MahaError else MaterialTheme.colorScheme.primary
-                            )
+            Column {
+                TopAppBar(
+                    title = {
+                        Column {
+                            Text("आसन निवड", fontSize = 18.sp)
+                            if (timeRemaining != null) {
+                                Text(
+                                    text = "वेळ उरली: ${timeRemaining!! / 60}:${String.format("%02d", timeRemaining!! % 60)}",
+                                    fontSize = 12.sp,
+                                    color = if (timeRemaining!! < 120) MahaError else MaterialTheme.colorScheme.primary
+                                )
+                            }
                         }
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        bookingViewModel.releaseHold()
-                        onNavigateBack()
-                    }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = {
+                            bookingViewModel.releaseHold()
+                            onNavigateBack()
+                        }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
                 )
-            )
+
+                // Smooth visual countdown indicator
+                if (timeRemaining != null) {
+                    val progress = (timeRemaining!!.toFloat() / 600f).coerceIn(0f, 1f)
+                    val animatedProgress by animateFloatAsState(
+                        targetValue = progress,
+                        animationSpec = tween(durationMillis = 300),
+                        label = "holdProgress"
+                    )
+                    LinearProgressIndicator(
+                        progress = { animatedProgress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(3.dp),
+                        color = if (timeRemaining!! < 120) MahaError else MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.primaryContainer
+                    )
+                }
+            }
         },
         bottomBar = {
-            if (selectedSeats.isNotEmpty()) {
+            AnimatedVisibility(
+                visible = selectedSeats.isNotEmpty(),
+                enter = slideInVertically(initialOffsetY = { it }, animationSpec = tween(200)) + fadeIn(tween(200)),
+                exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(180)) + fadeOut(tween(180))
+            ) {
                 SeatSelectionBottomBar(
                     selectedSeats = selectedSeats,
                     onContinue = {
@@ -280,9 +309,22 @@ fun SeatBox(
     val textColor = if (isSelected) Color.White else MahaTextPrimary
     val enabled = seat.status == "available"
 
+    val scale by animateFloatAsState(
+        targetValue = if (isSelected) 1.08f else 1.0f,
+        animationSpec = tween(durationMillis = 180),
+        label = "seatScale"
+    )
+    val alpha by animateFloatAsState(
+        targetValue = if (seat.status == "booked") 0.45f else 1.0f,
+        animationSpec = tween(durationMillis = 180),
+        label = "seatAlpha"
+    )
+
     Box(
         modifier = Modifier
             .size(38.dp)
+            .scale(scale)
+            .alpha(alpha)
             .background(backgroundColor, RoundedCornerShape(6.dp))
             .border(1.dp, if (isSelected) SeatSelected else MahaBorder, RoundedCornerShape(6.dp))
             .clickable(enabled = enabled) { onSeatClick() },

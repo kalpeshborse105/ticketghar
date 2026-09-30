@@ -78,8 +78,9 @@ export async function POST(request: Request) {
     // Check payment details - require payment unless explicitly allowed to skip
     let resolvedPayment = paymentDetails;
     if (!resolvedPayment) {
-      // Only allow direct_confirm when explicitly enabled (for local QA/testing)
-      const allowDirectConfirm = process.env.ALLOW_DIRECT_CONFIRM === 'true';
+      // Only allow direct_confirm when explicitly enabled and strictly outside production
+      const isProd = process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production';
+      const allowDirectConfirm = !isProd && process.env.ALLOW_DIRECT_CONFIRM === 'true';
       
       if (!allowDirectConfirm) {
         return NextResponse.json(

@@ -1,6 +1,7 @@
 package `in`.ticketghar.mahaticket.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -18,6 +19,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.lazy.LazyRow
 import coil.compose.AsyncImage
 import `in`.ticketghar.mahaticket.MahaTicketApp
 import `in`.ticketghar.mahaticket.model.EventItem
@@ -105,20 +112,69 @@ fun EventDetailContent(
     onBookSession: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var contentVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        contentVisible = true
+    }
+
+    val posterAlpha by animateFloatAsState(
+        targetValue = if (contentVisible) 1f else 0.7f,
+        animationSpec = tween(300),
+        label = "posterAlpha"
+    )
+    val posterScale by animateFloatAsState(
+        targetValue = if (contentVisible) 1f else 1.04f,
+        animationSpec = tween(350),
+        label = "posterScale"
+    )
+
+    val allSessions = event.sessions ?: emptyList()
+    val uniqueDates = remember(allSessions) {
+        allSessions.mapNotNull { session ->
+            try {
+                val dt = ZonedDateTime.parse(session.sessionStartTime)
+                dt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd")) to dt.format(DateTimeFormatter.ofPattern("EEE, d MMM"))
+            } catch (e: Exception) {
+                null
+            }
+        }.distinctBy { it.first }
+    }
+    var selectedDateKey by remember { mutableStateOf("all") }
+
+    val filteredSessions = remember(selectedDateKey, allSessions) {
+        if (selectedDateKey == "all") {
+            allSessions
+        } else {
+            allSessions.filter { session ->
+                try {
+                    val dt = ZonedDateTime.parse(session.sessionStartTime)
+                    dt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd")) == selectedDateKey
+                } catch (e: Exception) {
+                    true
+                }
+            }
+        }
+    }
+
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
         contentPadding = PaddingValues(bottom = 16.dp)
     ) {
-        // Hero Poster Image
+        // Hero Poster Image with smooth entrance
         item {
             AsyncImage(
                 model = event.posterUrl,
                 contentDescription = event.title,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(300.dp),
+                    .height(300.dp)
+                    .graphicsLayer {
+                        alpha = posterAlpha
+                        scaleX = posterScale
+                        scaleY = posterScale
+                    },
                 contentScale = ContentScale.Crop
             )
         }
@@ -244,20 +300,105 @@ fun EventDetailContent(
             }
         }
 
-        // Sessions Section
+        // Sessions Section with animated date tabs
         item {
             Spacer(modifier = Modifier.height(24.dp))
             Text(
-                text = "उपलब्ध शो",
+                text = "उपलब्ध शो (Available Shows)",
                 fontWeight = FontWeight.Bold,
                 fontSize = 16.sp,
                 color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Animated Date Filter Pills
+            if (uniqueDates.size > 1) {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    item {
+                        val isAllSelected = selectedDateKey == "all"
+                        val pillBg by animateColorAsState(
+                            targetValue = if (isAllSelected) MaterialTheme.colorScheme.primary else MahaSurface,
+                            animationSpec = tween(200),
+                            label = "datePillBg"
+                        )
+                        val pillText by animateColorAsState(
+                            targetValue = if (isAllSelected) Color.White else MahaTextPrimary,
+                            animationSpec = tween(200),
+                            label = "datePillText"
+                        )
+
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = pillBg,
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (isAllSelected) MaterialTheme.colorScheme.primary else MahaBorder
+                            ),
+                            modifier = Modifier
+                                .height(36.dp)
+                                .clickable { selectedDateKey = "all" }
+                        ) {
+                            Box(
+                                modifier = Modifier.padding(horizontal = 14.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "सर्व तारखा",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = pillText
+                                )
+                            }
+                        }
+                    }
+
+                    items(uniqueDates) { (dateKey, dateLabel) ->
+                        val isDateSelected = selectedDateKey == dateKey
+                        val pillBg by animateColorAsState(
+                            targetValue = if (isDateSelected) MaterialTheme.colorScheme.primary else MahaSurface,
+                            animationSpec = tween(200),
+                            label = "datePillBg"
+                        )
+                        val pillText by animateColorAsState(
+                            targetValue = if (isDateSelected) Color.White else MahaTextPrimary,
+                            animationSpec = tween(200),
+                            label = "datePillText"
+                        )
+
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = pillBg,
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (isDateSelected) MaterialTheme.colorScheme.primary else MahaBorder
+                            ),
+                            modifier = Modifier
+                                .height(36.dp)
+                                .clickable { selectedDateKey = dateKey }
+                        ) {
+                            Box(
+                                modifier = Modifier.padding(horizontal = 14.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = dateLabel,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = pillText
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+            }
         }
 
-        items(event.sessions ?: emptyList()) { session ->
+        items(filteredSessions) { session ->
             SessionCard(
                 session = session,
                 onBookClick = { onBookSession(session.id) },

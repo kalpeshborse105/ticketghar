@@ -20,6 +20,10 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.compose.ui.draw.scale
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.navigation.NavType
 import androidx.navigation.navArgument
 import `in`.ticketghar.mahaticket.theme.*
@@ -115,7 +119,31 @@ fun MahaTicketRoot() {
             NavHost(
                 navController = navController,
                 startDestination = Screen.Home.route,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                enterTransition = {
+                    fadeIn(animationSpec = tween(220)) + slideIntoContainer(
+                        towards = AnimatedContentTransitionScope.SlideDirection.Start,
+                        animationSpec = tween(220)
+                    )
+                },
+                exitTransition = {
+                    fadeOut(animationSpec = tween(180)) + slideOutOfContainer(
+                        towards = AnimatedContentTransitionScope.SlideDirection.Start,
+                        animationSpec = tween(180)
+                    )
+                },
+                popEnterTransition = {
+                    fadeIn(animationSpec = tween(220)) + slideIntoContainer(
+                        towards = AnimatedContentTransitionScope.SlideDirection.End,
+                        animationSpec = tween(220)
+                    )
+                },
+                popExitTransition = {
+                    fadeOut(animationSpec = tween(180)) + slideOutOfContainer(
+                        towards = AnimatedContentTransitionScope.SlideDirection.End,
+                        animationSpec = tween(180)
+                    )
+                }
             ) {
                 composable(Screen.Home.route) {
                     HomeScreenWithViewModel(eventViewModel, navController)
@@ -238,8 +266,15 @@ fun BottomNavigationBar(navController: NavHostController) {
         tonalElevation = 4.dp
     ) {
         screens.forEach { screen ->
+            val isSelected = currentRoute == screen.route
+            val iconScale by animateFloatAsState(
+                targetValue = if (isSelected) 1.15f else 1.0f,
+                animationSpec = tween(200),
+                label = "navIconScale"
+            )
+
             NavigationBarItem(
-                selected = currentRoute == screen.route,
+                selected = isSelected,
                 onClick = {
                     if (currentRoute != screen.route) {
                         navController.navigate(screen.route) {
@@ -249,7 +284,13 @@ fun BottomNavigationBar(navController: NavHostController) {
                         }
                     }
                 },
-                icon = { Icon(screen.icon, contentDescription = screen.title) },
+                icon = {
+                    Icon(
+                        screen.icon,
+                        contentDescription = screen.title,
+                        modifier = Modifier.scale(iconScale)
+                    )
+                },
                 label = { Text(screen.title, fontSize = 11.sp) },
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = MaterialTheme.colorScheme.primary,

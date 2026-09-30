@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS public.users (
     CHECK (preferred_language IN ('mr', 'en')),
   city TEXT NOT NULL DEFAULT 'Pune',
   password_hash TEXT,
+  otp_code TEXT,
+  otp_expires_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -573,6 +575,8 @@ END $$;
 
 -- Idempotent column migrations for existing instances
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password_hash TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS otp_code TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS otp_expires_at TIMESTAMPTZ;
 ALTER TABLE public.events ADD COLUMN IF NOT EXISTS cast_crew TEXT;
 
 -- NOTE: App connects with Postgres role that bypasses RLS (direct SQL via pg Pool).

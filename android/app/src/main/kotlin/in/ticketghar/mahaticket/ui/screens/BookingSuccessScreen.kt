@@ -17,6 +17,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.alpha
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.lifecycle.viewmodel.compose.viewModel
 import `in`.ticketghar.mahaticket.MahaTicketApp
 import `in`.ticketghar.mahaticket.model.BookingOrder
@@ -49,6 +53,21 @@ fun BookingSuccessScreen(
         )
     }
 
+    var isAnimatedIn by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        isAnimatedIn = true
+    }
+    val checkmarkScale by animateFloatAsState(
+        targetValue = if (isAnimatedIn) 1f else 0.4f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+        label = "checkmarkScale"
+    )
+    val checkmarkAlpha by animateFloatAsState(
+        targetValue = if (isAnimatedIn) 1f else 0f,
+        animationSpec = tween(durationMillis = 280),
+        label = "checkmarkAlpha"
+    )
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -59,12 +78,15 @@ fun BookingSuccessScreen(
     ) {
         item { Spacer(modifier = Modifier.height(32.dp)) }
 
-        // Success Icon
+        // Success Icon with subtle spring animation
         item {
             Surface(
                 shape = CircleShape,
                 color = MahaSuccess.copy(alpha = 0.15f),
-                modifier = Modifier.size(100.dp)
+                modifier = Modifier
+                    .size(100.dp)
+                    .scale(checkmarkScale)
+                    .alpha(checkmarkAlpha)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
