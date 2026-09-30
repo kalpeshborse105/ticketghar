@@ -1,13 +1,12 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Language, translations } from '../lib/i18n.ts';
 import { usePWAInstall } from '@/hooks/use-pwa';
 import { AuthModal } from './AuthModal.tsx';
 import {
   Ticket,
   MapPin,
-  Globe,
   Search,
   Bookmark,
   Building2,
@@ -16,9 +15,8 @@ import {
   X,
   ChevronDown,
   User,
-  LogOut,
-  ShieldCheck,
-  Clock,
+  Navigation,
+  Loader2,
   TrendingUp,
 } from 'lucide-react';
 
@@ -54,6 +52,40 @@ const DEFAULT_CITIES = [
   'Jalgaon',
 ];
 
+const CITY_ALIASES: Record<string, string> = {
+  Pune: 'Pune',
+  Pimpri: 'Pune',
+  'Pimpri-Chinchwad': 'Pune',
+  Mumbai: 'Mumbai',
+  'Navi Mumbai': 'Mumbai',
+  Thane: 'Thane',
+  Nagpur: 'Nagpur',
+  Nashik: 'Nashik',
+  Aurangabad: 'Chhatrapati Sambhaji Nagar',
+  Sambhajinagar: 'Chhatrapati Sambhaji Nagar',
+  'Chhatrapati Sambhaji Nagar': 'Chhatrapati Sambhaji Nagar',
+  Kolhapur: 'Kolhapur',
+  Solapur: 'Solapur',
+  Sangli: 'Sangli',
+  Satara: 'Satara',
+  Amravati: 'Amravati',
+  Nanded: 'Nanded',
+  Ratnagiri: 'Ratnagiri',
+  Jalgaon: 'Jalgaon',
+};
+
+const CITY_STORAGE_KEY = 'mahaticket_user_city';
+
+const getCityFromApiName = (cityName: string): string | null => {
+  const normalized = cityName.trim().toLowerCase();
+
+  const found = Object.entries(CITY_ALIASES).find(([source]) =>
+    normalized.includes(source.toLowerCase()),
+  );
+
+  return found?.[1] || null;
+};
+
 export const Header: React.FC<HeaderProps> = ({
   language,
   onLanguageChange,
@@ -69,44 +101,97 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const t = translations[language];
   const { isInstallable, install } = usePWAInstall();
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [cityList, setCityList] = useState<string[]>(availableCities || DEFAULT_CITIES);
+  const [cityList, setCityList] = useState<string[]>(
+    availableCities?.length ? availableCities : DEFAULT_CITIES,
+  );
+
   const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [authModalMessage, setAuthModalMessage] = useState<string | undefined>(undefined);
+  const [authModalMessage, setAuthModalMessage] = useState<string | undefined>();
   const [user, setUser] = useState<any>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+
   const [searchFocused, setSearchFocused] = useState(false);
   const [liveResults, setLiveResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
-  const searchRef = useRef<HTMLDivElement>(null);
-  const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
+  const [detectingCity, setDetectingCity] = useState(false);
+  const [cityDetectedLive, setCityDetectedLive] = useState(false);
+
+  const searchRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+  const searchAbortRef = useRef<AbortController | null>(null);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cityDetectionStartedRef = useRef(false);
+
+  /*
+   * ---------------------------------------------------------
+   * Load cities from backend
+   * ---------------------------------------------------------
+   */
   useEffect(() => {
-    async function loadCities() {
+    let cancelled = false;
+
+    const loadCities = async () => {
       try {
-        const res = await fetch('/api/cities');
-        if (res.ok) {
-          const data = await res.json();
-          if (data.cities && Array.isArray(data.cities)) {
-            setCityList(data.cities);
-          }
+        const res = await fetch('/api/cities', {
+          method: 'GET',
+          cache: 'no-store',
+        });
+
+        if (!res.ok) return;
+
+        const data = await res.json();
+
+        if (!cancelled && Array.isArray(data.cities) && data.cities.length > 0) {
+          setCityList(data.cities);
         }
       } catch {
-        // Fallback to default
+        // Keep default city list.
       }
-    }
+    };
+
     loadCities();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
+  /*
+   * ---------------------------------------------------------
+   * Keep parent-provided availableCities synchronized
+   * ---------------------------------------------------------
+   */
+  useEffect(() => {
+    if (availableCities?.length) {
+      setCityList(availableCities);
+    }
+  }, [availableCities]);
+
+  /*
+   * ---------------------------------------------------------
+   * Session
+   * ---------------------------------------------------------
+   */
   const checkUserSession = async () => {
     try {
-      const res = await fetch('/api/auth/flow/session');
-      if (res.ok) {
-        const data = await res.json();
-        setUser(data.user || null);
+      const res = await fetch('/api/auth/flow/session', {
+        method: 'GET',
+        cache: 'no-store',
+        credentials: 'include',
+      });
+
+      if (!res.ok) {
+        setUser(null);
+        return;
       }
-    } catch (error) {
-      console.error('Session check error:', error);
+
+      const data = await res.json();
+      setUser(data.user || null);
+    } catch {
+      setUser(null);
     }
   };
 
@@ -114,58 +199,293 @@ export const Header: React.FC<HeaderProps> = ({
     checkUserSession();
   }, []);
 
-  // Live search with debounce
+  /*
+   * ---------------------------------------------------------
+   * LIVE CITY DETECTION
+   *
+   * Priority:
+   * 1. Existing user selection in localStorage
+   * 2. Live IP city from ipapi.co
+   * 3. Existing parent selectedCity
+   * 4. Maharashtra fallback
+   *
+   * localStorage works on localhost AND production.
+   * It is browser/device-specific.
+   * ---------------------------------------------------------
+   */
   useEffect(() => {
-    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-    if (!searchQuery.trim()) {
-      setLiveResults([]);
-      return;
-    }
-    setSearching(true);
-    searchDebounceRef.current = setTimeout(async () => {
+    if (cityDetectionStartedRef.current) return;
+    cityDetectionStartedRef.current = true;
+
+    let cancelled = false;
+
+    const detectLiveCity = async () => {
+      if (typeof window === 'undefined') return;
+
+      // First respect a city the user explicitly selected.
+      const savedCity = localStorage.getItem(CITY_STORAGE_KEY);
+
+      if (
+        savedCity &&
+        savedCity !== 'महाराष्ट्र (All)' &&
+        cityList.includes(savedCity)
+      ) {
+        if (!cancelled && savedCity !== selectedCity) {
+          onCityChange(savedCity);
+        }
+        return;
+      }
+
+      setDetectingCity(true);
+
       try {
-        const res = await fetch(`/api/events?search=${encodeURIComponent(searchQuery.trim())}&limit=5`);
-        if (res.ok) {
-          const data = await res.json();
-          setLiveResults(data.events?.slice(0, 5) || []);
+        /*
+         * no-store is intentional:
+         * we want a fresh live location lookup instead of an old
+         * browser/network cached response.
+         */
+        const response = await fetch('https://ipapi.co/json/', {
+          method: 'GET',
+          cache: 'no-store',
+          headers: {
+            Accept: 'application/json',
+          },
+        });
+
+        if (!response.ok) throw new Error('IP location request failed');
+
+        const geo = await response.json();
+
+        if (cancelled) return;
+
+        const detected = getCityFromApiName(String(geo.city || ''));
+
+        if (detected && cityList.includes(detected)) {
+          onCityChange(detected);
+          localStorage.setItem(CITY_STORAGE_KEY, detected);
+          setCityDetectedLive(true);
+
+          window.setTimeout(() => {
+            if (!cancelled) setCityDetectedLive(false);
+          }, 4000);
         }
       } catch {
-        setLiveResults([]);
+        // Do not block the site if IP location service fails.
       } finally {
-        setSearching(false);
-      }
-    }, 350);
-  }, [searchQuery]);
-
-  // Close search results when clicking outside
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
-        setSearchFocused(false);
+        if (!cancelled) {
+          setDetectingCity(false);
+        }
       }
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
 
-  const handleLogout = async () => {
-    try {
-      await fetch('/api/auth/flow/logout', { method: 'POST' });
-      setUser(null);
-      setUserMenuOpen(false);
-      window.location.reload();
-    } catch (error) {
-      console.error('Logout error:', error);
+    detectLiveCity();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cityList, onCityChange, selectedCity]);
+
+  /*
+   * ---------------------------------------------------------
+   * Manual city selection
+   * ---------------------------------------------------------
+   */
+  const handleCityChange = (city: string) => {
+    onCityChange(city);
+
+    if (typeof window !== 'undefined') {
+      if (city === 'महाराष्ट्र (All)') {
+        localStorage.removeItem(CITY_STORAGE_KEY);
+      } else {
+        localStorage.setItem(CITY_STORAGE_KEY, city);
+      }
     }
   };
 
-  const handleMyTicketsClick = () => {
-    if (!user) {
-      setAuthModalMessage('तिकिटे पाहण्यासाठी कृपया लॉगिन करा (Please sign in to view your tickets)');
-      setAuthModalOpen(true);
-    } else {
-      onOpenMyTickets();
+  /*
+   * ---------------------------------------------------------
+   * LIVE SEARCH
+   *
+   * 250ms debounce
+   * Abort previous request
+   * No-store API request
+   * Results update while typing
+   * ---------------------------------------------------------
+   */
+  useEffect(() => {
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+      searchDebounceRef.current = null;
     }
+
+    if (searchAbortRef.current) {
+      searchAbortRef.current.abort();
+      searchAbortRef.current = null;
+    }
+
+    const query = searchQuery.trim();
+
+    if (!query) {
+      setLiveResults([]);
+      setSearching(false);
+      return;
+    }
+
+    setSearching(true);
+
+    searchDebounceRef.current = setTimeout(async () => {
+      const controller = new AbortController();
+      searchAbortRef.current = controller;
+
+      try {
+        const params = new URLSearchParams();
+
+        params.set('search', query);
+        params.set('limit', '6');
+
+        if (selectedCity && selectedCity !== 'महाराष्ट्र (All)') {
+          params.set('city', selectedCity);
+        }
+
+        const res = await fetch(`/api/events?${params.toString()}`, {
+          method: 'GET',
+          cache: 'no-store',
+          signal: controller.signal,
+        });
+
+        if (!res.ok) {
+          throw new Error('Search failed');
+        }
+
+        const data = await res.json();
+
+        setLiveResults(
+          Array.isArray(data.events) ? data.events.slice(0, 6) : [],
+        );
+      } catch (error: any) {
+        if (error?.name !== 'AbortError') {
+          setLiveResults([]);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setSearching(false);
+        }
+      }
+    }, 250);
+
+    return () => {
+      if (searchDebounceRef.current) {
+        clearTimeout(searchDebounceRef.current);
+        searchDebounceRef.current = null;
+      }
+
+      if (searchAbortRef.current) {
+        searchAbortRef.current.abort();
+        searchAbortRef.current = null;
+      }
+    };
+  }, [searchQuery, selectedCity]);
+
+  /*
+   * ---------------------------------------------------------
+   * Close dropdowns on outside click
+   * ---------------------------------------------------------
+   */
+  useEffect(() => {
+    const handler = (event: MouseEvent) => {
+      const target = event.target as Node;
+
+      if (searchRef.current && !searchRef.current.contains(target)) {
+        setSearchFocused(false);
+      }
+
+      if (userMenuRef.current && !userMenuRef.current.contains(target)) {
+        setUserMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handler);
+
+    return () => {
+      document.removeEventListener('mousedown', handler);
+    };
+  }, []);
+
+  /*
+   * ---------------------------------------------------------
+   * Keyboard support
+   * ---------------------------------------------------------
+   */
+  const handleSearchKeyDown = (
+    event: React.KeyboardEvent<HTMLInputElement>,
+  ) => {
+    if (event.key === 'Escape') {
+      onSearchChange('');
+      setLiveResults([]);
+      setSearchFocused(false);
+      return;
+    }
+
+    if (event.key === 'Enter') {
+      event.preventDefault();
+
+      setSearchFocused(false);
+
+      // Parent already receives the live search query.
+      // Keep the query active rather than navigating to a
+      // potentially unavailable route.
+    }
+  };
+
+  /*
+   * ---------------------------------------------------------
+   * User actions
+   * ---------------------------------------------------------
+   */
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/flow/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch {
+      // Still clear local UI state.
+    }
+
+    setUser(null);
+    setUserMenuOpen(false);
+  };
+
+  const handleMyTicketsClick = () => {
+    setUserMenuOpen(false);
+
+    if (!user) {
+      setAuthModalMessage(
+        language === 'mr'
+          ? 'तिकिटे पाहण्यासाठी कृपया लॉगिन करा'
+          : 'Please sign in to view your tickets',
+      );
+      setAuthModalOpen(true);
+      return;
+    }
+
+    onOpenMyTickets();
+  };
+
+  const handleProfileClick = () => {
+    setUserMenuOpen(false);
+
+    if (!user) {
+      setAuthModalMessage(
+        language === 'mr'
+          ? 'प्रोफाइल पाहण्यासाठी कृपया लॉगिन करा'
+          : 'Please sign in to view your profile',
+      );
+      setAuthModalOpen(true);
+      return;
+    }
+
+    window.location.href = '/profile';
   };
 
   const handleLoginClick = () => {
@@ -177,304 +497,526 @@ export const Header: React.FC<HeaderProps> = ({
     setSearchFocused(false);
     onSearchChange('');
     setLiveResults([]);
+
     if (typeof window !== 'undefined') {
       window.location.href = `/events/${event.id}`;
     }
   };
 
-  const showResults = searchFocused && searchQuery.trim().length > 0;
+  const showResults =
+    searchFocused && searchQuery.trim().length > 0;
+
 
   return (
-    <header className="sticky top-0 z-40 bg-white border-b border-slate-200 text-slate-900 shadow-sm">
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 gap-2 sm:gap-3">
-          
-          {/* Brand Logo */}
-          <div className="flex items-center gap-2 cursor-pointer select-none shrink-0" onClick={onHomeClick}>
-            <div className="w-9 h-9 rounded-2xl bg-[#ea580c] flex items-center justify-center shadow-md shadow-orange-500/25 transform hover:scale-105 transition">
-              <Ticket className="w-5 h-5 text-white transform -rotate-12" />
+    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white text-slate-900 shadow-sm">
+
+      <div className="mx-auto max-w-7xl px-3 sm:px-6 lg:px-8">
+
+        {/* ===================================================
+            DESKTOP / TABLET MAIN HEADER
+            =================================================== */}
+        <div className="flex h-16 items-center gap-2 sm:gap-3">
+
+          {/* BRAND */}
+          <button
+            type="button"
+            onClick={onHomeClick}
+            className="flex shrink-0 items-center gap-2 text-left"
+            aria-label="MahaTicket Home"
+          >
+            <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-red-600 shadow-md shadow-orange-500/25 transition-transform hover:scale-105">
+              <Ticket className="h-5 w-5 -rotate-12 text-white" />
             </div>
+
             <div className="hidden sm:block">
               <div className="flex items-center gap-1.5">
-                <span className="font-extrabold text-lg tracking-tight text-slate-950 font-serif">
+                <span className="font-serif text-lg font-extrabold tracking-tight text-slate-950">
                   {language === 'mr' ? 'महाटिकिट' : 'MahaTicket'}
                 </span>
-                <span className="text-[9px] uppercase font-black tracking-wider px-1.5 py-0.5 rounded-full bg-orange-100 text-[#ea580c] border border-orange-200">
+
+                <span className="rounded-full border border-orange-200 bg-orange-100 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-[#ea580c]">
                   MH
                 </span>
               </div>
-              <p className="text-[9px] text-slate-500 truncate max-w-[160px]">
+
+              <p className="max-w-[160px] truncate text-[9px] text-slate-500">
                 Maharashtra-First Ticket Marketplace
               </p>
             </div>
-          </div>
+          </button>
 
-          {/* City Selector */}
-          <div className="relative hidden md:flex items-center shrink-0">
-            <MapPin className="absolute left-3 w-3.5 h-3.5 text-[#ea580c] pointer-events-none" />
+          {/* CITY SELECTOR */}
+          <div className="relative hidden shrink-0 md:flex md:items-center">
+
+            <MapPin className="pointer-events-none absolute left-3 h-3.5 w-3.5 text-[#ea580c]" />
+
             <select
               value={selectedCity}
-              onChange={(e) => { onCityChange(e.target.value); localStorage.setItem('mahaticket_user_city', e.target.value); }}
-              className="bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-7 py-2 text-xs font-bold text-slate-800 hover:border-[#ea580c] focus:outline-none focus:ring-2 focus:ring-[#ea580c]/30 transition appearance-none cursor-pointer max-w-[160px]"
+              onChange={(event) => handleCityChange(event.target.value)}
+              className="max-w-[175px] cursor-pointer appearance-none rounded-xl border border-slate-200 bg-slate-50 py-2 pl-8 pr-8 text-xs font-bold text-slate-800 outline-none transition hover:border-orange-300 focus:border-[#ea580c] focus:ring-2 focus:ring-orange-500/20"
+              aria-label="Select city"
             >
-              {cityList.map((c) => (
-                <option key={c} value={c} className="bg-white text-slate-900">
-                  {c === 'महाराष्ट्र (All)' ? t.allMaharashtra : c}
+              {cityList.map((city) => (
+                <option
+                  key={city}
+                  value={city}
+                  className="bg-white text-slate-900"
+                >
+                  {city === 'महाराष्ट्र (All)' ? t.allMaharashtra : city}
                 </option>
               ))}
             </select>
-            <ChevronDown className="absolute right-2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+
+            {detectingCity ? (
+              <Loader2 className="pointer-events-none absolute right-2 h-3.5 w-3.5 animate-spin text-[#ea580c]" />
+            ) : (
+              <ChevronDown className="pointer-events-none absolute right-2 h-3.5 w-3.5 text-slate-400" />
+            )}
           </div>
 
-          {/* LIVE SEARCH BAR — Full width, prominent */}
-          <div className="flex-1 max-w-md relative" ref={searchRef}>
+          {/* LIVE SEARCH */}
+          <div
+            ref={searchRef}
+            className="relative min-w-0 flex-1"
+          >
             <div className="relative">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+
               <input
-                type="text"
-                placeholder={language === 'mr' ? 'नाटक, संगीत, कार्यक्रम शोधा...' : 'Search plays, music, events...'}
+                type="search"
                 value={searchQuery}
-                onChange={(e) => onSearchChange(e.target.value)}
+                onChange={(event) => onSearchChange(event.target.value)}
                 onFocus={() => setSearchFocused(true)}
-                className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl pl-10 pr-10 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-0 focus:border-[#ea580c] transition"
+                onKeyDown={handleSearchKeyDown}
+                placeholder={
+                  language === 'mr'
+                    ? 'नाटक, संगीत, कार्यक्रम शोधा...'
+                    : 'Search plays, music, events...'
+                }
+                autoComplete="off"
+                spellCheck={false}
+                className="w-full rounded-xl border-2 border-slate-200 bg-slate-50 py-2.5 pl-10 pr-10 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#ea580c] focus:bg-white"
+                aria-label="Search events"
               />
-              {searchQuery && (
+
+              {/* IMPORTANT:
+                  spinner now correctly shows while searching.
+                  The previous code had !searchQuery here,
+                  which prevented the spinner from appearing
+                  during an actual search. */}
+              {searching ? (
+                <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-[#ea580c]" />
+              ) : searchQuery ? (
                 <button
-                  onClick={() => { onSearchChange(''); setLiveResults([]); }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  type="button"
+                  onClick={() => {
+                    onSearchChange('');
+                    setLiveResults([]);
+                    setSearchFocused(false);
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-slate-400 transition hover:bg-slate-200 hover:text-slate-700"
+                  aria-label="Clear search"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="h-4 w-4" />
                 </button>
-              )}
-              {searching && !searchQuery && (
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-[#ea580c] border-t-transparent rounded-full animate-spin" />
-              )}
+              ) : null}
             </div>
 
-            {/* Live Search Results Dropdown */}
+            {/* LIVE RESULTS */}
             {showResults && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 overflow-hidden">
+              <div className="absolute left-0 right-0 top-full z-[60] mt-1 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+
                 {searching ? (
-                  <div className="flex items-center gap-3 px-4 py-3 text-xs text-slate-500">
-                    <div className="w-3.5 h-3.5 border-2 border-[#ea580c] border-t-transparent rounded-full animate-spin shrink-0" />
-                    <span>शोधत आहे...</span>
+                  <div className="flex items-center gap-3 px-4 py-4 text-xs text-slate-500">
+                    <Loader2 className="h-4 w-4 animate-spin text-[#ea580c]" />
+                    <span>
+                      {language === 'mr'
+                        ? 'कार्यक्रम शोधत आहे...'
+                        : 'Searching events...'}
+                    </span>
                   </div>
                 ) : liveResults.length > 0 ? (
                   <>
-                    <div className="px-4 pt-2.5 pb-1">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                        <TrendingUp className="w-3 h-3 text-[#ea580c]" />
-                        <span>शोध परिणाम ({liveResults.length} कार्यक्रम)</span>
+                    <div className="flex items-center gap-1.5 border-b border-slate-100 px-4 py-2.5">
+                      <TrendingUp className="h-3.5 w-3.5 text-[#ea580c]" />
+
+                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                        {language === 'mr'
+                          ? `तुमच्यासाठी ${liveResults.length} कार्यक्रम`
+                          : `${liveResults.length} matching events`}
                       </p>
                     </div>
-                    {liveResults.map((ev) => (
+
+                    {liveResults.map((event) => (
                       <button
-                        key={ev.id}
-                        onClick={() => handleSearchResultClick(ev)}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-orange-50 transition text-left group"
+                        type="button"
+                        key={event.id}
+                        onClick={() => handleSearchResultClick(event)}
+                        className="group flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-orange-50"
                       >
-                        <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 bg-slate-100 border border-slate-200">
-                          {ev.posterUrl ? (
-                            <img src={ev.posterUrl} alt="" className="w-full h-full object-cover" />
+                        <div className="h-11 w-11 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+                          {event.posterUrl ? (
+                            <img
+                              src={event.posterUrl}
+                              alt=""
+                              loading="lazy"
+                              className="h-full w-full object-cover"
+                            />
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center text-[#ea580c]">
-                              <Ticket className="w-5 h-5" />
+                            <div className="flex h-full w-full items-center justify-center text-[#ea580c]">
+                              <Ticket className="h-5 w-5" />
                             </div>
                           )}
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-slate-900 group-hover:text-[#ea580c] truncate transition">
-                            {ev.titleMr || ev.title}
+
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-bold text-slate-900 transition group-hover:text-[#ea580c]">
+                            {language === 'mr'
+                              ? event.titleMr || event.title
+                              : event.title || event.titleMr}
                           </p>
-                          <p className="text-[11px] text-slate-500 flex items-center gap-1 truncate">
-                            <MapPin className="w-3 h-3 shrink-0" />
-                            <span>{ev.venue?.nameMr || ev.venue?.name || ''} · {ev.venue?.city || ''}</span>
+
+                          <p className="mt-0.5 flex items-center gap-1 truncate text-[11px] text-slate-500">
+                            <MapPin className="h-3 w-3 shrink-0" />
+
+                            <span>
+                              {event.venue?.nameMr ||
+                                event.venue?.name ||
+                                ''}
+
+                              {event.venue?.city
+                                ? ` · ${event.venue.city}`
+                                : ''}
+                            </span>
                           </p>
                         </div>
-                        <div className="shrink-0 text-[10px] font-bold text-[#ea580c] bg-orange-50 px-2 py-1 rounded-lg border border-orange-200">
-                          ₹{ev.minPrice || '—'}
+
+                        <div className="shrink-0 rounded-lg border border-orange-200 bg-orange-50 px-2 py-1 text-[10px] font-black text-[#ea580c]">
+                          {event.minPrice
+                            ? `₹${event.minPrice}`
+                            : 'View'}
                         </div>
                       </button>
                     ))}
-                    <div className="px-4 py-2 border-t border-slate-100">
-                      <p className="text-[11px] text-slate-400 text-center">Enter दाबा किंवा वरील कार्यक्रम निवडा</p>
+
+                    <div className="border-t border-slate-100 px-4 py-2 text-center">
+                      <p className="text-[10px] text-slate-400">
+                        {language === 'mr'
+                          ? 'Enter दाबा किंवा कार्यक्रम निवडा'
+                          : 'Select an event above'}
+                      </p>
                     </div>
                   </>
                 ) : (
-                  <div className="px-4 py-4 text-xs text-slate-500 flex items-center gap-2">
-                    <Search className="w-4 h-4 text-slate-300" />
-                    <span>"{searchQuery}" साठी कोणताही कार्यक्रम आढळला नाही</span>
+                  <div className="flex items-center gap-3 px-4 py-5 text-xs text-slate-500">
+                    <Search className="h-4 w-4 text-slate-300" />
+
+                    <span>
+                      {language === 'mr'
+                        ? `"${searchQuery}" साठी कार्यक्रम आढळला नाही`
+                        : `No events found for "${searchQuery}"`}
+                    </span>
                   </div>
                 )}
               </div>
             )}
           </div>
 
-          {/* Actions & Buttons */}
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            {/* Language Switch */}
-            <button
-              onClick={() => onLanguageChange(language === 'mr' ? 'en' : 'mr')}
-              className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-bold text-slate-700 transition"
-              title="Change Language"
-            >
-              <Globe className="w-3.5 h-3.5 text-[#ea580c]" />
-              <span>{language === 'mr' ? 'EN' : 'मरा'}</span>
-            </button>
+          {/* RIGHT ACTIONS */}
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
 
-            {/* My Tickets Button */}
-            <button
-              onClick={handleMyTicketsClick}
-              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-50 border border-orange-200 hover:bg-orange-100 text-xs font-extrabold text-[#ea580c] transition shadow-sm"
+            {/* =================================================
+                LANGUAGE SWITCH
+                En / म
+                Active language = ORANGE
+                ================================================= */}
+            <div
+              className="hidden items-center rounded-xl border border-slate-200 bg-slate-50 p-0.5 sm:flex"
+              aria-label="Language selector"
             >
-              <Bookmark className="w-3.5 h-3.5" />
-              <span>{t.myTickets}</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => onLanguageChange('en')}
+                className={`min-w-[34px] rounded-lg px-2 py-1.5 text-[11px] font-black transition-all ${language === 'en'
+                  ? 'bg-[#ea580c] text-white shadow-sm'
+                  : 'text-slate-500 hover:bg-white hover:text-slate-800'
+                  }`}
+                aria-pressed={language === 'en'}
+              >
+                En
+              </button>
 
-            {/* Auth Button / User Dropdown */}
+              <button
+                type="button"
+                onClick={() => onLanguageChange('mr')}
+                className={`min-w-[34px] rounded-lg px-2 py-1.5 text-[11px] font-black transition-all ${language === 'mr'
+                  ? 'bg-[#ea580c] text-white shadow-sm'
+                  : 'text-slate-500 hover:bg-white hover:text-slate-800'
+                  }`}
+                aria-pressed={language === 'mr'}
+              >
+                म
+              </button>
+            </div>
+
+            {/* USER / ACCOUNT */}
             {user ? (
-              <div className="relative">
+              <div
+                ref={userMenuRef}
+                className="relative"
+              >
                 <button
-                  onClick={() => setUserMenuOpen(!userMenuOpen)}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-bold text-slate-900 transition"
+                  type="button"
+                  onClick={() => setUserMenuOpen((open) => !open)}
+                  className={`flex items-center gap-1.5 rounded-xl border px-2 py-1.5 text-xs font-bold transition ${userMenuOpen
+                    ? 'border-orange-300 bg-orange-50 text-[#ea580c]'
+                    : 'border-slate-200 bg-white text-slate-800 hover:border-orange-200 hover:bg-orange-50/50'
+                    }`}
+                  aria-expanded={userMenuOpen}
+                  aria-haspopup="menu"
                 >
-                  <div className="w-5 h-5 rounded-full bg-orange-100 text-[#ea580c] flex items-center justify-center font-bold text-[10px]">
-                    {(user.fullName || user.email || 'U')[0].toUpperCase()}
-                  </div>
-                  <span className="hidden sm:inline truncate max-w-[90px]">
-                    {user.fullName || user.email?.split('@')[0]}
+                  {/* Fixed profile icon */}
+                  <span
+                    className={`flex h-7 w-7 items-center justify-center rounded-full transition ${userMenuOpen
+                      ? 'bg-[#ea580c] text-white'
+                      : 'bg-orange-100 text-[#ea580c]'
+                      }`}
+                  >
+                    <User className="h-4 w-4" />
                   </span>
-                  <ChevronDown className="w-3 h-3 text-slate-400" />
+
+                  <span className="hidden sm:block">
+                    {language === 'mr' ? 'माझे खाते' : 'My Account'}
+                  </span>
+
+                  <ChevronDown
+                    className={`h-3.5 w-3.5 transition-transform ${userMenuOpen ? 'rotate-180' : ''
+                      }`}
+                  />
                 </button>
 
+                {/* ONLY TWO SUB OPTIONS */}
                 {userMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-2xl border border-slate-200 py-2 z-50">
-                    <div className="px-4 py-2 border-b border-slate-100">
-                      <p className="text-[10px] text-slate-500 uppercase font-bold">लॉगिन केले आहे</p>
-                      <p className="text-xs font-bold text-slate-900 truncate">{user.email}</p>
-                    </div>
+                  <div className="absolute right-0 top-full z-[70] mt-2 w-52 overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-2xl">
+
                     <button
-                      onClick={() => { setUserMenuOpen(false); onOpenMyTickets(); }}
-                      className="w-full text-left px-4 py-2 text-xs font-bold text-slate-800 hover:bg-orange-50 hover:text-[#ea580c] transition flex items-center gap-2"
+                      type="button"
+                      onClick={handleMyTicketsClick}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-xs font-bold text-slate-800 transition hover:bg-orange-50 hover:text-[#ea580c]"
                     >
-                      <Bookmark className="w-4 h-4 text-[#ea580c]" />
-                      <span>माझी तिकिटे</span>
+                      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-100 text-[#ea580c]">
+                        <Bookmark className="h-4 w-4" />
+                      </span>
+
+                      <span>
+                        {language === 'mr'
+                          ? 'माझी तिकिटे'
+                          : 'My Tickets'}
+                      </span>
                     </button>
-                    <a
-                      href="/profile"
-                      className="block px-4 py-2 text-xs font-bold text-slate-800 hover:bg-orange-50 hover:text-[#ea580c] transition"
-                    >
-                      माझे प्रोफाइल
-                    </a>
+
                     <button
-                      onClick={handleLogout}
-                      className="w-full flex items-center gap-2 px-4 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 transition border-t border-slate-100 mt-1"
+                      type="button"
+                      onClick={handleProfileClick}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-xs font-bold text-slate-800 transition hover:bg-orange-50 hover:text-[#ea580c]"
                     >
-                      <LogOut className="w-4 h-4" />
-                      लॉगआउट
+                      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+                        <User className="h-4 w-4" />
+                      </span>
+
+                      <span>
+                        {language === 'mr'
+                          ? 'माझे प्रोफाइल'
+                          : 'My Profile'}
+                      </span>
                     </button>
                   </div>
                 )}
               </div>
             ) : (
               <button
+                type="button"
                 onClick={handleLoginClick}
-                className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-xl bg-[#ea580c] hover:bg-[#c2410c] text-white text-xs font-extrabold transition shadow-md shadow-orange-500/20 active:scale-95"
+                className="flex items-center gap-1.5 rounded-xl bg-[#ea580c] px-3 py-2 text-xs font-extrabold text-white shadow-md shadow-orange-500/20 transition hover:bg-[#c2410c] active:scale-95 sm:px-4"
               >
-                <User className="w-3.5 h-3.5" />
-                <span>लॉगिन</span>
+                <User className="h-3.5 w-3.5" />
+
+                <span>
+                  {language === 'mr' ? 'लॉगिन' : 'Login'}
+                </span>
               </button>
             )}
 
-            {/* PWA Install */}
-            {isInstallable && (
-              <button
-                onClick={install}
-                className="hidden lg:flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm transition"
-              >
-                <Download className="w-3.5 h-3.5 text-orange-400" />
-                <span className="hidden xl:inline">{t.installApp}</span>
-              </button>
-            )}
-
-            {/* Mobile Hamburger */}
+            {/* MOBILE MENU */}
             <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:text-slate-900 hover:border-slate-300"
+              type="button"
+              onClick={() => setMobileMenuOpen((open) => !open)}
+              className="rounded-xl border border-slate-200 bg-white p-2 text-slate-700 transition hover:border-orange-300 hover:text-[#ea580c] md:hidden"
+              aria-label="Open menu"
+              aria-expanded={mobileMenuOpen}
             >
-              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              {mobileMenuOpen ? (
+                <X className="h-5 w-5" />
+              ) : (
+                <Menu className="h-5 w-5" />
+              )}
             </button>
           </div>
         </div>
 
-        {/* Mobile City Bar */}
-        <div className="sm:hidden pb-2 pt-1 flex items-center gap-2">
-          <div className="relative flex-1">
-            <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#ea580c] pointer-events-none" />
+        {/* ===================================================
+            MOBILE CITY + LANGUAGE
+            =================================================== */}
+        <div className="flex items-center gap-2 pb-2 pt-1 sm:hidden">
+
+          <div className="relative min-w-0 flex-1">
+            <MapPin className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#ea580c]" />
+
             <select
               value={selectedCity}
-              onChange={(e) => { onCityChange(e.target.value); localStorage.setItem('mahaticket_user_city', e.target.value); }}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-6 py-1.5 text-xs font-bold text-[#ea580c] appearance-none cursor-pointer focus:outline-none focus:border-[#ea580c]"
+              onChange={(event) => handleCityChange(event.target.value)}
+              className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-7 text-xs font-bold text-slate-800 outline-none focus:border-[#ea580c]"
+              aria-label="Select city"
             >
-              {cityList.map((c) => (
-                <option key={c} value={c}>
-                  {c === 'महाराष्ट्र (All)' ? 'सर्व महाराष्ट्र' : c}
+              {cityList.map((city) => (
+                <option key={city} value={city}>
+                  {city === 'महाराष्ट्र (All)'
+                    ? language === 'mr'
+                      ? 'सर्व महाराष्ट्र'
+                      : 'All Maharashtra'
+                    : city}
                 </option>
               ))}
             </select>
-            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
-          </div>
-          <button
-            onClick={() => onLanguageChange(language === 'mr' ? 'en' : 'mr')}
-            className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 shrink-0"
-          >
-            {language === 'mr' ? 'EN' : 'मरा'}
-          </button>
-        </div>
 
-        {/* Mobile Menu */}
-        {mobileMenuOpen && (
-          <div className="md:hidden border-t border-slate-100 py-3 space-y-2 bg-white">
+            {detectingCity ? (
+              <Loader2 className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-[#ea580c]" />
+            ) : (
+              <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+            )}
+          </div>
+
+          {/* Mobile En / म switch */}
+          <div className="flex shrink-0 items-center rounded-xl border border-slate-200 bg-slate-50 p-0.5">
             <button
-              onClick={() => { setMobileMenuOpen(false); handleMyTicketsClick(); }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl bg-orange-50 text-xs font-bold text-[#ea580c] border border-orange-200"
+              type="button"
+              onClick={() => onLanguageChange('en')}
+              className={`rounded-lg px-2.5 py-1.5 text-[10px] font-black transition ${language === 'en'
+                ? 'bg-[#ea580c] text-white shadow-sm'
+                : 'text-slate-500'
+                }`}
+              aria-pressed={language === 'en'}
             >
-              <Bookmark className="w-4 h-4" />
-              <span>{t.myTickets}</span>
+              En
             </button>
 
-            {!user ? (
+            <button
+              type="button"
+              onClick={() => onLanguageChange('mr')}
+              className={`rounded-lg px-2.5 py-1.5 text-[10px] font-black transition ${language === 'mr'
+                ? 'bg-[#ea580c] text-white shadow-sm'
+                : 'text-slate-500'
+                }`}
+              aria-pressed={language === 'mr'}
+            >
+              म
+            </button>
+          </div>
+        </div>
+
+        {/* ===================================================
+            MOBILE MENU
+            =================================================== */}
+        {mobileMenuOpen && (
+          <div className="space-y-2 border-t border-slate-100 bg-white py-3 md:hidden">
+
+            {/* My Tickets */}
+            <button
+              type="button"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                handleMyTicketsClick();
+              }}
+              className="flex w-full items-center gap-2.5 rounded-xl border border-orange-200 bg-orange-50 px-3 py-2.5 text-xs font-bold text-[#ea580c]"
+            >
+              <Bookmark className="h-4 w-4" />
+
+              <span>
+                {language === 'mr'
+                  ? 'माझी तिकिटे'
+                  : 'My Tickets'}
+              </span>
+            </button>
+
+            {/* My Profile */}
+            <button
+              type="button"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                handleProfileClick();
+              }}
+              className="flex w-full items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-bold text-slate-800"
+            >
+              <User className="h-4 w-4 text-[#ea580c]" />
+
+              <span>
+                {language === 'mr'
+                  ? 'माझे प्रोफाइल'
+                  : 'My Profile'}
+              </span>
+            </button>
+
+            {/* Login only when not authenticated */}
+            {!user && (
               <button
-                onClick={() => { setMobileMenuOpen(false); handleLoginClick(); }}
-                className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-[#ea580c] text-white text-xs font-bold"
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  handleLoginClick();
+                }}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#ea580c] px-3 py-2.5 text-xs font-bold text-white"
               >
-                <User className="w-4 h-4" />
-                <span>लॉगिन करा</span>
-              </button>
-            ) : (
-              <button
-                onClick={handleLogout}
-                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl bg-rose-50 text-xs font-bold text-rose-600 border border-rose-200"
-              >
-                <LogOut className="w-4 h-4" />
-                <span>लॉगआउट करा</span>
+                <User className="h-4 w-4" />
+
+                <span>
+                  {language === 'mr'
+                    ? 'लॉगिन करा'
+                    : 'Login'}
+                </span>
               </button>
             )}
 
+            {/* Partner */}
             <button
-              onClick={() => { onOpenPartnerModal(); setMobileMenuOpen(false); }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl bg-slate-50 text-xs font-bold text-slate-800 border border-slate-200"
+              type="button"
+              onClick={() => {
+                onOpenPartnerModal();
+                setMobileMenuOpen(false);
+              }}
+              className="flex w-full items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-bold text-slate-800"
             >
-              <Building2 className="w-4 h-4 text-slate-500" />
-              <span>{t.partnerWithUs}</span>
+              <Building2 className="h-4 w-4 text-slate-500" />
+
+              <span>
+                {language === 'mr'
+                  ? 'आमच्यासोबत भागीदारी'
+                  : 'Partner With Us'}
+              </span>
             </button>
 
+            {/* Install */}
             {isInstallable && (
               <button
-                onClick={() => { install(); setMobileMenuOpen(false); }}
-                className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-slate-900 text-white font-bold text-xs"
+                type="button"
+                onClick={() => {
+                  install();
+                  setMobileMenuOpen(false);
+                }}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-3 py-2.5 text-xs font-bold text-white"
               >
-                <Download className="w-4 h-4 text-orange-400" />
+                <Download className="h-4 w-4 text-orange-400" />
+
                 <span>{t.installApp}</span>
               </button>
             )}
@@ -482,12 +1024,32 @@ export const Header: React.FC<HeaderProps> = ({
         )}
       </div>
 
-      {/* Auth Modal */}
+      {/* =====================================================
+          LIVE CITY DETECTED MINI BANNER
+          ===================================================== */}
+      {cityDetectedLive && selectedCity !== 'महाराष्ट्र (All)' && (
+        <div className="border-t border-orange-100 bg-orange-50">
+          <div className="mx-auto flex max-w-7xl items-center justify-center gap-1.5 px-4 py-1.5 text-[10px] font-bold text-orange-700">
+            <Navigation className="h-3 w-3" />
+
+            <span>
+              {language === 'mr'
+                ? `तुमचे शहर ${selectedCity} निवडले आहे`
+                : `${selectedCity} selected for you`}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================
+          AUTH MODAL
+          ===================================================== */}
       <AuthModal
         isOpen={authModalOpen}
         initialMessage={authModalMessage}
         onClose={() => setAuthModalOpen(false)}
         onSuccess={() => {
+          setAuthModalOpen(false);
           checkUserSession();
           onOpenMyTickets();
         }}

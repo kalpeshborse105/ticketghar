@@ -213,7 +213,7 @@ export default function HomePage() {
             setError(null);
             setLoading(false);
             return;
-          } catch {}
+          } catch { }
         }
       }
       setError(err.message || 'Error loading events');
@@ -491,11 +491,10 @@ export default function HomePage() {
                     <button
                       key={cat.id}
                       onClick={() => setSelectedCategory(cat.id)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all whitespace-nowrap cursor-pointer active:scale-95 ${
-                        isSelected
-                          ? 'bg-[#ea580c] text-white shadow-sm font-bold'
-                          : 'bg-white text-slate-700 hover:text-slate-900 border border-slate-200 hover:bg-slate-50 hover:border-orange-300'
-                      }`}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all whitespace-nowrap cursor-pointer active:scale-95 ${isSelected
+                        ? 'bg-[#ea580c] text-white shadow-sm font-bold'
+                        : 'bg-white text-slate-700 hover:text-slate-900 border border-slate-200 hover:bg-slate-50 hover:border-orange-300'
+                        }`}
                     >
                       <Icon className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : 'text-[#ea580c]'}`} />
                       <span>{language === 'mr' ? cat.labelMr : cat.labelEn}</span>
@@ -641,76 +640,445 @@ export default function HomePage() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-[#e5e7eb] bg-white py-8 px-4 sm:px-8 text-xs text-[#6b7280]">
-        <div className="max-w-7xl mx-auto space-y-6">
-          {/* Top: Brand + App Download */}
-          <div className="flex flex-col sm:flex-row items-center sm:items-start justify-between gap-6">
-            <div className="text-center sm:text-left">
-              <div className="flex items-center justify-center sm:justify-start gap-2 text-[#111827] font-bold text-base">
-                <div className="w-7 h-7 rounded-xl bg-[#ea580c] flex items-center justify-center">
-                  <svg viewBox="0 0 20 20" className="w-4 h-4 text-white" fill="currentColor">
-                    <path d="M2 6a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/>
+      {/* =========================================================
+    MODERN BOOKING PLATFORM FOOTER
+    ========================================================= */}
+      <footer className="relative mt-10 overflow-hidden border-t border-slate-200 bg-[#0b1220] text-white">
+
+        {/* Decorative background */}
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div className="absolute -right-32 -top-32 h-80 w-80 rounded-full bg-orange-500/10 blur-3xl" />
+          <div className="absolute -left-32 bottom-0 h-72 w-72 rounded-full bg-pink-500/10 blur-3xl" />
+          <div className="absolute left-1/2 top-1/2 h-64 w-64 -translate-x-1/2 -translate-y-1/2 rounded-full bg-purple-500/5 blur-3xl" />
+        </div>
+
+        <div className="relative mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+
+          {/* =====================================================
+        TOP APP PROMOTION
+        ===================================================== */}
+          <div className="mb-10 overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-r from-orange-600 via-red-500 to-pink-600 p-5 shadow-2xl sm:p-7">
+
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+
+              {/* Left */}
+              <div className="flex items-start gap-4">
+
+                {/* App Icon */}
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-white shadow-lg sm:h-20 sm:w-20">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 via-red-500 to-pink-500 text-white shadow-md sm:h-14 sm:w-14">
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="h-7 w-7 sm:h-8 sm:w-8"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <rect x="5" y="2.5" width="14" height="19" rx="3" />
+                      <path d="M9 5h6" strokeLinecap="round" />
+                      <circle cx="12" cy="18" r="1" fill="currentColor" stroke="none" />
+                    </svg>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="mb-1 flex flex-wrap items-center gap-2">
+                    <h2 className="text-lg font-black tracking-tight sm:text-2xl">
+                      महाटिकिट
+                    </h2>
+
+                    <span className="rounded-full bg-white/15 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-white backdrop-blur">
+                      Official App
+                    </span>
+                  </div>
+
+                  <p className="max-w-xl text-sm font-medium text-white/90 sm:text-base">
+                    महाराष्ट्रातील नाटक, संगीत, कॉमेडी, चित्रपट,
+                    क्रीडा आणि खास कार्यक्रमांची तिकिटे एका ठिकाणी.
+                  </p>
+
+                  <p className="mt-1 text-xs text-white/70">
+                    Discover • Book • Enjoy
+                  </p>
+                </div>
+              </div>
+
+              {/* Google Play */}
+              <div className="shrink-0">
+                <a
+                  href="#"
+                  onClick={(e) => e.preventDefault()}
+                  aria-label="Get MahaTicket on Google Play"
+                  title="MahaTicket Android App — Coming Soon"
+                  className="group flex min-w-[205px] items-center gap-3 rounded-xl border border-white/20 bg-black px-4 py-3 text-white shadow-xl transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#050505] hover:shadow-2xl active:scale-[0.98]"
+                >
+
+                  {/* Google Play Multicolor Icon */}
+                  <svg
+                    viewBox="0 0 48 48"
+                    className="h-9 w-9 shrink-0"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M5.5 4.4c-.9.9-1.5 2.3-1.5 4v31.2c0 1.7.6 3.1 1.5 4l.2.2L28.1 24v-.5L5.7 4.2l-.2.2z"
+                      fill="#00D7FF"
+                    />
+                    <path
+                      d="M35.6 31.5 28.1 24v-.5l7.5-7.5.2.1 8.9 5.1c2.5 1.4 2.5 3.7 0 5.1l-8.9 5.1-.2.1z"
+                      fill="#FFD500"
+                    />
+                    <path
+                      d="m5.7 43.8 22.4-19.3 7.5 7.5-25.8 14.8c-1.6.9-3 .4-4.1-3z"
+                      fill="#FF3B5C"
+                    />
+                    <path
+                      d="M5.7 4.2c1.1-3.4 2.5-3.9 4.1-3l25.8 14.8-7.5 7.5L5.7 4.2z"
+                      fill="#00E676"
+                    />
+                  </svg>
+
+                  <div className="text-left">
+                    <p className="text-[10px] leading-none text-white/60">
+                      GET IT ON
+                    </p>
+
+                    <p className="mt-1 text-[16px] font-semibold leading-none tracking-tight">
+                      Google Play
+                    </p>
+                  </div>
+                </a>
+
+                <p className="mt-2 text-center text-[9px] font-medium text-white/60">
+                  Android app coming soon
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* =====================================================
+        BRAND + LINK COLUMNS
+        ===================================================== */}
+          <div className="grid grid-cols-2 gap-8 sm:grid-cols-3 lg:grid-cols-5">
+
+            {/* Brand */}
+            <div className="col-span-2 sm:col-span-3 lg:col-span-2">
+
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-red-600 shadow-lg shadow-orange-500/20">
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="h-6 w-6 text-white"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path
+                      d="M4 5h16v14H4z"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d="m8 9 3 3-3 3M13 15h3"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
                   </svg>
                 </div>
-                <span>MahaTicket (महाटिकिट)</span>
-                <span className="text-[9px] text-[#ea580c] bg-[#ea580c]/10 px-1.5 py-0.5 rounded border border-[#ea580c]/20 font-black">MH</span>
+
+                <div>
+                  <h3 className="text-lg font-black tracking-tight">
+                    MahaTicket
+                  </h3>
+
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-orange-400">
+                    Maharashtra's Ticketing Platform
+                  </p>
+                </div>
               </div>
-              <p className="mt-1 text-[#9ca3af] text-[11px]">महाराष्ट्र • पुणे • मुंबई • ठाणे • नाशिक • नागपूर • कोल्हापूर</p>
-              <p className="mt-0.5 text-[#9ca3af] text-[11px]">Maharashtra-First Theatre & Events Ticketing Platform</p>
+
+              <p className="mt-4 max-w-sm text-sm leading-6 text-slate-400">
+                नाटक, संगीत, कॉमेडी, सांस्कृतिक कार्यक्रम, चित्रपट,
+                क्रीडा आणि इतर खास अनुभवांसाठी सोपे आणि सुरक्षित
+                ऑनलाइन तिकीट बुकिंग.
+              </p>
+
+              {/* Trust badges */}
+              <div className="mt-5 flex flex-wrap gap-2">
+                <span className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-semibold text-slate-300">
+                  ✓ Secure Booking
+                </span>
+
+                <span className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-semibold text-slate-300">
+                  ✓ Digital Tickets
+                </span>
+
+                <span className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-semibold text-slate-300">
+                  ✓ Easy Payments
+                </span>
+              </div>
             </div>
 
-            {/* App Download Buttons */}
+            {/* Explore */}
+            <div>
+              <h4 className="mb-4 text-xs font-black uppercase tracking-wider text-white">
+                Explore
+              </h4>
+
+              <div className="space-y-3 text-sm text-slate-400">
+                <button
+                  onClick={() => {
+                    setViewState('home');
+                    setSelectedCategory('all');
+                  }}
+                  className="block transition hover:text-orange-400"
+                >
+                  All Events
+                </button>
+
+                <button
+                  onClick={() => setSelectedCategory('plays')}
+                  className="block transition hover:text-orange-400"
+                >
+                  Plays & Theatre
+                </button>
+
+                <button
+                  onClick={() => setSelectedCategory('music')}
+                  className="block transition hover:text-orange-400"
+                >
+                  Music & Concerts
+                </button>
+
+                <button
+                  onClick={() => setSelectedCategory('comedy')}
+                  className="block transition hover:text-orange-400"
+                >
+                  Comedy
+                </button>
+
+                <button
+                  onClick={() => setSelectedCategory('movies')}
+                  className="block transition hover:text-orange-400"
+                >
+                  Movies
+                </button>
+              </div>
+            </div>
+
+            {/* Company */}
+            <div>
+              <h4 className="mb-4 text-xs font-black uppercase tracking-wider text-white">
+                Company
+              </h4>
+
+              <div className="space-y-3 text-sm text-slate-400">
+
+                <Link
+                  href="/about"
+                  className="block transition hover:text-orange-400"
+                >
+                  About Us
+                </Link>
+
+                <button
+                  onClick={() => setPartnerModalOpen(true)}
+                  className="block transition hover:text-orange-400"
+                >
+                  Partner With Us
+                </button>
+
+                <Link
+                  href="/contact"
+                  className="block transition hover:text-orange-400"
+                >
+                  Contact Us
+                </Link>
+
+                <Link
+                  href="/privacy"
+                  className="block transition hover:text-orange-400"
+                >
+                  Privacy Policy
+                </Link>
+
+                <Link
+                  href="/terms"
+                  className="block transition hover:text-orange-400"
+                >
+                  Terms & Conditions
+                </Link>
+              </div>
+            </div>
+
+            {/* Support */}
+            <div>
+              <h4 className="mb-4 text-xs font-black uppercase tracking-wider text-white">
+                Support
+              </h4>
+
+              <div className="space-y-3 text-sm text-slate-400">
+
+                <Link
+                  href="/refund"
+                  className="block transition hover:text-orange-400"
+                >
+                  Refund Policy
+                </Link>
+
+                <button
+                  onClick={() => {
+                    setViewState('my_tickets');
+                    setActiveNavTab('tickets');
+                  }}
+                  className="block transition hover:text-orange-400"
+                >
+                  My Tickets
+                </button>
+
+                <button
+                  onClick={() => setViewState('offers')}
+                  className="block transition hover:text-orange-400"
+                >
+                  Offers & Coupons
+                </button>
+
+                <Link
+                  href="/contact"
+                  className="block transition hover:text-orange-400"
+                >
+                  Help Centre
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          {/* =====================================================
+        CATEGORIES STRIP
+        ===================================================== */}
+          <div className="mt-10 border-y border-white/10 py-6">
+
+            <div className="mb-4 flex items-center justify-between">
+              <h4 className="text-xs font-black uppercase tracking-wider text-white">
+                Discover Experiences
+              </h4>
+
+              <span className="text-[10px] font-medium text-slate-500">
+                Maharashtra
+              </span>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+
+              {[
+                {
+                  id: 'plays',
+                  label: '🎭 नाटक',
+                  bg: 'bg-orange-500/10',
+                  border: 'border-orange-500/20',
+                  text: 'text-orange-400',
+                },
+                {
+                  id: 'music',
+                  label: '🎵 संगीत',
+                  bg: 'bg-purple-500/10',
+                  border: 'border-purple-500/20',
+                  text: 'text-purple-400',
+                },
+                {
+                  id: 'comedy',
+                  label: '😂 कॉमेडी',
+                  bg: 'bg-yellow-500/10',
+                  border: 'border-yellow-500/20',
+                  text: 'text-yellow-400',
+                },
+                {
+                  id: 'cultural',
+                  label: '🎉 सांस्कृतिक',
+                  bg: 'bg-pink-500/10',
+                  border: 'border-pink-500/20',
+                  text: 'text-pink-400',
+                },
+                {
+                  id: 'movies',
+                  label: '🎬 चित्रपट',
+                  bg: 'bg-blue-500/10',
+                  border: 'border-blue-500/20',
+                  text: 'text-blue-400',
+                },
+                {
+                  id: 'sports',
+                  label: '🏆 क्रीडा',
+                  bg: 'bg-emerald-500/10',
+                  border: 'border-emerald-500/20',
+                  text: 'text-emerald-400',
+                },
+                {
+                  id: 'workshops',
+                  label: '🎨 कार्यशाळा',
+                  bg: 'bg-cyan-500/10',
+                  border: 'border-cyan-500/20',
+                  text: 'text-cyan-400',
+                },
+              ].map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    setViewState('home');
+                    setSelectedCategory(item.id as EventCategory);
+                  }}
+                  className={`rounded-full border ${item.border} ${item.bg} ${item.text} px-3.5 py-2 text-[11px] font-bold transition-all hover:-translate-y-0.5 hover:bg-white/10 active:scale-95`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[10px] text-slate-500">
+
+              <div>
+                <p className="text-[11px] font-semibold text-slate-400">
+                  © {new Date().getFullYear()} Kalpkrut Infotech Pvt. Ltd.
+                </p>
+
+                <p className="mt-1 text-[9px] text-slate-600">
+                  MahaTicket is a Maharashtra-focused events & ticketing platform.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* =====================================================
+        LOCATION / BRAND STATEMENT
+        ===================================================== */}
+          {/* <div className="mt-7 flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:flex-row sm:items-center sm:justify-between">
+
             <div className="flex items-center gap-3">
-              {/* Play Store Button — link added later */}
-              <a
-                href="#"
-                onClick={(e) => e.preventDefault()}
-                title="Coming soon on Google Play Store"
-                className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white transition border border-slate-700 shadow-sm group"
-              >
-                {/* Google Play Icon SVG */}
-                <svg viewBox="0 0 24 24" className="w-5 h-5 shrink-0" fill="currentColor">
-                  <path d="M3.18 23.76c.37.2.8.2 1.18.02l13.26-7.16-2.9-2.9-11.54 9.98c0 0 0 .06 0 .06zM.5 1.57C.19 1.96 0 2.51 0 3.16v17.68c0 .65.19 1.2.5 1.59l.08.08 9.9-9.9v-.23L.58 1.49.5 1.57zM19.97 10.37l-2.76-1.49-3.18 3.18 3.18 3.18 2.78-1.5c.79-.43.79-1.94-.02-2.37zm-17.67 12.7l11.19-9.67-3.01-3.01L2.3 23.07z"/>
-                </svg>
-                <div className="text-left">
-                  <p className="text-[9px] text-slate-400 leading-none">Coming Soon</p>
-                  <p className="text-xs font-bold leading-tight">Google Play</p>
-                </div>
-              </a>
 
-              {/* APK Download — direct install */}
-              <a
-                href="#"
-                onClick={(e) => e.preventDefault()}
-                title="Download APK directly (coming soon)"
-                className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-orange-50 border border-orange-200 hover:bg-orange-100 text-[#ea580c] transition group"
-              >
-                <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2}>
-                  <path d="M12 16l-4-4h2.5V4h3v8H16l-4 4zm-6 2h12v2H6v-2z" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-                <div className="text-left">
-                  <p className="text-[9px] text-[#ea580c]/70 leading-none">Direct</p>
-                  <p className="text-[11px] font-bold leading-tight">APK</p>
-                </div>
-              </a>
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-500/10 text-orange-400">
+                <MapPin className="h-4 w-4" />
+              </div>
+
+              <div>
+                <p className="text-xs font-bold text-white">
+                  महाराष्ट्रभर तुमच्या जवळचे कार्यक्रम
+                </p>
+
+                <p className="text-[10px] text-slate-500">
+                  Pune • Mumbai • Thane • Nashik • Nagpur • Kolhapur •
+                  Solapur • Aurangabad • Maharashtra
+                </p>
+              </div>
             </div>
-          </div>
 
-          {/* Divider */}
-          <div className="border-t border-[#f3f4f6]" />
+            <span className="text-[10px] font-semibold text-slate-500">
+              Built for Maharashtra
+            </span>
+          </div> */}
 
-          {/* Bottom: Links */}
-          <div className="flex flex-wrap items-center justify-between gap-y-3 gap-x-2">
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[#6b7280]">
-              <button onClick={() => setPartnerModalOpen(true)} className="hover:text-[#ea580c] transition font-medium">Partner With Us</button>
-              <Link href="/about" className="hover:text-[#ea580c] transition">About</Link>
-              <Link href="/terms" className="hover:text-[#ea580c] transition">Terms</Link>
-              <Link href="/privacy" className="hover:text-[#ea580c] transition">Privacy</Link>
-              <Link href="/refund" className="hover:text-[#ea580c] transition">Refunds</Link>
-              <Link href="/contact" className="hover:text-[#ea580c] transition">Contact</Link>
-            </div>
-            <span className="text-[#9ca3af]">© {new Date().getFullYear()} Kalpkrut Infotech Pvt. Ltd.</span>
-          </div>
+          {/* =====================================================
+        COPYRIGHT / LEGAL
+        ===================================================== */}
+
+
         </div>
       </footer>
 
