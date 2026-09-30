@@ -2,24 +2,39 @@ import { NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
 import { orders, auditLogs } from '@/src/db/schema.ts';
 import { eq } from 'drizzle-orm';
-import crypto from 'crypto';
-
-const WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET || 'ticketghar_rzp_webhook_secret_key_2026';
+import { verifyWebhookSignature } from '@/src/lib/payments/razorpay.ts';
 
 export async function POST(request: Request) {
   try {
     const rawBody = await request.text();
     const signature = request.headers.get('x-razorpay-signature');
 
-    // Verify signature if configured
-    if (process.env.NODE_ENV === 'production' && process.env.PAYMENT_WEBHOOK_SECRET) {
-      const expectedSignature = crypto
-        .createHmac('sha256', WEBHOOK_SECRET)
-        .update(rawBody)
-        .digest('hex');
+    // CRITICAL: Always verify webhook signature in production
+    if (process.env.NODE_ENV === 'production') {
+      if (!signature) {
+        console.error('Webhook signature missing in production');
+        return NextResponse.json({ error: 'Signature required' }, { status: 401 });
+      }
 
-      if (signature !== expectedSignature) {
-        return NextResponse.json({ error: 'Invalid webhook signature' }, { status: 400 });
+      if (!process.env.PAYMENT_WEBHOOK_SECRET) {
+        console.error('PAYMENT_WEBHOOK_SECRET not configured');
+        return NextResponse.json({ error: 'Webhook not configured' }, { status: 503 });
+      }
+
+      const isValid = verifyWebhookSignature(rawBody, signature);
+      if (!isValid) {
+        console.error('Invalid webhook signature');
+        return NextResponse.json({ error: 'Invalid webhook signature' }, { status: 401 });
+      }
+    } else {
+      // In development, log warning if signature is missing but allow processing
+      if (!signature) {
+        console.warn('Webhook signature missing in development mode');
+      } else if (process.env.PAYMENT_WEBHOOK_SECRET) {
+        const isValid = verifyWebhookSignature(rawBody, signature);
+        if (!isValid) {
+          console.warn('Invalid webhook signature in development mode');
+        }
       }
     }
 

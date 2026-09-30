@@ -15,6 +15,13 @@ import {
   AlertCircle,
 } from 'lucide-react';
 
+// Razorpay TypeScript declarations
+declare global {
+  interface Window {
+    Razorpay: any;
+  }
+}
+
 interface CheckoutDrawerProps {
   event: EventItem;
   session: EventSessionItem;
@@ -57,6 +64,26 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
   const [upiId, setUpiId] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [razorpayLoaded, setRazorpayLoaded] = useState(false);
+
+  // Load Razorpay checkout script
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.async = true;
+    script.onload = () => setRazorpayLoaded(true);
+    script.onerror = () => {
+      console.error('Failed to load Razorpay checkout script');
+      setErrorMessage('Failed to load payment gateway. Please refresh the page.');
+    };
+    document.body.appendChild(script);
+
+    return () => {
+      if (document.body.contains(script)) {
+        document.body.removeChild(script);
+      }
+    };
+  }, []);
 
   // Hold Countdown Timer
   const [timeLeft, setTimeLeft] = useState<number>(480);
@@ -133,35 +160,122 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
       return;
     }
 
+    if (!razorpayLoaded) {
+      setErrorMessage('Payment gateway is loading. Please wait a moment and try again.');
+      return;
+    }
+
     try {
       setIsProcessing(true);
       setErrorMessage(null);
 
-      const res = await fetch('/api/bookings/confirm', {
+      // Step 1: Create Razorpay order
+      const createOrderRes = await fetch('/api/payments/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sessionId: session.id,
-          eventId: event.id,
           seatIds: holdData.seatIds,
-          userName: userName.trim(),
-          userEmail: userEmail.trim().toLowerCase(),
-          userPhone: userPhone.trim(),
-          paymentMethod,
-          appliedCoupon: couponInput || null,
+          couponCode: couponInput || null,
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Booking confirmation failed.');
+      const orderData = await createOrderRes.json();
+
+      if (!createOrderRes.ok) {
+        // Handle payment gateway not configured
+        if (orderData.configured === false) {
+          setErrorMessage(
+            language === 'mr'
+              ? 'पेमेंट गेटवे कॉन्फिगर केलेला नाही. कृपया सपोर्टशी संपर्क साधा.'
+              : 'Payment gateway not configured. Please contact support.'
+          );
+          
+          // Check if direct confirm is allowed (only for admin/QA)
+          const allowDirectConfirm = process.env.NEXT_PUBLIC_ALLOW_DIRECT_CONFIRM === 'true';
+          if (allowDirectConfirm) {
+            console.warn('Payment gateway not configured but NEXT_PUBLIC_ALLOW_DIRECT_CONFIRM is true');
+            // Do not auto-confirm; user must explicitly handle this in admin mode
+          }
+          setIsProcessing(false);
+          return;
+        }
+        
+        throw new Error(orderData.error || 'Failed to create payment order');
       }
 
-      onSuccess(data);
+      // Step 2: Open Razorpay checkout
+      const options = {
+        key: orderData.keyId,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        name: 'MahaTicket',
+        description: `${language === 'mr' ? event.titleMr : event.title}`,
+        order_id: orderData.orderId,
+        prefill: {
+          name: userName.trim(),
+          email: userEmail.trim(),
+          contact: userPhone.trim(),
+        },
+        theme: {
+          color: '#ea580c',
+        },
+        modal: {
+          ondismiss: () => {
+            setIsProcessing(false);
+            setErrorMessage(
+              language === 'mr'
+                ? 'पेमेंट रद्द केले. कृपया पुन्हा प्रयत्न करा.'
+                : 'Payment cancelled. Please try again.'
+            );
+          },
+        },
+        handler: async (response: any) => {
+          try {
+            // Step 3: Verify payment and confirm booking
+            const verifyRes = await fetch('/api/payments/verify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+                sessionId: session.id,
+                eventId: event.id,
+                seatIds: holdData.seatIds,
+                userName: userName.trim(),
+                userEmail: userEmail.trim().toLowerCase(),
+                userPhone: userPhone.trim(),
+                couponCode: couponInput || null,
+              }),
+            });
+
+            const verifyData = await verifyRes.json();
+
+            if (!verifyRes.ok) {
+              throw new Error(verifyData.error || 'Payment verification failed');
+            }
+
+            // Success! Call the onSuccess callback
+            onSuccess(verifyData);
+          } catch (err: any) {
+            console.error('Payment verification error:', err);
+            setErrorMessage(
+              err.message || 
+              (language === 'mr' 
+                ? 'पेमेंट पडताळणी अयशस्वी. कृपया सपोर्टशी संपर्क साधा.'
+                : 'Payment verification failed. Please contact support.')
+            );
+            setIsProcessing(false);
+          }
+        },
+      };
+
+      const razorpay = new window.Razorpay(options);
+      razorpay.open();
     } catch (err: any) {
       console.error(err);
       setErrorMessage(err.message || 'Payment processing failed. Please retry.');
-    } finally {
       setIsProcessing(false);
     }
   };

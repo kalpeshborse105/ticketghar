@@ -8,6 +8,7 @@ export default defineConfig([
       "react-hooks/set-state-in-effect": "off",
       "react-hooks/exhaustive-deps": "warn",
       "@next/next/no-img-element": "off",
+      "react/no-unescaped-entities": "off",
     },
   },
 ]);

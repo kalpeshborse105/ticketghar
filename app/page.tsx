@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { translations } from '@/src/lib/i18n';
 import { Language, EventCategory, EventItem, EventSessionItem } from '@/src/lib/types';
 import { Header } from '@/src/components/Header';
@@ -52,6 +53,27 @@ export default function HomePage() {
 
   useEffect(() => {
     setMounted(true);
+    
+    // Handle query params for direct booking
+    const params = new URLSearchParams(window.location.search);
+    const bookEventId = params.get('bookEvent');
+    const sessionId = params.get('session');
+    
+    if (bookEventId && sessionId) {
+      // Fetch the event and open seat map
+      fetch(`/api/events/${bookEventId}`)
+        .then(res => res.json())
+        .then(data => {
+          const event = data.event;
+          const session = event.sessions.find((s: any) => s.id === parseInt(sessionId, 10));
+          if (event && session) {
+            setSelectedEventForBooking(event);
+            setSelectedSessionForBooking(session);
+            setSeatMapOpen(true);
+          }
+        })
+        .catch(err => console.error('Failed to load booking:', err));
+    }
   }, []);
 
   // Navigation and Filtering State
@@ -165,6 +187,25 @@ export default function HomePage() {
   useEffect(() => {
     fetchEvents();
   }, [fetchEvents]);
+
+  // Deep-link: /?bookEvent=ID&session=ID opens seat map from event detail
+  useEffect(() => {
+    if (typeof window === 'undefined' || events.length === 0) return;
+    const qs = new URLSearchParams(window.location.search);
+    const bookEventId = qs.get('bookEvent');
+    const sessionId = qs.get('session');
+    if (!bookEventId || !sessionId) return;
+
+    const ev = events.find((e) => String(e.id) === String(bookEventId));
+    if (!ev) return;
+    const sess =
+      (ev.sessions || []).find((s: any) => String(s.id) === String(sessionId)) ||
+      ({ id: Number(sessionId) } as any);
+    setSelectedEventForBooking(ev);
+    setSelectedSessionForBooking(sess);
+    setSeatMapOpen(true);
+    window.history.replaceState({}, '', '/');
+  }, [events]);
 
   // Handle Bottom Nav Changes
   const handleNavTabChange = (tab: NavTab) => {
@@ -502,18 +543,34 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-4 text-[#6b7280] font-normal text-xs">
+          <div className="flex flex-wrap items-center justify-center sm:justify-end gap-x-3 gap-y-2 text-[#6b7280] font-normal text-xs">
             <button
               onClick={() => setPartnerModalOpen(true)}
               className="hover:text-[#6366f1] transition"
             >
-              आयोजक नोंदणी (Partner With Us)
+              Partner With Us
             </button>
-            <span>•</span>
-            <span className="text-[#9ca3af]">नियम व अटी (Terms)</span>
-            <span>•</span>
-            <span className="text-[#9ca3af]">गोपनीयता धोरण (Privacy)</span>
-            <span>•</span>
+            <span className="text-[#d1d5db]">•</span>
+            <Link href="/about" className="hover:text-[#6366f1] transition">
+              About
+            </Link>
+            <span className="text-[#d1d5db]">•</span>
+            <Link href="/terms" className="hover:text-[#6366f1] transition">
+              Terms
+            </Link>
+            <span className="text-[#d1d5db]">•</span>
+            <Link href="/privacy" className="hover:text-[#6366f1] transition">
+              Privacy
+            </Link>
+            <span className="text-[#d1d5db]">•</span>
+            <Link href="/refund" className="hover:text-[#6366f1] transition">
+              Refunds
+            </Link>
+            <span className="text-[#d1d5db]">•</span>
+            <Link href="/contact" className="hover:text-[#6366f1] transition">
+              Contact
+            </Link>
+            <span className="text-[#d1d5db]">•</span>
             <span>© {new Date().getFullYear()} Kalpkrut Infotech</span>
           </div>
         </div>

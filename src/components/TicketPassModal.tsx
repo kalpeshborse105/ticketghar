@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Language, translations } from '../lib/i18n.ts';
 import {
   CheckCircle,
@@ -11,7 +11,13 @@ import {
   Ticket,
   ShieldCheck,
   X,
+  Mail,
 } from 'lucide-react';
+import {
+  buildBookingWhatsAppMessage,
+  buildWhatsAppShareUrl,
+  getTicketShareUrl,
+} from '@/src/lib/public-url';
 
 interface TicketPassModalProps {
   bookingResult: any;
@@ -26,15 +32,16 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
 }) => {
   const t = translations[language];
   const { order, tickets = [], event, pricing } = bookingResult;
+  const [emailStatus, setEmailStatus] = useState<'idle' | 'sending' | 'sent' | 'pending' | 'failed'>(
+    'idle'
+  );
+  const [emailMessage, setEmailMessage] = useState('');
 
   // Save to offline cache (localStorage)
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
-      const existingStr =
-        localStorage.getItem('mahaticket_offline_orders') ||
-        localStorage.getItem('ticketghar_offline_orders') ||
-        '[]';
+      const existingStr = localStorage.getItem('mahaticket_offline_orders') || '[]';
       const existing = JSON.parse(existingStr);
       if (!existing.some((o: any) => o.orderNumber === order.orderNumber)) {
         const toSave = {
@@ -49,86 +56,140 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
           JSON.stringify([toSave, ...existing].slice(0, 20))
         );
       }
-    } catch (e) {
-      console.warn('Failed to cache ticket offline:', e);
+    } catch {
+      /* ignore cache errors */
     }
   }, [order, event, tickets, pricing]);
 
-  const handlePrint = () => {
-    window.print();
+  // Auto-email to order email (no popup) — reports real provider status
+  useEffect(() => {
+    if (!tickets?.[0]?.ticketCode || !order?.userEmail) return;
+    let cancelled = false;
+    (async () => {
+      setEmailStatus('sending');
+      try {
+        const res = await fetch(`/api/tickets/${tickets[0].ticketCode}/email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        const data = await res.json();
+        if (cancelled) return;
+        if (data.sent) {
+          setEmailStatus('sent');
+          setEmailMessage(
+            language === 'mr' ? 'ईमेल पाठवला.' : `Email sent to ${data.recipient || order.userEmail}`
+          );
+        } else if (data.configured === false) {
+          setEmailStatus('pending');
+          setEmailMessage(
+            language === 'mr'
+              ? 'तिकीट निश्चित. ईमेल सेवा सध्या कॉन्फिगर केलेली नाही.'
+              : 'Ticket confirmed. Email delivery pending (provider not configured).'
+          );
+        } else {
+          setEmailStatus('failed');
+          setEmailMessage(
+            language === 'mr'
+              ? 'तिकीट निश्चित. ईमेल अयशस्वी — पुन्हा प्रयत्न करा.'
+              : 'Ticket confirmed. Email delivery failed — you can retry.'
+          );
+        }
+      } catch {
+        if (!cancelled) {
+          setEmailStatus('failed');
+          setEmailMessage(
+            language === 'mr'
+              ? 'तिकीट निश्चित. ईमेल अयशस्वी.'
+              : 'Ticket confirmed. Email could not be sent.'
+          );
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [tickets, order?.userEmail, language]);
+
+  const eventTitle = language === 'mr' ? event?.titleMr || event?.title : event?.title;
+  const venueName = language === 'mr' ? event?.venue?.nameMr || event?.venue?.name : event?.venue?.name;
+  const seatNames = tickets.map((tk: any) => tk.seatCode).join(', ');
+  const primaryTicket = tickets[0]?.ticketCode;
+
+  const handleWhatsApp = () => {
+    if (!primaryTicket) return;
+    const dateTime = order?.sessionStart
+      ? new Date(order.sessionStart).toLocaleString('en-IN')
+      : 'See ticket';
+    const message = buildBookingWhatsAppMessage({
+      eventTitle: eventTitle || 'Event',
+      venueName: venueName || 'Venue',
+      dateTime,
+      seats: seatNames,
+      bookingId: order.orderNumber,
+      ticketCode: primaryTicket,
+    });
+    window.open(buildWhatsAppShareUrl(message), '_blank', 'noopener,noreferrer');
   };
 
   const handleShare = async () => {
-    const seatNames = tickets.map((tk: any) => tk.seatCode).join(', ');
-    const eventTitle = language === 'mr' ? event.titleMr : event.title;
-    const venueName = language === 'mr' ? event.venue?.nameMr : event.venue?.name;
-
-    const shareMessage = `MahaTicket 🎟️\nबुकिंग यशस्वी! / Booking Confirmed!\n\nEvent: ${eventTitle}\nVenue: ${venueName}\nSeats: ${seatNames}\nBooking ID: ${order.orderNumber}\n\nPresent this digital pass at the entrance gate.`;
+    const ticketUrl = primaryTicket ? getTicketShareUrl(primaryTicket) : '';
+    const shareMessage = `MahaTicket 🎟️\nBooking Confirmed!\n\nEvent: ${eventTitle}\nVenue: ${venueName}\nSeats: ${seatNames}\nBooking ID: ${order.orderNumber}\n\n${ticketUrl}`;
 
     if (typeof navigator !== 'undefined' && navigator.share) {
       try {
         await navigator.share({
           title: `MahaTicket - ${eventTitle}`,
           text: shareMessage,
-          url: window.location.href,
+          url: ticketUrl || undefined,
         });
       } catch {
-        // user cancelled share
+        /* cancelled */
       }
     } else {
-      navigator.clipboard.writeText(shareMessage);
-      alert(
-        language === 'mr'
-          ? 'तिकीट तपशील क्लिपबोर्डवर कॉपी केला आहे!'
-          : 'Booking details copied to clipboard!'
-      );
+      await navigator.clipboard.writeText(shareMessage);
     }
   };
 
   const handleDownloadPDF = async () => {
-    if (!tickets || tickets.length === 0) return;
+    if (!primaryTicket) return;
     try {
-      const ticketCode = tickets[0].ticketCode;
-      const res = await fetch(`/api/tickets/${ticketCode}/pdf`);
-      if (res.ok) {
-        const blob = await res.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `MahaTicket-${order.orderNumber}.pdf`;
-        a.click();
-        window.URL.revokeObjectURL(url);
+      const res = await fetch(`/api/tickets/${primaryTicket}/pdf`);
+      const type = res.headers.get('content-type') || '';
+      if (!res.ok || !type.includes('pdf')) {
+        throw new Error('Invalid PDF response');
       }
-    } catch (err) {
-      console.error('PDF download error:', err);
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `MahaTicket-${order.orderNumber}.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch {
       alert(language === 'mr' ? 'PDF डाउनलोड करण्यात त्रुटी' : 'Error downloading PDF');
     }
   };
 
-  const handleEmailTicket = async () => {
-    if (!tickets || tickets.length === 0) return;
-    const email = prompt(
-      language === 'mr'
-        ? 'तिकीट पाठवण्यासाठी ईमेल अॅड्रेस टाका:'
-        : 'Enter email address to send ticket:'
-    );
-    if (!email) return;
-    
+  const handleRetryEmail = async () => {
+    if (!primaryTicket) return;
+    setEmailStatus('sending');
     try {
-      const ticketCode = tickets[0].ticketCode;
-      const res = await fetch(`/api/tickets/${ticketCode}/email`, {
+      const res = await fetch(`/api/tickets/${primaryTicket}/email`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({}),
       });
-      if (res.ok) {
-        alert(language === 'mr' ? 'तिकीट ईमेल पाठवले!' : 'Ticket emailed successfully!');
+      const data = await res.json();
+      if (data.sent) {
+        setEmailStatus('sent');
+        setEmailMessage(language === 'mr' ? 'ईमेल पाठवला.' : `Email sent to ${data.recipient}`);
       } else {
-        throw new Error('Email send failed');
+        setEmailStatus(data.configured === false ? 'pending' : 'failed');
+        setEmailMessage(data.message || 'Email not sent');
       }
-    } catch (err) {
-      console.error('Email error:', err);
-      alert(language === 'mr' ? 'ईमेल पाठवण्यात त्रुटी' : 'Error sending email');
+    } catch {
+      setEmailStatus('failed');
     }
   };
 
@@ -274,6 +335,25 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
           </div>
         </div>
 
+        {/* Email delivery status (auto — no popup) */}
+        {emailMessage ? (
+          <div className="px-4 py-2 border-t border-[#e5e7eb] bg-[#fafafa] text-xs text-[#6b7280] flex items-center justify-between gap-2">
+            <span>
+              {emailStatus === 'sent' ? '✓ ' : emailStatus === 'pending' ? '⏳ ' : emailStatus === 'failed' ? '!' : ''}
+              {emailMessage}
+            </span>
+            {(emailStatus === 'failed' || emailStatus === 'pending') && (
+              <button
+                type="button"
+                onClick={handleRetryEmail}
+                className="text-[#6366f1] font-semibold shrink-0"
+              >
+                Retry Email
+              </button>
+            )}
+          </div>
+        ) : null}
+
         {/* Bottom Actions */}
         <div className="p-3.5 sm:p-4 border-t border-[#e5e7eb] bg-white flex flex-wrap items-center justify-between gap-2 safe-bottom">
           <p className="text-xs text-[#6b7280] hidden sm:block">
@@ -282,6 +362,7 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
 
           <div className="flex items-center flex-wrap gap-2 w-full sm:w-auto">
             <button
+              type="button"
               onClick={handleDownloadPDF}
               className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-white hover:bg-[#f5f5f5] text-[#111827] font-medium text-xs border border-[#e5e7eb] hover:border-[#6366f1] transition"
             >
@@ -290,24 +371,25 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
             </button>
 
             <button
-              onClick={handleEmailTicket}
+              type="button"
+              onClick={handleRetryEmail}
               className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-white hover:bg-[#f5f5f5] text-[#111827] font-medium text-xs border border-[#e5e7eb] hover:border-[#6366f1] transition"
             >
-              <svg className="w-3.5 h-3.5 text-[#6366f1]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
+              <Mail className="w-3.5 h-3.5 text-[#6366f1]" />
               <span>Email</span>
             </button>
 
             <button
-              onClick={handleShare}
+              type="button"
+              onClick={handleWhatsApp}
               className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-white hover:bg-[#f5f5f5] text-[#111827] font-medium text-xs border border-[#e5e7eb] hover:border-[#6366f1] transition"
             >
-              <Share2 className="w-3.5 h-3.5 text-[#6366f1]" />
+              <Share2 className="w-3.5 h-3.5 text-[#25D366]" />
               <span>WhatsApp</span>
             </button>
 
             <button
+              type="button"
               onClick={onClose}
               className="flex-1 sm:flex-none px-4 py-2 rounded-lg bg-[#6366f1] hover:bg-[#4f46e5] text-white font-semibold text-xs shadow-sm transition active:scale-95"
             >

@@ -14,6 +14,12 @@ sealed class EventsUiState {
     data class Error(val message: String, val cachedEvents: List<EventItem>? = null) : EventsUiState()
 }
 
+sealed class EventDetailUiState {
+    data object Loading : EventDetailUiState()
+    data class Success(val event: EventItem) : EventDetailUiState()
+    data class Error(val message: String) : EventDetailUiState()
+}
+
 class EventViewModel(
     private val repository: EventRepository,
     private val networkMonitor: NetworkMonitor
@@ -21,6 +27,9 @@ class EventViewModel(
     
     private val _eventsState = MutableStateFlow<EventsUiState>(EventsUiState.Loading)
     val eventsState: StateFlow<EventsUiState> = _eventsState.asStateFlow()
+    
+    private val _eventDetailState = MutableStateFlow<EventDetailUiState>(EventDetailUiState.Loading)
+    val eventDetailState: StateFlow<EventDetailUiState> = _eventDetailState.asStateFlow()
     
     private val _selectedCategory = MutableStateFlow("all")
     val selectedCategory: StateFlow<String> = _selectedCategory.asStateFlow()
@@ -74,5 +83,19 @@ class EventViewModel(
     
     fun searchEvents(query: String) {
         loadEvents(search = query)
+    }
+    
+    fun loadEventDetails(eventId: Int) {
+        viewModelScope.launch {
+            _eventDetailState.value = EventDetailUiState.Loading
+            
+            val isCurrentlyOnline = isOnline.value
+            val result = repository.getEventDetails(eventId, isCurrentlyOnline)
+            
+            _eventDetailState.value = result.fold(
+                onSuccess = { event -> EventDetailUiState.Success(event) },
+                onFailure = { error -> EventDetailUiState.Error(error.message ?: "Failed to load event details") }
+            )
+        }
     }
 }

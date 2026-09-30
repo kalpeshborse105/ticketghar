@@ -4,19 +4,24 @@ import { pool } from '@/src/db/index';
 export const dynamic = 'force-dynamic';
 
 /**
- * GET /api/health
- * Safe liveness + database connectivity check.
- * Never exposes passwords or internal stack traces.
+ * GET /api/health — safe liveness + DB check. Never exposes credentials.
  */
 export async function GET() {
   const started = Date.now();
   let database: 'connected' | 'disconnected' = 'disconnected';
   let supabase: 'configured' | 'missing' = 'missing';
+  const environment =
+    process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production'
+      ? 'production'
+      : 'development';
 
   try {
     if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
       supabase = 'configured';
-    } else if (process.env.SQL_HOST?.includes('supabase') || process.env.DATABASE_URL?.includes('supabase')) {
+    } else if (
+      process.env.SQL_HOST?.includes('supabase') ||
+      process.env.DATABASE_URL?.includes('supabase')
+    ) {
       supabase = 'configured';
     }
 
@@ -33,6 +38,7 @@ export async function GET() {
       app: 'MahaTicket',
       database,
       supabase,
+      environment,
       latencyMs: Date.now() - started,
     });
   } catch {
@@ -42,6 +48,7 @@ export async function GET() {
         app: 'MahaTicket',
         database: 'disconnected',
         supabase,
+        environment,
         latencyMs: Date.now() - started,
       },
       { status: 503 }

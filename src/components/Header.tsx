@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { Language, translations } from '../lib/i18n.ts';
 import { usePWAInstall } from '@/hooks/use-pwa';
+import { createClient } from '@/src/lib/supabase/client.ts';
+import { AuthModal } from './AuthModal.tsx';
 import {
   Ticket,
   MapPin,
@@ -14,6 +16,8 @@ import {
   Menu,
   X,
   ChevronDown,
+  User,
+  LogOut,
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -65,6 +69,9 @@ export const Header: React.FC<HeaderProps> = ({
   const { isInstallable, install } = usePWAInstall();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [cityList, setCityList] = useState<string[]>(availableCities || DEFAULT_CITIES);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   useEffect(() => {
     async function loadCities() {
@@ -82,6 +89,32 @@ export const Header: React.FC<HeaderProps> = ({
     }
     loadCities();
   }, []);
+
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        setUser(user);
+      } catch (error) {
+        console.error('Auth check error:', error);
+      }
+    }
+    checkAuth();
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      const response = await fetch('/api/auth/logout', { method: 'POST' });
+      if (response.ok) {
+        setUser(null);
+        setUserMenuOpen(false);
+        window.location.reload();
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
 
   return (
     <header className="sticky top-0 z-40 bg-white border-b border-[#e5e7eb] text-[#111827] shadow-sm">
@@ -154,6 +187,52 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Actions & Buttons */}
           <div className="flex items-center gap-2">
+            {/* Auth Button / User Menu */}
+            {user ? (
+              <div className="relative">
+                <button
+                  onClick={() => setUserMenuOpen(!userMenuOpen)}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[#e5e7eb] bg-white hover:bg-[#f5f5f5] text-xs font-medium text-[#111827] transition"
+                >
+                  <User className="w-3.5 h-3.5 text-[#6366f1]" />
+                  <span className="hidden sm:inline truncate max-w-[120px]">
+                    {user.email?.split('@')[0] || 'User'}
+                  </span>
+                  <ChevronDown className="w-3 h-3 text-[#9ca3af]" />
+                </button>
+                
+                {userMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                    <div className="px-4 py-2 border-b border-gray-100">
+                      <p className="text-xs text-gray-500">Signed in as</p>
+                      <p className="text-sm font-medium text-gray-800 truncate">{user.email}</p>
+                    </div>
+                    <a
+                      href="/profile"
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition"
+                    >
+                      My Profile
+                    </a>
+                    <button
+                      onClick={handleLogout}
+                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      Logout
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button
+                onClick={() => setAuthModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#6366f1] hover:bg-[#4f46e5] text-white text-xs font-medium transition shadow-sm"
+              >
+                <User className="w-3.5 h-3.5" />
+                <span>Login</span>
+              </button>
+            )}
+
             {/* Language Switch */}
             <button
               onClick={() => onLanguageChange(language === 'mr' ? 'en' : 'mr')}
@@ -266,6 +345,19 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         )}
       </div>
+
+      {/* Auth Modal */}
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        onSuccess={() => {
+          // Refresh user state after successful login
+          const supabase = createClient();
+          supabase.auth.getUser().then(({ data: { user } }) => {
+            setUser(user);
+          });
+        }}
+      />
     </header>
   );
 };

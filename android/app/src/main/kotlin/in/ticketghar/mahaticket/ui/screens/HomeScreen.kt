@@ -46,7 +46,9 @@ fun HomeScreenWithViewModel(
         is `in`.ticketghar.mahaticket.ui.viewmodel.EventsUiState.Success -> {
             HomeScreen(
                 events = state.events,
-                onSelectEvent = { /* Navigate to EventDetails */ },
+                onSelectEvent = { event ->
+                    navController.navigate(`in`.ticketghar.mahaticket.BookingRoutes.eventDetail(event.id))
+                },
                 onCategorySelected = { viewModel.selectCategory(it) },
                 selectedCategory = selectedCategory,
                 onSearch = { viewModel.searchEvents(it) }

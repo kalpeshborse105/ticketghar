@@ -45,6 +45,15 @@ class BookingViewModel(
     private val _ticketsState = MutableStateFlow<TicketsUiState>(TicketsUiState.Loading)
     val ticketsState: StateFlow<TicketsUiState> = _ticketsState.asStateFlow()
     
+    private val _selectedSeats = MutableStateFlow<List<SeatItem>>(emptyList())
+    val selectedSeats: StateFlow<List<SeatItem>> = _selectedSeats.asStateFlow()
+    
+    private val _holdResponse = MutableStateFlow<HoldSeatsResponse?>(null)
+    val holdResponse: StateFlow<HoldSeatsResponse?> = _holdResponse.asStateFlow()
+    
+    private val _bookingOrder = MutableStateFlow<BookingOrder?>(null)
+    val bookingOrder: StateFlow<BookingOrder?> = _bookingOrder.asStateFlow()
+    
     val isOnline: StateFlow<Boolean> = networkMonitor.isOnline
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     
@@ -60,7 +69,7 @@ class BookingViewModel(
         }
     }
     
-    fun holdSeats(sessionId: Int, seatIds: List<Int>, phoneNumber: String) {
+    fun holdSeats(sessionId: Int, phoneNumber: String) {
         if (!isOnline.value) {
             _bookingState.value = BookingUiState.Error("बुकिंगसाठी इंटरनेट आवश्यक आहे")
             return
@@ -69,9 +78,13 @@ class BookingViewModel(
         viewModelScope.launch {
             _bookingState.value = BookingUiState.Loading
             
+            val seatIds = _selectedSeats.value.map { it.seatId }
             val result = repository.holdSeats(sessionId, seatIds, phoneNumber)
             _bookingState.value = result.fold(
-                onSuccess = { BookingUiState.HoldSuccess(it) },
+                onSuccess = { 
+                    _holdResponse.value = it
+                    BookingUiState.HoldSuccess(it)
+                },
                 onFailure = { BookingUiState.Error(it.message ?: "Failed to hold seats") }
             )
         }
@@ -83,10 +96,12 @@ class BookingViewModel(
         email: String?,
         attendeeNames: Map<String, String>,
         razorpayPaymentId: String,
-        razorpaySignature: String
+        razorpaySignature: String,
+        onSuccess: (String) -> Unit,
+        onError: (String) -> Unit
     ) {
         if (!isOnline.value) {
-            _bookingState.value = BookingUiState.Error("बुकिंग पूर्ण करण्यासाठी इंटरनेट आवश्यक आहे")
+            onError("बुकिंग पूर्ण करण्यासाठी इंटरनेट आवश्यक आहे")
             return
         }
         
@@ -97,8 +112,15 @@ class BookingViewModel(
                 holdToken, phoneNumber, email, attendeeNames, razorpayPaymentId, razorpaySignature
             )
             _bookingState.value = result.fold(
-                onSuccess = { BookingUiState.BookingSuccess(it) },
-                onFailure = { BookingUiState.Error(it.message ?: "Booking failed") }
+                onSuccess = { 
+                    _bookingOrder.value = it
+                    onSuccess(it.orderNumber)
+                    BookingUiState.BookingSuccess(it)
+                },
+                onFailure = { 
+                    onError(it.message ?: "Booking failed")
+                    BookingUiState.Error(it.message ?: "Booking failed")
+                }
             )
         }
     }
@@ -123,5 +145,20 @@ class BookingViewModel(
     
     fun resetBookingState() {
         _bookingState.value = BookingUiState.Idle
+    }
+    
+    fun toggleSeatSelection(seat: SeatItem) {
+        val currentSeats = _selectedSeats.value.toMutableList()
+        if (currentSeats.any { it.seatId == seat.seatId }) {
+            currentSeats.removeAll { it.seatId == seat.seatId }
+        } else {
+            currentSeats.add(seat)
+        }
+        _selectedSeats.value = currentSeats
+    }
+    
+    fun releaseHold() {
+        _holdResponse.value = null
+        _selectedSeats.value = emptyList()
     }
 }

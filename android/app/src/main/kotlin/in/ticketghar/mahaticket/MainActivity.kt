@@ -20,6 +20,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import `in`.ticketghar.mahaticket.theme.*
 import `in`.ticketghar.mahaticket.ui.screens.*
 import `in`.ticketghar.mahaticket.ui.viewmodel.BookingViewModel
@@ -53,6 +55,21 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
     data object Profile : Screen("profile", "प्रोफाइल", Icons.Default.Person)
 }
 
+object BookingRoutes {
+    const val EVENT_DETAIL = "event_detail/{eventId}"
+    const val SEAT_SELECTION = "seat_selection/{sessionId}"
+    const val CHECKOUT = "checkout/{holdToken}"
+    const val BOOKING_SUCCESS = "booking_success/{orderNumber}"
+    const val TICKET_DETAIL = "ticket_detail/{ticketCode}"
+    const val LOGIN = "login"
+    
+    fun eventDetail(eventId: Int) = "event_detail/$eventId"
+    fun seatSelection(sessionId: Int) = "seat_selection/$sessionId"
+    fun checkout(holdToken: String) = "checkout/$holdToken"
+    fun bookingSuccess(orderNumber: String) = "booking_success/$orderNumber"
+    fun ticketDetail(ticketCode: String) = "ticket_detail/$ticketCode"
+}
+
 @Composable
 fun MahaTicketRoot() {
     val navController = rememberNavController()
@@ -73,10 +90,23 @@ fun MahaTicketRoot() {
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.systemBars),
         bottomBar = {
-            BottomNavigationBar(navController)
+            val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
+            // Hide bottom nav on booking flow screens
+            val showBottomBar = currentRoute in listOf(
+                Screen.Home.route,
+                Screen.Explore.route,
+                Screen.Tickets.route,
+                Screen.Offers.route,
+                Screen.Profile.route
+            )
+            if (showBottomBar) {
+                BottomNavigationBar(navController)
+            }
         }
     ) { innerPadding ->
-        Column(modifier = Modifier.padding(innerPadding)) {
+        Column(modifier = Modifier
+            .fillMaxSize()
+            .padding(innerPadding)) {
             // Offline banner
             if (!isOnline) {
                 OfflineBanner()
@@ -85,7 +115,7 @@ fun MahaTicketRoot() {
             NavHost(
                 navController = navController,
                 startDestination = Screen.Home.route,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.fillMaxSize()
             ) {
                 composable(Screen.Home.route) {
                     HomeScreenWithViewModel(eventViewModel, navController)
@@ -101,6 +131,90 @@ fun MahaTicketRoot() {
                 }
                 composable(Screen.Profile.route) {
                     ProfileScreen()
+                }
+                
+                // Booking flow screens
+                composable(
+                    route = BookingRoutes.EVENT_DETAIL,
+                    arguments = listOf(navArgument("eventId") { type = NavType.IntType })
+                ) { backStackEntry ->
+                    val eventId = backStackEntry.arguments?.getInt("eventId") ?: 0
+                    EventDetailScreen(
+                        eventId = eventId,
+                        onNavigateBack = { navController.popBackStack() },
+                        onBookSession = { sessionId ->
+                            navController.navigate(BookingRoutes.seatSelection(sessionId))
+                        }
+                    )
+                }
+                
+                composable(
+                    route = BookingRoutes.SEAT_SELECTION,
+                    arguments = listOf(navArgument("sessionId") { type = NavType.IntType })
+                ) { backStackEntry ->
+                    val sessionId = backStackEntry.arguments?.getInt("sessionId") ?: 0
+                    SeatSelectionScreen(
+                        sessionId = sessionId,
+                        onNavigateBack = { navController.popBackStack() },
+                        onContinueToCheckout = { holdToken ->
+                            navController.navigate(BookingRoutes.checkout(holdToken))
+                        }
+                    )
+                }
+                
+                composable(
+                    route = BookingRoutes.CHECKOUT,
+                    arguments = listOf(navArgument("holdToken") { type = NavType.StringType })
+                ) { backStackEntry ->
+                    val holdToken = backStackEntry.arguments?.getString("holdToken") ?: ""
+                    CheckoutScreen(
+                        holdToken = holdToken,
+                        onNavigateBack = { navController.popBackStack() },
+                        onBookingSuccess = { orderNumber ->
+                            navController.navigate(BookingRoutes.bookingSuccess(orderNumber)) {
+                                popUpTo(Screen.Home.route) { inclusive = false }
+                            }
+                        }
+                    )
+                }
+                
+                composable(
+                    route = BookingRoutes.BOOKING_SUCCESS,
+                    arguments = listOf(navArgument("orderNumber") { type = NavType.StringType })
+                ) { backStackEntry ->
+                    val orderNumber = backStackEntry.arguments?.getString("orderNumber") ?: ""
+                    BookingSuccessScreen(
+                        orderNumber = orderNumber,
+                        onViewTicket = { ticketCode ->
+                            navController.navigate(BookingRoutes.ticketDetail(ticketCode))
+                        },
+                        onGoHome = {
+                            navController.navigate(Screen.Home.route) {
+                                popUpTo(Screen.Home.route) { inclusive = true }
+                            }
+                        }
+                    )
+                }
+                
+                composable(
+                    route = BookingRoutes.TICKET_DETAIL,
+                    arguments = listOf(navArgument("ticketCode") { type = NavType.StringType })
+                ) { backStackEntry ->
+                    val ticketCode = backStackEntry.arguments?.getString("ticketCode") ?: ""
+                    TicketDetailScreen(
+                        ticketCode = ticketCode,
+                        onNavigateBack = { navController.popBackStack() }
+                    )
+                }
+                
+                composable(BookingRoutes.LOGIN) {
+                    LoginScreen(
+                        onLoginSuccess = {
+                            navController.navigate(Screen.Home.route) {
+                                popUpTo(BookingRoutes.LOGIN) { inclusive = true }
+                            }
+                        }
+                    )
                 }
             }
         }

@@ -4,6 +4,8 @@ import { tickets, orders, events, venues, eventSessions } from '@/src/db/schema'
 import { eq } from 'drizzle-orm';
 import fs from 'fs';
 import path from 'path';
+import { getTicketShareUrl } from '@/src/lib/public-url';
+import { generateTicketPdfBuffer } from '@/src/lib/ticket-pdf';
 
 export async function POST(
   req: NextRequest,
@@ -38,27 +40,28 @@ export async function POST(
     const templatePath = path.join(process.cwd(), 'src/lib/templates/booking-confirmation.html');
     let htmlContent = fs.existsSync(templatePath)
       ? fs.readFileSync(templatePath, 'utf8')
-      : `<html><body><h1>MahaTicket</h1><p>{{EVENT_TITLE}}</p><p>{{TICKET_CODE}}</p></body></html>`;
+      : `<html><body><h1>MahaTicket</h1><p>{{EVENT_TITLE}}</p><p>{{TICKET_CODE}}</p><p><a href="{{TICKET_LINK}}">View Ticket</a></p></body></html>`;
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || '';
-    htmlContent = htmlContent
-      .replace(/\{\{EVENT_TITLE\}\}/g, eventRecord?.event.titleMr || eventRecord?.event.title || 'Event')
-      .replace(/\{\{EVENT_CATEGORY\}\}/g, eventRecord?.event.categoryMr || 'कार्यक्रम')
-      .replace(/\{\{ORDER_NUMBER\}\}/g, ticketRecord.order.orderNumber)
-      .replace(/\{\{VENUE_NAME\}\}/g, eventRecord?.venue?.nameMr || eventRecord?.venue?.name || 'सभागृह')
-      .replace(
-        /\{\{SHOW_DATE_TIME\}\}/g,
-        new Date(ticketRecord.session.sessionStartTime!).toLocaleString('mr-IN', {
+    const ticketLink = getTicketShareUrl(ticketRecord.ticket.ticketCode);
+    const showtime = ticketRecord.session.sessionStartTime
+      ? new Date(ticketRecord.session.sessionStartTime).toLocaleString('en-IN', {
           dateStyle: 'medium',
           timeStyle: 'short',
         })
-      )
+      : '—';
+
+    htmlContent = htmlContent
+      .replace(/\{\{EVENT_TITLE\}\}/g, eventRecord?.event.title || 'Event')
+      .replace(/\{\{EVENT_CATEGORY\}\}/g, eventRecord?.event.categoryMr || 'Event')
+      .replace(/\{\{ORDER_NUMBER\}\}/g, ticketRecord.order.orderNumber)
+      .replace(/\{\{VENUE_NAME\}\}/g, eventRecord?.venue?.name || 'Venue')
+      .replace(/\{\{SHOW_DATE_TIME\}\}/g, showtime)
       .replace(/\{\{SEATS_LIST\}\}/g, ticketRecord.ticket.seatCode)
       .replace(/\{\{ATTENDEE_NAME\}\}/g, ticketRecord.ticket.attendeeName)
       .replace(/\{\{GRAND_TOTAL\}\}/g, (ticketRecord.order.grandTotal / 100).toFixed(0))
       .replace(/\{\{TICKET_CODE\}\}/g, ticketRecord.ticket.ticketCode)
       .replace(/\{\{QR_DATA_URL\}\}/g, '')
-      .replace(/\{\{TICKET_LINK\}\}/g, appUrl ? `${appUrl}/?ticket=${ticketRecord.ticket.ticketCode}` : ticketRecord.ticket.ticketCode);
+      .replace(/\{\{TICKET_LINK\}\}/g, ticketLink);
 
     const resendApiKey = process.env.RESEND_API_KEY;
     const from = process.env.EMAIL_FROM || 'MahaTicket <onboarding@resend.dev>';
@@ -74,25 +77,58 @@ export async function POST(
       });
     }
 
+    let pdfAttachment: { filename: string; content: string } | undefined;
+    try {
+      const pdf = await generateTicketPdfBuffer({
+        ticketCode: ticketRecord.ticket.ticketCode,
+        orderNumber: ticketRecord.order.orderNumber,
+        eventTitle: eventRecord?.event.title || 'Event',
+        venueName: eventRecord?.venue?.name || 'Venue',
+        showtime,
+        seatCode: ticketRecord.ticket.seatCode,
+        attendeeName: ticketRecord.ticket.attendeeName,
+        faceValuePaise: ticketRecord.ticket.faceValue,
+        status: ticketRecord.ticket.status,
+        qrPayload: ticketRecord.ticket.qrPayload || ticketRecord.ticket.ticketCode,
+        securityHash: ticketRecord.ticket.securityHash,
+      });
+      pdfAttachment = {
+        filename: `MahaTicket-${ticketRecord.order.orderNumber}.pdf`,
+        content: pdf.toString('base64'),
+      };
+    } catch (pdfErr) {
+      console.error('PDF attach failed:', pdfErr);
+    }
+
+    const payload: Record<string, unknown> = {
+      from,
+      to: [recipient],
+      subject: `MahaTicket — Booking confirmed (${ticketRecord.order.orderNumber})`,
+      html: htmlContent,
+    };
+    if (pdfAttachment) {
+      payload.attachments = [pdfAttachment];
+    }
+
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${resendApiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        from,
-        to: [recipient],
-        subject: `MahaTicket — Booking confirmed (${ticketRecord.order.orderNumber})`,
-        html: htmlContent,
-      }),
+      body: JSON.stringify(payload),
     });
 
     if (!res.ok) {
       const detail = await res.text();
       console.error('Resend error:', detail);
       return NextResponse.json(
-        { success: false, sent: false, configured: true, message: 'Email provider rejected the send.' },
+        {
+          success: false,
+          sent: false,
+          configured: true,
+          message: 'Email provider rejected the send.',
+        },
         { status: 502 }
       );
     }
@@ -102,6 +138,7 @@ export async function POST(
       sent: true,
       configured: true,
       recipient,
+      pdfAttached: Boolean(pdfAttachment),
       message: `Booking confirmation email sent to ${recipient}`,
     });
   } catch (error) {

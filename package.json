@@ -15,6 +15,9 @@
   "dependencies": {
     "@google/genai": "^2.4.0",
     "@hookform/resolvers": "^5.2.1",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.117.2",
+    "@types/pdfkit": "^0.17.6",
     "autoprefixer": "^10.4.21",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -25,9 +28,12 @@
     "lucide-react": "^0.553.0",
     "motion": "^12.23.24",
     "next": "^15.4.9",
+    "pdfkit": "^0.20.2",
     "pg": "^8.23.0",
     "postcss": "^8.5.6",
     "qrcode": "^1.5.4",
+    "qrcode.react": "^4.2.0",
+    "razorpay": "^2.9.8",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
     "tailwind-merge": "^3.3.1"

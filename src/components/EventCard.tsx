@@ -25,12 +25,9 @@ export const EventCard: React.FC<EventCardProps> = ({
   const nextSession = event.sessions && event.sessions.length > 0 ? event.sessions[0] : null;
 
   return (
-    <div
-      onClick={() => onSelect(event)}
-      className="group bg-white border border-[#e5e7eb] hover:border-[#6366f1] rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-200 flex flex-col cursor-pointer transform hover:-translate-y-0.5"
-    >
+    <div className="group bg-white border border-[#e5e7eb] hover:border-[#6366f1] rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-200 flex flex-col transform hover:-translate-y-0.5">
       {/* Poster Image Container */}
-      <div className="relative aspect-[16/10] sm:aspect-[4/3] w-full overflow-hidden bg-[#f5f5f5]">
+      <a href={`/events/${event.id}`} className="relative aspect-[16/10] sm:aspect-[4/3] w-full overflow-hidden bg-[#f5f5f5] block">
         <img
           src={event.posterUrl}
           alt={displayTitle}
@@ -72,15 +69,17 @@ export const EventCard: React.FC<EventCardProps> = ({
             </div>
           </div>
         )}
-      </div>
+      </a>
 
       {/* Card Body */}
       <div className="p-3.5 sm:p-4 flex-1 flex flex-col justify-between">
         <div>
           {/* Main Title */}
-          <h3 className="text-sm sm:text-base font-semibold text-[#111827] group-hover:text-[#6366f1] transition-colors line-clamp-1">
-            {displayTitle}
-          </h3>
+          <a href={`/events/${event.id}`} className="block">
+            <h3 className="text-sm sm:text-base font-semibold text-[#111827] group-hover:text-[#6366f1] transition-colors line-clamp-1">
+              {displayTitle}
+            </h3>
+          </a>
 
           {/* Secondary Title (Marathi/English subtitle) */}
           <p className="text-xs text-[#6b7280] line-clamp-1 mt-0.5">

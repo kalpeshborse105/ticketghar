@@ -75,19 +75,20 @@ export async function POST(request: Request) {
 
     const pricing = await calculatePricing(eventRecord, seatIds.length, faceValueTotal, couponCode);
 
-    const razorpayConfigured =
-      Boolean(process.env.RAZORPAY_KEY_ID) &&
-      Boolean(process.env.RAZORPAY_KEY_SECRET) &&
-      !String(process.env.RAZORPAY_KEY_ID).includes('YourKeyIdHere');
-
+    // Check payment details - require payment unless explicitly allowed to skip
     let resolvedPayment = paymentDetails;
     if (!resolvedPayment) {
-      if (razorpayConfigured) {
+      // Only allow direct_confirm when explicitly enabled (for local QA/testing)
+      const allowDirectConfirm = process.env.ALLOW_DIRECT_CONFIRM === 'true';
+      
+      if (!allowDirectConfirm) {
         return NextResponse.json(
-          { error: 'Payment details required.', paymentConfigured: true },
+          { error: 'Payment details required. Payment must be completed before confirmation.' },
           { status: 402 }
         );
       }
+
+      console.warn('Direct confirm allowed by ALLOW_DIRECT_CONFIRM=true env variable');
       resolvedPayment = {
         gateway: 'direct_confirm',
         idempotencyKey: `idem_${Date.now()}_${targetUserId}`,
@@ -113,7 +114,6 @@ export async function POST(request: Request) {
       event: result.event,
       pricing: result.pricing,
       payment: {
-        configured: razorpayConfigured,
         mode: resolvedPayment.gateway || 'direct_confirm',
       },
     });
