@@ -142,50 +142,20 @@ export default function EventDetailPage() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <MTTicketLoader
-          message="कार्यक्रमाचा तपशील लोड होत आहे..."
-          submessage="MahaTicket अधिकृत बुकिंग पोर्टल"
-        />
-      </div>
+  const activeSessions = React.useMemo(() => {
+    return (event?.sessions || []).filter((s) => s.status === 'active');
+  }, [event?.sessions]);
+
+  const uniqueDates = React.useMemo(() => {
+    return Array.from(
+      new Set(
+        activeSessions.map((s) => {
+          const d = new Date(s.sessionStartTime);
+          return d.toISOString().split('T')[0];
+        })
+      )
     );
-  }
-
-  if (error || !event) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
-        <div className="max-w-md w-full bg-white rounded-3xl border border-slate-200 p-8 text-center space-y-4 shadow-xl">
-          <div className="w-16 h-16 rounded-2xl bg-orange-50 text-[#ea580c] flex items-center justify-center mx-auto">
-            <Ticket className="w-8 h-8" />
-          </div>
-          <h1 className="text-xl font-bold text-slate-900">{error || 'कार्यक्रम सापडला नाही'}</h1>
-          <p className="text-xs text-slate-600">
-            आपण शोधत असलेला कार्यक्रम उपलब्ध नाही किंवा मुदत संपली आहे.
-          </p>
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 px-6 py-2.5 bg-[#ea580c] hover:bg-[#c2410c] text-white rounded-xl text-xs font-bold transition shadow-lg shadow-orange-500/20"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>इतर नाटके व कार्यक्रम पहा</span>
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  const activeSessions = event.sessions.filter((s) => s.status === 'active');
-
-  const uniqueDates = Array.from(
-    new Set(
-      activeSessions.map((s) => {
-        const d = new Date(s.sessionStartTime);
-        return d.toISOString().split('T')[0];
-      })
-    )
-  );
+  }, [activeSessions]);
 
   const filteredSessions = React.useMemo(() => {
     let list =
@@ -228,6 +198,40 @@ export default function EventDetailPage() {
 
     return list;
   }, [activeSessions, selectedDate, timeFilter, sessionSort]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <MTTicketLoader
+          message="कार्यक्रमाचा तपशील लोड होत आहे..."
+          submessage="MahaTicket अधिकृत बुकिंग पोर्टल"
+        />
+      </div>
+    );
+  }
+
+  if (error || !event) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
+        <div className="max-w-md w-full bg-white rounded-3xl border border-slate-200 p-8 text-center space-y-4 shadow-xl">
+          <div className="w-16 h-16 rounded-2xl bg-orange-50 text-[#ea580c] flex items-center justify-center mx-auto">
+            <Ticket className="w-8 h-8" />
+          </div>
+          <h1 className="text-xl font-bold text-slate-900">{error || 'कार्यक्रम सापडला नाही'}</h1>
+          <p className="text-xs text-slate-600">
+            आपण शोधत असलेला कार्यक्रम उपलब्ध नाही किंवा मुदत संपली आहे.
+          </p>
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 px-6 py-2.5 bg-[#ea580c] hover:bg-[#c2410c] text-white rounded-xl text-xs font-bold transition shadow-lg shadow-orange-500/20"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>इतर नाटके व कार्यक्रम पहा</span>
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   const categoryLabel: Record<string, string> = {
     plays: 'नाटक व रंगभूमी',

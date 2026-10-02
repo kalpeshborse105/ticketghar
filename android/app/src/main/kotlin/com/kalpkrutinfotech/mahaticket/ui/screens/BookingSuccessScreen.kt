@@ -1,9 +1,11 @@
 package com.kalpkrutinfotech.mahaticket.ui.screens
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -12,18 +14,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.alpha
-import androidx.compose.animation.*
-import androidx.compose.animation.core.*
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kalpkrutinfotech.mahaticket.MahaTicketApp
-import com.kalpkrutinfotech.mahaticket.model.BookingOrder
 import com.kalpkrutinfotech.mahaticket.theme.*
 import com.kalpkrutinfotech.mahaticket.ui.viewmodel.BookingViewModel
 import com.kalpkrutinfotech.mahaticket.ui.viewmodel.BookingViewModelFactory
@@ -34,128 +34,159 @@ fun BookingSuccessScreen(
     onViewTicket: (String) -> Unit,
     onGoHome: () -> Unit
 ) {
-    val app = androidx.compose.ui.platform.LocalContext.current.applicationContext as MahaTicketApp
-    val bookingViewModel: BookingViewModel = viewModel(
-        factory = BookingViewModelFactory(app.bookingRepository, app.networkMonitor)
-    )
-
-    val bookingOrder by bookingViewModel.bookingOrder.collectAsState()
-
-    // Mock booking order for display
-    val mockOrder = remember {
-        BookingOrder(
-            orderNumber = orderNumber,
-            grandTotal = 50000,
-            tickets = listOf(),
-            eventTitle = "नाटक शीर्षक",
-            venueName = "सभागृह",
-            showtime = "आज, 7:00 PM"
-        )
-    }
-
     var isAnimatedIn by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         isAnimatedIn = true
     }
+
     val checkmarkScale by animateFloatAsState(
-        targetValue = if (isAnimatedIn) 1f else 0.4f,
+        targetValue = if (isAnimatedIn) 1f else 0.3f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
         label = "checkmarkScale"
-    )
-    val checkmarkAlpha by animateFloatAsState(
-        targetValue = if (isAnimatedIn) 1f else 0f,
-        animationSpec = tween(durationMillis = 280),
-        label = "checkmarkAlpha"
     )
 
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = PaddingValues(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        item { Spacer(modifier = Modifier.height(32.dp)) }
+        item { Spacer(modifier = Modifier.height(16.dp)) }
 
-        // Success Icon with subtle spring animation
+        // Celebration Green Badge
         item {
-            Surface(
-                shape = CircleShape,
-                color = MahaSuccess.copy(alpha = 0.15f),
+            Box(
                 modifier = Modifier
-                    .size(100.dp)
+                    .size(90.dp)
                     .scale(checkmarkScale)
-                    .alpha(checkmarkAlpha)
+                    .background(Color(0xFFECFDF5), CircleShape)
+                    .border(3.dp, Color(0xFF10B981), CircleShape),
+                contentAlignment = Alignment.Center
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.Default.CheckCircle,
-                        contentDescription = null,
-                        modifier = Modifier.size(60.dp),
-                        tint = MahaSuccess
-                    )
-                }
+                Icon(
+                    Icons.Default.Check,
+                    contentDescription = "Success",
+                    tint = Color(0xFF059669),
+                    modifier = Modifier.size(52.dp)
+                )
             }
         }
 
-        // Success Message
+        // Title & Confirmation
         item {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = "बुकिंग यशस्वी!",
+                    text = "बुकिंग यशस्वी झाली!",
                     fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.Black,
                     color = MaterialTheme.colorScheme.onBackground
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "तुमचे तिकीट बुक झाले आहे",
-                    fontSize = 15.sp,
+                    text = "आपले तिकीट निश्चित झाले आहे व ई-पास तयार आहे",
+                    fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
                 )
             }
         }
 
-        // Order Details Card
+        // Digital Ticket Pass Preview Stub Card
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, Color(0xFFE5E7EB)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp)
-                ) {
-                    DetailRow("ऑर्डर क्रमांक", orderNumber)
-                    Divider(modifier = Modifier.padding(vertical = 12.dp), color = MahaBorder)
-                    DetailRow("कार्यक्रम", mockOrder.eventTitle)
-                    DetailRow("सभागृह", mockOrder.venueName)
-                    DetailRow("शो वेळ", mockOrder.showtime)
-                    Divider(modifier = Modifier.padding(vertical = 12.dp), color = MahaBorder)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                Column {
+                    // Header band in warm orange
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(Color(0xFFEA580C), Color(0xFFC2410C))
+                                )
+                            )
+                            .padding(horizontal = 16.dp, vertical = 10.dp)
                     ) {
-                        Text(
-                            text = "एकूण रक्कम",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp,
-                            color = MaterialTheme.colorScheme.onSurface
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "महाटिकिट अधिकृत ई-पास",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = Color.White.copy(alpha = 0.25f)
+                            ) {
+                                Text(
+                                    text = "CONFIRMED",
+                                    color = Color.White,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Black,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    // Ticket details body
+                    Column(modifier = Modifier.padding(18.dp)) {
+                        SuccessDetailRow("बुकिंग क्रमांक (Order No)", orderNumber)
+                        SuccessDetailRow("स्थिती (Status)", "यशस्वी (Paid & Confirmed)")
+                        SuccessDetailRow("तिकीट वितरण (Delivery)", "WhatsApp & SMS द्वारे पाठवले")
+
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 12.dp),
+                            color = Color(0xFFE5E7EB)
                         )
-                        Text(
-                            text = "₹${mockOrder.grandTotal / 100}",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.QrCodeScanner,
+                                    contentDescription = null,
+                                    tint = Color(0xFFEA580C),
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Text(
+                                    text = "प्रवेशद्वारावर QR स्कॅन करा",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = Color(0xFFECFDF5)
+                            ) {
+                                Text(
+                                    text = "वैध पास",
+                                    color = Color(0xFF059669),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -165,64 +196,51 @@ fun BookingSuccessScreen(
         item {
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Button(
                     onClick = { onViewTicket(orderNumber) },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(50.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    ),
-                    shape = RoundedCornerShape(10.dp)
+                        .height(48.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEA580C)),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Icon(Icons.Default.ConfirmationNumber, contentDescription = null)
+                    Icon(
+                        Icons.Default.ConfirmationNumber,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("तिकीट पहा", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        text = "डिजिटल तिकीट पहा (View Ticket)",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
                 }
 
                 OutlinedButton(
                     onClick = onGoHome,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(50.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.primary
-                    ),
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Icon(Icons.Default.Home, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("होमवर जा", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                }
-            }
-        }
-
-        // Info Note
-        item {
-            Surface(
-                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .height(48.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, Color(0xFFEA580C)),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFEA580C))
                 ) {
                     Icon(
-                        Icons.Default.Info,
+                        Icons.Default.Home,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
+                        tint = Color(0xFFEA580C),
+                        modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "तुमचे तिकीट ईमेल व SMS द्वारे पाठवले गेले आहे",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        lineHeight = 16.sp
+                        text = "मुख्य पृष्ठावर जा (Home)",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }
@@ -231,22 +249,22 @@ fun BookingSuccessScreen(
 }
 
 @Composable
-fun DetailRow(label: String, value: String) {
+fun SuccessDetailRow(label: String, value: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 6.dp),
+            .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(
             text = label,
-            fontSize = 14.sp,
+            fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
             text = value,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
         )
     }

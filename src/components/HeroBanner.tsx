@@ -156,7 +156,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
       if (slide.ctaUrl.startsWith('http')) {
         window.open(slide.ctaUrl, '_blank', 'noopener,noreferrer');
       } else {
-        window.location.href = slide.ctaUrl;
+        window.location.assign(slide.ctaUrl);
       }
     }
   };

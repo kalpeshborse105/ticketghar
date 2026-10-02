@@ -45,6 +45,14 @@ class EventViewModel(
 
     private val _offersState = MutableStateFlow<OffersUiState>(OffersUiState.Loading)
     val offersState: StateFlow<OffersUiState> = _offersState.asStateFlow()
+
+    val announcements: StateFlow<List<AnnouncementResponse>> = _offersState.map { state ->
+        if (state is OffersUiState.Success) state.announcements else emptyList()
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        emptyList()
+    )
     
     private val _selectedCategory = MutableStateFlow("all")
     val selectedCategory: StateFlow<String> = _selectedCategory.asStateFlow()

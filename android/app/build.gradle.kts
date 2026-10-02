@@ -29,7 +29,7 @@ android {
             properties.load(localPropertiesFile.inputStream())
         }
         val apiBaseUrl = properties.getProperty("api.base.url")
-            ?: "https://ticketghar.kalpkrutinfotech.com"
+            ?: "https://mahaticket.kalpkrutinfotech.com"
 
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
         buildConfigField("String", "APP_NAME", "\"MahaTicket\"")

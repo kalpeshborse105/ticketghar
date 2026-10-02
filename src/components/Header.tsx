@@ -556,7 +556,7 @@ export const Header: React.FC<HeaderProps> = ({
     setLiveResults([]);
 
     if (typeof window !== 'undefined') {
-      window.location.href = `/events/${event.id}`;
+      window.location.assign(`/events/${event.id}`);
     }
   };
 

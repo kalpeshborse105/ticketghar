@@ -2,6 +2,7 @@ package com.kalpkrutinfotech.mahaticket.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -16,6 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -39,13 +41,13 @@ fun ProfileScreen(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Profile Header Card
+        // 1. Profile Header Card
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = androidx.compose.foundation.BorderStroke(1.dp, MahaBorder),
+                border = BorderStroke(1.dp, Color(0xFFE5E7EB)),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Column(
@@ -58,28 +60,29 @@ fun ProfileScreen(
                         modifier = Modifier
                             .size(72.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer),
+                            .background(Color(0xFFFFF7ED))
+                            .border(2.dp, Color(0xFFFED7AA), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             Icons.Default.Person,
                             contentDescription = null,
-                            modifier = Modifier.size(40.dp),
-                            tint = MaterialTheme.colorScheme.primary
+                            modifier = Modifier.size(42.dp),
+                            tint = Color(0xFFEA580C)
                         )
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Text(
-                        text = if (isLoggedIn) "महाटिकिट सदस्य" else "अतिथी वापरकर्ता (Guest)",
+                        text = if (isLoggedIn) "महाटिकिट सदस्य" else "महाटिकिट वापरकर्ता (Guest)",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
 
                     Text(
-                        text = if (isLoggedIn) "+91 98765 43210" else "लॉगिन करून तिकिटे सुरक्षित ठेवा",
+                        text = if (isLoggedIn) "+91 98765 43210" else "आपली सर्व तिकिटे आपल्या फोनवर सुरक्षित आहेत",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -89,93 +92,134 @@ fun ProfileScreen(
                     if (!isLoggedIn) {
                         Button(
                             onClick = onNavigateToLogin,
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEA580C)),
                             shape = RoundedCornerShape(10.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Icon(Icons.Default.Login, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("लॉगिन करा / Sign In", fontWeight = FontWeight.SemiBold)
+                            Text("लॉगिन करा / Sign In", fontWeight = FontWeight.Bold)
                         }
                     } else {
                         OutlinedButton(
                             onClick = { isLoggedIn = false },
                             shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, Color(0xFFEF4444)),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("लॉगआउट (Sign Out)", color = MaterialTheme.colorScheme.error)
+                            Text("लॉगआउट करा (Sign Out)", color = Color(0xFFEF4444), fontWeight = FontWeight.Bold)
                         }
                     }
                 }
             }
         }
 
-        // Quick Actions
+        // 2. Main Account & Booking Actions
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = androidx.compose.foundation.BorderStroke(1.dp, MahaBorder)
+                border = BorderStroke(1.dp, Color(0xFFE5E7EB))
             ) {
                 Column {
-                    ProfileMenuItem(
+                    ModernProfileMenuItem(
                         icon = Icons.Default.ConfirmationNumber,
                         title = "माझी तिकिटे (My Tickets)",
-                        subtitle = "बुक केलेली सर्व तिकिटे पहा",
+                        subtitle = "बुक केलेली सर्व तिकिटे व ई-पास पहा",
                         onClick = onNavigateToTickets
                     )
-                    HorizontalDivider(color = MahaBorder, thickness = 0.5.dp)
-                    ProfileMenuItem(
-                        icon = Icons.Default.Language,
+                    HorizontalDivider(color = Color(0xFFF3F4F6), thickness = 1.dp)
+                    ModernProfileMenuItem(
+                        icon = Icons.Default.Translate,
                         title = "अ‍ॅप भाषा (App Language)",
-                        subtitle = "मराठी (प्राथमिक)",
+                        subtitle = "मराठी (प्राथमिक भाषा)",
                         onClick = {}
                     )
-                    HorizontalDivider(color = MahaBorder, thickness = 0.5.dp)
-                    ProfileMenuItem(
+                    HorizontalDivider(color = Color(0xFFF3F4F6), thickness = 1.dp)
+                    ModernProfileMenuItem(
                         icon = Icons.Default.Notifications,
                         title = "सूचना (Notifications)",
-                        subtitle = "नवीन कार्यक्रम आणि बुकिंग अपडेट्स",
+                        subtitle = "नवीन कार्यक्रम, ऑफर आणि शो स्मरणपत्रे",
                         onClick = {}
                     )
                 }
             }
         }
 
-        // Legal & Support
+        // 3. Organizer Partnership
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = androidx.compose.foundation.BorderStroke(1.dp, MahaBorder)
+                border = BorderStroke(1.dp, Color(0xFFFED7AA))
+            ) {
+                ModernProfileMenuItem(
+                    icon = Icons.Default.Business,
+                    title = "नाट्य व कार्यक्रम आयोजक (Partner With Us)",
+                    subtitle = "आपला कार्यक्रम महाटिकिटवर सूचीबद्ध करा",
+                    onClick = {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.API_BASE_URL}/contact"))
+                        context.startActivity(intent)
+                    }
+                )
+            }
+        }
+
+        // 4. Legal & Support Links
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, Color(0xFFE5E7EB))
             ) {
                 Column {
-                    ProfileMenuItem(
+                    ModernProfileMenuItem(
                         icon = Icons.Default.HelpOutline,
-                        title = "मदत आणि सपोर्ट (Help & Support)",
-                        subtitle = "आमच्याशी संपर्क साधा",
+                        title = "मदत आणि सपोर्ट (Help Centre)",
+                        subtitle = "बुकिंग संबंधित प्रश्न व ग्राहक सहाय्य",
                         onClick = {
                             val intent = Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.API_BASE_URL}/contact"))
                             context.startActivity(intent)
                         }
                     )
-                    HorizontalDivider(color = MahaBorder, thickness = 0.5.dp)
-                    ProfileMenuItem(
+                    HorizontalDivider(color = Color(0xFFF3F4F6), thickness = 1.dp)
+                    ModernProfileMenuItem(
+                        icon = Icons.Default.Info,
+                        title = "आमच्याबद्दल (About MahaTicket)",
+                        subtitle = "महाराष्ट्राचे अधिकृत तिकीट बुकिंग व्यासपीठ",
+                        onClick = {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.API_BASE_URL}/about"))
+                            context.startActivity(intent)
+                        }
+                    )
+                    HorizontalDivider(color = Color(0xFFF3F4F6), thickness = 1.dp)
+                    ModernProfileMenuItem(
+                        icon = Icons.Default.AssignmentReturn,
+                        title = "परतावा धोरण (Refund Policy)",
+                        subtitle = "तिकीट रद्द करणे व परतावा नियम",
+                        onClick = {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.API_BASE_URL}/refund"))
+                            context.startActivity(intent)
+                        }
+                    )
+                    HorizontalDivider(color = Color(0xFFF3F4F6), thickness = 1.dp)
+                    ModernProfileMenuItem(
                         icon = Icons.Default.Description,
-                        title = "नियम व अटी (Terms of Service)",
-                        subtitle = "MahaTicket बुकिंग नियम",
+                        title = "नियम व अटी (Terms & Conditions)",
+                        subtitle = "वापरकर्त्यांसाठी नियम व मार्गदर्शक तत्त्वे",
                         onClick = {
                             val intent = Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.API_BASE_URL}/terms"))
                             context.startActivity(intent)
                         }
                     )
-                    HorizontalDivider(color = MahaBorder, thickness = 0.5.dp)
-                    ProfileMenuItem(
+                    HorizontalDivider(color = Color(0xFFF3F4F6), thickness = 1.dp)
+                    ModernProfileMenuItem(
                         icon = Icons.Default.PrivacyTip,
                         title = "गोपनीयता धोरण (Privacy Policy)",
-                        subtitle = "तुमचा डेटा कसा सुरक्षित राहतो",
+                        subtitle = "तुमचा डेटा आणि सुरक्षा माहिती",
                         onClick = {
                             val intent = Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.API_BASE_URL}/privacy"))
                             context.startActivity(intent)
@@ -185,24 +229,32 @@ fun ProfileScreen(
             }
         }
 
-        // App Version & Footer
+        // 5. App Version & Company Branding
         item {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 12.dp),
+                    .padding(vertical = 14.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
                     text = "${BuildConfig.APP_NAME_MR} (${BuildConfig.APP_NAME})",
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "आवृत्ती ${BuildConfig.VERSION_NAME} • Kalpkrut Infotech",
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "आवृत्ती ${BuildConfig.VERSION_NAME} • Made for Maharashtra",
+                    text = "महाराष्ट्रासाठी अभिमानाने निर्मित (Made for Maharashtra)",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFFEA580C)
                 )
             }
         }
@@ -210,7 +262,7 @@ fun ProfileScreen(
 }
 
 @Composable
-fun ProfileMenuItem(
+fun ModernProfileMenuItem(
     icon: ImageVector,
     title: String,
     subtitle: String,
@@ -220,34 +272,44 @@ fun ProfileMenuItem(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
-            .padding(16.dp),
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(24.dp)
-        )
-        Spacer(modifier = Modifier.width(16.dp))
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color(0xFFFFF7ED)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = Color(0xFFEA580C),
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        Spacer(modifier = Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 14.sp
             )
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 11.sp
             )
         }
         Icon(
             Icons.AutoMirrored.Filled.ArrowForwardIos,
             contentDescription = null,
-            tint = MahaTextSecondary,
-            modifier = Modifier.size(14.dp)
+            tint = Color(0xFF9CA3AF),
+            modifier = Modifier.size(13.dp)
         )
     }
 }
