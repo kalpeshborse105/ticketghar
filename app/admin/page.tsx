@@ -45,7 +45,10 @@ export default function AdminPage() {
     setLoginLoading(true);
 
     try {
-      const payload = loginMode === 'organizer_login' ? { email, password } : { password };
+      const payload =
+        loginMode === 'organizer_login'
+          ? { email: email.trim(), username: email.trim(), password }
+          : { password };
 
       const res = await fetch('/api/admin/login', {
         method: 'POST',
@@ -166,15 +169,16 @@ export default function AdminPage() {
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-slate-300 flex items-center gap-2">
                       <Mail className="w-4 h-4 text-amber-400" />
-                      नोंदणीकृत ईमेल (Organizer Email)
+                      वापरकर्तानाव / ईमेल / फोन (Username / Email / Mobile)
                     </label>
                     <input
-                      type="email"
-                      placeholder="उदा. contact@swara.com"
+                      type="text"
+                      placeholder="उदा. swara_organizer किंवा contact@swara.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
                       disabled={loginLoading}
+                      autoComplete="username"
                       className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
                     />
                   </div>
@@ -191,6 +195,7 @@ export default function AdminPage() {
                       onChange={(e) => setPassword(e.target.value)}
                       required
                       disabled={loginLoading}
+                      autoComplete="current-password"
                       className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
                     />
                   </div>
@@ -208,6 +213,7 @@ export default function AdminPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     disabled={loginLoading}
+                    autoComplete="current-password"
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
                   />
                 </div>
@@ -222,14 +228,14 @@ export default function AdminPage() {
               <button
                 type="submit"
                 disabled={loginLoading || !password || (loginMode === 'organizer_login' && !email)}
-                className="w-full py-3 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-extrabold text-sm transition flex items-center justify-center gap-2 shadow-md"
+                className="w-full py-3 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-extrabold text-sm transition flex items-center justify-center gap-2 shadow-md active:scale-98"
               >
                 <Lock className="w-4 h-4" />
                 <span>
                   {loginLoading
                     ? 'प्रमाणीकरण करत आहे...'
                     : loginMode === 'organizer_login'
-                    ? 'आयोजक डॅशबोर्ड उघडा'
+                    ? 'आयोजक डॅशबोर्ड उघडा (Login)'
                     : 'प्रशासक लॉगिन करा'}
                 </span>
               </button>

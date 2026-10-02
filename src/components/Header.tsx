@@ -18,6 +18,7 @@ import {
   Navigation,
   Loader2,
   TrendingUp,
+  ShieldCheck,
 } from 'lucide-react';
 
 export interface HeaderProps {
@@ -905,6 +906,16 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
+            {/* Organizer Portal Desktop Link */}
+            <a
+              href="/admin"
+              className="hidden lg:flex items-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 px-3 py-2 text-xs font-bold text-amber-800 transition"
+              title="Organizer & Gate Scanner Portal"
+            >
+              <ShieldCheck className="h-3.5 w-3.5 text-amber-600" />
+              <span>{language === 'mr' ? 'आयोजक व स्कॅनर' : 'Organizer Portal'}</span>
+            </a>
+
             {/* MOBILE MENU */}
             <button
               type="button"
@@ -1061,6 +1072,20 @@ export const Header: React.FC<HeaderProps> = ({
                   : 'Partner With Us'}
               </span>
             </button>
+
+            {/* Organizer & Scanner Portal Mobile */}
+            <a
+              href="/admin"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex w-full items-center gap-2.5 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-xs font-bold text-amber-900 shadow-sm transition hover:bg-amber-100"
+            >
+              <ShieldCheck className="h-4 w-4 text-amber-600" />
+              <span>
+                {language === 'mr'
+                  ? 'आयोजक व तिकीट स्कॅनर पोर्टल'
+                  : 'Organizer & Scanner Portal'}
+              </span>
+            </a>
 
             {/* Install */}
             {isInstallable && (

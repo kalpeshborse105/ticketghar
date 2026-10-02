@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Outfit, Noto_Sans_Devanagari } from 'next/font/google';
 import './globals.css';
 
@@ -15,6 +15,13 @@ const notoSansDevanagari = Noto_Sans_Devanagari({
   weight: ['400', '500', '600', '700'],
   display: 'swap',
 });
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  themeColor: '#ea580c',
+};
 
 export const metadata: Metadata = {
   title: 'MahaTicket (महाटिकिट) - Maharashtra-First Event & Ticket Marketplace',

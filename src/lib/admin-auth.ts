@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { db } from '@/src/db/index.ts';
 import { users, organizers } from '@/src/db/schema.ts';
-import { eq } from 'drizzle-orm';
+import { eq, or } from 'drizzle-orm';
 import { verifyPassword } from '@/src/lib/auth-service.ts';
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
@@ -38,12 +38,13 @@ export interface AdminSessionData {
 
 /**
  * Authenticate with either:
- * 1. Email + Password (checks DB users table & organizers table for role)
+ * 1. Username / Email / Phone + Password (checks DB users table & organizers table for role)
  * 2. Master ADMIN_PASSWORD (assigns 'super_admin')
  */
 export async function authenticateAdmin(credentials: {
   password: string;
   email?: string;
+  username?: string;
 }): Promise<{
   success: boolean;
   role?: string;
@@ -51,30 +52,67 @@ export async function authenticateAdmin(credentials: {
   sessionToken?: string;
   error?: string;
 }> {
-  const { password, email } = credentials;
+  const { password, email, username } = credentials;
+  const rawIdentifier = (username || email || '').trim();
 
-  // 1. Email + Password login (Organizer, Scanner, Admin)
-  if (email && email.trim()) {
-    const cleanEmail = email.trim().toLowerCase();
+  // 1. Username / Email / Phone + Password login (Organizer, Scanner, Admin)
+  if (rawIdentifier) {
+    const cleanIdentifier = rawIdentifier.toLowerCase();
 
     try {
-      const [user] = await db
+      // Find in users by email OR phone
+      const userMatches = await db
         .select()
         .from(users)
-        .where(eq(users.email, cleanEmail))
+        .where(
+          or(
+            eq(users.email, cleanIdentifier),
+            eq(users.phoneNumber, rawIdentifier)
+          )
+        )
         .limit(1);
+
+      let user = userMatches[0];
+
+      // If not directly found in users, check if an organizer matches by email, phone, or name
+      let orgMatch = null;
+      if (!user) {
+        const orgList = await db
+          .select()
+          .from(organizers)
+          .where(
+            or(
+              eq(organizers.email, cleanIdentifier),
+              eq(organizers.phone, rawIdentifier),
+              eq(organizers.name, rawIdentifier),
+              eq(organizers.companyName, rawIdentifier)
+            )
+          )
+          .limit(1);
+
+        if (orgList.length > 0) {
+          orgMatch = orgList[0];
+          // Try finding user linked to this organizer email
+          const linkedUsers = await db
+            .select()
+            .from(users)
+            .where(eq(users.email, orgMatch.email.toLowerCase()))
+            .limit(1);
+          user = linkedUsers[0];
+        }
+      }
 
       if (!user) {
         return {
           success: false,
-          error: 'या ईमेलसाठी कोणतेही खाते सापडले नाही (No account found with this email)',
+          error: 'या वापरकर्तानाव / ईमेलसाठी कोणतेही खाते सापडले नाही (No account found with this username/email)',
         };
       }
 
       if (!user.passwordHash) {
         return {
           success: false,
-          error: 'पासवर्ड सेट केलेला नाही. कृपया मुख्य संकेतस्थळावरून OTP द्वारे पासवर्ड सेट करा.',
+          error: 'पासवर्ड सेट केलेला नाही. मुख्य प्रशासकाशी संपर्क साधा किंवा पासवर्ड रीसेट करा.',
         };
       }
 
@@ -87,14 +125,14 @@ export async function authenticateAdmin(credentials: {
       }
 
       // Check if user is linked to an organizer
-      const [org] = await db
+      const [org] = orgMatch ? [orgMatch] : await db
         .select()
         .from(organizers)
-        .where(eq(organizers.email, cleanEmail))
+        .where(eq(organizers.email, user.email.toLowerCase()))
         .limit(1);
 
       let rawRole = String(user.role || 'customer');
-      let organizerId = org ? org.id : undefined;
+      const organizerId = org ? org.id : undefined;
 
       // If user is listed in organizers table or has organizer role
       if (org && (rawRole === 'customer' || !rawRole)) {

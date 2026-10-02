@@ -5,7 +5,7 @@ import { authenticateAdmin, setSessionCookie } from '@/src/lib/admin-auth.ts';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { password, email } = body;
+    const { password, email, username } = body;
 
     if (!password) {
       return NextResponse.json(
@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await authenticateAdmin({ password, email });
+    const result = await authenticateAdmin({ password, email, username });
 
     if (!result.success) {
       return NextResponse.json(

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Language, translations } from '../lib/i18n.ts';
+import { AdminScanner } from './AdminScanner';
 import {
   LayoutDashboard,
   Calendar,
@@ -33,6 +34,9 @@ import {
   Megaphone,
   Bell,
   Tag,
+  Key,
+  Lock,
+  Copy,
 } from 'lucide-react';
 
 interface AdminPanelProps {
@@ -48,6 +52,7 @@ type AdminTab =
   | 'settlements'
   | 'events'
   | 'cities_venues'
+  | 'organizers_mgmt'
   | 'scanner'
   | 'verified_tickets'
   | 'screen_status'
@@ -171,6 +176,34 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [auditLogsList, setAuditLogsList] = useState<any[]>([]);
   const [loadingAuditLogs, setLoadingAuditLogs] = useState(false);
 
+  // Organizers Management State
+  const [organizersList, setOrganizersList] = useState<any[]>([]);
+  const [loadingOrganizers, setLoadingOrganizers] = useState(false);
+  const [organizerSearchQuery, setOrganizerSearchQuery] = useState('');
+  const [showCreateOrganizerModal, setShowCreateOrganizerModal] = useState(false);
+  const [showCredentialsModal, setShowCredentialsModal] = useState(false);
+  const [selectedOrganizerForCredentials, setSelectedOrganizerForCredentials] = useState<any>(null);
+  const [createdCredentialsAlert, setCreatedCredentialsAlert] = useState<{
+    companyName: string;
+    username: string;
+    password?: string;
+  } | null>(null);
+
+  const [newOrganizerForm, setNewOrganizerForm] = useState({
+    name: '',
+    companyName: '',
+    email: '',
+    phone: '',
+    city: 'Pune',
+    commissionRate: 600, // 6%
+    password: '',
+  });
+
+  const [credentialsForm, setCredentialsForm] = useState({
+    email: '',
+    password: '',
+  });
+
   // Create Event Form
   const [newEventForm, setNewEventForm] = useState({
     organizerId: 1,
@@ -268,6 +301,106 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       console.error(e);
     } finally {
       setLoadingLeads(false);
+    }
+  };
+
+  // Fetch Organizers from DB
+  const fetchOrganizers = async () => {
+    try {
+      setLoadingOrganizers(true);
+      const res = await fetch('/api/admin/organizers');
+      if (res.ok) {
+        const data = await res.json();
+        setOrganizersList(data.organizers || []);
+      }
+    } catch (e) {
+      console.error('Error fetching organizers:', e);
+    } finally {
+      setLoadingOrganizers(false);
+    }
+  };
+
+  // Create New Organizer
+  const handleCreateOrganizer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newOrganizerForm.name || !newOrganizerForm.companyName || !newOrganizerForm.email || !newOrganizerForm.phone) {
+      alert('कृपया सर्व आवश्यक माहिती भरा (All fields are required)');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/admin/organizers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newOrganizerForm),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        if (newOrganizerForm.password) {
+          setCreatedCredentialsAlert({
+            companyName: newOrganizerForm.companyName,
+            username: newOrganizerForm.email,
+            password: newOrganizerForm.password,
+          });
+        }
+        setShowCreateOrganizerModal(false);
+        setNewOrganizerForm({
+          name: '',
+          companyName: '',
+          email: '',
+          phone: '',
+          city: 'Pune',
+          commissionRate: 600,
+          password: '',
+        });
+        await fetchOrganizers();
+      } else {
+        alert(data.error || 'आयोजक नोंदणी अयशस्वी');
+      }
+    } catch (e: any) {
+      alert('त्रुटी: ' + e.message);
+    }
+  };
+
+  // Set / Reset Credentials for Organizer
+  const handleSetOrganizerCredentials = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!credentialsForm.email || !credentialsForm.password) {
+      alert('ईमेल आणि पासवर्ड आवश्यक आहे');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/admin/organizers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'set_credentials',
+          organizerId: selectedOrganizerForCredentials?.id,
+          name: selectedOrganizerForCredentials?.name,
+          email: credentialsForm.email,
+          phone: selectedOrganizerForCredentials?.phone,
+          password: credentialsForm.password,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setCreatedCredentialsAlert({
+          companyName: selectedOrganizerForCredentials?.companyName || 'आयोजक',
+          username: credentialsForm.email,
+          password: credentialsForm.password,
+        });
+        setShowCredentialsModal(false);
+        setSelectedOrganizerForCredentials(null);
+        setCredentialsForm({ email: '', password: '' });
+        await fetchOrganizers();
+      } else {
+        alert(data.error || 'क्रेडेंशियल्स अद्यतनित करण्यात अडचण आली');
+      }
+    } catch (e: any) {
+      alert('त्रुटी: ' + e.message);
     }
   };
 
@@ -426,6 +559,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       if (activeTab === 'settlements') fetchSettlements();
       if (activeTab === 'events') fetchEvents();
       if (activeTab === 'cities_venues') fetchVenues();
+      if (activeTab === 'organizers_mgmt') fetchOrganizers();
       if (activeTab === 'leads') fetchLeads();
       if (activeTab === 'orders') fetchOrders();
       if (activeTab === 'verified_tickets') fetchTickets();
@@ -743,8 +877,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     : 'text-slate-300 hover:bg-slate-800'
                 }`}
               >
-                <QrCode className="w-4 h-4" />
-                <span>गेट स्कॅनर (QR Pass)</span>
+                <QrCode className="w-4 h-4 text-amber-400" />
+                <span>गेट स्कॅनर (QR Scanner)</span>
               </button>
 
               <button
@@ -769,6 +903,30 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               >
                 <Layers className="w-4 h-4 text-sky-400" />
                 <span>स्क्रीन व आसन स्थिती (Seats)</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('events')}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
+                  activeTab === 'events'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
+                    : 'text-slate-300 hover:bg-slate-800'
+                }`}
+              >
+                <Calendar className="w-4 h-4 text-amber-400" />
+                <span>माझे कार्यक्रम (My Events)</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('settlements')}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
+                  activeTab === 'settlements'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
+                    : 'text-slate-300 hover:bg-slate-800'
+                }`}
+              >
+                <Banknote className="w-4 h-4 text-purple-400" />
+                <span>विक्री व सेटलमेंट (Settlement)</span>
               </button>
             </>
           ) : (
@@ -808,6 +966,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               >
                 <MapPin className="w-4 h-4 text-emerald-400" />
                 <span>शहरे व नाट्यगृहे (Cities)</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('organizers_mgmt')}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
+                  activeTab === 'organizers_mgmt'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
+                    : 'text-slate-300 hover:bg-slate-800'
+                }`}
+              >
+                <Building2 className="w-4 h-4 text-amber-400" />
+                <span>आयोजक व क्रेडेंशियल्स (Organizers)</span>
               </button>
 
               <button
@@ -1235,6 +1405,221 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
           )}
 
+          {/* TAB: ORGANIZERS & CREDENTIALS MANAGEMENT */}
+          {activeTab === 'organizers_mgmt' && (
+            <div className="space-y-6">
+              {/* Top Banner and Actions */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-xl sm:text-2xl font-extrabold text-white font-serif">
+                    आयोजक व लॉगिन क्रेडेंशियल्स (Organizers & Credentials)
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    नोंदणीकृत नाट्य / कार्यक्रम आयोजक, त्यांचे लॉगिन पासवर्ड, कमिशन व संपर्क तपशील
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => setShowCreateOrganizerModal(true)}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#ea580c] hover:bg-[#c2410c] text-white text-xs font-bold transition shadow-lg active:scale-95"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>नवीन आयोजक जोडा (Add Organizer)</span>
+                  </button>
+
+                  <button
+                    onClick={fetchOrganizers}
+                    disabled={loadingOrganizers}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-300 hover:text-white transition"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${loadingOrganizers ? 'animate-spin' : ''}`} />
+                    <span>रिफ्रेश</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Success Alert Banner for Generated/Updated Credentials */}
+              {createdCredentialsAlert && (
+                <div className="p-4 rounded-2xl bg-emerald-950/60 border border-emerald-500/50 text-emerald-200 text-xs shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in">
+                  <div className="space-y-1">
+                    <div className="font-black text-sm text-emerald-300 flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      <span>आयोजक लॉगिन क्रेडेंशियल्स तयार/अपडेट झाले!</span>
+                    </div>
+                    <div className="text-[11px] text-slate-300 space-x-3">
+                      <span>संस्था: <strong>{createdCredentialsAlert.companyName}</strong></span>
+                      <span>वापरकर्तानाव/ईमेल: <strong className="font-mono text-amber-300">{createdCredentialsAlert.username}</strong></span>
+                      {createdCredentialsAlert.password && (
+                        <span>पासवर्ड: <strong className="font-mono text-emerald-300">{createdCredentialsAlert.password}</strong></span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        const text = `MahaTicket Organizer Portal\nLogin URL: ${window.location.origin}/admin\nUsername: ${createdCredentialsAlert.username}\nPassword: ${createdCredentialsAlert.password || '(as set)'}`;
+                        navigator.clipboard.writeText(text);
+                        alert('लॉगिन तपशील क्लिपबोर्डवर कॉपी झाले!');
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-emerald-500 text-slate-950 font-bold text-xs flex items-center gap-1.5 hover:bg-emerald-400 transition"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>तपशील कॉपी करा</span>
+                    </button>
+                    <button
+                      onClick={() => setCreatedCredentialsAlert(null)}
+                      className="p-1 rounded-lg text-slate-400 hover:text-white"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Search Bar */}
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center justify-between gap-3 shadow-lg">
+                <div className="relative w-full sm:w-80">
+                  <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="आयोजक, कंपनी किंवा फोन शोधा..."
+                    value={organizerSearchQuery}
+                    onChange={(e) => setOrganizerSearchQuery(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  />
+                </div>
+                <div className="text-xs text-slate-400 font-mono hidden sm:block">
+                  एकूण नोंदणीकृत आयोजक: {organizersList.length}
+                </div>
+              </div>
+
+              {/* Organizers List Table */}
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-800 bg-slate-950/60 text-slate-400 font-bold uppercase tracking-wider text-[11px]">
+                        <th className="p-3.5">आयोजक / संस्था</th>
+                        <th className="p-3.5">लॉगिन क्रेडेंशियल्स स्थिती</th>
+                        <th className="p-3.5">संपर्क व शहर</th>
+                        <th className="p-3.5">कमिशन दर</th>
+                        <th className="p-3.5">पडताळणी स्थिती</th>
+                        <th className="p-3.5 text-right">प्रशासकीय कृती</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {organizersList
+                        .filter((org) => {
+                          if (!organizerSearchQuery.trim()) return true;
+                          const q = organizerSearchQuery.toLowerCase();
+                          return (
+                            (org.name || '').toLowerCase().includes(q) ||
+                            (org.companyName || '').toLowerCase().includes(q) ||
+                            (org.email || '').toLowerCase().includes(q) ||
+                            (org.phone || '').toLowerCase().includes(q) ||
+                            (org.city || '').toLowerCase().includes(q)
+                          );
+                        })
+                        .map((org) => (
+                          <tr key={org.id} className="hover:bg-slate-850/80 transition">
+                            <td className="p-3.5">
+                              <div className="font-bold text-white text-sm">
+                                {org.companyName}
+                              </div>
+                              <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                                <span>{org.name}</span>
+                                <span className="text-slate-600">•</span>
+                                <span className="font-mono text-slate-500 text-[10px]">ID: #{org.id}</span>
+                              </div>
+                            </td>
+
+                            <td className="p-3.5">
+                              {org.hasLoginAccount ? (
+                                <div className="space-y-1">
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-400 text-[10px] font-bold">
+                                    <Check className="w-3 h-3" />
+                                    <span>लॉगिन खाते सक्रिय (Active)</span>
+                                  </span>
+                                  <div className="text-[11px] font-mono text-slate-300">
+                                    {org.email}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="space-y-1">
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-950/80 border border-amber-500/40 text-amber-400 text-[10px] font-bold">
+                                    <AlertCircle className="w-3 h-3" />
+                                    <span>पासवर्ड सेट करा (No Password)</span>
+                                  </span>
+                                  <div className="text-[11px] text-slate-500">
+                                    प्रवेशासाठी पासवर्ड आवश्यक
+                                  </div>
+                                </div>
+                              )}
+                            </td>
+
+                            <td className="p-3.5 text-slate-300">
+                              <div className="font-mono text-[11px] text-amber-400">
+                                {org.phone}
+                              </div>
+                              <div className="text-[11px] text-slate-400">
+                                {org.city || 'पुणे'}
+                              </div>
+                            </td>
+
+                            <td className="p-3.5">
+                              <span className="font-mono font-bold text-white">
+                                {((org.commissionRate || 600) / 100).toFixed(1)}%
+                              </span>
+                              <div className="text-[10px] text-slate-500 capitalize">
+                                {org.commissionType || 'percentage'}
+                              </div>
+                            </td>
+
+                            <td className="p-3.5">
+                              <span
+                                className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase border ${
+                                  org.verificationStatus === 'verified'
+                                    ? 'bg-emerald-950/60 text-emerald-400 border-emerald-500/40'
+                                    : 'bg-amber-950/60 text-amber-400 border-amber-500/40'
+                                }`}
+                              >
+                                {org.verificationStatus === 'verified' ? 'प्रमाणित (Verified)' : 'प्रलंबित (Pending)'}
+                              </span>
+                            </td>
+
+                            <td className="p-3.5 text-right">
+                              <button
+                                onClick={() => {
+                                  setSelectedOrganizerForCredentials(org);
+                                  setCredentialsForm({
+                                    email: org.email || '',
+                                    password: '',
+                                  });
+                                  setShowCredentialsModal(true);
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 hover:text-amber-300 border border-slate-700 text-xs font-bold transition shadow-sm"
+                              >
+                                <Key className="w-3.5 h-3.5" />
+                                <span>{org.hasLoginAccount ? 'पासवर्ड बदला' : 'क्रेडेंशियल्स द्या'}</span>
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {organizersList.length === 0 && !loadingOrganizers && (
+                  <div className="text-center py-12 text-slate-500 text-xs">
+                    कोणतेही आयोजक सापडले नाहीत. नवीन आयोजक जोडण्यासाठी वरील बटण वापरा.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* TAB 4: SETTLEMENTS */}
           {activeTab === 'settlements' && (
             <div className="space-y-6">
@@ -1406,93 +1791,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
           )}
 
-          {/* TAB 6: GATE SCANNER */}
+          {/* TAB: GATE SCANNER (Official Device Camera QR Scanner with Live Verified/Invalid Overlays) */}
           {activeTab === 'scanner' && (
-            <div className="max-w-2xl mx-auto space-y-6">
-              <div className="text-center space-y-1">
-                <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center justify-center mx-auto">
-                  <QrCode className="w-6 h-6" />
-                </div>
-                <h2 className="text-xl sm:text-2xl font-bold text-white font-serif">
-                  प्रवेशद्वार स्कॅनर (Gate Ticket Verification)
-                </h2>
-                <p className="text-xs text-slate-400">
-                  QR टोकन किंवा तिकीट कोड प्रविष्ट करून सर्व्हर-सत्यापित प्रवेश द्या
-                </p>
-              </div>
-
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-400">प्रवेशद्वार (Gate Name):</span>
-                  <input
-                    type="text"
-                    value={gateName}
-                    onChange={(e) => setGateName(e.target.value)}
-                    className="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-white"
-                  />
-                </div>
-
-                <form onSubmit={handleScanTicket} className="space-y-3">
-                  <input
-                    type="text"
-                    placeholder="उदा. TG-TKT-101 किंवा संपूर्ण QR पेलोड पेस्ट करा..."
-                    value={scanInput}
-                    onChange={(e) => setScanInput(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 font-mono focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  />
-
-                  <button
-                    type="submit"
-                    disabled={scanLoading || !scanInput.trim()}
-                    className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-extrabold text-sm transition flex items-center justify-center gap-2"
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>{scanLoading ? 'तपासत आहे...' : 'तिकीट पडताळा (Verify Ticket)'}</span>
-                  </button>
-                </form>
-
-                {/* Scan Result */}
-                {scanResult && (
-                  <div
-                    className={`p-5 rounded-2xl border text-center space-y-2 ${
-                      scanResult.valid
-                        ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-300'
-                        : 'bg-rose-950/40 border-rose-500/50 text-rose-300'
-                    }`}
-                  >
-                    <div className="text-lg font-black font-serif">
-                      {scanResult.valid ? '✅ प्रवेश मान्य (ENTRY ALLOWED)' : '❌ प्रवेश नाकारला (ENTRY REJECTED)'}
-                    </div>
-                    <p className="text-xs font-semibold">{scanResult.message}</p>
-
-                    {scanResult.ticket && (
-                      <div className="pt-2 text-xs text-left bg-slate-950/60 p-3 rounded-xl space-y-1">
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">आसन क्र. (Seat):</span>
-                          <span className="font-bold text-amber-400">{scanResult.ticket.seat}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">प्रेक्षक (Name):</span>
-                          <span className="text-white">{scanResult.ticket.attendee}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">कार्यक्रम (Event):</span>
-                          <span className="text-white truncate max-w-[200px]">
-                            {scanResult.ticket.eventMr || scanResult.ticket.event}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                    {scanResult.alreadyScannedAt && (
-                      <p className="text-xs text-amber-300 font-medium">
-                        याआधी स्कॅन: {new Date(scanResult.alreadyScannedAt).toLocaleTimeString()} (Gate: {scanResult.previousGate})
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
+            <AdminScanner
+              scannerUserId={currentUser?.userId || 1}
+              initialGateName={gateName || 'Main Entry Gate 1'}
+              onTicketVerified={() => {
+                fetchTickets();
+              }}
+              onViewVerifiedList={() => {
+                setActiveTab('verified_tickets');
+              }}
+            />
           )}
 
           {/* TAB: VERIFIED TICKETS LIST */}
@@ -2897,6 +3207,256 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   className="px-5 py-2 rounded-xl bg-[#ea580c] hover:bg-[#c2410c] disabled:opacity-50 text-white font-bold text-xs shadow-lg transition active:scale-95"
                 >
                   {isSubmittingAnnouncement ? 'जतन करत आहे...' : 'बॅनर प्रकाशित करा (Publish Banner)'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: CREATE ORGANIZER */}
+      {showCreateOrganizerModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-950 border border-slate-800 rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-amber-400" />
+                <h3 className="text-base font-bold text-white font-serif">
+                  नवीन आयोजक नोंदणी (Add Organizer)
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowCreateOrganizerModal(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateOrganizer} className="space-y-3.5 text-xs">
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">
+                  नाट्यसंस्था / कंपनी नाव (Company Name) *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="उदा. स्वरा क्रिएशन्स"
+                  value={newOrganizerForm.companyName}
+                  onChange={(e) =>
+                    setNewOrganizerForm({ ...newOrganizerForm, companyName: e.target.value })
+                  }
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-300 font-semibold block mb-1">
+                    संपर्क व्यक्तीचे नाव (Contact Person) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="उदा. सचिन जोशी"
+                    value={newOrganizerForm.name}
+                    onChange={(e) =>
+                      setNewOrganizerForm({ ...newOrganizerForm, name: e.target.value })
+                    }
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-slate-300 font-semibold block mb-1">
+                    मोबाईल नंबर (Phone) *
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    placeholder="98XXXXXXXX"
+                    value={newOrganizerForm.phone}
+                    onChange={(e) =>
+                      setNewOrganizerForm({ ...newOrganizerForm, phone: e.target.value })
+                    }
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-300 font-semibold block mb-1">
+                    लॉगिन ईमेल (Login Email / Username) *
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="organizer@theatre.com"
+                    value={newOrganizerForm.email}
+                    onChange={(e) =>
+                      setNewOrganizerForm({ ...newOrganizerForm, email: e.target.value })
+                    }
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-slate-300 font-semibold block mb-1">
+                    शहर (City)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="उदा. Pune"
+                    value={newOrganizerForm.city}
+                    onChange={(e) =>
+                      setNewOrganizerForm({ ...newOrganizerForm, city: e.target.value })
+                    }
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">
+                  प्लॅटफॉर्म कमिशन (Commission % - उदा. 6% = 600)
+                </label>
+                <input
+                  type="number"
+                  value={newOrganizerForm.commissionRate}
+                  onChange={(e) =>
+                    setNewOrganizerForm({ ...newOrganizerForm, commissionRate: Number(e.target.value) })
+                  }
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
+                />
+              </div>
+
+              <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-500/30 space-y-1.5">
+                <label className="text-amber-300 font-bold flex items-center gap-1.5">
+                  <Key className="w-3.5 h-3.5" />
+                  <span>प्रारंभिक लॉगिन पासवर्ड (Initial Login Password - Optional)</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="उदा. Swara@2026 किंवा रिक्त ठेवा"
+                  value={newOrganizerForm.password}
+                  onChange={(e) =>
+                    setNewOrganizerForm({ ...newOrganizerForm, password: e.target.value })
+                  }
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2 text-white font-mono text-xs"
+                />
+                <p className="text-[10px] text-slate-400">
+                  येथे पासवर्ड दिल्यास आयोजकाचे लॉगिन खाते थेट तयार होईल. आयोजक /admin वरून लॉगिन करू शकतात.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateOrganizerModal(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 font-semibold text-xs"
+                >
+                  रद्द करा
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-[#ea580c] hover:bg-[#c2410c] text-white font-bold text-xs shadow-lg transition active:scale-95"
+                >
+                  नोंदणी पूर्ण करा (Register Organizer)
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: SET / RESET ORGANIZER CREDENTIALS */}
+      {showCredentialsModal && selectedOrganizerForCredentials && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-950 border border-slate-800 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <Key className="w-5 h-5 text-amber-400" />
+                <h3 className="text-base font-bold text-white font-serif">
+                  आयोजक क्रेडेंशियल्स व्यवस्थापन
+                </h3>
+              </div>
+              <button
+                onClick={() => {
+                  setShowCredentialsModal(false);
+                  setSelectedOrganizerForCredentials(null);
+                }}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 text-xs space-y-1">
+              <div className="font-bold text-white">{selectedOrganizerForCredentials.companyName}</div>
+              <div className="text-slate-400">संपर्क: {selectedOrganizerForCredentials.name} ({selectedOrganizerForCredentials.phone})</div>
+            </div>
+
+            <form onSubmit={handleSetOrganizerCredentials} className="space-y-3.5 text-xs">
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">
+                  वापरकर्तानाव / लॉगिन ईमेल (Username / Email) *
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={credentialsForm.email}
+                  onChange={(e) => setCredentialsForm({ ...credentialsForm, email: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-slate-300 font-semibold">
+                    नवीन पासवर्ड (New Password) *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const gen = 'Maha@' + Math.floor(100000 + Math.random() * 900000);
+                      setCredentialsForm({ ...credentialsForm, password: gen });
+                    }}
+                    className="text-[10px] text-amber-400 hover:underline"
+                  >
+                    पासवर्ड जनरेट करा
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  required
+                  placeholder="उदा. SecurePass#2026"
+                  value={credentialsForm.password}
+                  onChange={(e) => setCredentialsForm({ ...credentialsForm, password: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
+                />
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-[11px] text-slate-400">
+                💡 पासवर्ड सेट केल्यानंतर आयोजक <code className="text-amber-400">/admin</code> पृष्ठावर जाऊन &quot;आयोजक लॉगिन&quot; पर्यायाने प्रवेश करू शकतात.
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCredentialsModal(false);
+                    setSelectedOrganizerForCredentials(null);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 font-semibold text-xs"
+                >
+                  रद्द करा
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg transition active:scale-95"
+                >
+                  क्रेडेंशियल्स सेव्ह करा (Save Credentials)
                 </button>
               </div>
             </form>
