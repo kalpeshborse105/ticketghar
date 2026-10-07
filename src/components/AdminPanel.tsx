@@ -824,19 +824,30 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </div>
         </div>
 
-        {/* Role Switcher */}
+        {/* Role Badge / Switcher — Only super_admin / finance / operations can switch roles */}
         <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-400 hidden sm:inline">सक्रिय भूमिका (RBAC):</span>
-          <select
-            value={activeRole}
-            onChange={(e) => setActiveRole(e.target.value as any)}
-            className="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1 text-xs font-semibold text-amber-400 focus:outline-none cursor-pointer"
-          >
-            <option value="super_admin">Super Admin (सर्व अधिकार)</option>
-            <option value="finance">Finance (सेटलमेंट व लेजर)</option>
-            <option value="operations">Operations (आयोजक व कार्यक्रम)</option>
-            <option value="scanner">Gate Scanner (प्रवेश पडताळणी)</option>
-          </select>
+          {initialRole === 'organizer' || initialRole === 'scanner' ? (
+            // Organizer & Scanner: role is FIXED — no switcher
+            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-bold">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              {initialRole === 'organizer' ? 'आयोजक (Organizer)' : 'गेट स्कॅनर (Gate Scanner)'}
+            </span>
+          ) : (
+            // Admin staff: role switcher for testing/QA purposes
+            <>
+              <span className="text-xs text-slate-400 hidden sm:inline">सक्रिय भूमिका (RBAC):</span>
+              <select
+                value={activeRole}
+                onChange={(e) => setActiveRole(e.target.value as any)}
+                className="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1 text-xs font-semibold text-amber-400 focus:outline-none cursor-pointer"
+              >
+                <option value="super_admin">Super Admin (सर्व अधिकार)</option>
+                <option value="finance">Finance (सेटलमेंट व लेजर)</option>
+                <option value="operations">Operations (आयोजक व कार्यक्रम)</option>
+                <option value="scanner">Gate Scanner (प्रवेश पडताळणी)</option>
+              </select>
+            </>
+          )}
         </div>
       </header>
 

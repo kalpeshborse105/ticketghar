@@ -4,14 +4,17 @@ import { relations } from 'drizzle-orm';
 // 1. Users & Roles
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
-  uid: text('uid').notNull().unique(), // Firebase UID or Auth token
+  uid: text('uid').notNull().unique(), // Firebase UID, Auth token, or user identifier
   email: text('email').notNull(),
   fullName: text('full_name').notNull().default('Guest User'),
   phoneNumber: text('phone_number'),
-  role: text('role').notNull().default('customer'), // 'customer' | 'super_admin' | 'operations' | 'finance' | 'scanner'
+  role: text('role').notNull().default('customer'), // 'customer' | 'super_admin' | 'organizer' | 'manager' | 'operations' | 'finance' | 'scanner'
   preferredLanguage: text('preferred_language').notNull().default('mr'), // 'mr' | 'en'
   city: text('city').notNull().default('Pune'),
   passwordHash: text('password_hash'),
+  organizerId: integer('organizer_id'),
+  status: text('status').default('active'), // 'active' | 'disabled'
+  assignedEvents: text('assigned_events'), // JSON array of event IDs for managers
   otpCode: text('otp_code'),
   otpExpiresAt: timestamp('otp_expires_at'),
   createdAt: timestamp('created_at').defaultNow(),
@@ -27,6 +30,7 @@ export const organizers = pgTable('organizers', {
   phone: text('phone').notNull(),
   city: text('city').notNull().default('Pune'),
   verificationStatus: text('verification_status').notNull().default('verified'), // 'pending' | 'verified' | 'rejected'
+  status: text('status').default('active'), // 'active' | 'disabled'
   commissionType: text('commission_type').notNull().default('percentage'), // 'percentage' | 'flat'
   commissionRate: integer('commission_rate').notNull().default(600), // in basis points: 600 = 6.00%
   bankName: text('bank_name'),
@@ -107,9 +111,10 @@ export const events = pgTable('events', {
   descriptionMr: text('description_mr').notNull(),
   posterUrl: text('poster_url').notNull(),
   bannerUrl: text('banner_url'),
-  status: text('status').notNull().default('published'), // 'draft' | 'published' | 'unpublish' | 'cancelled'
+  status: text('status').notNull().default('published'), // 'draft' | 'submitted' | 'under_review' | 'approved' | 'rejected' | 'published' | 'unpublish' | 'unpublished' | 'cancelled' | 'completed'
   featured: integer('featured').notNull().default(0),
   castCrew: text('cast_crew'),
+  rejectionReason: text('rejection_reason'),
   convenienceFeeType: text('convenience_fee_type').notNull().default('flat'),
   convenienceFeeValue: integer('convenience_fee_value').notNull().default(3000), // in paise (3000 = ₹30)
   gstPercent: integer('gst_percent').notNull().default(18), // 18% on convenience fee

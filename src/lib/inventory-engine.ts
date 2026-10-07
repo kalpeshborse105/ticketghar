@@ -197,6 +197,7 @@ export async function createTemporarySeatHold(params: {
         inArray(seatInventory.seatId, seatIds),
         or(
           eq(seatInventory.status, 'available'),
+          lt(seatInventory.holdExpiresAt, now),
           and(eq(seatInventory.status, 'held'), eq(seatInventory.heldByUserId, userIdStr))
         )
       )
@@ -211,6 +212,7 @@ export async function createTemporarySeatHold(params: {
   const faceValueTotal = sessionInventories.reduce((sum, item) => sum + item.price, 0);
 
   return {
+    holdToken: userIdStr,
     heldSeatIds: seatIds,
     heldSeats: sessionInventories.map((i) => ({
       seatId: i.seatId,

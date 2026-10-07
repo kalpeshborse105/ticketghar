@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
 import { tickets, orders, events, venues, eventSessions, ticketScans } from '@/src/db/schema.ts';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and } from 'drizzle-orm';
 import { requireAdmin, verifyAdminSession } from '@/src/lib/admin-auth.ts';
 
 export async function GET(request: NextRequest) {
@@ -13,7 +13,12 @@ export async function GET(request: NextRequest) {
     const limitParam = parseInt(searchParams.get('limit') || '200', 10);
     const statusParam = searchParams.get('status');
 
-    const ticketRows = await db
+    // Auto-scope tickets to organizer's events when session role is organizer
+    const session = verifyAdminSession(request);
+    const isOrganizer = session.valid && session.role === 'organizer' && session.user?.organizerId;
+    const orgId = isOrganizer ? Number(session.user!.organizerId) : null;
+
+    const baseQuery = db
       .select({
         ticket: tickets,
         order: orders,
@@ -28,6 +33,19 @@ export async function GET(request: NextRequest) {
       .leftJoin(eventSessions, eq(tickets.sessionId, eventSessions.id))
       .orderBy(desc(tickets.createdAt))
       .limit(limitParam);
+
+    const ticketRows = orgId
+      ? await db
+          .select({ ticket: tickets, order: orders, event: events, venue: venues, session: eventSessions })
+          .from(tickets)
+          .innerJoin(orders, eq(tickets.orderId, orders.id))
+          .innerJoin(events, eq(orders.eventId, events.id))
+          .leftJoin(venues, eq(events.venueId, venues.id))
+          .leftJoin(eventSessions, eq(tickets.sessionId, eventSessions.id))
+          .where(eq(events.organizerId, orgId))
+          .orderBy(desc(tickets.createdAt))
+          .limit(limitParam)
+      : await baseQuery;
 
     const enriched = await Promise.all(
       ticketRows.map(async (row) => {
@@ -79,6 +97,7 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
 
 // POST /api/admin/tickets/verify - Manual instant verification by organizer
 export async function POST(request: NextRequest) {

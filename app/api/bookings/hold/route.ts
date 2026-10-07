@@ -57,7 +57,11 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      hold: holdResult,
+      holdToken: holdResult.holdToken || holderId,
+      hold: {
+        ...holdResult,
+        holdToken: holdResult.holdToken || holderId,
+      },
       pricing,
     });
   } catch (error: any) {

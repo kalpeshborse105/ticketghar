@@ -1,14 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
 import { events, venues, organizers, eventSessions, ticketTypes, auditLogs } from '@/src/db/schema.ts';
-import { eq, desc } from 'drizzle-orm';
-import { requireAdmin } from '@/src/lib/admin-auth.ts';
+import { eq, desc, and } from 'drizzle-orm';
+import { requireAdmin, verifyAdminSession } from '@/src/lib/admin-auth.ts';
 
 export async function GET(request: NextRequest) {
   const authError = requireAdmin(request);
   if (authError) return authError;
   try {
-    const list = await db
+    const { searchParams } = new URL(request.url);
+    // Allow organizers to scope to their own events
+    const organizerIdParam = searchParams.get('organizerId');
+
+    // Also auto-detect from session: if caller is an organizer, enforce their organizerId
+    const session = verifyAdminSession(request);
+    let filterOrganizerId: number | null = null;
+
+    if (session.valid && session.role === 'organizer' && session.user?.organizerId) {
+      filterOrganizerId = Number(session.user.organizerId);
+    } else if (organizerIdParam) {
+      filterOrganizerId = parseInt(organizerIdParam, 10);
+    }
+
+    const query = db
       .select({
         event: events,
         venue: venues,
@@ -18,6 +32,16 @@ export async function GET(request: NextRequest) {
       .innerJoin(venues, eq(events.venueId, venues.id))
       .innerJoin(organizers, eq(events.organizerId, organizers.id))
       .orderBy(desc(events.createdAt));
+
+    const list = filterOrganizerId
+      ? await db
+          .select({ event: events, venue: venues, organizer: organizers })
+          .from(events)
+          .innerJoin(venues, eq(events.venueId, venues.id))
+          .innerJoin(organizers, eq(events.organizerId, organizers.id))
+          .where(eq(events.organizerId, filterOrganizerId))
+          .orderBy(desc(events.createdAt))
+      : await query;
 
     const formatted = list.map((item) => ({
       ...item.event,
@@ -32,6 +56,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to fetch events' }, { status: 500 });
   }
 }
+
 
 export async function POST(request: NextRequest) {
   const authError = requireAdmin(request);

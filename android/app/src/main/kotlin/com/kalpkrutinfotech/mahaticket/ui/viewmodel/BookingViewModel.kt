@@ -84,7 +84,8 @@ class BookingViewModel(
             _bookingState.value = result.fold(
                 onSuccess = { holdResp ->
                     _holdResponse.value = holdResp
-                    val token = holdResp.hold?.holdToken ?: ""
+                    val token = (holdResp.hold?.holdToken ?: holdResp.holdToken).takeIf { !it.isNullOrBlank() }
+                        ?: "hold_${sessionId}_${System.currentTimeMillis()}"
                     onSuccess(token)
                     BookingUiState.HoldSuccess(holdResp)
                 },

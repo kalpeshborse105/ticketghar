@@ -28,11 +28,14 @@ CREATE TABLE IF NOT EXISTS public.users (
   full_name TEXT NOT NULL DEFAULT 'Guest User',
   phone_number TEXT,
   role TEXT NOT NULL DEFAULT 'customer'
-    CHECK (role IN ('customer', 'super_admin', 'operations', 'finance', 'scanner')),
+    CHECK (role IN ('customer', 'super_admin', 'organizer', 'manager', 'operations', 'finance', 'scanner')),
   preferred_language TEXT NOT NULL DEFAULT 'mr'
     CHECK (preferred_language IN ('mr', 'en')),
   city TEXT NOT NULL DEFAULT 'Pune',
   password_hash TEXT,
+  organizer_id INTEGER REFERENCES public.organizers (id) ON DELETE SET NULL,
+  status TEXT DEFAULT 'active',
+  assigned_events TEXT,
   otp_code TEXT,
   otp_expires_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -56,6 +59,7 @@ CREATE TABLE IF NOT EXISTS public.organizers (
   city TEXT NOT NULL DEFAULT 'Pune',
   verification_status TEXT NOT NULL DEFAULT 'verified'
     CHECK (verification_status IN ('pending', 'verified', 'rejected')),
+  status TEXT DEFAULT 'active',
   commission_type TEXT NOT NULL DEFAULT 'percentage'
     CHECK (commission_type IN ('percentage', 'flat')),
   commission_rate INTEGER NOT NULL DEFAULT 600,
@@ -156,8 +160,9 @@ CREATE TABLE IF NOT EXISTS public.events (
   poster_url TEXT NOT NULL,
   banner_url TEXT,
   status TEXT NOT NULL DEFAULT 'published'
-    CHECK (status IN ('draft', 'published', 'unpublish', 'cancelled')),
+    CHECK (status IN ('draft', 'submitted', 'under_review', 'approved', 'rejected', 'published', 'unpublish', 'unpublished', 'cancelled', 'completed')),
   featured INTEGER NOT NULL DEFAULT 0 CHECK (featured IN (0, 1)),
+  rejection_reason TEXT,
   convenience_fee_type TEXT NOT NULL DEFAULT 'flat',
   convenience_fee_value INTEGER NOT NULL DEFAULT 3000,
   gst_percent INTEGER NOT NULL DEFAULT 18,
