@@ -39,7 +39,8 @@ data class SeatItem(
     val seatCode: String,
     val price: Int,
     val status: String, // available, held, booked, blocked
-    val isAccessible: Boolean
+    val isAccessible: Boolean,
+    val sectionName: String? = null
 )
 
 data class BookingOrder(

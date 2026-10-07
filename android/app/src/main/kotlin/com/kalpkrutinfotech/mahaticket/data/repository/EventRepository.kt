@@ -44,26 +44,11 @@ class EventRepository(
                     Result.failure(Exception(errorMsg))
                 }
             } else {
-                // Offline fallback
-                val cached = if (category != null && category != "all") {
-                    database.eventDao().getCachedEventsByCategory(category)
-                } else {
-                    database.eventDao().getAllCachedEvents()
-                }
-                Result.success(cached.map { it.toEventItem() })
+                // Live ticket booking system requires active internet for real-time inventory
+                Result.failure(Exception("इंटरनेट कनेक्शन उपलब्ध नाही. थेट तिकीट बुकिंग आणि आसन स्थितीसाठी कृपया इंटरनेट सुरू करा."))
             }
         } catch (e: Exception) {
-            // Network failure - attempt fallback to Room
-            try {
-                val cached = database.eventDao().getAllCachedEvents()
-                if (cached.isNotEmpty()) {
-                    Result.success(cached.map { it.toEventItem() })
-                } else {
-                    Result.failure(Exception(e.localizedMessage ?: "इंटरनेट कनेक्शन तपासा आणि पुन्हा प्रयत्न करा"))
-                }
-            } catch (fallbackError: Exception) {
-                Result.failure(e)
-            }
+            Result.failure(Exception("इंटरनेट कनेक्शन उपलब्ध नाही. थेट तिकीट बुकिंगसाठी कृपया इंटरनेट सुरू करा."))
         }
     }
     
@@ -82,15 +67,10 @@ class EventRepository(
                         Result.failure(Exception(response.body()?.error ?: "कार्यक्रम माहिती आढळली नाही"))
                     }
                 } else {
-                    val cached = database.eventDao().getAllCachedEvents().find { it.id == eventId }
-                    if (cached != null) {
-                        Result.success(cached.toEventItem())
-                    } else {
-                        Result.failure(Exception("कार्यक्रम ऑफलाइन उपलब्ध नाही"))
-                    }
+                    Result.failure(Exception("थेट तिकीट आरक्षण आणि आसन स्थिती पाहण्यासाठी इंटरनेट कनेक्शन आवश्यक आहे."))
                 }
             } catch (e: Exception) {
-                Result.failure(e)
+                Result.failure(Exception("इंटरनेट कनेक्शन उपलब्ध नाही. कृपया नेटवर्क तपासा."))
             }
         }
 

@@ -31,14 +31,10 @@ import com.kalpkrutinfotech.mahaticket.ui.viewmodel.BookingViewModelFactory
 @Composable
 fun CheckoutScreen(
     holdToken: String,
+    bookingViewModel: BookingViewModel,
     onNavigateBack: () -> Unit,
     onBookingSuccess: (String) -> Unit
 ) {
-    val app = androidx.compose.ui.platform.LocalContext.current.applicationContext as MahaTicketApp
-    val bookingViewModel: BookingViewModel = viewModel(
-        factory = BookingViewModelFactory(app.bookingRepository, app.networkMonitor)
-    )
-
     val selectedSeats by bookingViewModel.selectedSeats.collectAsState()
     var customerName by remember { mutableStateOf("") }
     var customerEmail by remember { mutableStateOf("") }
@@ -106,7 +102,13 @@ fun CheckoutScreen(
 
                     Button(
                         onClick = {
-                            if (customerName.isBlank() || customerPhone.length != 10) {
+                            if (selectedSeats.isEmpty()) {
+                                errorMessage = "कोणतेही आसन निवडलेले नाही. कृपया मागे जाऊन आसन निवडा."
+                                return@Button
+                            }
+
+                            val cleanPhone = customerPhone.filter { it.isDigit() }.takeLast(10)
+                            if (customerName.isBlank() || cleanPhone.length != 10) {
                                 errorMessage = "कृपया आपले पूर्ण नाव आणि १०-अंकी मोबाईल नंबर प्रविष्ट करा."
                                 return@Button
                             }
@@ -120,7 +122,7 @@ fun CheckoutScreen(
 
                             bookingViewModel.confirmBooking(
                                 holdToken = holdToken,
-                                phoneNumber = customerPhone,
+                                phoneNumber = cleanPhone,
                                 email = customerEmail.ifBlank { null },
                                 attendeeNames = attendeeNames,
                                 razorpayPaymentId = mockPaymentId,
@@ -239,26 +241,54 @@ fun CheckoutScreen(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        selectedSeats.forEach { seat ->
-                            Row(
+                        if (selectedSeats.isEmpty()) {
+                            Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                                    .padding(vertical = 12.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Text(
-                                    text = "आसन क्रमांक: ${seat.seatCode}",
+                                    text = "कोणतेही आसन निवडलेले नाही. कृपया मागे जाऊन आसन निवडा.",
                                     fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    color = Color(0xFFDC2626),
+                                    fontWeight = FontWeight.Medium,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                 )
-                                Text(
-                                    text = "₹${seat.price / 100}",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFEA580C)
-                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                OutlinedButton(
+                                    onClick = onNavigateBack,
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFEA580C)),
+                                    border = BorderStroke(1.dp, Color(0xFFEA580C)),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("मागे जाऊन आसन निवडा", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        } else {
+                            selectedSeats.forEach { seat ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "आसन क्रमांक: ${seat.seatCode}",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "₹${seat.price / 100}",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFEA580C)
+                                    )
+                                }
                             }
                         }
                     }

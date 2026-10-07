@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -61,14 +62,14 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
 
 object BookingRoutes {
     const val EVENT_DETAIL = "event_detail/{eventId}"
-    const val SEAT_SELECTION = "seat_selection/{sessionId}"
+    const val SEAT_SELECTION = "seat_selection/{sessionId}/{eventId}"
     const val CHECKOUT = "checkout/{holdToken}"
     const val BOOKING_SUCCESS = "booking_success/{orderNumber}"
     const val TICKET_DETAIL = "ticket_detail/{ticketCode}"
     const val LOGIN = "login"
     
     fun eventDetail(eventId: Int) = "event_detail/$eventId"
-    fun seatSelection(sessionId: Int) = "seat_selection/$sessionId"
+    fun seatSelection(sessionId: Int, eventId: Int = 1) = "seat_selection/$sessionId/$eventId"
     fun checkout(holdToken: String) = "checkout/$holdToken"
     fun bookingSuccess(orderNumber: String) = "booking_success/$orderNumber"
     fun ticketDetail(ticketCode: String) = "ticket_detail/$ticketCode"
@@ -88,6 +89,21 @@ fun MahaTicketRoot() {
     )
     
     val isOnline by eventViewModel.isOnline.collectAsState()
+    var previousOnlineState by remember { mutableStateOf<Boolean?>(null) }
+    var showOnlineToast by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isOnline) {
+        if (previousOnlineState == false && isOnline) {
+            // Internet restored! Auto-fetch live events and catalogs
+            showOnlineToast = true
+            eventViewModel.loadEvents()
+            eventViewModel.loadCities()
+            eventViewModel.loadOffers()
+            kotlinx.coroutines.delay(4000)
+            showOnlineToast = false
+        }
+        previousOnlineState = isOnline
+    }
     
     Scaffold(
         modifier = Modifier
@@ -112,8 +128,21 @@ fun MahaTicketRoot() {
             .fillMaxSize()
             .padding(innerPadding)) {
             // Offline banner
-            if (!isOnline) {
+            AnimatedVisibility(
+                visible = !isOnline,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
                 OfflineBanner()
+            }
+
+            // Green "Welcome back / Internet restored" banner
+            AnimatedVisibility(
+                visible = showOnlineToast,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                OnlineRestoredBanner()
             }
             
             NavHost(
@@ -187,19 +216,25 @@ fun MahaTicketRoot() {
                     EventDetailScreen(
                         eventId = eventId,
                         onNavigateBack = { navController.popBackStack() },
-                        onBookSession = { sessionId ->
-                            navController.navigate(BookingRoutes.seatSelection(sessionId))
+                        onBookSession = { sessionId, evId ->
+                            navController.navigate(BookingRoutes.seatSelection(sessionId, evId))
                         }
                     )
                 }
                 
                 composable(
                     route = BookingRoutes.SEAT_SELECTION,
-                    arguments = listOf(navArgument("sessionId") { type = NavType.IntType })
+                    arguments = listOf(
+                        navArgument("sessionId") { type = NavType.IntType },
+                        navArgument("eventId") { type = NavType.IntType; defaultValue = 1 }
+                    )
                 ) { backStackEntry ->
                     val sessionId = backStackEntry.arguments?.getInt("sessionId") ?: 0
+                    val eventId = backStackEntry.arguments?.getInt("eventId") ?: 1
                     SeatSelectionScreen(
                         sessionId = sessionId,
+                        eventId = eventId,
+                        bookingViewModel = bookingViewModel,
                         onNavigateBack = { navController.popBackStack() },
                         onContinueToCheckout = { holdToken ->
                             navController.navigate(BookingRoutes.checkout(holdToken))
@@ -214,6 +249,7 @@ fun MahaTicketRoot() {
                     val holdToken = backStackEntry.arguments?.getString("holdToken") ?: ""
                     CheckoutScreen(
                         holdToken = holdToken,
+                        bookingViewModel = bookingViewModel,
                         onNavigateBack = { navController.popBackStack() },
                         onBookingSuccess = { orderNumber ->
                             navController.navigate(BookingRoutes.bookingSuccess(orderNumber)) {
@@ -324,7 +360,8 @@ fun BottomNavigationBar(navController: NavHostController) {
 @Composable
 fun OfflineBanner() {
     Surface(
-        color = MahaWarning.copy(alpha = 0.15f),
+        color = Color(0xFFFEF2F2),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFECACA)),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -333,16 +370,46 @@ fun OfflineBanner() {
             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
         ) {
             Icon(
-                Icons.Default.Info,
+                Icons.Default.WifiOff,
                 contentDescription = null,
-                tint = MahaWarning,
+                tint = Color(0xFFDC2626),
                 modifier = Modifier.size(16.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                "ऑफलाइन मोड - कॅश केलेला डेटा दाखवत आहोत",
+                "इंटरनेट कनेक्शन उपलब्ध नाही. थेट तिकीट बुकिंगसाठी इंटरनेट सुरू करा.",
                 style = MaterialTheme.typography.bodySmall,
-                color = MahaTextPrimary
+                color = Color(0xFF991B1B),
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Medium
+            )
+        }
+    }
+}
+
+@Composable
+fun OnlineRestoredBanner() {
+    Surface(
+        color = Color(0xFFECFDF5),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFA7F3D0)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Default.CheckCircle,
+                contentDescription = null,
+                tint = Color(0xFF059669),
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                "✓ इंटरनेट पूर्ववत झाले! थेट डेटा अपडेट केला आहे.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFF065F46),
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
             )
         }
     }

@@ -17,6 +17,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { getTicketShareUrl } from '@/src/lib/public-url';
+import { MahaTicketCard } from '@/src/components/ui/MahaTicketCard';
 
 interface TicketData {
   valid: boolean;
@@ -222,145 +223,25 @@ export default function PublicTicketPage() {
           </span>
         </div>
 
-        {/* BookMyShow Style M-Ticket Pass Container */}
-        <div className="bg-white text-slate-900 rounded-2xl border border-slate-200 shadow-2xl overflow-hidden print:shadow-none print:border-none">
-          {/* Top Brand Banner */}
-          <div className="bg-[#ea580c] text-white p-4 sm:p-5 flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xl sm:text-2xl font-black tracking-tight">MahaTicket</span>
-                <span className="text-xs uppercase bg-white/20 px-2 py-0.5 rounded font-bold">
-                  M-Ticket
-                </span>
-              </div>
-              <p className="text-xs text-orange-100 mt-0.5">
-                Official Admission Pass · महाटिकिट अधिकृत प्रवेशिका
-              </p>
-            </div>
-            <div className="text-right">
-              <span className="text-[10px] uppercase text-orange-200 block">Booking ID</span>
-              <span className="text-xs sm:text-sm font-mono font-bold">{data.order.orderNumber}</span>
-            </div>
-          </div>
-
-          {/* Event Header */}
-          <div className="p-5 sm:p-6 border-b border-slate-200">
-            <div className="flex items-center gap-2 text-[11px] font-semibold text-[#ea580c] uppercase">
-              <span>{data.event.categoryMr || data.event.category}</span>
-              {data.event.language && (
-                <>
-                  <span>·</span>
-                  <span>{data.event.language}</span>
-                </>
-              )}
-            </div>
-
-            <h1 className="text-xl sm:text-2xl font-black text-slate-950 mt-1">
-              {data.event.titleMr || data.event.title}
-            </h1>
-            {data.event.titleMr && (
-              <p className="text-xs sm:text-sm text-slate-600 mt-0.5">{data.event.title}</p>
-            )}
-
-            {/* Event Meta */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 pt-4 border-t border-slate-100 text-xs">
-              <div className="flex items-start gap-2.5">
-                <Calendar className="w-4 h-4 text-[#ea580c] shrink-0 mt-0.5" />
-                <div>
-                  <span className="text-[10px] text-slate-600 block uppercase font-bold">Showtime</span>
-                  <span className="font-bold text-slate-900">{formattedDate}</span>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-2.5">
-                <MapPin className="w-4 h-4 text-[#ea580c] shrink-0 mt-0.5" />
-                <div>
-                  <span className="text-[10px] text-slate-600 block uppercase font-bold">Venue</span>
-                  <span className="font-bold text-slate-900 block">{data.venue.nameMr || data.venue.name}</span>
-                  <span className="text-[11px] text-slate-600">{data.venue.address || data.venue.city}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Seat & Attendee Details */}
-          <div className="p-5 sm:p-6 bg-slate-50 border-b border-slate-200">
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              <div>
-                <span className="text-[10px] uppercase font-bold text-slate-600 block">
-                  Seats ({data.order.ticketCount || 1})
-                </span>
-                <span className="text-base font-extrabold text-[#ea580c] font-mono block">
-                  {allSeatsDisplay}
-                </span>
-              </div>
-
-              <div>
-                <span className="text-[10px] uppercase font-bold text-slate-600 block">
-                  Attendee
-                </span>
-                <span className="text-xs sm:text-sm font-bold text-slate-900 block truncate">
-                  {data.ticket.attendeeName || data.order.userName || 'Guest'}
-                </span>
-              </div>
-
-              <div>
-                <span className="text-[10px] uppercase font-bold text-slate-600 block">
-                  Total Paid
-                </span>
-                <span className="text-base font-extrabold text-slate-950 font-mono block">
-                  ₹{(data.order.grandTotal / 100).toFixed(0)}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Perforated Stub Line */}
-          <div className="relative border-b-2 border-dashed border-slate-300">
-            <div className="absolute -left-3 -top-3 w-6 h-6 rounded-full bg-slate-50 border-r border-slate-200" />
-            <div className="absolute -right-3 -top-3 w-6 h-6 rounded-full bg-slate-50 border-l border-slate-200" />
-          </div>
-
-          {/* Single Unified QR Code Section (BookMyShow Style) */}
-          <div className="p-6 sm:p-8 flex flex-col items-center text-center space-y-3 bg-white">
-            <div className="p-3 bg-white rounded-2xl border-2 border-slate-200 shadow-sm relative">
-              <QRCodeSVG
-                value={data.publicShareUrl || getTicketShareUrl(data.ticket.ticketCode)}
-                size={180}
-                level="M"
-                includeMargin={true}
-              />
-              {isUsed && (
-                <div className="absolute inset-0 bg-white/90 backdrop-blur-xs flex items-center justify-center rounded-2xl">
-                  <span className="px-3 py-1 bg-red-600 text-white font-extrabold text-xs rounded-full uppercase tracking-wider">
-                    ALREADY SCANNED
-                  </span>
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-1">
-              <span className="text-xs font-black uppercase text-orange-600 tracking-wide block">
-                प्रवेश द्वारावर हा QR कोड दाखवा (Scan at Venue Gate)
-              </span>
-              <p className="text-[11px] text-slate-600 max-w-sm">
-                Phone camera scan will open this official ticket. Hand over to gate scanner for laser entry verification.
-              </p>
-            </div>
-
-            <div className="pt-2 text-[10px] font-mono text-slate-600 bg-slate-100 px-3 py-1 rounded-md">
-              Primary Pass: {data.ticket.ticketCode}
-            </div>
-          </div>
-
-          {/* Instructions Box */}
-          <div className="p-4 bg-slate-50 border-t border-slate-200 text-[11px] text-slate-600 space-y-1">
-            <p className="font-bold text-slate-800">महत्वाच्या सूचना (Important Notice):</p>
-            <p>• कृपया वेळेच्या किमान १५ मिनिटे आधी सभागृहात पोहोचावे.</p>
-            <p>• डिजिटल एम-तिकीट किंवा डाऊनलोड केलेली PDF प्रवेशासाठी ग्राह्य धरली जाईल.</p>
-            <p>• support@mahaticket.kalpkrutinfotech.com</p>
-          </div>
-        </div>
+        {/* BookMyShow Style M-Ticket Pass Container with Stitch Visuals */}
+        <MahaTicketCard
+          ticketCode={data.ticket.ticketCode}
+          seatCode={allSeatsDisplay}
+          attendeeName={data.ticket.attendeeName || data.order.userName || 'Guest'}
+          status={data.ticket.status}
+          eventTitle={data.event.titleMr || data.event.title}
+          eventCategory={data.event.categoryMr || data.event.category}
+          venueName={data.venue.nameMr || data.venue.name || 'Venue'}
+          venueCity={data.venue.city || 'महाराष्ट्र'}
+          showTimeStr={eventDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          showDateStr={eventDate.toLocaleDateString('mr-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+          orderNumber={data.order.orderNumber}
+          grandTotal={data.order.grandTotal}
+          qrPayload={data.publicShareUrl || getTicketShareUrl(data.ticket.ticketCode)}
+          totalTickets={data.order.ticketCount}
+          onDownloadPdf={handleDownloadPdf}
+          onShare={handleShareWhatsApp}
+        />
 
         {/* Action Buttons (Download, Print, WhatsApp) */}
         <div className="flex flex-wrap items-center gap-2 print:hidden">

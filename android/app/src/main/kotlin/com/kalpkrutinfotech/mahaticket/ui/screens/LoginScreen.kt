@@ -96,8 +96,12 @@ fun LoginScreen(
                         .padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    var usePasswordMode by remember { mutableStateOf(false) }
+                    var password by remember { mutableStateOf("") }
+                    var passwordVisible by remember { mutableStateOf(false) }
+
                     Text(
-                        text = if (showOtpField) "OTP प्रविष्ट करा" else "लॉगिन / नोंदणी करा",
+                        text = if (showOtpField) "OTP प्रविष्ट करा" else if (usePasswordMode) "पासवर्ड द्वारे लॉगिन" else "लॉगिन / नोंदणी करा",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -108,16 +112,18 @@ fun LoginScreen(
                     Text(
                         text = if (showOtpField) 
                             "${emailOrPhone} वर पाठवलेला ६-अंकी OTP प्रविष्ट करा" 
-                        else 
+                        else if (usePasswordMode)
+                            "आपला ईमेल/मोबाईल आणि पासवर्ड प्रविष्ट करा"
+                        else
                             "आपली तिकिटे सुरक्षित ठेवण्यासाठी मोबाईल नंबर किंवा ईमेल प्रविष्ट करा",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
                     )
 
-                    Spacer(modifier = Modifier.height(20.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                    if (!showOtpField) {
+                    if (!showOtpField && !usePasswordMode) {
                         OutlinedTextField(
                             value = emailOrPhone,
                             onValueChange = { 
@@ -125,10 +131,10 @@ fun LoginScreen(
                                 errorMessage = null
                             },
                             label = { Text("मोबाईल नंबर किंवा ईमेल") },
-                            placeholder = { Text("उदा. 9876543210") },
+                            placeholder = { Text("उदा. name@example.com किंवा 9876543210") },
                             leadingIcon = {
                                 Icon(
-                                    Icons.Default.PhoneAndroid,
+                                    Icons.Default.AlternateEmail,
                                     contentDescription = null,
                                     tint = Color(0xFFEA580C)
                                 )
@@ -136,23 +142,23 @@ fun LoginScreen(
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
                             shape = RoundedCornerShape(12.dp),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedBorderColor = Color(0xFFEA580C),
                                 unfocusedBorderColor = Color(0xFFE5E7EB)
                             )
                         )
 
-                        Spacer(modifier = Modifier.height(18.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
 
                         Button(
                             onClick = {
-                                if (emailOrPhone.isBlank() || emailOrPhone.length < 10) {
-                                    errorMessage = "कृपया वैध १०-अंकी मोबाईल नंबर किंवा ईमेल टाका."
+                                if (emailOrPhone.isBlank() || emailOrPhone.length < 5) {
+                                    errorMessage = "कृपया वैध ईमेल किंवा १०-अंकी मोबाईल नंबर टाका."
                                 } else {
                                     isLoading = true
                                     scope.launch {
-                                        delay(800)
+                                        delay(600)
                                         isLoading = false
                                         showOtpField = true
                                     }
@@ -174,6 +180,119 @@ fun LoginScreen(
                             } else {
                                 Text("OTP मिळवा (Send OTP)", fontSize = 14.sp, fontWeight = FontWeight.Bold)
                             }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        TextButton(
+                            onClick = { usePasswordMode = true }
+                        ) {
+                            Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color(0xFFEA580C))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("पासवर्डने लॉगिन करा (Password Login)", color = Color(0xFFEA580C), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    } else if (usePasswordMode) {
+                        OutlinedTextField(
+                            value = emailOrPhone,
+                            onValueChange = { 
+                                emailOrPhone = it
+                                errorMessage = null
+                            },
+                            label = { Text("ईमेल किंवा मोबाईल नंबर") },
+                            placeholder = { Text("name@example.com") },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.AlternateEmail,
+                                    contentDescription = null,
+                                    tint = Color(0xFFEA580C)
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color(0xFFEA580C),
+                                unfocusedBorderColor = Color(0xFFE5E7EB)
+                            )
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        OutlinedTextField(
+                            value = password,
+                            onValueChange = { 
+                                password = it
+                                errorMessage = null
+                            },
+                            label = { Text("पासवर्ड (Password)") },
+                            placeholder = { Text("••••••••") },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.Lock,
+                                    contentDescription = null,
+                                    tint = Color(0xFFEA580C)
+                                )
+                            },
+                            trailingIcon = {
+                                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                    Icon(
+                                        imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                        contentDescription = if (passwordVisible) "Hide password" else "Show password",
+                                        tint = Color(0xFF6B7280)
+                                    )
+                                }
+                            },
+                            visualTransformation = if (passwordVisible) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color(0xFFEA580C),
+                                unfocusedBorderColor = Color(0xFFE5E7EB)
+                            )
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Button(
+                            onClick = {
+                                if (emailOrPhone.isBlank() || password.isBlank()) {
+                                    errorMessage = "कृपया ईमेल/मोबाईल आणि पासवर्ड दोन्ही प्रविष्ट करा."
+                                } else {
+                                    isLoading = true
+                                    scope.launch {
+                                        delay(800)
+                                        isLoading = false
+                                        onLoginSuccess()
+                                    }
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                            enabled = !isLoading,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEA580C)),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            if (isLoading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    color = Color.White,
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Text("लॉगिन करा (Sign In)", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        TextButton(
+                            onClick = { usePasswordMode = false }
+                        ) {
+                            Text("OTP द्वारे लॉगिन करा (Use OTP instead)", color = Color(0xFFEA580C), fontSize = 12.sp)
                         }
                     } else {
                         OutlinedTextField(
@@ -237,7 +356,7 @@ fun LoginScreen(
                                 otp = ""
                             }
                         ) {
-                            Text("नंबर बदला (Change Number)", color = Color(0xFFEA580C), fontSize = 12.sp)
+                            Text("नंबर किंवा ईमेल बदला", color = Color(0xFFEA580C), fontSize = 12.sp)
                         }
                     }
 

@@ -53,10 +53,15 @@ class BookingViewModel(
     private val _bookingOrder = MutableStateFlow<BookingOrder?>(null)
     val bookingOrder: StateFlow<BookingOrder?> = _bookingOrder.asStateFlow()
     
+    var activeSessionId: Int = 1
+    var activeEventId: Int = 1
+
     val isOnline: StateFlow<Boolean> = networkMonitor.isOnline
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), networkMonitor.isCurrentlyOnline())
     
-    fun loadSeats(sessionId: Int) {
+    fun loadSeats(sessionId: Int, eventId: Int = 1) {
+        activeSessionId = sessionId
+        if (eventId > 0) activeEventId = eventId
         viewModelScope.launch {
             _seatsState.value = SeatsUiState.Loading
             
@@ -75,6 +80,7 @@ class BookingViewModel(
         onSuccess: (String) -> Unit = {},
         onError: (String) -> Unit = {}
     ) {
+        activeSessionId = sessionId
         viewModelScope.launch {
             _bookingState.value = BookingUiState.Loading
             
@@ -111,13 +117,11 @@ class BookingViewModel(
             _bookingState.value = BookingUiState.Loading
             
             val seatIds = _selectedSeats.value.map { it.seatId }
-            val firstSeat = _selectedSeats.value.firstOrNull()
-            val sessionId = firstSeat?.sectionId ?: 1
             val customerName = attendeeNames.values.firstOrNull() ?: "Customer"
 
             val result = repository.confirmBooking(
-                sessionId = sessionId,
-                eventId = 1,
+                sessionId = activeSessionId,
+                eventId = activeEventId,
                 seatIds = seatIds,
                 userName = customerName,
                 userEmail = email ?: "customer@mahaticket.in",

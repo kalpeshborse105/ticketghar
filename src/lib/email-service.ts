@@ -155,7 +155,8 @@ export async function sendBookingTicketEmail(
     const smtpHost = process.env.SMTP_HOST;
     const smtpPort = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : 587;
     const smtpUser = process.env.SMTP_USER;
-    const smtpPass = process.env.SMTP_PASS || process.env.SMTP_PASSWORD;
+    const rawPass = process.env.SMTP_PASS || process.env.SMTP_PASSWORD || '';
+    const smtpPass = rawPass.trim().replace(/\s+/g, '');
     const fromAddress = process.env.SMTP_FROM || process.env.EMAIL_FROM || 'MahaTicket <tickets@mahaticket.kalpkrutinfotech.com>';
 
     if (smtpHost && smtpUser && smtpPass) {
@@ -164,7 +165,7 @@ export async function sendBookingTicketEmail(
         port: smtpPort,
         secure: smtpPort === 465,
         auth: {
-          user: smtpUser,
+          user: smtpUser.trim(),
           pass: smtpPass,
         },
       });

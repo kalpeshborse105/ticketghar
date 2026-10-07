@@ -48,7 +48,7 @@ import java.time.format.DateTimeFormatter
 fun EventDetailScreen(
     eventId: Int,
     onNavigateBack: () -> Unit,
-    onBookSession: (Int) -> Unit
+    onBookSession: (Int, Int) -> Unit
 ) {
     val app = androidx.compose.ui.platform.LocalContext.current.applicationContext as MahaTicketApp
     val eventViewModel: EventViewModel = viewModel(
@@ -130,21 +130,48 @@ fun EventDetailScreen(
                         .padding(paddingValues),
                     contentAlignment = Alignment.Center
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            Icons.Default.ErrorOutline,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(48.dp)
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(state.message, color = MaterialTheme.colorScheme.onSurface)
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(24.dp)
+                    ) {
+                        Surface(
+                            shape = androidx.compose.foundation.shape.CircleShape,
+                            color = Color(0xFFFFF7ED),
+                            border = BorderStroke(1.dp, Color(0xFFFED7AA)),
+                            modifier = Modifier.size(72.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Default.WifiOff,
+                                    contentDescription = null,
+                                    tint = Color(0xFFEA580C),
+                                    modifier = Modifier.size(36.dp)
+                                )
+                            }
+                        }
                         Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "माहिती लोड करण्यात अडचण आली",
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "थेट आसन उपलब्धता व शो पाहण्यासाठी इंटरनेट कनेक्शन तपासा.",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(20.dp))
                         Button(
                             onClick = { eventViewModel.loadEventDetails(eventId) },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEA580C))
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEA580C)),
+                            shape = RoundedCornerShape(10.dp)
                         ) {
-                            Text("पुन्हा प्रयत्न करा", fontWeight = FontWeight.Bold)
+                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("पुन्हा प्रयत्न करा (Retry)", fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -156,7 +183,7 @@ fun EventDetailScreen(
 @Composable
 fun EventDetailContent(
     event: EventItem,
-    onBookSession: (Int) -> Unit,
+    onBookSession: (Int, Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -486,7 +513,7 @@ fun EventDetailContent(
         items(filteredSessions) { session ->
             ModernSessionCard(
                 session = session,
-                onBookClick = { onBookSession(session.id) },
+                onBookClick = { onBookSession(session.id, event.id) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)

@@ -22,6 +22,7 @@ import {
   buildWhatsAppShareUrl,
   getTicketShareUrl,
 } from '@/src/lib/public-url';
+import { MahaTicketCard } from '@/src/components/ui/MahaTicketCard';
 
 interface TicketPassModalProps {
   bookingResult: any;
@@ -227,120 +228,26 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
           </button>
         </div>
 
-        {/* Printable Pass Container */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-slate-50">
-          
-          {/* Main BookMyShow Style M-Ticket Pass */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
-            
-            {/* Header: Title and Event Info */}
-            <div className="border-b border-slate-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div>
-                <span className="text-[10px] uppercase font-extrabold px-2 py-0.5 rounded bg-orange-100 text-[#ea580c] border border-orange-200">
-                  {language === 'mr' ? event.categoryMr || 'कार्यक्रम' : event.category || 'Event'}
-                </span>
-                <h3 className="text-lg sm:text-xl font-black text-slate-900 mt-1.5">
-                  {eventTitle}
-                </h3>
-                {event.titleMr && language === 'en' && (
-                  <p className="text-xs text-slate-600">{event.titleMr}</p>
-                )}
-              </div>
-
-              <div className="text-left sm:text-right">
-                <span className="text-xs text-slate-600 block">{t.grandTotal}</span>
-                <span className="text-lg sm:text-xl font-black text-[#ea580c] font-mono">
-                  ₹{(order.grandTotal / 100).toFixed(0)}
-                </span>
-                <span className="text-[10px] text-emerald-600 block font-bold">
-                  ✓ PAID (MahaTicket Verified)
-                </span>
-              </div>
-            </div>
-
-            {/* Event Timing & Venue */}
-            <div className="py-2 border-b border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              <div className="flex items-start gap-2 text-slate-900">
-                <Calendar className="w-4 h-4 text-[#ea580c] shrink-0 mt-0.5" />
-                <div>
-                  <span className="text-slate-600 block text-[10px] font-bold uppercase">तारीख व वेळ / Showtime</span>
-                  <span className="font-bold text-slate-900">
-                    {order.createdAt
-                      ? new Date(order.createdAt).toLocaleDateString(
-                          language === 'mr' ? 'mr-IN' : 'en-IN',
-                          { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }
-                        )
-                      : 'Today'}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-2 text-slate-900">
-                <MapPin className="w-4 h-4 text-[#ea580c] shrink-0 mt-0.5" />
-                <div>
-                  <span className="text-slate-600 block text-[10px] font-bold uppercase">सभागृह / Venue</span>
-                  <span className="font-bold text-slate-900 truncate block">
-                    {venueName}
-                  </span>
-                  <span className="text-slate-600 block text-[11px]">
-                    {event.venue?.address || event.venue?.city || 'Pune'}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Single Unified QR Code Pass (BookMyShow Style for all 1-5 tickets) */}
-            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex flex-col items-center text-center space-y-3">
-              {/* Central Scannable QR */}
-              <div className="p-2.5 bg-white rounded-xl border border-slate-300 shadow-sm">
-                <QRCodeSVG
-                  value={ticketUrl}
-                  size={160}
-                  level="M"
-                  includeMargin={true}
-                />
-              </div>
-
-              <div className="space-y-1">
-                <span className="text-xs font-black uppercase text-[#ea580c] tracking-wide block">
-                  प्रवेश द्वारावर हा QR कोड दाखवा (Scan for Venue Entry)
-                </span>
-                <p className="text-[11px] text-slate-600 max-w-sm">
-                  This single unified QR covers all {tickets.length} seats in this booking.
-                </p>
-              </div>
-
-              {/* Seats Badge Grid */}
-              <div className="w-full pt-2 border-t border-slate-200">
-                <div className="text-[10px] uppercase font-bold text-slate-600 mb-1">
-                  आरक्षित आसने / Booked Seats ({tickets.length} Passes):
-                </div>
-                <div className="flex flex-wrap justify-center gap-1.5">
-                  {tickets.map((tk: any, i: number) => (
-                    <span
-                      key={tk.id || i}
-                      className="px-2.5 py-1 rounded-md bg-white border border-orange-300 text-[#ea580c] font-black text-xs font-mono shadow-2xs"
-                    >
-                      {tk.seatCode}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              <div className="text-xs text-slate-800 font-medium">
-                ग्राहक: <span className="font-bold">{order.userName}</span>
-              </div>
-            </div>
-
-            {/* Verification Notice */}
-            <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-600">
-              <div className="flex items-center gap-1.5 text-emerald-600 font-bold">
-                <ShieldCheck className="w-4 h-4" />
-                <span>HMAC SHA-256 Verified Official Pass</span>
-              </div>
-              <span className="font-mono text-[10px] text-slate-600">M-TICKET</span>
-            </div>
-          </div>
+        {/* Printable Pass Container with Stitch Visuals */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-100 flex justify-center">
+          <MahaTicketCard
+            ticketCode={primaryTicket || order.orderNumber}
+            seatCode={seatsList}
+            attendeeName={order.userName}
+            status="confirmed"
+            eventTitle={eventTitle || 'Event'}
+            eventCategory={language === 'mr' ? event?.categoryMr || 'कार्यक्रम' : event?.category || 'Event'}
+            venueName={venueName || 'Venue'}
+            venueCity={event?.venue?.city || 'महाराष्ट्र'}
+            showTimeStr={order.sessionStart ? new Date(order.sessionStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined}
+            showDateStr={order.createdAt ? new Date(order.createdAt).toLocaleDateString(language === 'mr' ? 'mr-IN' : 'en-IN', { weekday: 'short', day: 'numeric', month: 'short' }) : 'Today'}
+            orderNumber={order.orderNumber}
+            grandTotal={order.grandTotal}
+            qrPayload={ticketUrl}
+            totalTickets={tickets.length}
+            onDownloadPdf={handleDownloadPDF}
+            onShare={handleWhatsApp}
+          />
         </div>
 
         {/* Email delivery status banner */}

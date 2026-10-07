@@ -619,22 +619,35 @@ export default function HomePage() {
               ) : error ? (
                 <MTEmptyState
                   type="general"
-                  title={language === 'mr' ? 'माहिती लोड करण्यात अडचण आली' : 'Unable to load events'}
-                  description={language === 'mr' ? 'कृपया इंटरनेट कनेक्शन तपासा किंवा पुन्हा प्रयत्न करा.' : 'Please verify connection and retry.'}
+                  title={language === 'mr' ? 'अरेरे! काहीतरी अडचण आली.' : 'Something went wrong.'}
+                  description={language === 'mr' ? 'कृपया पुन्हा प्रयत्न करा.' : 'Please try again.'}
                   actionText={language === 'mr' ? 'पुन्हा प्रयत्न करा' : 'Retry'}
                   onAction={fetchEvents}
                 />
               ) : sortedEvents.length === 0 ? (
                 <MTEmptyState
                   type="events"
-                  title={language === 'mr' ? 'या निवडीसाठी कोणतेही कार्यक्रम नाहीत' : 'No events found'}
-                  description={
-                    language === 'mr'
-                      ? 'आपले बजेट किंवा तारीख बदलून पहा किंवा सर्व शहरांमधील कार्यक्रम शोधा.'
-                      : 'Try broadening your budget, clearing date filters, or selecting All Maharashtra.'
+                  title={
+                    selectedCity !== 'महाराष्ट्र (All)'
+                      ? (language === 'mr' ? 'या शहरात सध्या कार्यक्रम उपलब्ध नाहीत.' : 'No events currently available in this city.')
+                      : (language === 'mr' ? 'या निवडीसाठी कोणतेही कार्यक्रम नाहीत' : 'No events found for this selection')
                   }
-                  actionText={language === 'mr' ? 'सर्व कार्यक्रम पहा' : 'Show All Events'}
-                  onAction={handleResetFilters}
+                  description={
+                    selectedCity !== 'महाराष्ट्र (All)'
+                      ? (language === 'mr' ? 'लवकरच नवीन नाटके व सांस्कृतिक कार्यक्रम सुरू होतील. आपण संपूर्ण महाराष्ट्रातील कार्यक्रम पाहू शकता.' : 'Upcoming events will be listed soon. You can explore events across all Maharashtra.')
+                      : (language === 'mr' ? 'आपले बजेट किंवा तारीख बदलून पहा किंवा सर्व शहरांमधील कार्यक्रम शोधा.' : 'Try adjusting your budget or date filter, or explore events across Maharashtra.')
+                  }
+                  actionText={
+                    selectedCity !== 'महाराष्ट्र (All)'
+                      ? (language === 'mr' ? 'संपूर्ण महाराष्ट्रातील कार्यक्रम पहा' : 'View All Maharashtra Events')
+                      : (language === 'mr' ? 'सर्व कार्यक्रम पहा' : 'Show All Events')
+                  }
+                  onAction={() => {
+                    if (selectedCity !== 'महाराष्ट्र (All)') {
+                      setSelectedCity('महाराष्ट्र (All)');
+                    }
+                    handleResetFilters();
+                  }}
                 />
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4.5">

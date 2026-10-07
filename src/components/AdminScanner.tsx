@@ -272,27 +272,38 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
         aspectRatio: 1.0,
       };
 
-      const cameraSelection = targetCamera
-        ? { deviceId: { exact: targetCamera } }
-        : { facingMode: 'environment' };
+      const cameraSelection: any = targetCamera || { facingMode: 'environment' };
 
-      await html5Qr.start(
-        cameraSelection,
-        config,
-        (decodedText) => {
-          if (!isCooldownRef.current && !currentOverlay) {
-            void verifyCode(decodedText);
-          }
-        },
-        (errorMessage) => {
-          // Continuous frame parsing error - expected when no QR in frame
-        }
-      );
+      try {
+        await html5Qr.start(
+          cameraSelection,
+          config,
+          (decodedText) => {
+            if (!isCooldownRef.current && !currentOverlay) {
+              void verifyCode(decodedText);
+            }
+          },
+          () => {}
+        );
+      } catch (errFallback) {
+        // Fallback: Try with facingMode environment or user
+        console.warn('Primary camera selection failed, trying environment fallback:', errFallback);
+        await html5Qr.start(
+          { facingMode: 'environment' },
+          config,
+          (decodedText) => {
+            if (!isCooldownRef.current && !currentOverlay) {
+              void verifyCode(decodedText);
+            }
+          },
+          () => {}
+        );
+      }
 
       setCameraActive(true);
     } catch (err: any) {
       console.error('Camera start failed:', err);
-      setCameraError(err?.message || 'कॅमेरा सुरू करताना अडचण आली. कृपया परवानगी तपासा.');
+      setCameraError(err?.message || 'कॅमेरा सुरू करताना अडचण आली. कृपया ब्राउझरमध्ये कॅमेरा परवानगी द्या.');
       setCameraActive(false);
     }
   };
@@ -470,16 +481,16 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
       {/* Main Scanner Section */}
       <div className="relative bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-6 shadow-2xl overflow-hidden">
         {/* Camera Viewport & Overlay */}
-        <div className="relative bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 aspect-square sm:aspect-[4/3] max-w-lg mx-auto flex items-center justify-center">
-          {/* Html5Qrcode viewfinder mount */}
+        <div className="relative bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 aspect-square sm:aspect-[4/3] max-w-lg mx-auto flex items-center justify-center min-h-[300px]">
+          {/* Html5Qrcode viewfinder mount - must stay rendered so dimensions are calculable */}
           <div
             id={scannerContainerId}
-            className={`w-full h-full ${cameraActive ? 'block' : 'hidden'}`}
+            className="w-full h-full min-h-[300px]"
           />
 
           {/* Idle Camera Placeholder */}
           {!cameraActive && (
-            <div className="text-center p-6 space-y-4">
+            <div className="absolute inset-0 bg-slate-950/95 flex flex-col items-center justify-center text-center p-6 space-y-4 z-10">
               <div className="w-20 h-20 rounded-3xl bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto text-slate-500">
                 <Camera className="w-10 h-10" />
               </div>

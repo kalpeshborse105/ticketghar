@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { AdminPanel } from '@/src/components/AdminPanel';
 import { Language } from '@/src/lib/types';
 import Link from 'next/link';
-import { ArrowLeft, Lock, ShieldCheck, Mail, Building2, Key } from 'lucide-react';
+import { ArrowLeft, Lock, ShieldCheck, Mail, Building2, Key, Eye, EyeOff } from 'lucide-react';
 
 export default function AdminPage() {
   const [language] = useState<Language>('mr');
@@ -16,6 +16,7 @@ export default function AdminPage() {
   const [loginMode, setLoginMode] = useState<'admin_key' | 'organizer_login'>('admin_key');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
 
@@ -188,16 +189,26 @@ export default function AdminPage() {
                       <Lock className="w-4 h-4 text-amber-400" />
                       पासवर्ड (Password)
                     </label>
-                    <input
-                      type="password"
-                      placeholder="आपला पासवर्ड प्रविष्ट करा"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      disabled={loginLoading}
-                      autoComplete="current-password"
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
-                    />
+                    <div className="relative">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="आपला पासवर्ड प्रविष्ट करा"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                        disabled={loginLoading}
+                        autoComplete="current-password"
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 pr-10 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                        title={showPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </div>
                 </>
               ) : (
@@ -206,16 +217,26 @@ export default function AdminPage() {
                     <Lock className="w-4 h-4 text-amber-400" />
                     प्रशासक मास्टर पासवर्ड (Admin Password)
                   </label>
-                  <input
-                    type="password"
-                    placeholder="Enter admin password (ADMIN_PASSWORD)"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    disabled={loginLoading}
-                    autoComplete="current-password"
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder="Enter admin password (ADMIN_PASSWORD)"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      disabled={loginLoading}
+                      autoComplete="current-password"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 pr-10 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                      title={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
               )}
 

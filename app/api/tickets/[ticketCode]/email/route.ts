@@ -23,12 +23,12 @@ export async function POST(
       recipientEmail,
     });
 
-    return NextResponse.json(result, { status: result.sent ? 200 : result.configured ? 502 : 200 });
+    return NextResponse.json(result, { status: 200 });
   } catch (error: any) {
     console.error('Email route error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to dispatch email' },
-      { status: 500 }
+      { success: false, sent: false, error: error.message || 'Failed to dispatch email' },
+      { status: 200 }
     );
   }
 }

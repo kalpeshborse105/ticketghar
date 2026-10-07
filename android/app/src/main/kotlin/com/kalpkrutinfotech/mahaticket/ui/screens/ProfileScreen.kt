@@ -12,6 +12,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
+import androidx.compose.material.icons.automirrored.filled.Login
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
+import androidx.compose.material.icons.automirrored.filled.AssignmentReturn
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -97,7 +100,7 @@ fun ProfileScreen(
                             shape = RoundedCornerShape(10.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(Icons.Default.Login, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Icon(Icons.AutoMirrored.Filled.Login, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("लॉगिन करा / Sign In", fontWeight = FontWeight.Bold)
                         }
@@ -178,7 +181,7 @@ fun ProfileScreen(
             ) {
                 Column {
                     ModernProfileMenuItem(
-                        icon = Icons.Default.HelpOutline,
+                        icon = Icons.AutoMirrored.Filled.HelpOutline,
                         title = "मदत आणि सपोर्ट (Help Centre)",
                         subtitle = "बुकिंग संबंधित प्रश्न व ग्राहक सहाय्य",
                         onClick = {
@@ -198,7 +201,7 @@ fun ProfileScreen(
                     )
                     HorizontalDivider(color = Color(0xFFF3F4F6), thickness = 1.dp)
                     ModernProfileMenuItem(
-                        icon = Icons.Default.AssignmentReturn,
+                        icon = Icons.AutoMirrored.Filled.AssignmentReturn,
                         title = "परतावा धोरण (Refund Policy)",
                         subtitle = "तिकीट रद्द करणे व परतावा नियम",
                         onClick = {

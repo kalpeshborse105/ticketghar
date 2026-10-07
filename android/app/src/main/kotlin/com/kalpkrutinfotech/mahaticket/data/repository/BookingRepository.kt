@@ -18,9 +18,12 @@ class BookingRepository(
         withContext(Dispatchers.IO) {
             try {
                 val response = apiService.getSessionSeats(sessionId)
-                if (response.isSuccessful && response.body() != null) {
-                    val seatsList = response.body()?.seats ?: emptyList()
+                val body = response.body()
+                if (response.isSuccessful && body != null) {
+                    val sectionsMap = body.sections?.associateBy { it.id } ?: emptyMap()
+                    val seatsList = body.seats ?: emptyList()
                     val seatItems = seatsList.map { seat ->
+                        val sec = sectionsMap[seat.sectionId]
                         SeatItem(
                             seatId = seat.seatId,
                             sectionId = seat.sectionId,
@@ -29,7 +32,8 @@ class BookingRepository(
                             seatCode = seat.seatCode,
                             price = seat.price,
                             status = seat.status,
-                            isAccessible = (seat.isAccessible ?: 0) == 1
+                            isAccessible = (seat.isAccessible ?: 0) == 1,
+                            sectionName = sec?.nameMr ?: sec?.name
                         )
                     }
                     Result.success(seatItems)
