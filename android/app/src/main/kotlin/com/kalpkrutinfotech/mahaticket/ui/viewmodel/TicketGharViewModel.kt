@@ -466,6 +466,57 @@ class TicketGharViewModel(
     }
 
     fun validateAndCheckInQr(qrString: String, scannedBy: String) {
+        if (bookingRepository != null) {
+            viewModelScope.launch {
+                val result = bookingRepository.verifyTicketScan(qrString.trim(), "Gate Entry 1")
+                result.fold(
+                    onSuccess = { resp ->
+                        val isSuccess = resp.valid && resp.scanResult == "SUCCESS"
+                        val isAlready = resp.scanResult == "ALREADY_USED"
+                        val scannedBooking = resp.ticket?.let { tk ->
+                            Booking(
+                                bookingId = tk.code ?: qrString,
+                                eventId = "1",
+                                eventTitleEn = tk.event ?: "MahaTicket Event",
+                                eventTitleMr = tk.eventMr ?: tk.event ?: "महाटिकिट कार्यक्रम",
+                                venueName = "Maharashtra Venue",
+                                venueAddress = "",
+                                showDate = tk.showtime ?: "",
+                                showTime = tk.showtime ?: "",
+                                seatIds = listOf(tk.seat ?: "General"),
+                                ticketCount = 1,
+                                baseAmount = 0,
+                                convenienceFee = 0,
+                                gstAmount = 0,
+                                totalAmount = 0,
+                                userEmail = "",
+                                userPhone = "",
+                                paymentId = "",
+                                paymentMethod = "Verified QR Scan",
+                                qrCodeData = qrString,
+                                isCheckedIn = isSuccess || isAlready,
+                                checkedInByGateStaff = scannedBy
+                            )
+                        }
+                        _scannerResult.value = QrValidationResult(
+                            isValid = isSuccess,
+                            isAlreadyCheckedIn = isAlready,
+                            booking = scannedBooking,
+                            messageEn = resp.message.ifBlank { if (isSuccess) "Entry Approved! Welcome." else "Ticket invalid or already used." },
+                            messageMr = resp.message.ifBlank { if (isSuccess) "प्रवेश मंजूर! नाट्यगृहात आपले स्वागत आहे." else "अवैध किंवा आधीच वापरलेले तिकीट." }
+                        )
+                    },
+                    onFailure = { err ->
+                        performLocalValidation(qrString, scannedBy, err.localizedMessage)
+                    }
+                )
+            }
+        } else {
+            performLocalValidation(qrString, scannedBy, null)
+        }
+    }
+
+    private fun performLocalValidation(qrString: String, scannedBy: String, networkError: String?) {
         val candidateBookingId = if (qrString.contains("TICKETGHAR|")) {
             val parts = qrString.split("|")
             if (parts.size >= 2) parts[1] else qrString
@@ -483,8 +534,8 @@ class TicketGharViewModel(
             _scannerResult.value = QrValidationResult(
                 isValid = false,
                 isAlreadyCheckedIn = false,
-                messageEn = "Invalid QR code. Record not found.",
-                messageMr = "अवैध तिकीट QR कोड. कोणतीही नोंद आढळली नाही."
+                messageEn = networkError ?: "Invalid QR code. Record not found.",
+                messageMr = networkError ?: "अवैध तिकीट QR कोड. कोणतीही नोंद आढळली नाही."
             )
             return
         }

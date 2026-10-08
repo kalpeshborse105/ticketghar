@@ -257,34 +257,36 @@ private fun EventDetailTheatricalContent(
                         )
                     }
 
-                    // Trailer Action Button on Banner
-                    Surface(
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(16.dp)
-                            .clip(RoundedCornerShape(20.dp))
-                            .clickable { onWatchTrailer() }
-                            .testTag("detail_trailer_button"),
-                        color = TheatricalCrimson,
-                        shape = RoundedCornerShape(20.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                    // Trailer Action Button on Banner (Only if event has real trailer URL)
+                    if (!event.trailerUrl.isNullOrBlank()) {
+                        Surface(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(16.dp)
+                                .clip(RoundedCornerShape(20.dp))
+                                .clickable { onWatchTrailer() }
+                                .testTag("detail_trailer_button"),
+                            color = TheatricalCrimson,
+                            shape = RoundedCornerShape(20.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.PlayArrow,
-                                contentDescription = "Play",
-                                tint = Color.White,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "ट्रेलर पहा (Watch Trailer)",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PlayArrow,
+                                    contentDescription = "Play",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "ट्रेलर पहा (Watch Trailer)",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
                         }
                     }
                 }

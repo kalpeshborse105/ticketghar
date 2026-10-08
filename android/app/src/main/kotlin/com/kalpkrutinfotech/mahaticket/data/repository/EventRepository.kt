@@ -157,7 +157,9 @@ fun EventResponse.toEventItem() = EventItem(
     },
     sessions = sessions?.map {
         SessionItem(it.id, it.eventId, it.sessionStartTime, it.sessionEndTime ?: "", it.status)
-    }
+    },
+    trailerUrl = trailerUrl,
+    galleryUrls = galleryUrls
 )
 
 fun CachedEvent.toEventItem() = EventItem(

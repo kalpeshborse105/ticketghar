@@ -111,6 +111,8 @@ export const events = pgTable('events', {
   descriptionMr: text('description_mr').notNull(),
   posterUrl: text('poster_url').notNull(),
   bannerUrl: text('banner_url'),
+  trailerUrl: text('trailer_url'),
+  galleryUrls: text('gallery_urls'), // JSON array of gallery image URLs
   status: text('status').notNull().default('published'), // 'draft' | 'submitted' | 'under_review' | 'approved' | 'rejected' | 'published' | 'unpublish' | 'unpublished' | 'cancelled' | 'completed'
   featured: integer('featured').notNull().default(0),
   castCrew: text('cast_crew'),

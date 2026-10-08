@@ -146,17 +146,14 @@ class EventViewModel(
     
     fun selectCategory(category: String) {
         _selectedCategory.value = category
-        loadEvents(category = category)
     }
 
     fun selectCity(city: String) {
         _selectedCity.value = city
-        loadEvents(city = city)
     }
     
     fun searchEvents(query: String) {
         _searchQuery.value = query
-        loadEvents(search = query.takeIf { it.isNotBlank() })
     }
     
     fun loadEventDetails(eventId: Int) {

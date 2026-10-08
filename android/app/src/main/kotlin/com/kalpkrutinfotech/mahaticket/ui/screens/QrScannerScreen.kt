@@ -1,4 +1,4 @@
-﻿package com.kalpkrutinfotech.mahaticket.ui.screens
+package com.kalpkrutinfotech.mahaticket.ui.screens
 
 import android.Manifest
 import android.content.pm.PackageManager
@@ -6,6 +6,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.ExperimentalGetImage
+import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
@@ -32,9 +34,12 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.google.mlkit.vision.barcode.BarcodeScanning
+import com.google.mlkit.vision.common.InputImage
 import com.kalpkrutinfotech.mahaticket.ui.viewmodel.TicketGharViewModel
 import com.kalpkrutinfotech.mahaticket.theme.*
 
+@androidx.annotation.OptIn(ExperimentalGetImage::class)
 @Composable
 fun QrScannerScreen(
     viewModel: TicketGharViewModel,
@@ -62,6 +67,8 @@ fun QrScannerScreen(
     var manualCodeInput by remember { mutableStateOf("") }
     var isTorchEnabled by remember { mutableStateOf(false) }
     var cameraInstance by remember { mutableStateOf<Camera?>(null) }
+    var isScanningPaused by remember { mutableStateOf(false) }
+    var lastScannedTimestamp by remember { mutableLongStateOf(0L) }
 
     // Laser scanning bar animation
     val infiniteTransition = rememberInfiniteTransition(label = "laser_scan")
@@ -133,17 +140,47 @@ fun QrScannerScreen(
                 contentAlignment = Alignment.Center
             ) {
                 if (hasCameraPermission) {
-                    // Live CameraX Feed
                     AndroidView(
                         factory = { ctx ->
                             val previewView = PreviewView(ctx).apply {
                                 scaleType = PreviewView.ScaleType.FILL_CENTER
                             }
                             val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
+                            val barcodeScanner = BarcodeScanning.getClient()
                             cameraProviderFuture.addListener({
                                 val cameraProvider = cameraProviderFuture.get()
                                 val preview = Preview.Builder().build().also {
                                     it.surfaceProvider = previewView.surfaceProvider
+                                }
+                                val imageAnalysis = ImageAnalysis.Builder()
+                                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                                    .build()
+                                imageAnalysis.setAnalyzer(ContextCompat.getMainExecutor(ctx)) { imageProxy ->
+                                    val mediaImage = imageProxy.image
+                                    if (mediaImage != null) {
+                                        val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
+                                        barcodeScanner.process(image)
+                                            .addOnSuccessListener { barcodes ->
+                                                val now = System.currentTimeMillis()
+                                                if (!isScanningPaused && now - lastScannedTimestamp > 2500) {
+                                                    for (barcode in barcodes) {
+                                                        val rawValue = barcode.rawValue
+                                                        if (!rawValue.isNullOrBlank()) {
+                                                            lastScannedTimestamp = now
+                                                            isScanningPaused = true
+                                                            manualCodeInput = rawValue
+                                                            viewModel.validateGateQr(rawValue)
+                                                            break
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            .addOnCompleteListener {
+                                                imageProxy.close()
+                                            }
+                                    } else {
+                                        imageProxy.close()
+                                    }
                                 }
                                 val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
                                 try {
@@ -151,7 +188,8 @@ fun QrScannerScreen(
                                     val cam = cameraProvider.bindToLifecycle(
                                         lifecycleOwner,
                                         cameraSelector,
-                                        preview
+                                        preview,
+                                        imageAnalysis
                                     )
                                     cameraInstance = cam
                                 } catch (exc: Exception) {
@@ -426,7 +464,10 @@ fun QrScannerScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    TextButton(onClick = { viewModel.clearScannerResult() }) {
+                    TextButton(onClick = {
+                        isScanningPaused = false
+                        viewModel.clearScannerResult()
+                    }) {
                         Text(text = "Dismiss / पुढील तिकीट स्कॅन करा", color = Color.LightGray, fontSize = 11.sp)
                     }
                 }

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
-import { users, events, seatInventory, ticketTypes } from '@/src/db/schema.ts';
+import { users, events, eventSessions, seatInventory, ticketTypes } from '@/src/db/schema.ts';
 import { eq, and, inArray } from 'drizzle-orm';
 import { confirmBookingOrder, calculatePricing } from '@/src/lib/inventory-engine.ts';
 
@@ -18,9 +18,9 @@ export async function POST(request: Request) {
       paymentDetails,
     } = body;
 
-    if (!sessionId || !eventId || !Array.isArray(seatIds) || seatIds.length === 0) {
+    if (!sessionId || !Array.isArray(seatIds) || seatIds.length === 0) {
       return NextResponse.json(
-        { error: 'Missing required booking confirmation fields.' },
+        { error: 'Missing required booking confirmation fields. Session ID and at least one seat ID are required.' },
         { status: 400 }
       );
     }
@@ -32,9 +32,20 @@ export async function POST(request: Request) {
       );
     }
 
-    const [eventRecord] = await db.select().from(events).where(eq(events.id, eventId));
+    // Authoritatively resolve eventId from the session to prevent client ID mismatch
+    const [sessionRecord] = await db
+      .select({ eventId: eventSessions.eventId })
+      .from(eventSessions)
+      .where(eq(eventSessions.id, sessionId));
+
+    if (!sessionRecord) {
+      return NextResponse.json({ error: `Event session #${sessionId} not found.` }, { status: 404 });
+    }
+
+    const effectiveEventId = sessionRecord.eventId || eventId;
+    const [eventRecord] = await db.select().from(events).where(eq(events.id, effectiveEventId));
     if (!eventRecord) {
-      return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+      return NextResponse.json({ error: `Event #${effectiveEventId} not found.` }, { status: 404 });
     }
 
     let existingUser = await db
@@ -68,17 +79,30 @@ export async function POST(request: Request) {
       .innerJoin(ticketTypes, eq(seatInventory.ticketTypeId, ticketTypes.id))
       .where(and(eq(seatInventory.sessionId, sessionId), inArray(seatInventory.seatId, seatIds)));
 
+    if (priceRows.length === 0) {
+      return NextResponse.json(
+        { error: `Selected seat IDs [${seatIds.join(', ')}] were not found in session #${sessionId} inventory.` },
+        { status: 400 }
+      );
+    }
+
     const faceValueTotal = priceRows.reduce((sum, r) => sum + r.price, 0);
     if (faceValueTotal <= 0) {
-      return NextResponse.json({ error: 'Unable to price selected seats.' }, { status: 400 });
+      return NextResponse.json({ error: 'Unable to price selected seats from inventory quota.' }, { status: 400 });
     }
 
     const pricing = await calculatePricing(eventRecord, seatIds.length, faceValueTotal, couponCode);
 
-    // Check payment details - require payment unless explicitly allowed to skip
-    let resolvedPayment = paymentDetails;
+    // Normalize payment details (supporting both mobile and web field names)
+    let resolvedPayment = paymentDetails ? {
+      gateway: paymentDetails.gateway || (paymentDetails.paymentId || paymentDetails.razorpayPaymentId ? 'razorpay' : 'direct_confirm'),
+      razorpayOrderId: paymentDetails.razorpayOrderId || paymentDetails.orderId || null,
+      razorpayPaymentId: paymentDetails.razorpayPaymentId || paymentDetails.paymentId || null,
+      razorpaySignature: paymentDetails.razorpaySignature || paymentDetails.signature || null,
+      idempotencyKey: paymentDetails.idempotencyKey || `idem_${Date.now()}_${targetUserId}`,
+    } : null;
+
     if (!resolvedPayment) {
-      // Only allow direct_confirm when explicitly enabled and strictly outside production
       const isProd = process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production';
       const allowDirectConfirm = !isProd && process.env.ALLOW_DIRECT_CONFIRM === 'true';
       
@@ -92,13 +116,16 @@ export async function POST(request: Request) {
       console.warn('Direct confirm allowed by ALLOW_DIRECT_CONFIRM=true env variable');
       resolvedPayment = {
         gateway: 'direct_confirm',
+        razorpayOrderId: null,
+        razorpayPaymentId: null,
+        razorpaySignature: null,
         idempotencyKey: `idem_${Date.now()}_${targetUserId}`,
       };
     }
 
     const result = await confirmBookingOrder({
       sessionId,
-      eventId,
+      eventId: effectiveEventId,
       seatIds,
       userId: targetUserId,
       userName: userName.trim(),
@@ -113,9 +140,16 @@ export async function POST(request: Request) {
       order: result.order,
       tickets: result.tickets,
       event: result.event,
-      pricing: result.pricing,
+      pricing: {
+        ...result.pricing,
+        faceValueTotal: result.pricing.ticketFaceValueTotal,
+        convenienceFee: result.pricing.platformFeeTotal,
+        gst: result.pricing.taxTotal,
+        discount: result.pricing.discountTotal,
+      },
       payment: {
         mode: resolvedPayment.gateway || 'direct_confirm',
+        paymentId: resolvedPayment.razorpayPaymentId,
       },
     });
   } catch (error: any) {

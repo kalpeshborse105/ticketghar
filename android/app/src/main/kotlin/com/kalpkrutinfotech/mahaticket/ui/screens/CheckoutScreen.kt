@@ -31,11 +31,16 @@ import com.kalpkrutinfotech.mahaticket.ui.viewmodel.BookingViewModel
 @Composable
 fun CheckoutScreen(
     holdToken: String,
+    sessionId: Int = 1,
+    eventId: Int = 1,
     bookingViewModel: BookingViewModel,
     onNavigateBack: () -> Unit,
     onBookingSuccess: (String) -> Unit
 ) {
     val selectedSeats by bookingViewModel.selectedSeats.collectAsState()
+    val holdResponse by bookingViewModel.holdResponse.collectAsState()
+    val serverPricing = holdResponse?.pricing
+
     var customerName by remember { mutableStateOf("") }
     var customerEmail by remember { mutableStateOf("") }
     var customerPhone by remember { mutableStateOf("") }
@@ -45,15 +50,17 @@ fun CheckoutScreen(
     var isProcessing by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    val basePrice = selectedSeats.sumOf { it.price }
-    val convenienceFee = if (basePrice > 0) (selectedSeats.size * 3500) else 0 // ₹35 per seat
-    val gstAmount = if (convenienceFee > 0) (convenienceFee * 18) / 100 else 0 // 18% GST on convenience fee
-    val grandTotal = (basePrice + convenienceFee + gstAmount - discountAmount).coerceAtLeast(0)
+    val basePrice = serverPricing?.faceValueTotal?.takeIf { it > 0 } ?: selectedSeats.sumOf { it.price }
+    val convenienceFee = serverPricing?.convenienceFee ?: 0
+    val gstAmount = serverPricing?.gst ?: 0
+    val totalDiscount = (serverPricing?.discount ?: 0) + discountAmount
+    val grandTotal = serverPricing?.grandTotal ?: (basePrice + convenienceFee + gstAmount - totalDiscount).coerceAtLeast(0)
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(CinemaBg)
+            .imePadding()
             .testTag("checkout_screen")
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -82,12 +89,12 @@ fun CheckoutScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             "सुरक्षित चेकआउट (Secure Checkout)",
-                            fontSize = 16.sp,
+                            fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
                         Text(
-                            "२५६-बिट एन्क्रिप्टेड पेमेंट गेटवे",
+                            "अधिकृत तिकीट आरक्षण प्रणाली",
                             fontSize = 11.sp,
                             color = GoldAccent
                         )
@@ -99,7 +106,7 @@ fun CheckoutScreen(
                         modifier = Modifier.padding(end = 8.dp)
                     ) {
                         Text(
-                            text = "🔒 SSL 100%",
+                            text = "✓ सुरक्षित व्यवहार",
                             color = Color.White,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
@@ -378,13 +385,17 @@ fun CheckoutScreen(
                             Spacer(modifier = Modifier.height(12.dp))
 
                             FareRow(label = "मूळ तिकीट दर (Base Ticket Amount)", amount = "₹${basePrice / 100}")
-                            FareRow(label = "सुविधा शुल्क (Convenience Fee ₹35/seat)", amount = "₹${convenienceFee / 100}")
-                            FareRow(label = "वस्तू आणि सेवा कर (GST 18%)", amount = "₹${gstAmount / 100}")
+                            if (convenienceFee > 0) {
+                                FareRow(label = "सुविधा शुल्क (Platform / Convenience Fee)", amount = "₹${convenienceFee / 100}")
+                            }
+                            if (gstAmount > 0) {
+                                FareRow(label = "लागू कर (Applicable Tax)", amount = "₹${gstAmount / 100}")
+                            }
 
-                            if (discountAmount > 0) {
+                            if (totalDiscount > 0) {
                                 FareRow(
-                                    label = "कूपन सूट (Discount Applied)",
-                                    amount = "-₹${discountAmount / 100}",
+                                    label = "कूपन / ऑफर सूट (Discount Applied)",
+                                    amount = "-₹${totalDiscount / 100}",
                                     amountColor = Color(0xFF10B981)
                                 )
                             }
@@ -514,13 +525,14 @@ fun CheckoutScreen(
 
                         val mockPaymentId = "pay_rzp_${System.currentTimeMillis()}"
                         val mockSignature = "sig_rzp_${System.currentTimeMillis()}"
-                        val attendeeNames = selectedSeats.associate { it.seatId.toString() to customerName }
 
                         bookingViewModel.confirmBooking(
-                            holdToken = holdToken,
+                            sessionId = sessionId,
+                            eventId = eventId,
+                            customerName = customerName.trim(),
                             phoneNumber = cleanPhone,
-                            email = customerEmail.ifBlank { null },
-                            attendeeNames = attendeeNames,
+                            email = customerEmail.trim().ifBlank { null },
+                            couponCode = appliedCoupon,
                             razorpayPaymentId = mockPaymentId,
                             razorpaySignature = mockSignature,
                             onSuccess = { orderNumber ->

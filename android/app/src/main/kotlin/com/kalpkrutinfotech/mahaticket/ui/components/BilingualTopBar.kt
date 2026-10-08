@@ -123,76 +123,25 @@ fun BilingualTopBar(
 
             Spacer(modifier = Modifier.width(6.dp))
 
-            // Role Switcher Dropdown (Customer / Organizer / Admin)
-            Box {
-                Surface(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
-                        .clickable { showRoleMenu = true }
-                        .testTag("role_switcher_button"),
-                    color = when (currentRole) {
-                        UserRole.ADMIN -> TheatricalCrimson.copy(alpha = 0.3f)
-                        UserRole.ORGANIZER -> GoldAccent.copy(alpha = 0.25f)
-                        UserRole.PUBLIC_USER -> Color(0xFF1E293B)
-                    },
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = when (currentRole) {
-                                UserRole.ADMIN -> "👑 "
-                                UserRole.ORGANIZER -> "🎪 "
-                                UserRole.PUBLIC_USER -> "👤 "
-                            },
-                            fontSize = 12.sp
-                        )
-                        Text(
-                            text = if (currentLanguage == AppLanguage.MARATHI) currentRole.labelMr else currentRole.labelEn,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color.White
-                        )
-                        Icon(
-                            imageVector = Icons.Default.ArrowDropDown,
-                            contentDescription = "Select Role",
-                            tint = Color.LightGray,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
+            Spacer(modifier = Modifier.width(4.dp))
 
-                DropdownMenu(
-                    expanded = showRoleMenu,
-                    onDismissRequest = { showRoleMenu = false },
-                    modifier = Modifier.background(Color(0xFF1E293B))
+            // Show role indicator only when in Admin or Organizer mode
+            if (currentRole != UserRole.PUBLIC_USER) {
+                Surface(
+                    color = when (currentRole) {
+                        UserRole.ADMIN -> TheatricalCrimson.copy(alpha = 0.35f)
+                        UserRole.ORGANIZER -> GoldAccent.copy(alpha = 0.25f)
+                        else -> Color(0xFF1E293B)
+                    },
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    UserRole.entries.forEach { role ->
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = if (currentLanguage == AppLanguage.MARATHI) role.labelMr else role.labelEn,
-                                    color = if (role == currentRole) GoldAccent else Color.White,
-                                    fontWeight = if (role == currentRole) FontWeight.Bold else FontWeight.Normal
-                                )
-                            },
-                            leadingIcon = {
-                                Text(
-                                    text = when (role) {
-                                        UserRole.ADMIN -> "👑"
-                                        UserRole.ORGANIZER -> "🎪"
-                                        UserRole.PUBLIC_USER -> "👤"
-                                    }
-                                )
-                            },
-                            onClick = {
-                                onRoleSelected(role)
-                                showRoleMenu = false
-                            }
-                        )
-                    }
+                    Text(
+                        text = if (currentLanguage == AppLanguage.MARATHI) currentRole.labelMr else currentRole.labelEn,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
                 }
             }
 

@@ -84,11 +84,12 @@ dependencies {
     // Image loading
     implementation(libs.coil.compose)
 
-    // CameraX for Gate QR Scanner
+    // CameraX & ML Kit for Gate QR Scanner
     implementation(libs.androidx.camera.core)
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
+    implementation("com.google.mlkit:barcode-scanning:17.3.0")
 
     // Networking & Coroutines
     implementation(libs.retrofit)

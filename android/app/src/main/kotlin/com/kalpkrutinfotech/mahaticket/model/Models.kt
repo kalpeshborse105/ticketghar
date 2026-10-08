@@ -14,7 +14,9 @@ data class EventItem(
     val posterUrl: String,
     val minPrice: Int?,
     val venue: VenueItem?,
-    val sessions: List<SessionItem>?
+    val sessions: List<SessionItem>?,
+    val trailerUrl: String? = null,
+    val galleryUrls: List<String>? = null
 )
 
 data class VenueItem(
@@ -175,6 +177,8 @@ data class Event(
     val bannerUrl: String = "",
     val trailerTitle: String = "Official Natak Preview & Trailer",
     val trailerVideoSnippet: String = "A stellar presentation with witty dialogues and heartfelt emotions.",
+    val trailerUrl: String? = null,
+    val galleryUrls: List<String> = emptyList(),
     val synopsisEn: String,
     val synopsisMr: String,
     val cast: List<String> = emptyList(),
@@ -251,6 +255,8 @@ fun EventItem.toEvent(): Event {
         durationText = "${durationMinutes / 60} तास ${durationMinutes % 60} मि.",
         posterUrl = posterUrl,
         bannerUrl = posterUrl,
+        trailerUrl = trailerUrl,
+        galleryUrls = galleryUrls ?: emptyList(),
         synopsisEn = description,
         synopsisMr = description,
         basePrice = (minPrice ?: 30000) / 100,

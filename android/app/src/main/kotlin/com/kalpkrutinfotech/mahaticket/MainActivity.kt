@@ -66,16 +66,18 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
 object BookingRoutes {
     const val EVENT_DETAIL = "event_detail/{eventId}"
     const val SEAT_SELECTION = "seat_selection/{sessionId}/{eventId}"
-    const val CHECKOUT = "checkout/{holdToken}"
+    const val CHECKOUT = "checkout/{holdToken}/{sessionId}/{eventId}"
     const val BOOKING_SUCCESS = "booking_success/{orderNumber}"
     const val TICKET_DETAIL = "ticket_detail/{ticketCode}"
     const val LOGIN = "login"
+    const val LEGAL = "legal/{policyType}"
 
     fun eventDetail(eventId: Int) = "event_detail/$eventId"
     fun seatSelection(sessionId: Int, eventId: Int = 1) = "seat_selection/$sessionId/$eventId"
-    fun checkout(holdToken: String) = "checkout/$holdToken"
+    fun checkout(holdToken: String, sessionId: Int = 1, eventId: Int = 1) = "checkout/$holdToken/$sessionId/$eventId"
     fun bookingSuccess(orderNumber: String) = "booking_success/$orderNumber"
     fun ticketDetail(ticketCode: String) = "ticket_detail/$ticketCode"
+    fun legal(policyType: String) = "legal/$policyType"
 }
 
 @Composable
@@ -290,6 +292,9 @@ fun MahaTicketRoot() {
                         },
                         onNavigateToTickets = {
                             navController.navigate(Screen.Tickets.route)
+                        },
+                        onNavigateToLegal = { policyType ->
+                            navController.navigate(BookingRoutes.legal(policyType))
                         }
                     )
                 }
@@ -346,19 +351,27 @@ fun MahaTicketRoot() {
                         eventId = eventId,
                         bookingViewModel = bookingViewModel,
                         onNavigateBack = { navController.popBackStack() },
-                        onContinueToCheckout = { holdToken ->
-                            navController.navigate(BookingRoutes.checkout(holdToken))
+                        onContinueToCheckout = { holdToken, sessId, evId ->
+                            navController.navigate(BookingRoutes.checkout(holdToken, sessId, evId))
                         }
                     )
                 }
 
                 composable(
                     route = BookingRoutes.CHECKOUT,
-                    arguments = listOf(navArgument("holdToken") { type = NavType.StringType })
+                    arguments = listOf(
+                        navArgument("holdToken") { type = NavType.StringType },
+                        navArgument("sessionId") { type = NavType.IntType; defaultValue = 1 },
+                        navArgument("eventId") { type = NavType.IntType; defaultValue = 1 }
+                    )
                 ) { backStackEntry ->
                     val holdToken = backStackEntry.arguments?.getString("holdToken") ?: ""
+                    val sessionId = backStackEntry.arguments?.getInt("sessionId") ?: 1
+                    val eventId = backStackEntry.arguments?.getInt("eventId") ?: 1
                     CheckoutScreen(
                         holdToken = holdToken,
+                        sessionId = sessionId,
+                        eventId = eventId,
                         bookingViewModel = bookingViewModel,
                         onNavigateBack = { navController.popBackStack() },
                         onBookingSuccess = { orderNumber ->
@@ -366,6 +379,17 @@ fun MahaTicketRoot() {
                                 popUpTo(Screen.Home.route) { inclusive = false }
                             }
                         }
+                    )
+                }
+
+                composable(
+                    route = BookingRoutes.LEGAL,
+                    arguments = listOf(navArgument("policyType") { type = NavType.StringType })
+                ) { backStackEntry ->
+                    val policyType = backStackEntry.arguments?.getString("policyType") ?: "terms"
+                    LegalScreen(
+                        policyType = policyType,
+                        onNavigateBack = { navController.popBackStack() }
                     )
                 }
 

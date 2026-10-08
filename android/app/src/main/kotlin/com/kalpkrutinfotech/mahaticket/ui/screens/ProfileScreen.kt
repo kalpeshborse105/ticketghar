@@ -33,7 +33,8 @@ import com.kalpkrutinfotech.mahaticket.theme.*
 @Composable
 fun ProfileScreen(
     onNavigateToLogin: () -> Unit = {},
-    onNavigateToTickets: () -> Unit = {}
+    onNavigateToTickets: () -> Unit = {},
+    onNavigateToLegal: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
     var isLoggedIn by remember { mutableStateOf(false) }
@@ -219,50 +220,42 @@ fun ProfileScreen(
                         icon = Icons.AutoMirrored.Filled.HelpOutline,
                         title = "मदत आणि सपोर्ट (Help Centre)",
                         subtitle = "बुकिंग संबंधित प्रश्न व ग्राहक सहाय्य",
-                        onClick = {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.API_BASE_URL}/contact"))
-                            context.startActivity(intent)
-                        }
+                        onClick = { onNavigateToLegal("about") }
                     )
                     HorizontalDivider(color = Color(0xFF1E293B), thickness = 1.dp)
                     CinemaProfileMenuItem(
                         icon = Icons.Default.Info,
                         title = "आमच्याबद्दल (About MahaTicket)",
                         subtitle = "महाराष्ट्राचे अधिकृत तिकीट बुकिंग व्यासपीठ",
-                        onClick = {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.API_BASE_URL}/about"))
-                            context.startActivity(intent)
-                        }
+                        onClick = { onNavigateToLegal("about") }
                     )
                     HorizontalDivider(color = Color(0xFF1E293B), thickness = 1.dp)
                     CinemaProfileMenuItem(
                         icon = Icons.Default.AssignmentReturn,
-                        title = "परतावा धोरण (Refund Policy)",
+                        title = "परतावा व रद्दीकरण धोरण (Refund Policy)",
                         subtitle = "तिकीट रद्द करणे व परतावा नियम",
-                        onClick = {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.API_BASE_URL}/refund"))
-                            context.startActivity(intent)
-                        }
+                        onClick = { onNavigateToLegal("refund") }
                     )
                     HorizontalDivider(color = Color(0xFF1E293B), thickness = 1.dp)
                     CinemaProfileMenuItem(
                         icon = Icons.Default.Description,
                         title = "नियम व अटी (Terms & Conditions)",
                         subtitle = "वापरकर्त्यांसाठी नियम व मार्गदर्शक तत्त्वे",
-                        onClick = {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.API_BASE_URL}/terms"))
-                            context.startActivity(intent)
-                        }
+                        onClick = { onNavigateToLegal("terms") }
                     )
                     HorizontalDivider(color = Color(0xFF1E293B), thickness = 1.dp)
                     CinemaProfileMenuItem(
                         icon = Icons.Default.PrivacyTip,
                         title = "गोपनीयता धोरण (Privacy Policy)",
                         subtitle = "तुमचा डेटा आणि सुरक्षा माहिती",
-                        onClick = {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.API_BASE_URL}/privacy"))
-                            context.startActivity(intent)
-                        }
+                        onClick = { onNavigateToLegal("privacy") }
+                    )
+                    HorizontalDivider(color = Color(0xFF1E293B), thickness = 1.dp)
+                    CinemaProfileMenuItem(
+                        icon = Icons.Default.AccountBalanceWallet,
+                        title = "प्लॅटफॉर्म व सेवा शुल्क माहिती (Platform Fees)",
+                        subtitle = "पारदर्शक दर, कर व शुल्क संरचना",
+                        onClick = { onNavigateToLegal("fees") }
                     )
                 }
             }

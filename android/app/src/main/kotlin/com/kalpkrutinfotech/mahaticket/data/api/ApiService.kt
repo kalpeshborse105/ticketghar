@@ -1,5 +1,6 @@
 package com.kalpkrutinfotech.mahaticket.data.api
 
+import com.google.gson.annotations.SerializedName
 import retrofit2.Response
 import retrofit2.http.*
 
@@ -34,6 +35,11 @@ interface MahaTicketApiService {
     suspend fun confirmBooking(
         @Body request: ConfirmBookingRequest
     ): Response<BookingConfirmationResponse>
+
+    @POST("/api/scanner/verify")
+    suspend fun verifyTicketScan(
+        @Body request: VerifyScanRequest
+    ): Response<VerifyScanResponse>
     
     @GET("/api/orders")
     suspend fun getMyOrders(
@@ -88,6 +94,8 @@ data class EventResponse(
     val descriptionMr: String? = null,
     val posterUrl: String? = null,
     val bannerUrl: String? = null,
+    val trailerUrl: String? = null,
+    val galleryUrls: List<String>? = null,
     val minPrice: Int? = null,
     val featured: Int? = null,
     val venue: VenueResponse? = null,
@@ -172,23 +180,30 @@ data class HoldSeatsRequest(
 data class HoldSeatsResponse(
     val success: Boolean = false,
     val hold: HoldResultData? = null,
+    @SerializedName("holdToken")
+    val rootHoldToken: String? = null,
     val pricing: PricingData? = null,
     val error: String? = null
 ) {
-    val holdToken: String? get() = hold?.holdToken
+    val holdToken: String? get() = rootHoldToken?.takeIf { it.isNotBlank() } ?: hold?.holdToken
 }
 
 data class HoldResultData(
     val holdToken: String? = null,
     val expiresAt: String? = null,
     val seatCount: Int = 0,
+    @SerializedName("ticketFaceValueTotal", alternate = ["faceValueTotal"])
     val faceValueTotal: Int = 0
 )
 
 data class PricingData(
+    @SerializedName("ticketFaceValueTotal", alternate = ["faceValueTotal"])
     val faceValueTotal: Int = 0,
+    @SerializedName("platformFeeTotal", alternate = ["convenienceFee"])
     val convenienceFee: Int = 0,
+    @SerializedName("taxTotal", alternate = ["gst"])
     val gst: Int = 0,
+    @SerializedName("discountTotal", alternate = ["discount"])
     val discount: Int = 0,
     val grandTotal: Int = 0
 )
@@ -304,4 +319,32 @@ data class RegisterTokenRequest(
     val platform: String = "android",
     val city: String? = null,
     val deviceModel: String? = null
+)
+
+data class VerifyScanRequest(
+    val ticketCodeOrPayload: String,
+    val gateName: String = "Main Gate 1",
+    val scannerUserId: String? = null,
+    val scannerDevice: String = "Android CameraX Scanner"
+)
+
+data class VerifyScanResponse(
+    val valid: Boolean = false,
+    val scanResult: String = "INVALID_TICKET",
+    val message: String = "",
+    val ticketCode: String? = null,
+    val alreadyScannedAt: String? = null,
+    val previousGate: String? = null,
+    val ticket: ScannedTicketDetails? = null,
+    val scannedAt: String? = null,
+    val error: String? = null
+)
+
+data class ScannedTicketDetails(
+    val code: String? = null,
+    val seat: String? = null,
+    val attendee: String? = null,
+    val event: String? = null,
+    val eventMr: String? = null,
+    val showtime: String? = null
 )

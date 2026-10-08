@@ -62,13 +62,20 @@ class BookingRepository(
             val response = apiService.holdSeats(request)
             if (response.isSuccessful && response.body() != null) {
                 val body = response.body()!!
-                if (body.success && body.hold != null) {
+                if (body.success && (body.hold != null || !body.rootHoldToken.isNullOrBlank())) {
                     Result.success(body)
                 } else {
                     Result.failure(Exception(body.error ?: "सीट होल्ड करण्यात त्रुटी"))
                 }
             } else {
-                Result.failure(Exception("सीट होल्ड विनंती अयशस्वी (HTTP ${response.code()})"))
+                val rawErr = try { response.errorBody()?.string() } catch (e: Exception) { null }
+                val parsedMsg = if (!rawErr.isNullOrBlank()) {
+                    try {
+                        val json = org.json.JSONObject(rawErr)
+                        json.optString("error", json.optString("message", rawErr))
+                    } catch (e: Exception) { rawErr }
+                } else "सीट होल्ड विनंती अयशस्वी (HTTP ${response.code()})"
+                Result.failure(Exception(parsedMsg))
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -127,7 +134,43 @@ class BookingRepository(
                     Result.failure(Exception(body.error ?: "बुकिंग निश्चित करण्यात अयशस्वी"))
                 }
             } else {
-                Result.failure(Exception("बुकिंग विनंती अयशस्वी (HTTP ${response.code()})"))
+                val rawErr = try { response.errorBody()?.string() } catch (e: Exception) { null }
+                val parsedMsg = if (!rawErr.isNullOrBlank()) {
+                    try {
+                        val json = org.json.JSONObject(rawErr)
+                        json.optString("error", json.optString("message", rawErr))
+                    } catch (e: Exception) { rawErr }
+                } else "बुकिंग विनंती अयशस्वी (HTTP ${response.code()})"
+                Result.failure(Exception(parsedMsg))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun verifyTicketScan(
+        ticketCodeOrPayload: String,
+        gateName: String = "Main Gate 1"
+    ): Result<VerifyScanResponse> = withContext(Dispatchers.IO) {
+        try {
+            val request = VerifyScanRequest(
+                ticketCodeOrPayload = ticketCodeOrPayload,
+                gateName = gateName,
+                scannerUserId = "gate_operator_1",
+                scannerDevice = "Android CameraX Terminal"
+            )
+            val response = apiService.verifyTicketScan(request)
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                val rawErr = try { response.errorBody()?.string() } catch (e: Exception) { null }
+                val parsedMsg = if (!rawErr.isNullOrBlank()) {
+                    try {
+                        val json = org.json.JSONObject(rawErr)
+                        json.optString("error", json.optString("message", rawErr))
+                    } catch (e: Exception) { rawErr }
+                } else "स्कॅनर पडताळणी अयशस्वी (HTTP ${response.code()})"
+                Result.failure(Exception(parsedMsg))
             }
         } catch (e: Exception) {
             Result.failure(e)

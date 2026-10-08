@@ -38,7 +38,7 @@ fun SeatSelectionScreen(
     eventId: Int = 1,
     bookingViewModel: BookingViewModel,
     onNavigateBack: () -> Unit,
-    onContinueToCheckout: (String) -> Unit
+    onContinueToCheckout: (String, Int, Int) -> Unit
 ) {
     LaunchedEffect(sessionId, eventId) {
         bookingViewModel.loadSeats(sessionId, eventId)
@@ -47,6 +47,8 @@ fun SeatSelectionScreen(
     val seatsState by bookingViewModel.seatsState.collectAsState()
     val selectedSeats by bookingViewModel.selectedSeats.collectAsState()
     val holdResponse by bookingViewModel.holdResponse.collectAsState()
+    var holdErrorMessage by remember { mutableStateOf<String?>(null) }
+    var isHoldingLoading by remember { mutableStateOf(false) }
 
     // Countdown timer for 8-10 minutes hold
     var timeRemaining by remember { mutableStateOf<Int?>(null) }
@@ -234,29 +236,62 @@ fun SeatSelectionScreen(
             exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(180)) + fadeOut(tween(180)),
             modifier = Modifier.align(Alignment.BottomCenter)
         ) {
-            TheatricalSeatBottomBar(
-                selectedSeats = selectedSeats,
-                isHolding = holdResponse != null,
-                onProceed = {
-                    val existingToken = (holdResponse?.holdToken ?: holdResponse?.hold?.holdToken)?.takeIf { it.isNotBlank() }
-                    if (existingToken != null) {
-                        onContinueToCheckout(existingToken)
-                    } else {
-                        bookingViewModel.holdSeats(
-                            sessionId = sessionId,
-                            phoneNumber = "9876543210",
-                            onSuccess = { genToken ->
-                                val safeToken = genToken.ifBlank { "hold_${sessionId}_${System.currentTimeMillis()}" }
-                                onContinueToCheckout(safeToken)
-                            },
-                            onError = {
-                                val fallbackToken = "hold_${sessionId}_${System.currentTimeMillis()}"
-                                onContinueToCheckout(fallbackToken)
+            Column {
+                if (holdErrorMessage != null) {
+                    Surface(
+                        color = Color(0xFF7F1D1D),
+                        shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = holdErrorMessage ?: "",
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(
+                                onClick = { holdErrorMessage = null },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(16.dp))
                             }
-                        )
+                        }
                     }
                 }
-            )
+                TheatricalSeatBottomBar(
+                    selectedSeats = selectedSeats,
+                    isHolding = holdResponse != null,
+                    onProceed = {
+                        holdErrorMessage = null
+                        val existingToken = (holdResponse?.holdToken ?: holdResponse?.hold?.holdToken)?.takeIf { it.isNotBlank() }
+                        if (existingToken != null) {
+                            onContinueToCheckout(existingToken, sessionId, eventId)
+                        } else {
+                            isHoldingLoading = true
+                            bookingViewModel.holdSeats(
+                                sessionId = sessionId,
+                                phoneNumber = "9876543210",
+                                onSuccess = { genToken ->
+                                    isHoldingLoading = false
+                                    val safeToken = genToken.ifBlank { "hold_${sessionId}_${System.currentTimeMillis()}" }
+                                    onContinueToCheckout(safeToken, sessionId, eventId)
+                                },
+                                onError = { err ->
+                                    isHoldingLoading = false
+                                    holdErrorMessage = err
+                                }
+                            )
+                        }
+                    }
+                )
+            }
         }
     }
 }

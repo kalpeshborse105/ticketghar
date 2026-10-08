@@ -149,7 +149,8 @@ class BookingViewModel(
         customerName: String,
         phoneNumber: String,
         email: String?,
-        attendeeNames: Map<Int, String>,
+        attendeeNames: Map<Int, String> = emptyMap(),
+        couponCode: String? = null,
         razorpayPaymentId: String? = null,
         razorpaySignature: String? = null,
         onSuccess: (String) -> Unit = {},
@@ -166,6 +167,7 @@ class BookingViewModel(
                 userName = customerName,
                 userEmail = email ?: "customer@mahaticket.in",
                 userPhone = phoneNumber,
+                couponCode = couponCode,
                 paymentId = razorpayPaymentId
             )
             
