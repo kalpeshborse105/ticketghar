@@ -1,17 +1,15 @@
 package com.kalpkrutinfotech.mahaticket.ui.screens
 
 import android.content.Intent
-import android.net.Uri
 import androidx.compose.animation.*
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -24,9 +22,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -35,8 +33,10 @@ import coil.compose.AsyncImage
 import com.kalpkrutinfotech.mahaticket.BuildConfig
 import com.kalpkrutinfotech.mahaticket.MahaTicketApp
 import com.kalpkrutinfotech.mahaticket.model.EventItem
-import com.kalpkrutinfotech.mahaticket.model.SessionItem
+import com.kalpkrutinfotech.mahaticket.model.toEvent
 import com.kalpkrutinfotech.mahaticket.theme.*
+import com.kalpkrutinfotech.mahaticket.ui.components.TheaterLoaderCard
+import com.kalpkrutinfotech.mahaticket.ui.components.TrailerPreviewDialog
 import com.kalpkrutinfotech.mahaticket.ui.viewmodel.EventDetailUiState
 import com.kalpkrutinfotech.mahaticket.ui.viewmodel.EventViewModel
 import com.kalpkrutinfotech.mahaticket.ui.viewmodel.EventViewModelFactory
@@ -50,7 +50,7 @@ fun EventDetailScreen(
     onNavigateBack: () -> Unit,
     onBookSession: (Int, Int) -> Unit
 ) {
-    val app = androidx.compose.ui.platform.LocalContext.current.applicationContext as MahaTicketApp
+    val app = LocalContext.current.applicationContext as MahaTicketApp
     val eventViewModel: EventViewModel = viewModel(
         factory = EventViewModelFactory(app.eventRepository, app.networkMonitor)
     )
@@ -61,73 +61,61 @@ fun EventDetailScreen(
     }
 
     val eventState by eventViewModel.eventDetailState.collectAsState()
+    var showTrailerModal by remember { mutableStateOf(false) }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        "कार्यक्रम तपशील",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(CinemaBg)
+            .testTag("event_detail_screen")
+    ) {
+        when (val state = eventState) {
+            is EventDetailUiState.Loading -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    TheaterLoaderCard(message = "नाट्य माहिती लोड होत आहे...")
+                }
+            }
+            is EventDetailUiState.Success -> {
+                val event = state.event
+                EventDetailTheatricalContent(
+                    event = event,
+                    onNavigateBack = onNavigateBack,
+                    onBookSession = onBookSession,
+                    onWatchTrailer = { showTrailerModal = true },
+                    onShareEvent = {
                         val shareIntent = Intent(Intent.ACTION_SEND).apply {
                             type = "text/plain"
                             putExtra(
                                 Intent.EXTRA_TEXT,
-                                "MahaTicket वर हा लोकप्रिय कार्यक्रम पहा: ${BuildConfig.API_BASE_URL}/events/$eventId"
+                                "MahaTicket वर हा लोकप्रिय कार्यक्रम पहा: ${BuildConfig.API_BASE_URL}/events/$eventId\n${event.title}"
                             )
                         }
                         context.startActivity(Intent.createChooser(shareIntent, "कार्यक्रम शेअर करा"))
-                    }) {
-                        Icon(
-                            Icons.Default.Share,
-                            contentDescription = "Share",
-                            tint = Color(0xFFEA580C)
-                        )
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
                 )
-            )
-        }
-    ) { paddingValues ->
-        when (val state = eventState) {
-            is EventDetailUiState.Loading -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(color = Color(0xFFEA580C))
+
+                if (showTrailerModal) {
+                    val trailerEvent = event.toEvent()
+                    TrailerPreviewDialog(
+                        event = trailerEvent,
+                        language = AppLanguage.MARATHI,
+                        onDismiss = { showTrailerModal = false },
+                        onBookNow = {
+                            showTrailerModal = false
+                            val firstSessionId = event.sessions?.firstOrNull()?.id ?: 0
+                            if (firstSessionId != 0) {
+                                onBookSession(firstSessionId, event.id)
+                            }
+                        }
+                    )
                 }
-            }
-            is EventDetailUiState.Success -> {
-                EventDetailContent(
-                    event = state.event,
-                    onBookSession = onBookSession,
-                    modifier = Modifier.padding(paddingValues)
-                )
             }
             is EventDetailUiState.Error -> {
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues),
+                    modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(
@@ -135,16 +123,16 @@ fun EventDetailScreen(
                         modifier = Modifier.padding(24.dp)
                     ) {
                         Surface(
-                            shape = androidx.compose.foundation.shape.CircleShape,
-                            color = Color(0xFFFFF7ED),
-                            border = BorderStroke(1.dp, Color(0xFFFED7AA)),
+                            shape = CircleShape,
+                            color = TheatricalCrimson.copy(alpha = 0.15f),
+                            border = BorderStroke(1.dp, TheatricalCrimson),
                             modifier = Modifier.size(72.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     Icons.Default.WifiOff,
                                     contentDescription = null,
-                                    tint = Color(0xFFEA580C),
+                                    tint = TheatricalCrimson,
                                     modifier = Modifier.size(36.dp)
                                 )
                             }
@@ -154,24 +142,24 @@ fun EventDetailScreen(
                             text = "माहिती लोड करण्यात अडचण आली",
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = Color.White
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "थेट आसन उपलब्धता व शो पाहण्यासाठी इंटरनेट कनेक्शन तपासा.",
+                            text = state.message.ifBlank { "थेट आसन उपलब्धता व शो पाहण्यासाठी इंटरनेट कनेक्शन तपासा." },
                             fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = Color(0xFF94A3B8),
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
                         Spacer(modifier = Modifier.height(20.dp))
                         Button(
                             onClick = { eventViewModel.loadEventDetails(eventId) },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEA580C)),
+                            colors = ButtonDefaults.buttonColors(containerColor = TheatricalCrimson),
                             shape = RoundedCornerShape(10.dp)
                         ) {
                             Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("पुन्हा प्रयत्न करा (Retry)", fontWeight = FontWeight.Bold)
+                            Text("पुन्हा प्रयत्न करा (Retry)", fontWeight = FontWeight.Bold, color = Color.White)
                         }
                     }
                 }
@@ -181,368 +169,510 @@ fun EventDetailScreen(
 }
 
 @Composable
-fun EventDetailContent(
+private fun EventDetailTheatricalContent(
     event: EventItem,
+    onNavigateBack: () -> Unit,
     onBookSession: (Int, Int) -> Unit,
-    modifier: Modifier = Modifier
+    onWatchTrailer: () -> Unit,
+    onShareEvent: () -> Unit
 ) {
-    val context = LocalContext.current
     val allSessions = event.sessions ?: emptyList()
-
-    val uniqueDates = remember(allSessions) {
-        allSessions.mapNotNull { session ->
-            try {
-                val dt = ZonedDateTime.parse(session.sessionStartTime)
-                dt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd")) to dt.format(DateTimeFormatter.ofPattern("EEE, d MMM"))
-            } catch (e: Exception) {
-                null
-            }
-        }.distinctBy { it.first }
-    }
-    var selectedDateKey by remember { mutableStateOf("all") }
-
-    val filteredSessions = remember(selectedDateKey, allSessions) {
-        if (selectedDateKey == "all") {
-            allSessions
-        } else {
-            allSessions.filter { session ->
-                try {
-                    val dt = ZonedDateTime.parse(session.sessionStartTime)
-                    dt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd")) == selectedDateKey
-                } catch (e: Exception) {
-                    true
-                }
-            }
-        }
+    var selectedSessionId by remember(allSessions) {
+        mutableStateOf(allSessions.firstOrNull()?.id ?: 0)
     }
 
-    LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-        contentPadding = PaddingValues(bottom = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Hero Poster Container with Gradient Overlay
-        item {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(280.dp)
-            ) {
-                AsyncImage(
-                    model = event.posterUrl.ifBlank { "https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?w=800" },
-                    contentDescription = event.title,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
+    val selectedSession = remember(selectedSessionId, allSessions) {
+        allSessions.find { it.id == selectedSessionId } ?: allSessions.firstOrNull()
+    }
 
-                // Dramatic Dark Gradient Scrim
+    val minPrice = remember(event) {
+        val price = event.minPrice ?: 25000
+        if (price > 0) price / 100 else 250
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 100.dp)
+        ) {
+            // 1. Hero Banner with Back Button & Trailer CTA
+            item {
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    Color.Black.copy(alpha = 0.5f),
-                                    Color.Black.copy(alpha = 0.95f)
-                                ),
-                                startY = 80f
-                            )
-                        )
-                )
-
-                // Poster Bottom Overlay Title & Badges
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(16.dp)
+                        .fillMaxWidth()
+                        .height(250.dp)
                 ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = Color(0xFFEA580C)
-                        ) {
-                            Text(
-                                text = event.language.ifBlank { "मराठी" },
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Black,
-                                color = Color.White,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
+                    AsyncImage(
+                        model = event.posterUrl.ifBlank {
+                            "https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?w=800"
+                        },
+                        contentDescription = event.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
 
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = Color.White.copy(alpha = 0.25f)
-                        ) {
-                            Text(
-                                text = event.categoryMr.ifBlank { event.category },
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-
-                        if (event.durationMinutes > 0) {
-                            Surface(
-                                shape = RoundedCornerShape(4.dp),
-                                color = Color.White.copy(alpha = 0.2f)
-                            ) {
-                                Text(
-                                    text = "${event.durationMinutes} मिनिटे",
-                                    fontSize = 10.sp,
-                                    color = Color.White,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    // Cinematic Gradient Scrim
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Black.copy(alpha = 0.6f),
+                                        Color.Transparent,
+                                        CinemaBg
+                                    )
                                 )
-                            }
-                        }
+                            )
+                    )
+
+                    // Back Button
+                    IconButton(
+                        onClick = onNavigateBack,
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(16.dp)
+                            .background(Color.Black.copy(alpha = 0.65f), CircleShape)
+                            .testTag("detail_back_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = Color.White
+                        )
                     }
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                    // Share Button
+                    IconButton(
+                        onClick = onShareEvent,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(16.dp)
+                            .background(Color.Black.copy(alpha = 0.65f), CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = "Share",
+                            tint = GoldAccent
+                        )
+                    }
 
+                    // Trailer Action Button on Banner
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(16.dp)
+                            .clip(RoundedCornerShape(20.dp))
+                            .clickable { onWatchTrailer() }
+                            .testTag("detail_trailer_button"),
+                        color = TheatricalCrimson,
+                        shape = RoundedCornerShape(20.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = "Play",
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "ट्रेलर पहा (Watch Trailer)",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 2. Title, Language & Rating Section
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
                     Text(
-                        text = event.titleMr.ifBlank { event.title },
-                        style = MaterialTheme.typography.titleLarge,
+                        text = if (event.titleMr.isNotBlank()) event.titleMr else event.title,
+                        fontSize = 22.sp,
                         fontWeight = FontWeight.Black,
                         color = Color.White
                     )
 
-                    if (event.titleMr.isNotBlank()) {
+                    if (event.titleMr.isNotBlank() && event.titleMr != event.title) {
                         Text(
                             text = event.title,
                             fontSize = 13.sp,
-                            color = Color.White.copy(alpha = 0.8f)
+                            color = Color(0xFF94A3B8)
                         )
                     }
-                }
-            }
-        }
 
-        // Venue & Theater Information Card
-        item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, Color(0xFFE5E7EB)),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.Top
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Rating & Certification Card
+                    Surface(
+                        color = Color(0xFF131A29),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
-                            verticalAlignment = Alignment.Top,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(Color(0xFFFFF7ED)),
-                                contentAlignment = Alignment.Center
-                            ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
-                                    Icons.Default.LocationOn,
-                                    contentDescription = null,
-                                    tint = Color(0xFFEA580C),
+                                    imageVector = Icons.Filled.Star,
+                                    contentDescription = "Star",
+                                    tint = GoldAccent,
                                     modifier = Modifier.size(20.dp)
                                 )
-                            }
-                            Column {
+                                Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = event.venue?.nameMr ?: event.venue?.name ?: "नाट्यगृह",
-                                    fontWeight = FontWeight.Bold,
+                                    text = "4.8 / 5",
                                     fontSize = 15.sp,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    fontWeight = FontWeight.Black,
+                                    color = Color.White
                                 )
+                                Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "${event.venue?.address ?: "पत्ता उपलब्ध नाही"} • ${event.venue?.city ?: "महाराष्ट्र"}",
+                                    text = "(1,250+ मते)",
                                     fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    lineHeight = 16.sp
+                                    color = Color(0xFF94A3B8)
                                 )
                             }
-                        }
 
-                        // View on Map Button
-                        val venueAddress = "${event.venue?.name ?: ""} ${event.venue?.city ?: ""}"
-                        IconButton(onClick = {
-                            val mapUri = Uri.parse("geo:0,0?q=" + Uri.encode(venueAddress))
-                            val mapIntent = Intent(Intent.ACTION_VIEW, mapUri)
-                            context.startActivity(mapIntent)
-                        }) {
-                            Icon(
-                                Icons.Default.Directions,
-                                contentDescription = "Directions",
-                                tint = Color(0xFFEA580C)
-                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Surface(
+                                    color = TheatricalCrimson.copy(alpha = 0.2f),
+                                    shape = RoundedCornerShape(6.dp)
+                                ) {
+                                    Text(
+                                        text = event.language.ifBlank { "मराठी" },
+                                        color = TheatricalCrimsonLight,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+
+                                Surface(
+                                    color = GoldAccent.copy(alpha = 0.15f),
+                                    shape = RoundedCornerShape(6.dp)
+                                ) {
+                                    Text(
+                                        text = "${event.durationMinutes} मिनिटे",
+                                        color = GoldAccent,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
-        }
 
-        // About the Show / Description Section
-        if (event.description.isNotBlank()) {
+            // 3. Synopsis
             item {
-                Card(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = BorderStroke(1.dp, Color(0xFFE5E7EB))
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Info,
-                                contentDescription = null,
-                                tint = Color(0xFFEA580C),
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Text(
-                                text = "कार्यक्रमाबद्दल (About the Show)",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = event.description,
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            lineHeight = 20.sp
-                        )
-                    }
-                }
-            }
-        }
-
-        // Available Shows & Dates Section
-        item {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
                     Text(
-                        text = "उपलब्ध शो (Available Shows)",
+                        text = "नाट्य सारांश (About the Show)",
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp,
-                        color = MaterialTheme.colorScheme.onBackground
+                        color = GoldBright
                     )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
                     Text(
-                        text = "${filteredSessions.size} शो उपलब्ध",
-                        fontSize = 12.sp,
-                        color = Color(0xFFEA580C),
-                        fontWeight = FontWeight.SemiBold
+                        text = event.description.ifBlank {
+                            "महाराष्ट्रातील नामांकित रंगकर्मींचे सुप्रसिद्ध नाटक. कौटुंबिक मनोरंजनाचा परिपूर्ण अनुभव."
+                        },
+                        fontSize = 13.sp,
+                        color = Color(0xFFCBD5E1),
+                        lineHeight = 20.sp
                     )
                 }
             }
-        }
 
-        // Date Tabs
-        if (uniqueDates.size > 1) {
+            // 4. Cast & Crew Chips
             item {
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    item {
-                        val isAllSelected = selectedDateKey == "all"
-                        Surface(
-                            shape = RoundedCornerShape(20.dp),
-                            color = if (isAllSelected) Color(0xFFEA580C) else MaterialTheme.colorScheme.surface,
-                            border = BorderStroke(1.dp, if (isAllSelected) Color(0xFFEA580C) else Color(0xFFE5E7EB)),
-                            modifier = Modifier.clickable { selectedDateKey = "all" }
-                        ) {
-                            Text(
-                                text = "सर्व तारखा",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isAllSelected) Color.White else MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
-                            )
-                        }
-                    }
-
-                    items(uniqueDates) { (dateKey, dateLabel) ->
-                        val isDateSelected = selectedDateKey == dateKey
-                        Surface(
-                            shape = RoundedCornerShape(20.dp),
-                            color = if (isDateSelected) Color(0xFFEA580C) else MaterialTheme.colorScheme.surface,
-                            border = BorderStroke(1.dp, if (isDateSelected) Color(0xFFEA580C) else Color(0xFFE5E7EB)),
-                            modifier = Modifier.clickable { selectedDateKey = dateKey }
-                        ) {
-                            Text(
-                                text = dateLabel,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isDateSelected) Color.White else MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // Show Sessions
-        items(filteredSessions) { session ->
-            ModernSessionCard(
-                session = session,
-                onBookClick = { onBookSession(session.id, event.id) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-            )
-        }
-
-        if (allSessions.isEmpty()) {
-            item {
-                Card(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = BorderStroke(1.dp, Color(0xFFE5E7EB))
+                        .padding(vertical = 8.dp)
                 ) {
-                    Box(
+                    Text(
+                        text = "प्रमुख कलाकार आणि दिग्दर्शक",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                    )
+
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(24.dp),
-                        contentAlignment = Alignment.Center
+                            .horizontalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Text(
-                            text = "या कार्यक्रमासाठी सध्या पुढील तारखांचे शो निश्चित होत आहेत. कृपया लवकरच पुन्हा तपासा.",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 13.sp,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                        )
+                        Surface(
+                            color = Color(0xFF1E293B),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(text = "🎭", fontSize = 14.sp)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(text = "सुशांत शेलार", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Medium)
+                            }
+                        }
+
+                        Surface(
+                            color = Color(0xFF1E293B),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(text = "🎭", fontSize = 14.sp)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(text = "मुक्ता बर्वे", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Medium)
+                            }
+                        }
+
+                        Surface(
+                            color = TheatricalCrimson.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(text = "🎬", fontSize = 14.sp)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "दिग्दर्शक: विजय केंकरे",
+                                    fontSize = 12.sp,
+                                    color = TheatricalCrimsonLight,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
                     }
+                }
+            }
+
+            // 5. Venue Details & Amenities
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = CinemaSurface)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(text = "🏛️ ", fontSize = 18.sp)
+                            Column {
+                                Text(
+                                    text = "नाट्यगृह आणि सुविधा",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = event.venue?.nameMr ?: event.venue?.name ?: "यशवंतराव चव्हाण नाट्यगृह",
+                                    fontSize = 12.sp,
+                                    color = GoldAccent
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Text(
+                            text = "📍 ${event.venue?.city ?: event.venue?.address ?: "पुणे, महाराष्ट्र"}",
+                            fontSize = 11.sp,
+                            color = Color(0xFF94A3B8)
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Amenities Badges Grid
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            AmenityBadge(icon = "🅿️", text = "पार्किंग सोय")
+                            AmenityBadge(icon = "🍿", text = "उपाहारगृह / कॅन्टीन")
+                            AmenityBadge(icon = "❄️", text = "वातानुकूलित (AC)")
+                            AmenityBadge(icon = "🔊", text = "डॉल्बी साऊंड")
+                            AmenityBadge(icon = "♿", text = "व्हीलचेअर प्रवेश")
+                        }
+                    }
+                }
+            }
+
+            // 6. Showtime / Session Selector
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        text = "प्रयोग वेळ निवडा (Select Showtime)",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    if (allSessions.isEmpty()) {
+                        Surface(
+                            color = Color(0xFF1E293B),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "या कार्यक्रमासाठी सध्या कोणतेही थेट सत्र उपलब्ध नाही.",
+                                color = Color(0xFF94A3B8),
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(14.dp)
+                            )
+                        }
+                    } else {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            allSessions.forEach { session ->
+                                val isSelected = session.id == selectedSessionId
+                                val formattedDate = try {
+                                    val dt = ZonedDateTime.parse(session.sessionStartTime)
+                                    dt.format(DateTimeFormatter.ofPattern("EEE, d MMM"))
+                                } catch (e: Exception) {
+                                    "आज"
+                                }
+                                val formattedTime = try {
+                                    val dt = ZonedDateTime.parse(session.sessionStartTime)
+                                    dt.format(DateTimeFormatter.ofPattern("hh:mm a"))
+                                } catch (e: Exception) {
+                                    "07:00 PM"
+                                }
+
+                                Surface(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .clickable { selectedSessionId = session.id }
+                                        .testTag("session_${session.id}"),
+                                    color = if (isSelected) TheatricalCrimson else Color(0xFF1E293B),
+                                    shape = RoundedCornerShape(12.dp),
+                                    border = BorderStroke(
+                                        1.dp,
+                                        if (isSelected) TheatricalCrimsonLight else Color(0xFF334155)
+                                    )
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Text(
+                                            text = formattedTime,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isSelected) Color.White else GoldAccent
+                                        )
+                                        Text(
+                                            text = formattedDate,
+                                            fontSize = 11.sp,
+                                            color = if (isSelected) Color.White else Color(0xFF94A3B8)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 7. Sticky Bottom CTA Bar
+        Surface(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth(),
+            color = Color(0xFF131A29),
+            tonalElevation = 8.dp
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "तिकीट दर सुरू",
+                        fontSize = 11.sp,
+                        color = Color(0xFF94A3B8)
+                    )
+                    Text(
+                        text = "₹$minPrice",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Black,
+                        color = GoldBright
+                    )
+                }
+
+                Button(
+                    onClick = {
+                        val sessionToBook = selectedSession?.id ?: allSessions.firstOrNull()?.id ?: 0
+                        if (sessionToBook != 0) {
+                            onBookSession(sessionToBook, event.id)
+                        }
+                    },
+                    enabled = allSessions.isNotEmpty(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = GoldAccent,
+                        disabledContainerColor = Color(0xFF334155)
+                    ),
+                    modifier = Modifier
+                        .height(48.dp)
+                        .testTag("select_seats_cta_button")
+                ) {
+                    Text(
+                        text = "जागा निवडा (Select Seats) 🎭",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black
+                    )
                 }
             }
         }
@@ -550,101 +680,18 @@ fun EventDetailContent(
 }
 
 @Composable
-fun ModernSessionCard(
-    session: SessionItem,
-    onBookClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val startDateTime = try {
-        ZonedDateTime.parse(session.sessionStartTime)
-    } catch (e: Exception) {
-        null
-    }
-
-    val dateFormatter = DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy")
-    val timeFormatter = DateTimeFormatter.ofPattern("h:mm a")
-
-    Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, Color(0xFFE5E7EB)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+private fun AmenityBadge(icon: String, text: String) {
+    Surface(
+        color = Color(0xFF1E293B),
+        shape = RoundedCornerShape(8.dp)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                if (startDateTime != null) {
-                    Text(
-                        text = startDateTime.format(dateFormatter),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Schedule,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp),
-                            tint = Color(0xFFEA580C)
-                        )
-                        Text(
-                            text = startDateTime.format(timeFormatter),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFFEA580C)
-                        )
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = Color(0xFFECFDF5)
-                        ) {
-                            Text(
-                                text = "उपलब्ध",
-                                fontSize = 10.sp,
-                                color = Color(0xFF059669),
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-                    }
-                }
-
-                if (session.status == "sold_out") {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "सर्व जागा भरल्या (Sold Out)",
-                        fontSize = 11.sp,
-                        color = MahaError,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-
-            Button(
-                onClick = onBookClick,
-                enabled = session.status != "sold_out",
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEA580C)),
-                shape = RoundedCornerShape(10.dp),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-            ) {
-                Icon(
-                    Icons.Default.ConfirmationNumber,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(14.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("जागा निवडा", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            }
+            Text(text = icon, fontSize = 12.sp)
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(text = text, fontSize = 11.sp, color = Color(0xFFCBD5E1), fontWeight = FontWeight.Medium)
         }
     }
 }

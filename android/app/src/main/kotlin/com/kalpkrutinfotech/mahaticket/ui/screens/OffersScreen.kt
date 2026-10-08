@@ -7,10 +7,10 @@ import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -21,11 +21,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kalpkrutinfotech.mahaticket.data.api.CouponResponse
 import com.kalpkrutinfotech.mahaticket.theme.*
+import com.kalpkrutinfotech.mahaticket.ui.components.TheaterLoaderCard
 import com.kalpkrutinfotech.mahaticket.ui.viewmodel.EventViewModel
 import com.kalpkrutinfotech.mahaticket.ui.viewmodel.OffersUiState
 
@@ -38,202 +40,195 @@ fun OffersScreen(viewModel: EventViewModel) {
         viewModel.loadOffers()
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(CinemaBg)
+            .testTag("offers_screen")
     ) {
-        // Header
-        Surface(
-            color = MaterialTheme.colorScheme.surface,
-            shadowElevation = 2.dp
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Header Bar
+            Surface(
+                color = CinemaSurface,
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
                         Text(
                             text = "विशेष सवलती व ऑफर्स",
-                            style = MaterialTheme.typography.titleLarge,
+                            fontSize = 18.sp,
                             fontWeight = FontWeight.Black,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = Color.White
                         )
                         Text(
                             text = "Special Offers & Promo Codes for MahaTicket",
                             fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = GoldAccent
                         )
                     }
 
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(Color(0xFFFFF7ED)),
-                        contentAlignment = Alignment.Center
+                    Surface(
+                        color = TheatricalCrimson.copy(alpha = 0.2f),
+                        shape = RoundedCornerShape(10.dp)
                     ) {
-                        Icon(
-                            Icons.Default.LocalOffer,
-                            contentDescription = null,
-                            tint = Color(0xFFEA580C),
-                            modifier = Modifier.size(20.dp)
+                        Text(
+                            text = "🏷️ ऑफर्स",
+                            color = TheatricalCrimsonLight,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         )
                     }
                 }
             }
-        }
 
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp)
-        ) {
-            when (val state = offersState) {
-                is OffersUiState.Loading -> {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        CircularProgressIndicator(
-                            color = Color(0xFFEA580C),
-                            strokeWidth = 3.dp,
-                            modifier = Modifier.size(36.dp)
-                        )
-                        Spacer(modifier = Modifier.height(14.dp))
-                        Text(
-                            "सध्याच्या ऑफर्स तपासत आहोत...",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-                is OffersUiState.Error -> {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            Icons.Default.ErrorOutline,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(48.dp)
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(state.message, color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp)
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Button(
-                            onClick = { viewModel.loadOffers() },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEA580C))
+            // Offers Content Area
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .weight(1f)
+            ) {
+                when (val state = offersState) {
+                    is OffersUiState.Loading -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Text("पुन्हा प्रयत्न करा", fontWeight = FontWeight.Bold)
+                            TheaterLoaderCard(message = "सध्याच्या ऑफर्स तपासत आहोत...")
                         }
                     }
-                }
-                is OffersUiState.Success -> {
-                    // Combine default coupons with server coupons if empty
-                    val serverCoupons = state.coupons
-                    val defaultCoupons = listOf(
-                        CouponResponse(
-                            id = 1,
-                            code = "MAHA50",
-                            discountType = "flat",
-                            discountValue = 5000,
-                            minOrderValue = 30000,
-                            maxDiscount = 5000,
-                            active = 1
-                        ),
-                        CouponResponse(
-                            id = 2,
-                            code = "NATAK10",
-                            discountType = "percentage",
-                            discountValue = 1000,
-                            minOrderValue = 0,
-                            maxDiscount = 10000,
-                            active = 1
-                        )
-                    )
-                    val displayCoupons = if (serverCoupons.isNotEmpty()) serverCoupons else defaultCoupons
-                    val announcements = state.announcements
-
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        // Section 1: Coupons Header
-                        item {
-                            Text(
-                                text = "सक्रिय कूपन कोड (${displayCoupons.size})",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Black,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-
-                        // Coupons
-                        items(displayCoupons) { coupon ->
-                            ModernCouponVoucherCard(
-                                coupon = coupon,
-                                onCopyCode = { code ->
-                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    val clip = ClipData.newPlainText("Coupon Code", code)
-                                    clipboard.setPrimaryClip(clip)
-                                    Toast.makeText(context, "कूपन कोड $code कॉपी झाला!", Toast.LENGTH_SHORT).show()
+                    is OffersUiState.Error -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.padding(24.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.ErrorOutline,
+                                    contentDescription = null,
+                                    tint = TheatricalCrimson,
+                                    modifier = Modifier.size(48.dp)
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(state.message, color = Color.White, fontSize = 14.sp)
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Button(
+                                    onClick = { viewModel.loadOffers() },
+                                    colors = ButtonDefaults.buttonColors(containerColor = TheatricalCrimson)
+                                ) {
+                                    Text("पुन्हा प्रयत्न करा", fontWeight = FontWeight.Bold, color = Color.White)
                                 }
-                            )
+                            }
                         }
+                    }
+                    is OffersUiState.Success -> {
+                        val serverCoupons = state.coupons
+                        val defaultCoupons = listOf(
+                            CouponResponse(
+                                id = 1,
+                                code = "MAHA50",
+                                discountType = "flat",
+                                discountValue = 5000,
+                                minOrderValue = 30000,
+                                maxDiscount = 5000,
+                                active = 1
+                            ),
+                            CouponResponse(
+                                id = 2,
+                                code = "NATAK10",
+                                discountType = "percentage",
+                                discountValue = 1000,
+                                minOrderValue = 0,
+                                maxDiscount = 10000,
+                                active = 1
+                            )
+                        )
+                        val displayCoupons = if (serverCoupons.isNotEmpty()) serverCoupons else defaultCoupons
 
-                        // Section 2: Announcements if any
-                        if (announcements.isNotEmpty()) {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(16.dp, 16.dp, 16.dp, 90.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
                             item {
-                                Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    text = "विशेष सूचना व आगामी उत्सव",
-                                    style = MaterialTheme.typography.titleMedium,
+                                    text = "सक्रिय कूपन कोड (${displayCoupons.size})",
+                                    fontSize = 15.sp,
                                     fontWeight = FontWeight.Black,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    color = Color.White
                                 )
                             }
 
-                            items(announcements) { ann ->
+                            items(displayCoupons, key = { it.code }) { coupon ->
                                 Card(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(14.dp),
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                                    border = BorderStroke(1.dp, Color(0xFFE5E7EB))
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = CardDefaults.cardColors(containerColor = CinemaSurface),
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Column(modifier = Modifier.padding(16.dp)) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(
-                                                Icons.Default.Campaign,
-                                                contentDescription = null,
-                                                tint = Color(0xFFEA580C),
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(8.dp))
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Surface(
+                                                color = Color(0xFF1E293B),
+                                                shape = RoundedCornerShape(8.dp),
+                                                border = BorderStroke(1.dp, GoldAccent)
+                                            ) {
+                                                Text(
+                                                    text = coupon.code,
+                                                    fontSize = 14.sp,
+                                                    fontWeight = FontWeight.Black,
+                                                    color = GoldBright,
+                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                                )
+                                            }
+
+                                            Spacer(modifier = Modifier.height(8.dp))
+
+                                            val discountText = if (coupon.discountType == "flat") {
+                                                "₹${coupon.discountValue / 100} थेट सवलत"
+                                            } else {
+                                                "${coupon.discountValue / 100}% सवलत"
+                                            }
                                             Text(
-                                                ann.title,
+                                                text = discountText,
+                                                fontSize = 13.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                fontSize = 14.sp,
-                                                color = MaterialTheme.colorScheme.onSurface
+                                                color = Color.White
                                             )
+
+                                            if (coupon.minOrderValue > 0) {
+                                                Text(
+                                                    text = "किमान ऑर्डर मूल्य: ₹${coupon.minOrderValue / 100}",
+                                                    fontSize = 11.sp,
+                                                    color = Color(0xFF94A3B8)
+                                                )
+                                            }
                                         }
-                                        if (ann.message.isNotBlank()) {
-                                            Spacer(modifier = Modifier.height(6.dp))
-                                            Text(
-                                                ann.message,
-                                                fontSize = 12.sp,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                lineHeight = 16.sp
-                                            )
+
+                                        Button(
+                                            onClick = {
+                                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                                clipboard.setPrimaryClip(ClipData.newPlainText("Coupon", coupon.code))
+                                                Toast.makeText(context, "कूपन '${coupon.code}' कॉपी केले!", Toast.LENGTH_SHORT).show()
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = GoldAccent),
+                                            shape = RoundedCornerShape(10.dp)
+                                        ) {
+                                            Text("कॉपी करा", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                                         }
                                     }
                                 }
@@ -241,106 +236,6 @@ fun OffersScreen(viewModel: EventViewModel) {
                         }
                     }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-fun ModernCouponVoucherCard(
-    coupon: CouponResponse,
-    onCopyCode: (String) -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, Color(0xFFE5E7EB)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Code box with copy icon
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color(0xFFFFF7ED),
-                    border = BorderStroke(1.dp, Color(0xFFFED7AA))
-                ) {
-                    Text(
-                        text = coupon.code,
-                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                        fontWeight = FontWeight.Black,
-                        fontSize = 15.sp,
-                        color = Color(0xFFEA580C),
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                    )
-                }
-
-                Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = Color(0xFFECFDF5)
-                ) {
-                    Text(
-                        text = "सक्रिय (ACTIVE)",
-                        color = Color(0xFF059669),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 10.sp,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            val discountText = if (coupon.discountType == "percentage") {
-                "${coupon.discountValue / 100}% थेट सवलत"
-            } else {
-                "₹${coupon.discountValue / 100} थेट सवलत"
-            }
-            Text(
-                text = discountText,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            val minOrder = if (coupon.minOrderValue > 0) "किमान ₹${coupon.minOrderValue / 100} च्या बुकिंगवर लागू" else "सर्व बुकिंगवर उपलब्ध"
-            val maxDiscount = if (coupon.maxDiscount > 0 && coupon.discountType == "percentage") " (कमाल ₹${coupon.maxDiscount / 100})" else ""
-            Text(
-                text = "$minOrder$maxDiscount. चेकआउट दरम्यान कूपन कोड लागू करा.",
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                lineHeight = 16.sp
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Button(
-                onClick = { onCopyCode(coupon.code) },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEA580C)),
-                shape = RoundedCornerShape(10.dp),
-                contentPadding = PaddingValues(vertical = 8.dp)
-            ) {
-                Icon(
-                    Icons.Default.ContentCopy,
-                    contentDescription = null,
-                    modifier = Modifier.size(15.dp),
-                    tint = Color.White
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "कूपन कोड कॉपी करा",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
             }
         }
     }

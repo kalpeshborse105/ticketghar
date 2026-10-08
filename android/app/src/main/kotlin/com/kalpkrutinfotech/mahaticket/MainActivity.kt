@@ -4,44 +4,42 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.*
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import androidx.compose.ui.draw.scale
-import androidx.compose.animation.*
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.navigation.NavType
 import androidx.navigation.navArgument
 import com.kalpkrutinfotech.mahaticket.theme.*
+import com.kalpkrutinfotech.mahaticket.ui.components.BilingualTopBar
 import com.kalpkrutinfotech.mahaticket.ui.screens.*
-import com.kalpkrutinfotech.mahaticket.ui.viewmodel.BookingViewModel
-import com.kalpkrutinfotech.mahaticket.ui.viewmodel.EventViewModel
-import com.kalpkrutinfotech.mahaticket.ui.viewmodel.BookingViewModelFactory
-import com.kalpkrutinfotech.mahaticket.ui.viewmodel.EventViewModelFactory
+import com.kalpkrutinfotech.mahaticket.ui.viewmodel.*
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Install Android 12+ Splash Screen
         installSplashScreen()
-        
         super.onCreate(savedInstanceState)
-
-        // Enable edge-to-edge window insets
         enableEdgeToEdge()
 
         setContent {
@@ -58,6 +56,11 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
     data object Tickets : Screen("tickets", "तिकिटे", Icons.Default.ConfirmationNumber)
     data object Offers : Screen("offers", "ऑफर्स", Icons.Default.LocalOffer)
     data object Profile : Screen("profile", "प्रोफाइल", Icons.Default.Person)
+    data object Admin : Screen("admin_control", "नियंत्रण", Icons.Default.AdminPanelSettings)
+    data object Organizer : Screen("organizer_dashboard", "आयोजक", Icons.Default.Dashboard)
+    data object QrScanner : Screen("qr_scanner", "स्कॅनर", Icons.Default.QrCodeScanner)
+    data object Chatbot : Screen("chatbot", "नाट्यमित्र", Icons.Default.SmartToy)
+    data object Notifications : Screen("notifications", "सूचना", Icons.Default.Notifications)
 }
 
 object BookingRoutes {
@@ -67,7 +70,7 @@ object BookingRoutes {
     const val BOOKING_SUCCESS = "booking_success/{orderNumber}"
     const val TICKET_DETAIL = "ticket_detail/{ticketCode}"
     const val LOGIN = "login"
-    
+
     fun eventDetail(eventId: Int) = "event_detail/$eventId"
     fun seatSelection(sessionId: Int, eventId: Int = 1) = "seat_selection/$sessionId/$eventId"
     fun checkout(holdToken: String) = "checkout/$holdToken"
@@ -79,22 +82,38 @@ object BookingRoutes {
 fun MahaTicketRoot() {
     val navController = rememberNavController()
     val app = androidx.compose.ui.platform.LocalContext.current.applicationContext as MahaTicketApp
-    
+
     val eventViewModel: EventViewModel = viewModel(
         factory = EventViewModelFactory(app.eventRepository, app.networkMonitor)
     )
-    
+
     val bookingViewModel: BookingViewModel = viewModel(
         factory = BookingViewModelFactory(app.bookingRepository, app.networkMonitor)
     )
-    
+
+    val mainViewModel: TicketGharViewModel = viewModel(
+        factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                @Suppress("UNCHECKED_CAST")
+                return TicketGharViewModel(
+                    eventRepository = app.eventRepository,
+                    bookingRepository = app.bookingRepository,
+                    networkMonitor = app.networkMonitor
+                ) as T
+            }
+        }
+    )
+
+    val currentLanguage by mainViewModel.language.collectAsState()
+    val currentUser by mainViewModel.currentUser.collectAsState()
+    val notifications by mainViewModel.notifications.collectAsState()
+
     val isOnline by eventViewModel.isOnline.collectAsState()
     var previousOnlineState by remember { mutableStateOf<Boolean?>(null) }
     var showOnlineToast by remember { mutableStateOf(false) }
 
     LaunchedEffect(isOnline) {
         if (previousOnlineState == false && isOnline) {
-            // Internet restored! Auto-fetch live events and catalogs
             showOnlineToast = true
             eventViewModel.loadEvents()
             eventViewModel.loadCities()
@@ -104,29 +123,97 @@ fun MahaTicketRoot() {
         }
         previousOnlineState = isOnline
     }
-    
+
+    val currentBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = currentBackStackEntry?.destination?.route
+
+    val isTopLevelRoute = currentRoute in listOf(
+        Screen.Home.route,
+        Screen.Explore.route,
+        Screen.Tickets.route,
+        Screen.Offers.route,
+        Screen.Profile.route,
+        Screen.Admin.route,
+        Screen.Organizer.route
+    )
+
     Scaffold(
         modifier = Modifier
             .fillMaxSize()
+            .background(CinemaBg)
             .windowInsetsPadding(WindowInsets.systemBars),
-        bottomBar = {
-            val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
-            // Hide bottom nav on booking flow screens
-            val showBottomBar = currentRoute in listOf(
-                Screen.Home.route,
-                Screen.Explore.route,
-                Screen.Tickets.route,
-                Screen.Offers.route,
-                Screen.Profile.route
+        topBar = {
+            if (isTopLevelRoute) {
+                BilingualTopBar(
+                    currentLanguage = currentLanguage,
+                    onLanguageToggle = { mainViewModel.setLanguage(it) },
+                    currentRole = currentUser?.role ?: UserRole.PUBLIC_USER,
+                    onRoleSelected = { role ->
+                        mainViewModel.switchUserRole(role)
+                        when (role) {
+                            UserRole.ADMIN -> navController.navigate(Screen.Admin.route) {
+                                popUpTo(Screen.Home.route) { saveState = true }
+                                launchSingleTop = true
+                            }
+                            UserRole.ORGANIZER -> navController.navigate(Screen.Organizer.route) {
+                                popUpTo(Screen.Home.route) { saveState = true }
+                                launchSingleTop = true
+                            }
+                            UserRole.PUBLIC_USER -> navController.navigate(Screen.Home.route) {
+                                popUpTo(Screen.Home.route) { inclusive = false }
+                                launchSingleTop = true
+                            }
+                        }
+                    },
+                    notificationCount = notifications.count { !it.isRead },
+                    onNotificationClick = { navController.navigate(Screen.Notifications.route) },
+                    onChatbotClick = { navController.navigate(Screen.Chatbot.route) }
+                )
+            }
+        },
+        floatingActionButton = {
+            val showFab = currentRoute !in listOf(
+                Screen.Chatbot.route,
+                BookingRoutes.EVENT_DETAIL,
+                BookingRoutes.SEAT_SELECTION,
+                BookingRoutes.CHECKOUT
             )
-            if (showBottomBar) {
-                BottomNavigationBar(navController)
+            if (showFab) {
+                FloatingActionButton(
+                    onClick = { navController.navigate(Screen.Chatbot.route) },
+                    containerColor = GoldAccent,
+                    contentColor = Color.Black,
+                    modifier = Modifier.testTag("ai_assistant_fab")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(text = "🎭", fontSize = 18.sp)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (currentLanguage == AppLanguage.MARATHI) "नाट्यमित्र AI" else "NatyaMitra",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        },
+        bottomBar = {
+            if (isTopLevelRoute) {
+                TheatricalBottomNavigationBar(
+                    navController = navController,
+                    currentRole = currentUser?.role ?: UserRole.PUBLIC_USER
+                )
             }
         }
     ) { innerPadding ->
-        Column(modifier = Modifier
-            .fillMaxSize()
-            .padding(innerPadding)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
             // Offline banner
             AnimatedVisibility(
                 visible = !isOnline,
@@ -136,7 +223,7 @@ fun MahaTicketRoot() {
                 OfflineBanner()
             }
 
-            // Green "Welcome back / Internet restored" banner
+            // Internet restored banner
             AnimatedVisibility(
                 visible = showOnlineToast,
                 enter = expandVertically() + fadeIn(),
@@ -144,7 +231,7 @@ fun MahaTicketRoot() {
             ) {
                 OnlineRestoredBanner()
             }
-            
+
             NavHost(
                 navController = navController,
                 startDestination = Screen.Home.route,
@@ -206,8 +293,31 @@ fun MahaTicketRoot() {
                         }
                     )
                 }
-                
-                // Booking flow screens
+                composable(Screen.Admin.route) {
+                    AdminControlCenterScreen(viewModel = mainViewModel)
+                }
+                composable(Screen.Organizer.route) {
+                    OrganizerScreen(
+                        viewModel = mainViewModel,
+                        onLaunchScannerClick = { navController.navigate(Screen.QrScanner.route) },
+                        onViewShowSeatsClick = { event ->
+                            val firstSession = event.availableShowtimes.firstOrNull()?.id?.toIntOrNull() ?: 1
+                            val evId = event.id.toIntOrNull() ?: 1
+                            navController.navigate(BookingRoutes.seatSelection(firstSession, evId))
+                        }
+                    )
+                }
+                composable(Screen.QrScanner.route) {
+                    QrScannerScreen(viewModel = mainViewModel)
+                }
+                composable(Screen.Chatbot.route) {
+                    ChatbotScreen(viewModel = mainViewModel)
+                }
+                composable(Screen.Notifications.route) {
+                    NotificationsScreen(viewModel = mainViewModel)
+                }
+
+                // Booking Flow screens
                 composable(
                     route = BookingRoutes.EVENT_DETAIL,
                     arguments = listOf(navArgument("eventId") { type = NavType.IntType })
@@ -221,7 +331,7 @@ fun MahaTicketRoot() {
                         }
                     )
                 }
-                
+
                 composable(
                     route = BookingRoutes.SEAT_SELECTION,
                     arguments = listOf(
@@ -241,7 +351,7 @@ fun MahaTicketRoot() {
                         }
                     )
                 }
-                
+
                 composable(
                     route = BookingRoutes.CHECKOUT,
                     arguments = listOf(navArgument("holdToken") { type = NavType.StringType })
@@ -258,7 +368,7 @@ fun MahaTicketRoot() {
                         }
                     )
                 }
-                
+
                 composable(
                     route = BookingRoutes.BOOKING_SUCCESS,
                     arguments = listOf(navArgument("orderNumber") { type = NavType.StringType })
@@ -276,7 +386,7 @@ fun MahaTicketRoot() {
                         }
                     )
                 }
-                
+
                 composable(
                     route = BookingRoutes.TICKET_DETAIL,
                     arguments = listOf(navArgument("ticketCode") { type = NavType.StringType })
@@ -287,7 +397,7 @@ fun MahaTicketRoot() {
                         onNavigateBack = { navController.popBackStack() }
                     )
                 }
-                
+
                 composable(BookingRoutes.LOGIN) {
                     LoginScreen(
                         onLoginSuccess = {
@@ -303,20 +413,39 @@ fun MahaTicketRoot() {
 }
 
 @Composable
-fun BottomNavigationBar(navController: NavHostController) {
-    val screens = listOf(
-        Screen.Home,
-        Screen.Explore,
-        Screen.Tickets,
-        Screen.Offers,
-        Screen.Profile
-    )
-    
+fun TheatricalBottomNavigationBar(
+    navController: NavHostController,
+    currentRole: UserRole
+) {
+    val screens = when (currentRole) {
+        UserRole.ADMIN -> listOf(
+            Screen.Home,
+            Screen.Admin,
+            Screen.Organizer,
+            Screen.QrScanner,
+            Screen.Profile
+        )
+        UserRole.ORGANIZER -> listOf(
+            Screen.Home,
+            Screen.Organizer,
+            Screen.QrScanner,
+            Screen.Tickets,
+            Screen.Profile
+        )
+        UserRole.PUBLIC_USER -> listOf(
+            Screen.Home,
+            Screen.Explore,
+            Screen.Tickets,
+            Screen.Offers,
+            Screen.Profile
+        )
+    }
+
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
-    
+
     NavigationBar(
-        containerColor = MaterialTheme.colorScheme.surface,
-        tonalElevation = 4.dp
+        containerColor = CinemaSurface,
+        tonalElevation = 8.dp
     ) {
         screens.forEach { screen ->
             val isSelected = currentRoute == screen.route
@@ -344,13 +473,19 @@ fun BottomNavigationBar(navController: NavHostController) {
                         modifier = Modifier.scale(iconScale)
                     )
                 },
-                label = { Text(screen.title, fontSize = 11.sp) },
+                label = {
+                    Text(
+                        screen.title,
+                        fontSize = 11.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                    )
+                },
                 colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = MaterialTheme.colorScheme.primary,
-                    selectedTextColor = MaterialTheme.colorScheme.primary,
-                    indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    selectedIconColor = GoldBright,
+                    selectedTextColor = GoldBright,
+                    indicatorColor = TheatricalCrimson,
+                    unselectedIconColor = Color(0xFF94A3B8),
+                    unselectedTextColor = Color(0xFF94A3B8)
                 )
             )
         }
@@ -360,27 +495,27 @@ fun BottomNavigationBar(navController: NavHostController) {
 @Composable
 fun OfflineBanner() {
     Surface(
-        color = Color(0xFFFEF2F2),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFECACA)),
+        color = Color(0xFF450A0A),
+        border = androidx.compose.foundation.BorderStroke(1.dp, TheatricalCrimson),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.Center,
-            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 Icons.Default.WifiOff,
                 contentDescription = null,
-                tint = Color(0xFFDC2626),
+                tint = TheatricalCrimsonLight,
                 modifier = Modifier.size(16.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 "इंटरनेट कनेक्शन उपलब्ध नाही. थेट तिकीट बुकिंगसाठी इंटरनेट सुरू करा.",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFF991B1B),
-                fontWeight = androidx.compose.ui.text.font.FontWeight.Medium
+                color = Color.White,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium
             )
         }
     }
@@ -389,27 +524,27 @@ fun OfflineBanner() {
 @Composable
 fun OnlineRestoredBanner() {
     Surface(
-        color = Color(0xFFECFDF5),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFA7F3D0)),
+        color = Color(0xFF064E3B),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF10B981)),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.Center,
-            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 Icons.Default.CheckCircle,
                 contentDescription = null,
-                tint = Color(0xFF059669),
+                tint = Color(0xFF34D399),
                 modifier = Modifier.size(16.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 "✓ इंटरनेट पूर्ववत झाले! थेट डेटा अपडेट केला आहे.",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFF065F46),
-                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                color = Color.White,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
             )
         }
     }

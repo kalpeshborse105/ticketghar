@@ -1,33 +1,29 @@
 package com.kalpkrutinfotech.mahaticket.ui.screens
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.animation.*
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.ConfirmationNumber
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -35,16 +31,16 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import com.kalpkrutinfotech.mahaticket.BookingRoutes
-import com.kalpkrutinfotech.mahaticket.BuildConfig
 import com.kalpkrutinfotech.mahaticket.data.api.AnnouncementResponse
 import com.kalpkrutinfotech.mahaticket.data.api.CityCatalogItem
+import com.kalpkrutinfotech.mahaticket.model.Event
+import com.kalpkrutinfotech.mahaticket.model.EventCategory
 import com.kalpkrutinfotech.mahaticket.model.EventItem
+import com.kalpkrutinfotech.mahaticket.model.toEvent
 import com.kalpkrutinfotech.mahaticket.theme.*
+import com.kalpkrutinfotech.mahaticket.ui.components.TrailerPreviewDialog
 import com.kalpkrutinfotech.mahaticket.ui.viewmodel.EventViewModel
 import com.kalpkrutinfotech.mahaticket.ui.viewmodel.EventsUiState
-import kotlinx.coroutines.delay
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
 
 @Composable
 fun HomeScreenWithViewModel(
@@ -59,28 +55,17 @@ fun HomeScreenWithViewModel(
 
     var showCityDialog by remember { mutableStateOf(false) }
 
-    if (showCityDialog) {
-        CitySelectionDialog(
-            cities = cities,
-            selectedCity = selectedCity,
-            onSelect = {
-                viewModel.selectCity(it)
-                showCityDialog = false
-            },
-            onDismiss = { showCityDialog = false }
-        )
-    }
-
     HomeScreen(
         eventsState = eventsState,
         selectedCategory = selectedCategory,
         selectedCity = selectedCity,
+        cities = cities.map { it.name },
         announcements = announcements,
         onSelectEvent = { event ->
             navController.navigate(BookingRoutes.eventDetail(event.id))
         },
         onCategorySelected = { viewModel.selectCategory(it) },
-        onOpenCitySelector = { showCityDialog = true },
+        onCitySelected = { viewModel.selectCity(it) },
         onSearch = { viewModel.searchEvents(it) },
         onRetry = { viewModel.loadEvents() }
     )
@@ -91,1130 +76,223 @@ fun HomeScreen(
     eventsState: EventsUiState,
     selectedCategory: String,
     selectedCity: String,
-    announcements: List<AnnouncementResponse>,
+    cities: List<String> = emptyList(),
+    announcements: List<AnnouncementResponse> = emptyList(),
     onSelectEvent: (EventItem) -> Unit,
     onCategorySelected: (String) -> Unit,
-    onOpenCitySelector: () -> Unit,
+    onCitySelected: (String) -> Unit = {},
     onSearch: (String) -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var searchQuery by remember { mutableStateOf("") }
-    val context = LocalContext.current
+    var selectedTrailerEvent by remember { mutableStateOf<Event?>(null) }
 
-    // Category options matching the website: All, Plays/Drama, Music, Comedy, Cultural, Workshops, Movies
-    val categories = listOf(
-        Triple("all", "सर्व अनुभव", Icons.Default.AutoAwesome),
-        Triple("plays", "नाटक", Icons.Default.TheaterComedy),
-        Triple("music", "संगीत व मैफिली", Icons.Default.MusicNote),
-        Triple("comedy", "स्टँडअप कॉमेडी", Icons.Default.SentimentSatisfiedAlt),
-        Triple("cultural", "सांस्कृतिक", Icons.Default.Celebration),
-        Triple("workshops", "कार्यशाळा", Icons.Default.Palette),
-        Triple("movies", "चित्रपट", Icons.Default.Movie)
-    )
+    val rawEvents = when (eventsState) {
+        is EventsUiState.Success -> eventsState.events
+        else -> emptyList()
+    }
 
-    LazyColumn(
+    val mappedEvents = remember(rawEvents) {
+        rawEvents.map { it.toEvent() }
+    }
+
+    // Filter events by query, city, and category
+    val filteredEvents = remember(mappedEvents, selectedCategory, selectedCity, searchQuery) {
+        mappedEvents.filter { event ->
+            val matchCat = selectedCategory == "all" || selectedCategory == "सर्व कार्यक्रम" ||
+                    event.category.name.equals(selectedCategory, ignoreCase = true) ||
+                    (selectedCategory == "plays" && event.category == EventCategory.NATAK) ||
+                    (selectedCategory == "music" && event.category == EventCategory.CONCERT) ||
+                    (selectedCategory == "comedy" && event.category == EventCategory.COMEDY) ||
+                    (selectedCategory == "movies" && event.category == EventCategory.CINEMA)
+
+            val matchCity = selectedCity.contains("All", ignoreCase = true) ||
+                    selectedCity.contains("महाराष्ट्र", ignoreCase = true) ||
+                    event.venue.city.contains(selectedCity, ignoreCase = true)
+
+            val matchQuery = searchQuery.isBlank() ||
+                    event.titleEn.contains(searchQuery, ignoreCase = true) ||
+                    event.titleMr.contains(searchQuery, ignoreCase = true) ||
+                    event.venue.nameMr.contains(searchQuery, ignoreCase = true) ||
+                    event.venue.nameEn.contains(searchQuery, ignoreCase = true)
+
+            matchCat && matchCity && matchQuery
+        }
+    }
+
+    Box(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-        contentPadding = PaddingValues(bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .background(CinemaBg)
+            .testTag("home_screen_feed")
     ) {
-        // 1. Modern Top Header with Brand Badge & City Pill
-        item {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surface)
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 90.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            // City Filter Pills & Search Bar
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
-                    // Logo with Ticket Icon Badge
+                    // City Filter Pills
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(
-                                    Brush.linearGradient(
-                                        listOf(Color(0xFFF97316), Color(0xFFEA580C), Color(0xFFC2410C))
-                                    )
-                                )
-                                .shadow(4.dp, RoundedCornerShape(12.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Default.ConfirmationNumber,
-                                contentDescription = "MahaTicket Logo",
-                                tint = Color.White,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-
-                        Column {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Text(
-                                    text = "MahaTicket",
-                                    color = MaterialTheme.colorScheme.onBackground,
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Black,
-                                    letterSpacing = (-0.5).sp
-                                )
-                                Surface(
-                                    shape = RoundedCornerShape(4.dp),
-                                    color = Color(0xFFEA580C).copy(alpha = 0.12f)
-                                ) {
-                                    Text(
-                                        text = "महाटिकिट",
-                                        color = Color(0xFFEA580C),
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                                    )
-                                }
-                            }
-                            Text(
-                                text = "महाराष्ट्राचे हक्काचे तिकीट व्यासपीठ",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    }
-
-                    // City Selector Pill Button
-                    Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = MaterialTheme.colorScheme.surface,
-                        border = BorderStroke(1.dp, Color(0xFFFED7AA)),
-                        modifier = Modifier.clickable { onOpenCitySelector() }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                Icons.Default.LocationOn,
-                                contentDescription = null,
-                                tint = Color(0xFFEA580C),
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            val displayCity = when {
-                                selectedCity.contains("All", ignoreCase = true) || selectedCity.contains("महाराष्ट्र") -> "महाराष्ट्र"
-                                else -> selectedCity
-                            }
-                            Text(
-                                text = displayCity,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.width(2.dp))
-                            Icon(
-                                Icons.Default.KeyboardArrowDown,
-                                contentDescription = null,
-                                tint = Color(0xFFEA580C),
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Search Bar matching the website style
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = {
-                        searchQuery = it
-                        onSearch(it)
-                    },
-                    placeholder = {
-                        Text(
-                            "नाटक, संगीत, सभागृह किंवा कलाकार शोधा...",
-                            fontSize = 13.sp,
-                            color = MahaTextSecondary
-                        )
-                    },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Default.Search,
-                            contentDescription = "Search",
-                            tint = Color(0xFFEA580C),
-                            modifier = Modifier.size(20.dp)
-                        )
-                    },
-                    trailingIcon = {
-                        if (searchQuery.isNotEmpty()) {
-                            IconButton(onClick = {
-                                searchQuery = ""
-                                onSearch("")
-                            }) {
-                                Icon(
-                                    Icons.Default.Close,
-                                    contentDescription = "Clear",
-                                    tint = MahaTextSecondary,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = Color(0xFFF9FAFB),
-                        unfocusedContainerColor = Color(0xFFF9FAFB),
-                        focusedBorderColor = Color(0xFFEA580C),
-                        unfocusedBorderColor = Color(0xFFE5E7EB),
-                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface
-                    ),
-                    singleLine = true
-                )
-            }
-        }
-
-        // 2. Category Navigation Rail (Horizontal scrollable chips with icons)
-        item {
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(categories) { (id, label, icon) ->
-                    val isSelected = selectedCategory == id ||
-                            (id == "plays" && (selectedCategory == "drama" || selectedCategory == "plays"))
-                    
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = if (isSelected) Color(0xFFEA580C) else MaterialTheme.colorScheme.surface,
-                        border = BorderStroke(
-                            1.dp,
-                            if (isSelected) Color(0xFFEA580C) else Color(0xFFE5E7EB)
-                        ),
-                        shadowElevation = if (isSelected) 2.dp else 0.dp,
-                        modifier = Modifier.clickable { onCategorySelected(id) }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Icon(
-                                icon,
-                                contentDescription = label,
-                                tint = if (isSelected) Color.White else Color(0xFFEA580C),
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Text(
-                                text = label,
-                                fontSize = 12.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // Handle State & Content
-        when (eventsState) {
-            is EventsUiState.Loading -> {
-                item {
-                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(280.dp),
-                        contentAlignment = Alignment.Center
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator(
-                                color = Color(0xFFEA580C),
-                                strokeWidth = 3.dp,
-                                modifier = Modifier.size(36.dp)
-                            )
-                            Spacer(modifier = Modifier.height(14.dp))
-                            Text(
-                                "कार्यक्रम लोड होत आहेत...",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    }
-                }
-            }
-            is EventsUiState.Error -> {
-                item {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        shape = RoundedCornerShape(20.dp),
-                        border = BorderStroke(1.dp, Color(0xFFFED7AA)),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(28.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(72.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFFFFF7ED)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    Icons.Default.WifiOff,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(36.dp),
-                                    tint = Color(0xFFEA580C)
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = "इंटरनेट कनेक्शन आवश्यक आहे",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "महाटिकिट हे थेट लाइव्ह तिकीट आरक्षण व्यासपीठ आहे. लाइव्ह शो आणि आसन स्थिती पाहण्यासाठी कृपया इंटरनेट सुरू करा.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                lineHeight = 18.sp
-                            )
-                            Spacer(modifier = Modifier.height(14.dp))
+                        Text(text = "📍", fontSize = 14.sp)
+                        val cityList = if (cities.isNotEmpty()) listOf("महाराष्ट्र (All)") + cities else listOf("महाराष्ट्र (All)", "पुणे", "मुंबई", "नाशिक", "ठाणे")
+                        cityList.forEach { city ->
+                            val isSelected = selectedCity.equals(city, ignoreCase = true) ||
+                                    (city.contains("All") && (selectedCity.contains("All") || selectedCity.contains("महाराष्ट्र")))
                             Surface(
-                                shape = RoundedCornerShape(20.dp),
-                                color = Color(0xFFFFF7ED),
-                                border = BorderStroke(1.dp, Color(0xFFFED7AA))
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .clickable { onCitySelected(city) }
+                                    .testTag("city_filter_$city"),
+                                color = if (isSelected) TheatricalCrimson else Color(0xFF1E293B),
+                                shape = RoundedCornerShape(16.dp),
+                                border = BorderStroke(1.dp, if (isSelected) TheatricalCrimsonLight else Color(0xFF334155))
                             ) {
                                 Text(
-                                    text = "💡 वाय-फाय (Wi-Fi) किंवा मोबाईल डेटा सुरू करा",
-                                    fontSize = 11.sp,
-                                    color = Color(0xFF9A3412),
-                                    fontWeight = FontWeight.Medium,
+                                    text = city,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = Color.White,
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                                 )
                             }
-                            Spacer(modifier = Modifier.height(20.dp))
-                            Button(
-                                onClick = onRetry,
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEA580C)),
-                                shape = RoundedCornerShape(12.dp),
-                                contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
-                            ) {
-                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("पुन्हा प्रयत्न करा (Retry)", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                            }
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Search Input
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = {
+                            searchQuery = it
+                            onSearch(it)
+                        },
+                        placeholder = {
+                            Text(
+                                text = "नाटक, चित्रपट, किंवा सभागृह शोधा...",
+                                fontSize = 13.sp,
+                                color = Color(0xFF64748B)
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Outlined.Search,
+                                contentDescription = "Search",
+                                tint = GoldAccent
+                            )
+                        },
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(onClick = {
+                                    searchQuery = ""
+                                    onSearch("")
+                                }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Clear",
+                                        tint = Color(0xFF94A3B8),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("home_search_bar"),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = GoldAccent,
+                            unfocusedBorderColor = Color(0xFF334155),
+                            focusedContainerColor = Color(0xFF131A29),
+                            unfocusedContainerColor = Color(0xFF131A29),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        singleLine = true
+                    )
                 }
             }
-            is EventsUiState.Success -> {
-                val allEvents = eventsState.events
 
-                if (allEvents.isEmpty()) {
-                    item {
-                        Card(
+            // Hero Spotlight Banner
+            item {
+                val featured = mappedEvents.firstOrNull()
+                if (featured != null) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(TheatricalCrimsonDark)
+                            .clickable {
+                                val originalItem = rawEvents.firstOrNull { it.id.toString() == featured.id }
+                                if (originalItem != null) onSelectEvent(originalItem)
+                            }
+                            .testTag("hero_spotlight_banner")
+                    ) {
+                        AsyncImage(
+                            model = featured.posterUrl,
+                            contentDescription = featured.titleEn,
+                            contentScale = ContentScale.Crop,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                            shape = RoundedCornerShape(16.dp),
-                            border = BorderStroke(1.dp, Color(0xFFE5E7EB))
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(32.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Icon(
-                                    Icons.Default.TheaterComedy,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(56.dp),
-                                    tint = Color(0xFFEA580C).copy(alpha = 0.5f)
+                                .height(175.dp)
+                        )
+
+                        // Gradient overlay
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(175.dp)
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.88f))
+                                    )
                                 )
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Text(
-                                    text = "या निवडीसाठी सध्या कोणतेही कार्यक्रम नाहीत",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                )
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = "इतर श्रेणी निवडा किंवा संपूर्ण महाराष्ट्रातील कार्यक्रम शोधा",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(modifier = Modifier.height(16.dp))
-                                OutlinedButton(
-                                    onClick = { onCategorySelected("all") },
-                                    shape = RoundedCornerShape(8.dp),
-                                    border = BorderStroke(1.dp, Color(0xFFEA580C)),
-                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFEA580C))
-                                ) {
-                                    Text("सर्व कार्यक्रम पहा", fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    // 3. Multi-Slide Hero Carousel (Auto-scrolling with touch support)
-                    if (searchQuery.isBlank()) {
-                        item {
-                            ModernHeroBannerCarousel(
-                                events = allEvents,
-                                announcements = announcements,
-                                onSelectEvent = onSelectEvent,
-                                modifier = Modifier.padding(horizontal = 16.dp)
-                            )
-                        }
+                        )
 
-                        // 4. Advertisement / Showcase Banner (Same as website lines 487-515)
-                        item {
-                            AdShowcaseBanner(
-                                onContactClick = {
-                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.API_BASE_URL}/contact"))
-                                    context.startActivity(intent)
-                                },
-                                modifier = Modifier.padding(horizontal = 16.dp)
-                            )
-                        }
-                    }
-
-                    // Filter theatre/plays events for Marathi Theatre Spotlight
-                    val theatreEvents = allEvents.filter {
-                        it.category.contains("drama", ignoreCase = true) ||
-                                it.category.contains("play", ignoreCase = true) ||
-                                it.title.contains("Sahi", ignoreCase = true) ||
-                                it.titleMr.contains("नाटक")
-                    }
-
-                    // 5. Horizontal Scrolling Rail: Marathi Theatre Spotlight (मराठी रंगभूमी विशेष)
-                    if (selectedCategory == "all" && searchQuery.isBlank() && theatreEvents.isNotEmpty()) {
-                        item {
-                            Column(modifier = Modifier.fillMaxWidth()) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(32.dp)
-                                                .background(Color(0xFFFFF7ED), RoundedCornerShape(8.dp))
-                                                .border(1.dp, Color(0xFFFED7AA), RoundedCornerShape(8.dp)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                Icons.Default.TheaterComedy,
-                                                contentDescription = null,
-                                                tint = Color(0xFFEA580C),
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                        }
-                                        Column {
-                                            Text(
-                                                text = "मराठी रंगभूमी विशेष",
-                                                fontSize = 16.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onBackground
-                                            )
-                                            Text(
-                                                text = "महाराष्ट्रातील नामवंत रंगमंदिरांमधील लोकप्रिय नाटके",
-                                                fontSize = 11.sp,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(10.dp))
-
-                                // Horizontal scrolling poster cards
-                                LazyRow(
-                                    contentPadding = PaddingValues(horizontal = 16.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    items(theatreEvents) { event ->
-                                        HorizontalEventCardItem(
-                                            event = event,
-                                            onClick = { onSelectEvent(event) }
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Filter music/concerts/trending
-                    val musicEvents = allEvents.filter {
-                        it.category.contains("music", ignoreCase = true) ||
-                                it.category.contains("concert", ignoreCase = true) ||
-                                it.category.contains("comedy", ignoreCase = true)
-                    }
-
-                    // 6. Horizontal Scrolling Rail: Music & Trending Events
-                    if (selectedCategory == "all" && searchQuery.isBlank() && musicEvents.isNotEmpty()) {
-                        item {
-                            Column(modifier = Modifier.fillMaxWidth()) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(32.dp)
-                                                .background(Color(0xFFFFF7ED), RoundedCornerShape(8.dp))
-                                                .border(1.dp, Color(0xFFFED7AA), RoundedCornerShape(8.dp)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                Icons.Default.MusicNote,
-                                                contentDescription = null,
-                                                tint = Color(0xFFEA580C),
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                        }
-                                        Column {
-                                            Text(
-                                                text = "लोकप्रिय संगीत व आगामी कार्यक्रम",
-                                                fontSize = 16.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onBackground
-                                            )
-                                            Text(
-                                                text = "मैफिली, संगीत नाटके आणि स्टँडअप शोज",
-                                                fontSize = 11.sp,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(10.dp))
-
-                                LazyRow(
-                                    contentPadding = PaddingValues(horizontal = 16.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    items(musicEvents) { event ->
-                                        HorizontalEventCardItem(
-                                            event = event,
-                                            onClick = { onSelectEvent(event) }
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // 7. All Events Section Header
-                    item {
+                        // Content on banner
                         Column(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 4.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = if (selectedCategory == "all") "सर्व आगामी कार्यक्रम" else "निवडलेले कार्यक्रम",
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onBackground
-                                )
-                                Text(
-                                    text = "${allEvents.size} कार्यक्रम उपलब्ध",
-                                    fontSize = 12.sp,
-                                    color = Color(0xFFEA580C),
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                            Text(
-                                text = "${selectedCity} • थेट ऑनलाईन सीट निवडून तिकीट बुक करा",
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    // 8. Main Catalog Events Cards
-                    items(allEvents) { event ->
-                        Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-                            ModernEventCardItem(
-                                event = event,
-                                onClick = { onSelectEvent(event) }
-                            )
-                        }
-                    }
-
-                    // 9. Producer & Organizer Banner (Matching Website bottom banner)
-                    item {
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                            border = BorderStroke(1.dp, Color(0xFFE5E7EB)),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Default.Business,
-                                        contentDescription = null,
-                                        tint = Color(0xFFEA580C),
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Text(
-                                        text = "नाट्य व कार्यक्रम आयोजकांसाठी",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFFEA580C)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = "आपला कार्यक्रम महाटिकिटवर सूचीबद्ध करा",
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = "पारदर्शक लेजर, थेट बँक खात्यात सेटलमेंट, मोफत व्हॉट्सॲप डिजिटल पास, आणि सभागृह गेट स्कॅनर सपोर्ट.",
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    lineHeight = 16.sp
-                                )
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Button(
-                                    onClick = {
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.API_BASE_URL}/contact"))
-                                        context.startActivity(intent)
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEA580C)),
-                                    shape = RoundedCornerShape(8.dp),
-                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
-                                ) {
-                                    Text("भागीदार व्हा / संपर्क करा", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/**
- * Multi-Slide Hero Carousel with smooth Pager transitions, auto-scroll, and dots
- */
-@Composable
-fun ModernHeroBannerCarousel(
-    events: List<EventItem>,
-    announcements: List<AnnouncementResponse>,
-    onSelectEvent: (EventItem) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    // Collect slides: top featured events + promo announcements
-    val slides = remember(events, announcements) {
-        val list = mutableListOf<HeroSlideItem>()
-        // Top 4 events
-        events.take(4).forEach { ev ->
-            list.add(
-                HeroSlideItem(
-                    id = ev.id,
-                    title = ev.titleMr.ifBlank { ev.title },
-                    secondaryTitle = ev.title,
-                    category = ev.categoryMr.ifBlank { ev.category },
-                    venue = ev.venue?.nameMr ?: ev.venue?.name ?: "पुणे",
-                    city = ev.venue?.city ?: "महाराष्ट्र",
-                    imageUrl = ev.posterUrl.ifBlank { "https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?w=800" },
-                    sessionTime = ev.sessions?.firstOrNull()?.sessionStartTime,
-                    event = ev
-                )
-            )
-        }
-        // If promo announcements exist with image, add them
-        announcements.filter { !it.imageUrl.isNullOrBlank() }.take(2).forEach { ann ->
-            list.add(
-                HeroSlideItem(
-                    id = ann.id,
-                    title = ann.title,
-                    secondaryTitle = ann.message,
-                    category = "विशेष ऑफर",
-                    venue = "MahaTicket",
-                    city = ann.city ?: "महाराष्ट्र",
-                    imageUrl = ann.imageUrl ?: "https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?w=800",
-                    isPromo = true
-                )
-            )
-        }
-        list
-    }
-
-    if (slides.isEmpty()) return
-
-    val pagerState = rememberPagerState(pageCount = { slides.size })
-
-    // Auto-advance slides every 4.5 seconds
-    LaunchedEffect(pagerState, slides.size) {
-        if (slides.size > 1) {
-            while (true) {
-                delay(4500)
-                val nextPage = (pagerState.currentPage + 1) % slides.size
-                pagerState.animateScrollToPage(nextPage)
-            }
-        }
-    }
-
-    Column(modifier = modifier.fillMaxWidth()) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(210.dp),
-            shape = RoundedCornerShape(18.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-        ) {
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier.fillMaxSize()
-            ) { page ->
-                val slide = slides[page]
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clickable {
-                            if (slide.event != null) {
-                                onSelectEvent(slide.event)
-                            }
-                        }
-                ) {
-                    // Poster image
-                    AsyncImage(
-                        model = slide.imageUrl,
-                        contentDescription = slide.title,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-
-                    // Cinematic Gradient Scrim
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color.Black.copy(alpha = 0.25f),
-                                        Color.Black.copy(alpha = 0.40f),
-                                        Color.Black.copy(alpha = 0.90f)
-                                    ),
-                                    startY = 50f
-                                )
-                            )
-                    )
-
-                    // Overlay Content
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(14.dp),
-                        verticalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        // Top Badges
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                                .align(Alignment.BottomStart)
+                                .padding(14.dp)
                         ) {
                             Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = Color(0xFFEA580C)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Default.AutoAwesome,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(12.dp)
-                                    )
-                                    Text(
-                                        text = if (slide.isPromo) "महा ऑफर" else "विशेष शिफारस",
-                                        color = Color.White,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = Color.Black.copy(alpha = 0.55f)
+                                color = TheatricalCrimson,
+                                shape = RoundedCornerShape(6.dp)
                             ) {
                                 Text(
-                                    text = "📍 ${slide.city}",
+                                    text = "🔥 हाऊसफुल्ल नाट्यप्रयोग / FEATURED",
                                     color = Color.White,
                                     fontSize = 10.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                )
-                            }
-                        }
-
-                        // Bottom Title, Venue & Book Button
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.Bottom
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = slide.title,
-                                    color = Color.White,
-                                    fontSize = 17.sp,
-                                    fontWeight = FontWeight.Black,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Default.LocationOn,
-                                        contentDescription = null,
-                                        tint = Color(0xFFF97316),
-                                        modifier = Modifier.size(12.dp)
-                                    )
-                                    Text(
-                                        text = "${slide.venue} • ${slide.category}",
-                                        color = Color.White.copy(alpha = 0.85f),
-                                        fontSize = 11.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                            }
-
-                            Button(
-                                onClick = {
-                                    if (slide.event != null) {
-                                        onSelectEvent(slide.event)
-                                    }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEA580C)),
-                                shape = RoundedCornerShape(10.dp),
-                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
-                            ) {
-                                Icon(
-                                    Icons.Default.ConfirmationNumber,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(13.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "बुक करा",
-                                    fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
                             }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Dot Pagination Indicators matching website style
-        if (slides.size > 1) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                repeat(slides.size) { index ->
-                    val isSelected = pagerState.currentPage == index
-                    Box(
-                        modifier = Modifier
-                            .padding(horizontal = 3.dp)
-                            .height(5.dp)
-                            .width(if (isSelected) 22.dp else 5.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (isSelected) Color(0xFFEA580C) else Color(0xFFD1D5DB)
-                            )
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
- * Ad & Showcase Banner identical to website lines 487-515
- */
-@Composable
-fun AdShowcaseBanner(
-    onContactClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    Brush.horizontalGradient(
-                        listOf(
-                            Color(0xFFEA580C),
-                            Color(0xFFD97706),
-                            Color(0xFFE11D48)
-                        )
-                    )
-                )
-                .padding(14.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(34.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(Color.White.copy(alpha = 0.22f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.AutoAwesome,
-                            contentDescription = null,
-                            tint = Color(0xFFFDE68A),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    Column {
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = Color.Black.copy(alpha = 0.25f)
-                        ) {
+                            Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "जाहिरात व आगामी नाटके",
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Black,
-                                color = Color(0xFFFDE68A),
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "आपल्या नाटकाची जाहिरात येथे करा — लाखो नाट्यप्रेमींपर्यंत पोहोचा",
-                            color = Color.White,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            lineHeight = 15.sp,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                Button(
-                    onClick = onContactClick,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.White,
-                        contentColor = Color(0xFF111827)
-                    ),
-                    shape = RoundedCornerShape(10.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                ) {
-                    Text(
-                        text = "संपर्क",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
- * 2:3 Portrait Horizontal Card for Spotlight Rails (BookMyShow standard style)
- */
-@Composable
-fun HorizontalEventCardItem(
-    event: EventItem,
-    onClick: () -> Unit
-) {
-    val displayTitle = event.titleMr.ifBlank { event.title }
-    val venueName = event.venue?.nameMr ?: event.venue?.name ?: "पुणे"
-    val nextSession = event.sessions?.firstOrNull()
-
-    Card(
-        modifier = Modifier
-            .width(160.dp)
-            .clickable { onClick() },
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, Color(0xFFE5E7EB)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column {
-            // Poster 2:3 Aspect Ratio
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(210.dp)
-            ) {
-                AsyncImage(
-                    model = event.posterUrl.ifBlank { "https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?w=800" },
-                    contentDescription = displayTitle,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-
-                // Poster Gradient
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f)),
-                                startY = 100f
-                            )
-                        )
-                )
-
-                // Top Badges
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(6.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = Color(0xFFEA580C)
-                    ) {
-                        Text(
-                            text = event.language.ifBlank { "मराठी" },
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Black,
-                            color = Color.White,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                        )
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = Color.Black.copy(alpha = 0.65f)
-                    ) {
-                        Text(
-                            text = event.categoryMr.ifBlank { event.category },
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                        )
-                    }
-                }
-
-                // Showtime overlay at bottom of poster
-                if (nextSession != null) {
-                    val formattedTime = try {
-                        val dt = ZonedDateTime.parse(nextSession.sessionStartTime)
-                        dt.format(DateTimeFormatter.ofPattern("EEE, d MMM"))
-                    } catch (e: Exception) {
-                        "लवकरच"
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = Color.Black.copy(alpha = 0.75f),
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(6.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(3.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.CalendarToday,
-                                contentDescription = null,
-                                tint = Color(0xFFF97316),
-                                modifier = Modifier.size(10.dp)
-                            )
-                            Text(
-                                text = formattedTime,
-                                fontSize = 9.sp,
+                                text = featured.titleMr,
                                 color = Color.White,
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Black
+                            )
+                            Text(
+                                text = "📍 ${featured.venue.nameMr} • ${featured.availableShowtimes.firstOrNull()?.timeText ?: "संध्याकाळी प्रयोग"}",
+                                color = GoldBright,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
                         }
@@ -1222,238 +300,361 @@ fun HorizontalEventCardItem(
                 }
             }
 
-            // Card Body
-            Column(modifier = Modifier.padding(10.dp)) {
-                Text(
-                    text = displayTitle,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                Spacer(modifier = Modifier.height(2.dp))
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    Icon(
-                        Icons.Default.LocationOn,
-                        contentDescription = null,
-                        tint = Color(0xFFEA580C),
-                        modifier = Modifier.size(11.dp)
-                    )
+            // Category Filter Pills
+            item {
+                Column(modifier = Modifier.padding(vertical = 4.dp)) {
                     Text(
-                        text = venueName,
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        text = "कला प्रकार निवडा (Categories)",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                     )
+
+                    val categories = listOf(
+                        "all" to "सर्व (All)",
+                        "plays" to "🎭 नाटक",
+                        "music" to "🎵 संगीत",
+                        "comedy" to "😄 कॉमेडी",
+                        "movies" to "🎬 चित्रपट"
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        categories.forEach { (catId, catLabel) ->
+                            val isSelected = selectedCategory == catId
+                            Surface(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable { onCategorySelected(catId) }
+                                    .testTag("cat_filter_$catId"),
+                                color = if (isSelected) GoldAccent else Color(0xFF1E293B),
+                                shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isSelected) GoldBright else Color(0xFF334155)
+                                )
+                            ) {
+                                Text(
+                                    text = catLabel,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isSelected) Color.Black else Color.White,
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                                )
+                            }
+                        }
+                    }
                 }
+            }
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Button(
-                    onClick = onClick,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEA580C)),
-                    shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(vertical = 6.dp)
+            // Section Header
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "बुक करा",
-                        fontSize = 11.sp,
+                        text = "🎭 आगामी नाट्यप्रयोग व कार्यक्रम",
+                        fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
+                    Text(
+                        text = "${filteredEvents.size} उपलब्ध",
+                        fontSize = 12.sp,
+                        color = GoldAccent,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
             }
+
+            // Loading / Error / Empty States
+            when (eventsState) {
+                is EventsUiState.Loading -> {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(220.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                CircularProgressIndicator(color = GoldAccent, modifier = Modifier.size(36.dp))
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(text = "कार्यक्रमांची यादी लोड होत आहे...", color = Color(0xFF94A3B8), fontSize = 13.sp)
+                            }
+                        }
+                    }
+                }
+                is EventsUiState.Error -> {
+                    item {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(20.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(text = "⚠️", fontSize = 28.sp)
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(text = eventsState.message, color = Color(0xFFF87171), fontSize = 13.sp)
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Button(
+                                    onClick = onRetry,
+                                    colors = ButtonDefaults.buttonColors(containerColor = TheatricalCrimson)
+                                ) {
+                                    Text("पुन्हा प्रयत्न करा (Retry)", color = Color.White)
+                                }
+                            }
+                        }
+                    }
+                }
+                else -> {
+                    if (filteredEvents.isEmpty()) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(200.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "कोणतेही कार्यक्रम उपलब्ध नाहीत.",
+                                    color = Color(0xFF94A3B8),
+                                    fontSize = 14.sp
+                                )
+                            }
+                        }
+                    } else {
+                        // Events List (Cinematic Cards)
+                        items(filteredEvents) { event ->
+                            val rawItem = rawEvents.firstOrNull { it.id.toString() == event.id }
+                            EventCardItem(
+                                event = event,
+                                onCardClick = { if (rawItem != null) onSelectEvent(rawItem) },
+                                onBookClick = { if (rawItem != null) onSelectEvent(rawItem) },
+                                onTrailerClick = { selectedTrailerEvent = event }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Trailer Modal
+        if (selectedTrailerEvent != null) {
+            TrailerPreviewDialog(
+                event = selectedTrailerEvent!!,
+                language = AppLanguage.MARATHI,
+                onDismiss = { selectedTrailerEvent = null },
+                onBookNow = {
+                    val rawItem = rawEvents.firstOrNull { it.id.toString() == selectedTrailerEvent?.id }
+                    selectedTrailerEvent = null
+                    if (rawItem != null) onSelectEvent(rawItem)
+                }
+            )
         }
     }
 }
 
-/**
- * Modern Full-width Event Card for the main catalog
- */
 @Composable
-fun ModernEventCardItem(
-    event: EventItem,
-    onClick: () -> Unit
+private fun EventCardItem(
+    event: Event,
+    onCardClick: () -> Unit,
+    onBookClick: () -> Unit,
+    onTrailerClick: () -> Unit
 ) {
-    val displayTitle = event.titleMr.ifBlank { event.title }
-    val secondaryTitle = if (event.titleMr.isNotBlank()) event.title else null
-    val venueName = event.venue?.nameMr ?: event.venue?.name ?: "पुणे"
-    val nextSession = event.sessions?.firstOrNull()
-
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() },
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .clickable { onCardClick() }
+            .testTag("event_card_${event.id}"),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, Color(0xFFE5E7EB)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        colors = CardDefaults.cardColors(containerColor = CinemaSurface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        border = BorderStroke(1.dp, CinemaBorder)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            // Left Poster Thumbnail
-            Box(
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
                 modifier = Modifier
-                    .width(105.dp)
-                    .height(145.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .fillMaxWidth()
+                    .padding(12.dp)
             ) {
-                AsyncImage(
-                    model = event.posterUrl.ifBlank { "https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?w=800" },
-                    contentDescription = displayTitle,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-
-                // Language badge overlay
-                Surface(
-                    shape = RoundedCornerShape(bottomEnd = 8.dp),
-                    color = Color(0xFFEA580C),
-                    modifier = Modifier.align(Alignment.TopStart)
+                // Event Poster
+                Box(
+                    modifier = Modifier
+                        .size(width = 96.dp, height = 135.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF1E293B))
                 ) {
-                    Text(
-                        text = event.language.ifBlank { "मराठी" },
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Black,
-                        color = Color.White,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    AsyncImage(
+                        model = event.posterUrl,
+                        contentDescription = event.titleEn,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
                     )
-                }
-            }
 
-            // Right Info Column
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(145.dp),
-                verticalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column {
-                    // Category & Duration tag
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    // Rating Badge
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(4.dp),
+                        color = Color.Black.copy(alpha = 0.8f),
+                        shape = RoundedCornerShape(6.dp)
                     ) {
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = Color(0xFFFFF7ED)
+                        Row(
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Star,
+                                contentDescription = "Rating",
+                                tint = GoldAccent,
+                                modifier = Modifier.size(11.dp)
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
                             Text(
-                                text = event.categoryMr.ifBlank { event.category },
+                                text = "${event.rating}",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFFEA580C),
+                                color = Color.White
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                // Info Column
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            color = TheatricalCrimson.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                text = event.category.displayMr,
+                                fontSize = 10.sp,
+                                color = TheatricalCrimsonLight,
+                                fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
 
-                        if (event.durationMinutes > 0) {
+                        Surface(
+                            color = Color(0xFF1E293B),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
                             Text(
-                                text = "• ${event.durationMinutes} मि.",
-                                fontSize = 11.sp,
-                                color = MahaTextSecondary
+                                text = event.certification,
+                                fontSize = 10.sp,
+                                color = Color(0xFF94A3B8),
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                             )
                         }
+
+                        Text(
+                            text = "• ${event.durationText}",
+                            fontSize = 10.sp,
+                            color = Color(0xFF94A3B8)
+                        )
                     }
 
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
 
                     Text(
-                        text = displayTitle,
+                        text = event.titleMr,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        color = Color.White,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
 
-                    if (!secondaryTitle.isNullOrBlank()) {
-                        Text(
-                            text = secondaryTitle,
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+                    Text(
+                        text = event.titleEn,
+                        fontSize = 11.sp,
+                        color = Color(0xFF94A3B8),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
 
                     Spacer(modifier = Modifier.height(4.dp))
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(3.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.LocationOn,
-                            contentDescription = null,
-                            tint = Color(0xFFEA580C),
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Text(
-                            text = "$venueName • ${event.venue?.city ?: "महाराष्ट्र"}",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+                    Text(
+                        text = "📍 ${event.venue.nameMr}",
+                        fontSize = 11.sp,
+                        color = GoldAccent,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = "दर ₹${event.basePrice} पासून",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = GoldBright
+                    )
+                }
+            }
+
+            // Bottom Actions Bar
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF172033))
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextButton(
+                    onClick = onTrailerClick,
+                    modifier = Modifier.testTag("trailer_btn_${event.id}")
+                ) {
+                    Text(
+                        text = "▶ ट्रेलर पहा (Trailer)",
+                        fontSize = 12.sp,
+                        color = GoldAccent,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
 
-                // Bottom: Showtime or Price + Book Button
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                Button(
+                    onClick = onBookClick,
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = TheatricalCrimson),
+                    modifier = Modifier.testTag("book_now_btn_${event.id}")
                 ) {
-                    if (nextSession != null) {
-                        val sessionDate = try {
-                            val dt = ZonedDateTime.parse(nextSession.sessionStartTime)
-                            dt.format(DateTimeFormatter.ofPattern("d MMM, h:mm a"))
-                        } catch (e: Exception) {
-                            "थेट प्रयोग"
-                        }
-                        Text(
-                            text = sessionDate,
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    } else {
-                        Text(
-                            text = "थेट प्रयोग",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    Button(
-                        onClick = onClick,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEA580C)),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
-                    ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            Icons.Default.ConfirmationNumber,
-                            contentDescription = null,
+                            imageVector = Icons.Outlined.ConfirmationNumber,
+                            contentDescription = "Book",
                             tint = Color.White,
-                            modifier = Modifier.size(13.dp)
+                            modifier = Modifier.size(14.dp)
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "बुक करा",
-                            fontSize = 11.sp,
+                            text = "तिकीट बुक करा 🎭",
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
@@ -1463,108 +664,3 @@ fun ModernEventCardItem(
         }
     }
 }
-
-/**
- * City Selection Dialog with Maharashtra's premier cultural cities
- */
-@Composable
-fun CitySelectionDialog(
-    cities: List<CityCatalogItem>,
-    selectedCity: String,
-    onSelect: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val defaultCities = listOf(
-        "महाराष्ट्र (All)" to "सर्व शहरे",
-        "Pune" to "पुणे (Pune)",
-        "Mumbai" to "मुंबई (Mumbai)",
-        "Thane" to "ठाणे (Thane)",
-        "Nashik" to "नाशिक (Nashik)",
-        "Nagpur" to "नागपूर (Nagpur)",
-        "Kolhapur" to "कोल्हापूर (Kolhapur)",
-        "Chhatrapati Sambhaji Nagar" to "छत्रपती संभाजीनगर",
-        "Solapur" to "सोलापूर (Solapur)",
-        "Sangli" to "सांगली (Sangli)",
-        "Satara" to "सातारा (Satara)"
-    )
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Default.LocationOn,
-                    contentDescription = null,
-                    tint = Color(0xFFEA580C),
-                    modifier = Modifier.size(22.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("आपले शहर निवडा (Select City)", fontWeight = FontWeight.Bold, fontSize = 17.sp)
-            }
-        },
-        text = {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 350.dp)
-            ) {
-                items(defaultCities) { (cityValue, cityDisplay) ->
-                    val isSelected = selectedCity.equals(cityValue, ignoreCase = true) ||
-                            (cityValue == "महाराष्ट्र (All)" && selectedCity.contains("All", ignoreCase = true))
-
-                    Surface(
-                        color = if (isSelected) Color(0xFFFFF7ED) else Color.Transparent,
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSelect(cityValue) }
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = cityDisplay,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isSelected) Color(0xFFEA580C) else MaterialTheme.colorScheme.onSurface,
-                                fontSize = 14.sp
-                            )
-                            if (isSelected) {
-                                Icon(
-                                    Icons.Default.CheckCircle,
-                                    contentDescription = null,
-                                    tint = Color(0xFFEA580C),
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = onDismiss,
-                colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFFEA580C))
-            ) {
-                Text("बंद करा", fontWeight = FontWeight.Bold)
-            }
-        }
-    )
-}
-
-data class HeroSlideItem(
-    val id: Int,
-    val title: String,
-    val secondaryTitle: String? = null,
-    val category: String,
-    val venue: String,
-    val city: String,
-    val imageUrl: String,
-    val sessionTime: String? = null,
-    val isPromo: Boolean = false,
-    val event: EventItem? = null
-)

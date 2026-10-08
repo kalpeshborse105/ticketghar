@@ -1,42 +1,32 @@
 package com.kalpkrutinfotech.mahaticket.ui.screens
 
 import androidx.compose.animation.*
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Accessible
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.kalpkrutinfotech.mahaticket.MahaTicketApp
 import com.kalpkrutinfotech.mahaticket.model.SeatItem
 import com.kalpkrutinfotech.mahaticket.theme.*
+import com.kalpkrutinfotech.mahaticket.ui.components.TheaterLoaderCard
 import com.kalpkrutinfotech.mahaticket.ui.viewmodel.BookingViewModel
-import com.kalpkrutinfotech.mahaticket.ui.viewmodel.BookingViewModelFactory
 import com.kalpkrutinfotech.mahaticket.ui.viewmodel.SeatsUiState
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.seconds
@@ -74,365 +64,397 @@ fun SeatSelectionScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            Column(modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {
-                TopAppBar(
-                    title = {
-                        Column {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(CinemaBg)
+            .testTag("seat_selection_screen")
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Header Bar
+            Surface(
+                color = CinemaSurface,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = {
+                                bookingViewModel.releaseHold()
+                                onNavigateBack()
+                            },
+                            modifier = Modifier.testTag("seat_selection_back_btn")
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = Color.White
+                            )
+                        }
+
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 "जागा निवडा (Select Seats)",
-                                fontSize = 17.sp,
+                                fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = Color.White
                             )
                             if (timeRemaining != null) {
                                 val minutes = timeRemaining!! / 60
                                 val seconds = timeRemaining!! % 60
                                 Text(
                                     text = "जागा आरक्षित वेळ: %02d:%02d".format(minutes, seconds),
-                                    fontSize = 12.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (timeRemaining!! < 120) MahaError else Color(0xFFEA580C)
+                                    color = if (timeRemaining!! < 120) TheatricalCrimsonLight else GoldAccent
                                 )
                             } else {
                                 Text(
                                     text = "कमाल ५ जागा एका वेळी निवडता येतील",
                                     fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = Color(0xFF94A3B8)
                                 )
                             }
                         }
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = {
-                            bookingViewModel.releaseHold()
-                            onNavigateBack()
-                        }) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back",
-                                tint = MaterialTheme.colorScheme.onSurface
+
+                        Surface(
+                            color = TheatricalCrimson.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.padding(end = 8.dp)
+                        ) {
+                            Text(
+                                text = "🎭 सभागृह",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = GoldAccent,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                             )
                         }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    )
-                )
+                    }
 
-                // Hold timer progress bar
-                if (timeRemaining != null) {
-                    val progress = (timeRemaining!!.toFloat() / 480f).coerceIn(0f, 1f)
-                    LinearProgressIndicator(
-                        progress = { progress },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(3.dp),
-                        color = if (timeRemaining!! < 120) MahaError else Color(0xFFEA580C),
-                        trackColor = Color(0xFFFFF7ED)
-                    )
+                    // Hold timer progress bar
+                    if (timeRemaining != null) {
+                        val progress = (timeRemaining!!.toFloat() / 480f).coerceIn(0f, 1f)
+                        LinearProgressIndicator(
+                            progress = { progress },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(3.dp),
+                            color = if (timeRemaining!! < 120) TheatricalCrimson else GoldAccent,
+                            trackColor = Color(0xFF1E293B)
+                        )
+                    }
                 }
             }
-        },
-        bottomBar = {
-            AnimatedVisibility(
-                visible = selectedSeats.isNotEmpty(),
-                enter = slideInVertically(initialOffsetY = { it }, animationSpec = tween(220)) + fadeIn(tween(220)),
-                exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(180)) + fadeOut(tween(180))
-            ) {
-                ModernSeatSelectionBottomBar(
-                    selectedSeats = selectedSeats,
-                    onContinue = {
-                        val existingToken = (holdResponse?.holdToken ?: holdResponse?.hold?.holdToken)?.takeIf { it.isNotBlank() }
-                        if (existingToken != null) {
-                            onContinueToCheckout(existingToken)
-                        } else {
-                            bookingViewModel.holdSeats(
-                                sessionId = sessionId,
-                                phoneNumber = "9876543210",
-                                onSuccess = { genToken ->
-                                    val safeToken = genToken.ifBlank { "hold_${sessionId}_${System.currentTimeMillis()}" }
-                                    onContinueToCheckout(safeToken)
-                                },
-                                onError = {
-                                    val fallbackToken = "hold_${sessionId}_${System.currentTimeMillis()}"
-                                    onContinueToCheckout(fallbackToken)
-                                }
-                            )
-                        }
-                    },
-                    isHolding = holdResponse != null,
-                    onProceedToCheckout = {
-                        val token = (holdResponse?.holdToken ?: holdResponse?.hold?.holdToken)?.takeIf { it.isNotBlank() }
-                            ?: "hold_${sessionId}_${System.currentTimeMillis()}"
-                        onContinueToCheckout(token)
+
+            // Main Content Area
+            when (val state = seatsState) {
+                is SeatsUiState.Loading -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        TheaterLoaderCard(message = "सभागृह आसन व्यवस्था लोड होत आहे...")
                     }
-                )
+                }
+                is SeatsUiState.Success -> {
+                    TheatricalSeatGridContent(
+                        seats = state.seats,
+                        selectedSeats = selectedSeats,
+                        onSeatClick = { seat ->
+                            if (holdResponse == null) {
+                                bookingViewModel.toggleSeatSelection(seat)
+                            }
+                        },
+                        onGroupSelect = { count ->
+                            if (holdResponse == null) {
+                                val available = state.seats.filter { it.status == "available" }.take(count)
+                                available.forEach { bookingViewModel.toggleSeatSelection(it) }
+                            }
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                is SeatsUiState.Error -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(24.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.EventSeat,
+                                contentDescription = null,
+                                tint = TheatricalCrimson,
+                                modifier = Modifier.size(52.dp)
+                            )
+                            Spacer(modifier = Modifier.height(14.dp))
+                            Text(
+                                text = "आसन व्यवस्था लोड करण्यात अडचण आली",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = state.message,
+                                fontSize = 12.sp,
+                                color = Color(0xFF94A3B8),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Button(
+                                onClick = { bookingViewModel.loadSeats(sessionId, eventId) },
+                                colors = ButtonDefaults.buttonColors(containerColor = TheatricalCrimson),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text("पुन्हा लोड करा", fontWeight = FontWeight.Bold, color = Color.White)
+                            }
+                        }
+                    }
+                }
             }
         }
-    ) { paddingValues ->
-        when (val state = seatsState) {
-            is SeatsUiState.Loading -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator(color = Color(0xFFEA580C))
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            "सभागृह आसन व्यवस्था लोड होत आहे...",
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-            is SeatsUiState.Success -> {
-                ModernSeatSelectionContent(
-                    seats = state.seats,
-                    selectedSeats = selectedSeats,
-                    onSeatClick = { seat ->
-                        if (holdResponse == null) {
-                            bookingViewModel.toggleSeatSelection(seat)
-                        }
-                    },
-                    modifier = Modifier.padding(paddingValues)
-                )
-            }
-            is SeatsUiState.Error -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(24.dp)
-                    ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = Color(0xFFFFF7ED),
-                            border = BorderStroke(1.dp, Color(0xFFFED7AA)),
-                            modifier = Modifier.size(72.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    Icons.Default.WifiOff,
-                                    contentDescription = null,
-                                    tint = Color(0xFFEA580C),
-                                    modifier = Modifier.size(36.dp)
-                                )
+
+        // Sticky Bottom Checkout Bar
+        AnimatedVisibility(
+            visible = selectedSeats.isNotEmpty(),
+            enter = slideInVertically(initialOffsetY = { it }, animationSpec = tween(220)) + fadeIn(tween(220)),
+            exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(180)) + fadeOut(tween(180)),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            TheatricalSeatBottomBar(
+                selectedSeats = selectedSeats,
+                isHolding = holdResponse != null,
+                onProceed = {
+                    val existingToken = (holdResponse?.holdToken ?: holdResponse?.hold?.holdToken)?.takeIf { it.isNotBlank() }
+                    if (existingToken != null) {
+                        onContinueToCheckout(existingToken)
+                    } else {
+                        bookingViewModel.holdSeats(
+                            sessionId = sessionId,
+                            phoneNumber = "9876543210",
+                            onSuccess = { genToken ->
+                                val safeToken = genToken.ifBlank { "hold_${sessionId}_${System.currentTimeMillis()}" }
+                                onContinueToCheckout(safeToken)
+                            },
+                            onError = {
+                                val fallbackToken = "hold_${sessionId}_${System.currentTimeMillis()}"
+                                onContinueToCheckout(fallbackToken)
                             }
-                        }
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = "आसन व्यवस्था लोड होऊ शकली नाही",
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
                         )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "थेट आसन उपलब्धता तपासण्यासाठी व आरक्षणासाठी इंटरनेट कनेक्शन आवश्यक आहे.",
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(modifier = Modifier.height(20.dp))
-                        Button(
-                            onClick = { bookingViewModel.loadSeats(sessionId, eventId) },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEA580C)),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("पुन्हा प्रयत्न करा (Retry)", fontWeight = FontWeight.Bold)
-                        }
                     }
                 }
-            }
+            )
         }
     }
 }
 
 @Composable
-fun ModernSeatSelectionContent(
+private fun TheatricalSeatGridContent(
     seats: List<SeatItem>,
     selectedSeats: List<SeatItem>,
     onSeatClick: (SeatItem) -> Unit,
+    onGroupSelect: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val tierGroups = remember(seats) {
+        seats.groupBy { it.sectionName ?: "मुख्य सभागृह" }
+    }
+
     LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-        contentPadding = PaddingValues(16.dp),
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp, 16.dp, 16.dp, 110.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Curved Screen / Stage Indicator
+        // Quick Group Select Chips (1..6)
+        item {
+            Column {
+                Text(
+                    text = "जलद जागा निवड (Quick Group Booking):",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = GoldAccent
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    (1..6).forEach { count ->
+                        Surface(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { onGroupSelect(count) },
+                            color = if (selectedSeats.size == count) TheatricalCrimson else Color(0xFF1E293B),
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, if (selectedSeats.size == count) GoldAccent else Color(0xFF334155))
+                        ) {
+                            Text(
+                                text = "$count जागा",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Auditorium Stage Canvas
         item {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 8.dp),
+                    .padding(vertical = 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Box(
+                Surface(
                     modifier = Modifier
-                        .fillMaxWidth(0.8f)
-                        .height(6.dp)
-                        .clip(RoundedCornerShape(topStart = 100.dp, topEnd = 100.dp))
-                        .background(
-                            Brush.horizontalGradient(
-                                listOf(
-                                    Color(0xFFEA580C).copy(alpha = 0.2f),
-                                    Color(0xFFEA580C),
-                                    Color(0xFFEA580C).copy(alpha = 0.2f)
-                                )
-                            )
-                        )
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        .fillMaxWidth(0.85f)
+                        .height(34.dp),
+                    shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+                    color = TheatricalCrimson.copy(alpha = 0.35f),
+                    border = BorderStroke(1.5.dp, GoldAccent.copy(alpha = 0.8f))
                 ) {
-                    Icon(
-                        Icons.Default.TheaterComedy,
-                        contentDescription = null,
-                        tint = Color(0xFFEA580C),
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Text(
-                        text = "रंगमंच / पडदा (STAGE / SCREEN)",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFFEA580C),
-                        letterSpacing = 1.sp
-                    )
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "🎭 रंगमंच / स्टेज (STAGE THIS WAY)",
+                            color = GoldBright,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 1.sp
+                        )
+                    }
                 }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "सर्व प्रेक्षक या दिशेने पाहतील",
+                    color = Color(0xFF94A3B8),
+                    fontSize = 10.sp
+                )
             }
         }
 
-        // Color-Coded Seat Status Legend
+        // Seat Status Legend
         item {
-            Card(
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, Color(0xFFE5E7EB))
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                LegendIndicator(color = Color(0xFF1E293B), label = "उपलब्ध (Available)", border = Color(0xFF475569))
+                LegendIndicator(color = GoldAccent, label = "निवडलेले (Selected)")
+                LegendIndicator(color = TheatricalCrimsonDark, label = "बुक (Booked)")
+            }
+        }
+
+        // Rows by Tier
+        tierGroups.forEach { (tierName, tierSeats) ->
+            item(key = tierName) {
+                TierSectionView(
+                    tierName = tierName,
+                    tierSeats = tierSeats,
+                    selectedSeats = selectedSeats,
+                    onSeatClick = onSeatClick
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TierSectionView(
+    tierName: String,
+    tierSeats: List<SeatItem>,
+    selectedSeats: List<SeatItem>,
+    onSeatClick: (SeatItem) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        // Tier Banner
+        Surface(
+            color = Color(0xFF131A29),
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 6.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "वर्ग: ${tierName.uppercase()}",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Black,
+                    color = GoldAccent
+                )
+                val firstPrice = tierSeats.firstOrNull()?.price ?: 0
+                Text(
+                    text = "₹${firstPrice / 100}",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
+        }
+
+        // Group seats by row
+        val rowMap = remember(tierSeats) { tierSeats.groupBy { it.rowLabel } }
+        rowMap.forEach { (rowLabel, rowSeats) ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                // Row Label
+                Text(
+                    text = rowLabel,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = GoldAccent,
+                    modifier = Modifier.width(24.dp)
+                )
+
+                // Seat Chips
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    ModernLegendItem(label = "उपलब्ध", bgColor = Color.White, borderColor = Color(0xFFD1D5DB))
-                    ModernLegendItem(label = "निवडलेले", bgColor = Color(0xFFEA580C), borderColor = Color(0xFFEA580C))
-                    ModernLegendItem(label = "बुक झाले", bgColor = Color(0xFFE5E7EB), borderColor = Color(0xFFE5E7EB))
-                }
-            }
-        }
+                    rowSeats.forEach { seat ->
+                        val isSelected = selectedSeats.any { it.seatId == seat.seatId }
+                        val isAvailable = seat.status == "available"
 
-        // Group seats by section
-        val seatsBySection = seats.groupBy { it.sectionId }
-
-        items(seatsBySection.keys.toList()) { sectionId ->
-            val sectionSeats = seatsBySection[sectionId] ?: emptyList()
-            val sampleSeat = sectionSeats.firstOrNull()
-            val sectionTitle = sampleSeat?.sectionName ?: "प्रवेशिका विभाग / Section ${sectionId}"
-            val sectionPrice = sampleSeat?.price ?: 30000
-            val rowsMap = sectionSeats.groupBy { it.rowLabel }
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, Color(0xFFE5E7EB))
-            ) {
-                Column(
-                    modifier = Modifier.padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    // Section Header with Title and Price
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 6.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(10.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFFEA580C))
-                            )
-                            Text(
-                                text = sectionTitle,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Black,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                        Text(
-                            text = "₹${sectionPrice / 100} / सीट",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Black,
-                            color = Color(0xFFEA580C)
+                        TheatricalSeatChip(
+                            seat = seat,
+                            isSelected = isSelected,
+                            isAvailable = isAvailable,
+                            onClick = { if (isAvailable) onSeatClick(seat) }
                         )
                     }
-
-                    HorizontalDivider(color = Color(0xFFF3F4F6), thickness = 1.dp)
-
-                    // Row Grids inside this section
-                    rowsMap.forEach { (rowLabel, rowSeats) ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .width(28.dp)
-                                    .height(34.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = rowLabel,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.width(6.dp))
-
-                            LazyRow(
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                items(rowSeats) { seat ->
-                                    ModernSeatBox(
-                                        seat = seat,
-                                        isSelected = selectedSeats.any { it.seatId == seat.seatId },
-                                        onSeatClick = { onSeatClick(seat) }
-                                    )
-                                }
-                            }
-                        }
-                    }
                 }
             }
         }
@@ -440,75 +462,41 @@ fun ModernSeatSelectionContent(
 }
 
 @Composable
-fun ModernLegendItem(label: String, bgColor: Color, borderColor: Color) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(18.dp)
-                .background(bgColor, RoundedCornerShape(4.dp))
-                .border(1.dp, borderColor, RoundedCornerShape(4.dp))
-        )
-        Text(
-            text = label,
-            fontSize = 11.sp,
-            color = MaterialTheme.colorScheme.onSurface,
-            fontWeight = FontWeight.Medium
-        )
-    }
-}
-
-@Composable
-fun ModernSeatBox(
+private fun TheatricalSeatChip(
     seat: SeatItem,
     isSelected: Boolean,
-    onSeatClick: () -> Unit
+    isAvailable: Boolean,
+    onClick: () -> Unit
 ) {
-    val isBooked = seat.status == "booked" || seat.status == "held" || seat.status == "blocked"
+    val bgColor = when {
+        isSelected -> GoldAccent
+        !isAvailable -> TheatricalCrimsonDark.copy(alpha = 0.5f)
+        else -> Color(0xFF1E293B)
+    }
 
-    val backgroundColor = when {
-        isSelected -> Color(0xFFEA580C)
-        isBooked -> Color(0xFFE5E7EB)
+    val textColor = when {
+        isSelected -> Color.Black
+        !isAvailable -> Color(0xFF64748B)
         else -> Color.White
     }
 
     val borderColor = when {
-        isSelected -> Color(0xFFEA580C)
-        isBooked -> Color(0xFFE5E7EB)
-        else -> Color(0xFFD1D5DB)
+        isSelected -> GoldBright
+        !isAvailable -> Color.Transparent
+        else -> Color(0xFF334155)
     }
 
-    val textColor = when {
-        isSelected -> Color.White
-        isBooked -> Color(0xFF9CA3AF)
-        else -> Color(0xFF111827)
-    }
-
-    val scale by animateFloatAsState(
-        targetValue = if (isSelected) 1.12f else 1.0f,
-        animationSpec = tween(durationMillis = 150),
-        label = "seatScale"
-    )
-
-    Box(
+    Surface(
         modifier = Modifier
-            .size(36.dp)
-            .scale(scale)
-            .background(backgroundColor, RoundedCornerShape(6.dp))
-            .border(1.dp, borderColor, RoundedCornerShape(6.dp))
-            .clickable(enabled = !isBooked) { onSeatClick() },
-        contentAlignment = Alignment.Center
+            .size(34.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .clickable(enabled = isAvailable) { onClick() }
+            .testTag("seat_${seat.seatCode}"),
+        color = bgColor,
+        shape = RoundedCornerShape(6.dp),
+        border = BorderStroke(1.dp, borderColor)
     ) {
-        if (seat.isAccessible) {
-            Icon(
-                Icons.AutoMirrored.Filled.Accessible,
-                contentDescription = "Accessible",
-                modifier = Modifier.size(14.dp),
-                tint = textColor
-            )
-        } else {
+        Box(contentAlignment = Alignment.Center) {
             Text(
                 text = seat.seatNumber.toString(),
                 fontSize = 11.sp,
@@ -520,61 +508,72 @@ fun ModernSeatBox(
 }
 
 @Composable
-fun ModernSeatSelectionBottomBar(
+private fun LegendIndicator(color: Color, label: String, border: Color? = null) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Surface(
+            modifier = Modifier.size(14.dp),
+            shape = RoundedCornerShape(3.dp),
+            color = color,
+            border = border?.let { BorderStroke(1.dp, it) }
+        ) {}
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(text = label, fontSize = 10.sp, color = Color(0xFFCBD5E1))
+    }
+}
+
+@Composable
+private fun TheatricalSeatBottomBar(
     selectedSeats: List<SeatItem>,
-    onContinue: () -> Unit,
     isHolding: Boolean,
-    onProceedToCheckout: () -> Unit
+    onProceed: () -> Unit
 ) {
-    val totalPrice = selectedSeats.sumOf { it.price }
+    val totalAmount = selectedSeats.sumOf { it.price } / 100
     val seatCodes = selectedSeats.joinToString(", ") { it.seatCode }
 
     Surface(
-        color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 8.dp,
-        border = BorderStroke(1.dp, Color(0xFFE5E7EB))
+        color = Color(0xFF131A29),
+        tonalElevation = 10.dp,
+        shadowElevation = 16.dp,
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "${selectedSeats.size} जागा निवडल्या ($seatCodes)",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1
-                )
-                Text(
-                    text = "₹${totalPrice / 100}",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Black,
-                    color = Color(0xFFEA580C)
-                )
-            }
-
-            Button(
-                onClick = if (isHolding) onProceedToCheckout else onContinue,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEA580C)),
-                shape = RoundedCornerShape(10.dp),
-                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = if (isHolding) "चेकआउट करा" else "सुरू ठेवा",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowForward,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = Color.White
-                )
+                Column {
+                    Text(
+                        text = "निवडलेली आसने: $seatCodes",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = GoldAccent
+                    )
+                    Text(
+                        text = "एकूण: ₹$totalAmount (${selectedSeats.size} जागा)",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Black,
+                        color = Color.White
+                    )
+                }
+
+                Button(
+                    onClick = onProceed,
+                    colors = ButtonDefaults.buttonColors(containerColor = TheatricalCrimson),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.testTag("seat_proceed_btn")
+                ) {
+                    Text(
+                        text = if (isHolding) "चेकआउटकडे जा →" else "पुढे जा (Hold & Pay) 🎭",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
             }
         }
     }

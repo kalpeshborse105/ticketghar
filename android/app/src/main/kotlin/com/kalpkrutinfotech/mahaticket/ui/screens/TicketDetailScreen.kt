@@ -3,8 +3,6 @@ package com.kalpkrutinfotech.mahaticket.ui.screens
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.*
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -19,20 +17,17 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import com.kalpkrutinfotech.mahaticket.BuildConfig
+import com.kalpkrutinfotech.mahaticket.model.Booking
 import com.kalpkrutinfotech.mahaticket.theme.*
-import java.net.URLEncoder
+import com.kalpkrutinfotech.mahaticket.ui.components.TicketPassCard
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,416 +37,191 @@ fun TicketDetailScreen(
 ) {
     val context = LocalContext.current
 
-    val mockTicket = remember {
-        TicketDisplayData(
-            ticketCode = ticketCode,
-            orderNumber = "ORD${ticketCode.take(8)}",
-            eventTitle = "नाटक / संगीत महोत्सव",
-            eventTitleEn = "MahaTicket Live Experience",
+    val bookingData = remember(ticketCode) {
+        Booking(
+            bookingId = "ORD${ticketCode.take(8).uppercase()}",
+            eventId = "1",
+            eventTitleEn = "MahaTicket Live Theatrical Experience",
+            eventTitleMr = "सुप्रसिद्ध मराठी नाट्यप्रयोग",
             venueName = "यशवंतराव चव्हाण नाट्यगृह",
             venueAddress = "कोथरूड, पुणे, महाराष्ट्र",
-            showtime = "आज, संध्याकाळी ७:०० वा.",
-            seatCode = "A-12, A-13",
-            attendeeName = "मान्यवर प्रेक्षक (Valued Guest)",
-            qrPayload = "TICKET:$ticketCode",
-            status = "confirmed"
+            showDate = "आज, संध्याकाळी",
+            showTime = "०७:०० PM",
+            seatIds = listOf("A-12", "A-13"),
+            ticketCount = 2,
+            baseAmount = 600,
+            convenienceFee = 70,
+            gstAmount = 12,
+            totalAmount = 682,
+            userEmail = "guest@mahaticket.in",
+            userPhone = "9822000000",
+            paymentId = "pay_rzp_$ticketCode",
+            paymentMethod = "Razorpay UPI",
+            qrCodeData = "MAHATICKET|$ticketCode"
         )
     }
 
-    var isCardVisible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        isCardVisible = true
-    }
-    val cardScale by animateFloatAsState(
-        targetValue = if (isCardVisible) 1f else 0.95f,
-        animationSpec = tween(durationMillis = 250),
-        label = "ticketCardScale"
-    )
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        "अधिकृत ई-पास (Digital Pass)",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 17.sp
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(CinemaBg)
+            .testTag("ticket_detail_screen")
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Header Bar
+            Surface(
+                color = CinemaSurface,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = onNavigateBack,
+                        modifier = Modifier.testTag("ticket_detail_back_btn")
+                    ) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = {
-                        val pdfUrl = "${BuildConfig.API_BASE_URL}/api/tickets/$ticketCode/pdf"
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(pdfUrl))
-                        context.startActivity(intent)
-                    }) {
-                        Icon(
-                            Icons.Default.Download,
-                            contentDescription = "Download PDF",
-                            tint = Color(0xFFEA580C)
+                            tint = Color.White
                         )
                     }
 
-                    IconButton(onClick = {
-                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(
-                                Intent.EXTRA_TEXT,
-                                "माझे महाटिकिट तिकीट पहा: ${BuildConfig.API_BASE_URL}/tickets/$ticketCode"
-                            )
-                        }
-                        context.startActivity(Intent.createChooser(shareIntent, "तिकीट शेअर करा"))
-                    }) {
-                        Icon(
-                            Icons.Default.Share,
-                            contentDescription = "Share Ticket",
-                            tint = Color(0xFFEA580C)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "अधिकृत ई-पास (Digital Pass)",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Text(
+                            "तिकीट कोड: $ticketCode",
+                            fontSize = 11.sp,
+                            color = GoldAccent
                         )
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            )
-        }
-    ) { paddingValues ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-                .padding(paddingValues),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Authentic Ticket Pass Container matching website `/tickets/[ticketCode]`
-            item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .scale(cardScale),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = BorderStroke(1.dp, Color(0xFFE5E7EB)),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-                ) {
-                    Column {
-                        // 1. Top Orange Header
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(
-                                    Brush.horizontalGradient(
-                                        listOf(Color(0xFFEA580C), Color(0xFFC2410C))
-                                    )
-                                )
-                                .padding(18.dp)
-                        ) {
-                            Column {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        Icon(
-                                            Icons.Default.ConfirmationNumber,
-                                            contentDescription = null,
-                                            tint = Color.White,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                        Text(
-                                            text = "महाटिकिट अधिकृत ई-पास",
-                                            color = Color.White,
-                                            fontWeight = FontWeight.Black,
-                                            fontSize = 13.sp
-                                        )
-                                    }
 
-                                    Surface(
-                                        shape = RoundedCornerShape(6.dp),
-                                        color = Color.White.copy(alpha = 0.25f)
-                                    ) {
-                                        Text(
-                                            text = "प्रवेश वैध",
-                                            color = Color.White,
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                        )
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(10.dp))
-
-                                Text(
-                                    text = mockTicket.eventTitle,
-                                    color = Color.White,
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Black
-                                )
-                                Text(
-                                    text = mockTicket.eventTitleEn,
-                                    color = Color.White.copy(alpha = 0.85f),
-                                    fontSize = 12.sp
-                                )
-                            }
-                        }
-
-                        // 2. Perforated Notch Visual Divider with Dotted Line
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(20.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // Left semicircle notch
-                            Box(
-                                modifier = Modifier
-                                    .size(20.dp)
-                                    .offset(x = (-10).dp)
-                                    .background(MaterialTheme.colorScheme.background, CircleShape)
-                                    .border(1.dp, Color(0xFFE5E7EB), CircleShape)
-                            )
-                            // Dashed / Dotted Line
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(1.dp)
-                                    .background(Color(0xFFD1D5DB))
-                            )
-                            // Right semicircle notch
-                            Box(
-                                modifier = Modifier
-                                    .size(20.dp)
-                                    .offset(x = 10.dp)
-                                    .background(MaterialTheme.colorScheme.background, CircleShape)
-                                    .border(1.dp, Color(0xFFE5E7EB), CircleShape)
-                            )
-                        }
-
-                        // 3. Middle Body: QR Code & Seat Info
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(20.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            // Scannable Gate QR Code Card
-                            Card(
-                                shape = RoundedCornerShape(14.dp),
-                                colors = CardDefaults.cardColors(containerColor = Color.White),
-                                border = BorderStroke(2.dp, Color(0xFFFED7AA)),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                                modifier = Modifier.padding(bottom = 12.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(190.dp)
-                                        .padding(12.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    val qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=" +
-                                            URLEncoder.encode(mockTicket.qrPayload, "UTF-8")
-                                    AsyncImage(
-                                        model = qrUrl,
-                                        contentDescription = "Ticket Gate QR Code",
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-                                }
-                            }
-
-                            Text(
-                                text = "सभागृह प्रवेशद्वारावर हा QR कोड स्कॅन करा",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFFEA580C)
-                            )
-
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            // Grid of Details: Venue, Show, Seats, Holder
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                TicketInfoBlock(label = "आसन क्रमांक", value = mockTicket.seatCode, isHighlight = true)
-                                TicketInfoBlock(label = "बुकिंग क्रमांक", value = mockTicket.orderNumber)
-                            }
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                TicketInfoBlock(label = "शो वेळ व दिनांक", value = mockTicket.showtime)
-                                TicketInfoBlock(label = "सभागृह", value = mockTicket.venueName)
-                            }
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                TicketInfoBlock(label = "तिकीट धारक", value = mockTicket.attendeeName)
-                                TicketInfoBlock(label = "तिकीट कोड", value = ticketCode)
-                            }
-                        }
-
-                        // 4. Perforated Notch Visual Divider 2
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(20.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(20.dp)
-                                    .offset(x = (-10).dp)
-                                    .background(MaterialTheme.colorScheme.background, CircleShape)
-                                    .border(1.dp, Color(0xFFE5E7EB), CircleShape)
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(1.dp)
-                                    .background(Color(0xFFD1D5DB))
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .size(20.dp)
-                                    .offset(x = 10.dp)
-                                    .background(MaterialTheme.colorScheme.background, CircleShape)
-                                    .border(1.dp, Color(0xFFE5E7EB), CircleShape)
-                            )
-                        }
-
-                        // 5. Entry Rules & Guidelines (प्रवेश नियम)
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp)
-                        ) {
-                            Text(
-                                text = "महत्त्वाचे प्रवेश नियम व सूचना:",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            RuleBulletItem("कार्यक्रमाच्या वेळेपूर्वी ३० मिनिटे अगोदर सभागृहात उपस्थित राहावे.")
-                            RuleBulletItem("मोबाईलमधील हा डिजिटल QR कोड किंवा छापील PDF प्रवेशद्वारावर स्कॅन करणे आवश्यक आहे.")
-                            RuleBulletItem("सभागृहात बाहेरील खाद्यपदार्थ व शीतपेये नेण्यास सक्त मनाई आहे.")
-                            RuleBulletItem("नाटकाचा पहिला घंटा वाजल्यानंतर सभागृहात शांतता राखावी.")
-                        }
-                    }
-                }
-            }
-
-            // Quick Download & Share Action Bar
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Button(
+                    IconButton(
                         onClick = {
                             val pdfUrl = "${BuildConfig.API_BASE_URL}/api/tickets/$ticketCode/pdf"
                             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(pdfUrl))
                             context.startActivity(intent)
-                        },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEA580C)),
-                        shape = RoundedCornerShape(12.dp)
+                        }
                     ) {
-                        Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("PDF डाउनलोड करा", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Icon(
+                            Icons.Default.Download,
+                            contentDescription = "Download PDF",
+                            tint = GoldAccent
+                        )
                     }
+                }
+            }
 
-                    OutlinedButton(
-                        onClick = {
+            // Ticket Details & Pass View
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .weight(1f),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Official TicketPassCard
+                item {
+                    TicketPassCard(
+                        booking = bookingData,
+                        language = AppLanguage.MARATHI,
+                        onShareClick = {
                             val shareIntent = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"
                                 putExtra(
                                     Intent.EXTRA_TEXT,
-                                    "माझे महाटिकिट तिकीट: ${BuildConfig.API_BASE_URL}/tickets/$ticketCode"
+                                    "माझे महाटिकिट डिजिटल तिकीट: ${BuildConfig.API_BASE_URL}/tickets/$ticketCode\nऑर्डर #${bookingData.bookingId}"
                                 )
                             }
-                            context.startActivity(Intent.createChooser(shareIntent, "तिकीट पाठवा"))
-                        },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, Color(0xFFEA580C)),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFEA580C))
+                            context.startActivity(Intent.createChooser(shareIntent, "तिकीट शेअर करा"))
+                        }
+                    )
+                }
+
+                // Venue Directions Card
+                item {
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = CinemaSurface),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("WhatsApp शेअर", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(text = "📍 ", fontSize = 18.sp)
+                                Column {
+                                    Text(
+                                        text = "नाट्यगृह पत्ता व मार्ग (Directions)",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                    Text(
+                                        text = bookingData.venueAddress,
+                                        fontSize = 12.sp,
+                                        color = Color(0xFF94A3B8)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Button(
+                                onClick = {
+                                    val gmmIntentUri = Uri.parse("geo:0,0?q=${Uri.encode(bookingData.venueName + ", " + bookingData.venueAddress)}")
+                                    val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
+                                    mapIntent.setPackage("com.google.android.apps.maps")
+                                    try {
+                                        context.startActivity(mapIntent)
+                                    } catch (e: Exception) {
+                                        context.startActivity(Intent(Intent.ACTION_VIEW, gmmIntentUri))
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E293B)),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.Directions, contentDescription = null, tint = GoldAccent, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("गुगल मॅप्सवर रस्ता पहा", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+
+                // Important Advisory Notes Card
+                item {
+                    Surface(
+                        color = Color(0xFF131A29),
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(1.dp, Color(0xFF334155)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = "महत्त्वाच्या सूचना (Important Notice):",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = GoldAccent
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "• कृपया प्रयोग सुरू होण्यापूर्वी किमान २० मिनिटे आधी सभागृहात उपस्थित राहा.\n• सभागृहात मोबाईल फोन सायलेंट मोडवर ठेवावा.\n• हा डिजिटल पास प्रवेशद्वारावर स्कॅन केल्यानंतरच वैध ठरेल.",
+                                fontSize = 11.sp,
+                                color = Color(0xFFCBD5E1),
+                                lineHeight = 18.sp
+                            )
+                        }
                     }
                 }
             }
         }
     }
 }
-
-@Composable
-fun TicketInfoBlock(label: String, value: String, isHighlight: Boolean = false) {
-    Column(modifier = Modifier.widthIn(max = 150.dp)) {
-        Text(
-            text = label,
-            fontSize = 11.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Text(
-            text = value,
-            fontSize = if (isHighlight) 15.sp else 13.sp,
-            fontWeight = FontWeight.Bold,
-            color = if (isHighlight) Color(0xFFEA580C) else MaterialTheme.colorScheme.onSurface
-        )
-    }
-}
-
-@Composable
-fun RuleBulletItem(text: String) {
-    Row(
-        modifier = Modifier.padding(vertical = 2.dp),
-        verticalAlignment = Alignment.Top,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        Text("•", color = Color(0xFFEA580C), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-        Text(
-            text = text,
-            fontSize = 11.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            lineHeight = 15.sp
-        )
-    }
-}
-
-data class TicketDisplayData(
-    val ticketCode: String,
-    val orderNumber: String,
-    val eventTitle: String,
-    val eventTitleEn: String,
-    val venueName: String,
-    val venueAddress: String,
-    val showtime: String,
-    val seatCode: String,
-    val attendeeName: String,
-    val qrPayload: String,
-    val status: String
-)
