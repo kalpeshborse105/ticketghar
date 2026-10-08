@@ -814,9 +814,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <span className="font-extrabold text-base sm:text-lg">
                 MahaTicket Control Center (महाटिकिट नियंत्रण कक्ष)
               </span>
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#ea580c]/10 text-[#ea580c] border border-[#ea580c]/30">
-                PROD BACKEND
-              </span>
             </div>
             <p className="text-[11px] text-slate-400">
               कंपनी प्रशासक कक्ष • महाराष्ट्र-प्रथम तिकीट नियंत्रण प्रणाली
@@ -856,15 +853,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         <div className="flex items-center gap-2">
           <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
           <span>
-            <strong>ॲडमिन मार्गदर्शक:</strong> आपण नवीन शहरे, नाट्यगृहे, कार्यक्रम आणि थेट गेट स्कॅनर तपासू शकता. सर्व व्यवहार क्लाउड एसक्यूएलमध्ये थेट नोंदवले जातात.
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold">
-            PostgreSQL: Connected
-          </span>
-          <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold">
-            Cloud SQL: Developer Edition
+            <strong>प्रणाली स्थिती:</strong> सुरक्षित ऑपरेशन्स पॅनेल सक्रिय आहे. सर्व व्यवहार एनक्रिप्टेड आणि ऑडिट ट्रॅकसह सुरक्षित आहेत.
           </span>
         </div>
       </div>

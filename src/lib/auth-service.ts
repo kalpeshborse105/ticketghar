@@ -202,10 +202,11 @@ export async function sendOtpEmail(email: string, otp: string): Promise<boolean>
       return true;
     } catch (err) {
       console.error('[AUTH-OTP] SMTP delivery failed, falling back:', err);
+      return false;
     }
   }
 
   // Development logging fallback
   console.log(`[AUTH-OTP DEVELOPMENT CODE for ${email}]: >>> ${otp} <<<`);
-  return true;
+  return false;
 }

@@ -15,8 +15,10 @@ async function main() {
     ssl: { rejectUnauthorized: false },
     connectionTimeoutMillis: 20000,
   });
+  await p.query('ALTER TABLE events ADD COLUMN IF NOT EXISTS trailer_url text;');
+  await p.query('ALTER TABLE events ADD COLUMN IF NOT EXISTS gallery_urls text;');
   const r = await p.query('select count(*)::int as n from events');
-  console.log('events', r.rows[0]);
+  console.log('events count:', r.rows[0]);
   await p.end();
 }
 
