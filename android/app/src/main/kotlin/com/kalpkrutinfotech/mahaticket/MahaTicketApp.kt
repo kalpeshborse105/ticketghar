@@ -20,6 +20,12 @@ class MahaTicketApp : Application() {
     
     lateinit var networkMonitor: NetworkMonitor
         private set
+
+    lateinit var sessionManager: com.kalpkrutinfotech.mahaticket.util.UserSessionManager
+        private set
+
+    lateinit var authRepository: com.kalpkrutinfotech.mahaticket.data.repository.AuthRepository
+        private set
     
     override fun onCreate() {
         super.onCreate()
@@ -29,10 +35,14 @@ class MahaTicketApp : Application() {
         
         // Initialize network monitor
         networkMonitor = NetworkMonitor(this)
+
+        // Initialize user session
+        sessionManager = com.kalpkrutinfotech.mahaticket.util.UserSessionManager.getInstance(this)
         
         // Initialize repositories
         val apiService = RetrofitClient.apiService
         eventRepository = EventRepository(apiService, database)
         bookingRepository = BookingRepository(apiService, database)
+        authRepository = com.kalpkrutinfotech.mahaticket.data.repository.AuthRepository(apiService, sessionManager)
     }
 }

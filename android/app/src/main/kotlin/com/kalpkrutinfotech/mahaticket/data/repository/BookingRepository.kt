@@ -81,6 +81,69 @@ class BookingRepository(
             Result.failure(e)
         }
     }
+
+    suspend fun createPaymentOrder(
+        sessionId: Int,
+        seatIds: List<Int>,
+        couponCode: String? = null
+    ): Result<CreatePaymentOrderResponse> = withContext(Dispatchers.IO) {
+        try {
+            val request = CreatePaymentOrderRequest(
+                sessionId = sessionId,
+                seatIds = seatIds,
+                couponCode = couponCode
+            )
+            val response = apiService.createPaymentOrder(request)
+            if (response.isSuccessful && response.body() != null) {
+                val body = response.body()!!
+                if (!body.orderId.isNullOrBlank()) {
+                    Result.success(body)
+                } else {
+                    Result.failure(Exception(body.error ?: "पेमेंट ऑर्डर तयार करण्यात त्रुटी"))
+                }
+            } else {
+                val rawErr = try { response.errorBody()?.string() } catch (e: Exception) { null }
+                val parsedMsg = if (!rawErr.isNullOrBlank()) {
+                    try {
+                        val json = org.json.JSONObject(rawErr)
+                        json.optString("error", json.optString("message", rawErr))
+                    } catch (e: Exception) { rawErr }
+                } else "पेमेंट ऑर्डर विनंती अयशस्वी (HTTP ${response.code()})"
+                Result.failure(Exception(parsedMsg))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun validateCoupon(
+        code: String,
+        amount: Int
+    ): Result<CouponValidationResponse> = withContext(Dispatchers.IO) {
+        try {
+            val request = ValidateCouponRequest(code = code.trim().uppercase(), amount = amount)
+            val response = apiService.validateCoupon(request)
+            if (response.isSuccessful && response.body() != null) {
+                val body = response.body()!!
+                if (body.valid) {
+                    Result.success(body)
+                } else {
+                    Result.failure(Exception(body.error ?: body.message ?: "अवैध कूपन कोड"))
+                }
+            } else {
+                val rawErr = try { response.errorBody()?.string() } catch (e: Exception) { null }
+                val parsedMsg = if (!rawErr.isNullOrBlank()) {
+                    try {
+                        val json = org.json.JSONObject(rawErr)
+                        json.optString("error", json.optString("message", rawErr))
+                    } catch (e: Exception) { rawErr }
+                } else "कूपन कोड लागू करता आला नाही"
+                Result.failure(Exception(parsedMsg))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
     
     suspend fun confirmBooking(
         sessionId: Int,
@@ -90,7 +153,9 @@ class BookingRepository(
         userEmail: String,
         userPhone: String,
         couponCode: String? = null,
-        paymentId: String? = null
+        paymentId: String? = null,
+        orderId: String? = null,
+        signature: String? = null
     ): Result<BookingConfirmationResponse> = withContext(Dispatchers.IO) {
         try {
             val request = ConfirmBookingRequest(
@@ -103,7 +168,9 @@ class BookingRepository(
                 couponCode = couponCode,
                 paymentDetails = PaymentDetailsRequest(
                     gateway = if (paymentId != null) "razorpay" else "direct_confirm",
-                    paymentId = paymentId
+                    paymentId = paymentId,
+                    orderId = orderId,
+                    signature = signature
                 )
             )
             val response = apiService.confirmBooking(request)

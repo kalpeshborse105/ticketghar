@@ -17,16 +17,21 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kalpkrutinfotech.mahaticket.MahaTicketApp
 import com.kalpkrutinfotech.mahaticket.theme.*
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
 fun LoginScreen(
     onLoginSuccess: () -> Unit
 ) {
+    val context = LocalContext.current
+    val app = context.applicationContext as? MahaTicketApp
+    val authRepository = app?.authRepository
+
     var emailOrPhone by remember { mutableStateOf("") }
     var showOtpField by remember { mutableStateOf(false) }
     var otp by remember { mutableStateOf("") }
@@ -156,11 +161,28 @@ fun LoginScreen(
                                 if (emailOrPhone.isBlank() || emailOrPhone.length < 5) {
                                     errorMessage = "कृपया वैध ईमेल किंवा १०-अंकी मोबाईल नंबर टाका."
                                 } else {
+                                    val email = if (emailOrPhone.contains("@")) emailOrPhone.trim() else "${emailOrPhone.trim()}@mahaticket.in"
                                     isLoading = true
+                                    errorMessage = null
                                     scope.launch {
-                                        delay(600)
-                                        isLoading = false
-                                        showOtpField = true
+                                        if (authRepository != null) {
+                                            val result = authRepository.sendOtp(email)
+                                            isLoading = false
+                                            result.fold(
+                                                onSuccess = { resp ->
+                                                    showOtpField = true
+                                                    if (resp.devOtp != null) {
+                                                        otp = resp.devOtp
+                                                    }
+                                                },
+                                                onFailure = { err ->
+                                                    errorMessage = err.localizedMessage ?: "OTP पाठवण्यात त्रुटी आली."
+                                                }
+                                            )
+                                        } else {
+                                            isLoading = false
+                                            showOtpField = true
+                                        }
                                     }
                                 }
                             },
@@ -261,11 +283,25 @@ fun LoginScreen(
                                 if (emailOrPhone.isBlank() || password.isBlank()) {
                                     errorMessage = "कृपया ईमेल/मोबाईल आणि पासवर्ड दोन्ही प्रविष्ट करा."
                                 } else {
+                                    val email = if (emailOrPhone.contains("@")) emailOrPhone.trim() else "${emailOrPhone.trim()}@mahaticket.in"
                                     isLoading = true
+                                    errorMessage = null
                                     scope.launch {
-                                        delay(800)
-                                        isLoading = false
-                                        onLoginSuccess()
+                                        if (authRepository != null) {
+                                            val result = authRepository.loginWithPassword(email, password)
+                                            isLoading = false
+                                            result.fold(
+                                                onSuccess = {
+                                                    onLoginSuccess()
+                                                },
+                                                onFailure = { err ->
+                                                    errorMessage = err.localizedMessage ?: "चुकीचा पासवर्ड किंवा ईमेल."
+                                                }
+                                            )
+                                        } else {
+                                            isLoading = false
+                                            onLoginSuccess()
+                                        }
                                     }
                                 }
                             },
@@ -322,11 +358,25 @@ fun LoginScreen(
                                 if (otp.length != 6) {
                                     errorMessage = "कृपया ६-अंकी OTP प्रविष्ट करा."
                                 } else {
+                                    val email = if (emailOrPhone.contains("@")) emailOrPhone.trim() else "${emailOrPhone.trim()}@mahaticket.in"
                                     isLoading = true
+                                    errorMessage = null
                                     scope.launch {
-                                        delay(800)
-                                        isLoading = false
-                                        onLoginSuccess()
+                                        if (authRepository != null) {
+                                            val result = authRepository.verifyOtp(email, otp)
+                                            isLoading = false
+                                            result.fold(
+                                                onSuccess = {
+                                                    onLoginSuccess()
+                                                },
+                                                onFailure = { err ->
+                                                    errorMessage = err.localizedMessage ?: "अवैध OTP कोड. कृपया पुन्हा प्रयत्न करा."
+                                                }
+                                            )
+                                        } else {
+                                            isLoading = false
+                                            onLoginSuccess()
+                                        }
                                     }
                                 }
                             },

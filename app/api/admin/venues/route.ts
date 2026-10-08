@@ -42,12 +42,15 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const {
+      venueId,
       name,
       nameMr,
       address,
       city,
       totalCapacity = 500,
       hasSeatLayout = 1,
+      customLayout = false,
+      sections: customSections,
       balconyRows = 3,
       balconyCols = 8,
       balconyPrice = 400, // in rupees
@@ -63,26 +66,90 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Insert venue
-    const [newVenue] = await db
-      .insert(venues)
-      .values({
-        name,
-        nameMr,
-        address,
-        city: city.trim(),
-        totalCapacity: Number(totalCapacity),
-        hasSeatLayout: Number(hasSeatLayout),
-      })
-      .returning();
+    let targetVenueId: number;
+    let targetVenueRecord: any;
 
-    // If seated venue, create Balcony and Stall sections
-    if (hasSeatLayout === 1) {
-      // 1. Balcony Section
+    if (venueId) {
+      // UPDATE existing venue
+      const [updatedVenue] = await db
+        .update(venues)
+        .set({
+          name,
+          nameMr,
+          address,
+          city: city.trim(),
+          totalCapacity: Number(totalCapacity),
+          hasSeatLayout: Number(hasSeatLayout),
+        })
+        .where(eq(venues.id, Number(venueId)))
+        .returning();
+
+      targetVenueId = updatedVenue.id;
+      targetVenueRecord = updatedVenue;
+
+      // Clear existing seats and sections to replace with new layout
+      await db.delete(seats).where(eq(seats.venueId, targetVenueId));
+      await db.delete(venueSections).where(eq(venueSections.venueId, targetVenueId));
+    } else {
+      // CREATE new venue
+      const [newVenue] = await db
+        .insert(venues)
+        .values({
+          name,
+          nameMr,
+          address,
+          city: city.trim(),
+          totalCapacity: Number(totalCapacity),
+          hasSeatLayout: Number(hasSeatLayout),
+        })
+        .returning();
+
+      targetVenueId = newVenue.id;
+      targetVenueRecord = newVenue;
+    }
+
+    // Process custom sections from TheatreSeatDesigner
+    if (hasSeatLayout === 1 && customLayout && Array.isArray(customSections) && customSections.length > 0) {
+      for (const sec of customSections) {
+        const [insertedSection] = await db
+          .insert(venueSections)
+          .values({
+            venueId: targetVenueId,
+            name: sec.name || 'Section',
+            nameMr: sec.nameMr || 'विभाग',
+            rowsCount: sec.rows?.length || 1,
+            colsCount: sec.rows?.[0]?.seats?.length || 8,
+            basePrice: Math.round(Number(sec.basePrice || 350) * 100),
+            accessible: sec.rows?.some((r: any) => r.seats?.some((s: any) => s.isAccessible === 1)) ? 1 : 0,
+          })
+          .returning();
+
+        const seatsToInsert: any[] = [];
+        for (const row of sec.rows || []) {
+          for (const seat of row.seats || []) {
+            seatsToInsert.push({
+              venueId: targetVenueId,
+              sectionId: insertedSection.id,
+              rowLabel: row.rowLabel || 'A',
+              seatNumber: Number(seat.seatNumber),
+              seatCode: seat.seatCode || `${sec.name.slice(0, 3).toUpperCase()}-${row.rowLabel}-${seat.seatNumber}`,
+              tier: seat.tier || sec.tier || 'standard',
+              isAccessible: Number(seat.isAccessible || 0),
+              isBlocked: Number(seat.isBlocked || 0),
+            });
+          }
+        }
+
+        if (seatsToInsert.length > 0) {
+          await db.insert(seats).values(seatsToInsert);
+        }
+      }
+    } else if (hasSeatLayout === 1) {
+      // Standard Balcony & Stall generation fallback
       const [balcony] = await db
         .insert(venueSections)
         .values({
-          venueId: newVenue.id,
+          venueId: targetVenueId,
           name: 'Balcony',
           nameMr: 'बाल्कनी',
           rowsCount: Number(balconyRows),
@@ -92,20 +159,20 @@ export async function POST(request: NextRequest) {
         })
         .returning();
 
-      // Create Balcony seats
       const rowLetters = ['A', 'B', 'C', 'D', 'E', 'F'];
       const balconySeatsToInsert: any[] = [];
       for (let r = 0; r < Number(balconyRows); r++) {
         const row = rowLetters[r] || `R${r + 1}`;
         for (let c = 1; c <= Number(balconyCols); c++) {
           balconySeatsToInsert.push({
-            venueId: newVenue.id,
+            venueId: targetVenueId,
             sectionId: balcony.id,
             rowLabel: row,
             seatNumber: c,
             seatCode: `BAL-${row}${c < 10 ? '0' + c : c}`,
             tier: 'platinum',
             isAccessible: 0,
+            isBlocked: 0,
           });
         }
       }
@@ -113,11 +180,10 @@ export async function POST(request: NextRequest) {
         await db.insert(seats).values(balconySeatsToInsert);
       }
 
-      // 2. Stall Section
       const [stall] = await db
         .insert(venueSections)
         .values({
-          venueId: newVenue.id,
+          venueId: targetVenueId,
           name: 'Stall / Orchestra',
           nameMr: 'स्टॉल / आसन व्यवस्था',
           rowsCount: Number(stallRows),
@@ -127,19 +193,19 @@ export async function POST(request: NextRequest) {
         })
         .returning();
 
-      // Create Stall seats
       const stallSeatsToInsert: any[] = [];
       for (let r = 0; r < Number(stallRows); r++) {
         const row = rowLetters[r] || `R${r + 1}`;
         for (let c = 1; c <= Number(stallCols); c++) {
           stallSeatsToInsert.push({
-            venueId: newVenue.id,
+            venueId: targetVenueId,
             sectionId: stall.id,
             rowLabel: row,
             seatNumber: c,
             seatCode: `STL-${row}${c < 10 ? '0' + c : c}`,
             tier: 'gold',
             isAccessible: r === 0 && c <= 2 ? 1 : 0,
+            isBlocked: 0,
           });
         }
       }
@@ -152,15 +218,16 @@ export async function POST(request: NextRequest) {
     await db.insert(auditLogs).values({
       actorId: 'admin_user',
       actorRole: 'super_admin',
-      action: 'CREATE_VENUE',
+      action: venueId ? 'UPDATE_VENUE' : 'CREATE_VENUE',
       entityType: 'venue',
-      entityId: String(newVenue.id),
+      entityId: String(targetVenueId),
       details: JSON.stringify({ name, city, address }),
     });
 
     return NextResponse.json({
       success: true,
-      venue: newVenue,
+      venue: targetVenueRecord,
+      venueId: targetVenueId,
     });
   } catch (error: any) {
     console.error('Error creating venue:', error);

@@ -7,16 +7,9 @@ import {
   X,
   Clock,
   ShieldCheck,
-  Tag,
-  CreditCard,
-  Smartphone,
-  Building,
   ArrowRight,
   AlertCircle,
-  Sparkles,
-  Ticket,
-  Store,
-  CheckCircle2,
+  Tag,
 } from 'lucide-react';
 
 declare global {
@@ -63,12 +56,9 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
   const [couponMessage, setCouponMessage] = useState<string | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
 
-  // Payment method
-  const [paymentMethod, setPaymentMethod] = useState<'upi' | 'card' | 'netbanking' | 'counter'>('upi');
-  const [upiId, setUpiId] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [razorpayLoaded, setRazorpayLoaded] = useState(false);
+  const [, setRazorpayLoaded] = useState(false);
 
   // Load Razorpay checkout script
   useEffect(() => {
@@ -143,40 +133,24 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
     }
   };
 
-  // Direct confirmation fallback (used when Counter / UPI or gateway is preparing)
-  const confirmDirectly = async (gatewayType: string) => {
-    const confirmRes = await fetch('/api/bookings/confirm', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sessionId: session.id,
-        eventId: event.id,
-        seatIds: holdData.seatIds,
-        userName: userName.trim(),
-        userEmail: userEmail.trim().toLowerCase(),
-        userPhone: userPhone.trim(),
-        couponCode: couponInput || null,
-        paymentDetails: {
-          gateway: gatewayType,
-          idempotencyKey: `direct_${Date.now()}_${holdData.seatIds.join('_')}`,
-        },
-      }),
-    });
-
-    const confirmData = await confirmRes.json();
-    if (!confirmRes.ok) {
-      throw new Error(confirmData.error || 'Failed to confirm booking order');
-    }
-    return confirmData;
-  };
-
-  // Submit payment & confirm booking
+  // Submit payment & confirm booking via real Razorpay
   const handleConfirmPayment = async () => {
-    if (!userName.trim() || !userEmail.trim() || !userPhone.trim()) {
+    const cleanPhone = userPhone.replace(/\D/g, '').slice(-10);
+
+    if (!userName.trim() || !userEmail.trim() || !cleanPhone) {
       setErrorMessage(
         language === 'mr'
-          ? 'कृपया पूर्ण नाव, ईमेल आणि मोबाईल नंबर भरा.'
+          ? 'कृपया आपले पूर्ण नाव, ईमेल आणि मोबाईल नंबर भरा.'
           : 'Please enter your full name, email and phone number.'
+      );
+      return;
+    }
+
+    if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
+      setErrorMessage(
+        language === 'mr'
+          ? 'कृपया वैध १०-अंकी भारतीय मोबाईल नंबर प्रविष्ट करा (६ ते ९ ने सुरू होणारा).'
+          : 'Please enter a valid 10-digit Indian mobile number starting with 6-9.'
       );
       return;
     }
@@ -194,14 +168,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
       setIsProcessing(true);
       setErrorMessage(null);
 
-      // If user selected Pay at Counter, confirm directly
-      if (paymentMethod === 'counter') {
-        const result = await confirmDirectly('counter');
-        onSuccess(result);
-        return;
-      }
-
-      // Try creating Razorpay order
+      // Step 1: Create real Razorpay order on server
       const createOrderRes = await fetch('/api/payments/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -214,26 +181,26 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
 
       const orderData = await createOrderRes.json();
 
-      // If gateway is not configured or offline, provide seamless instant UPI / Direct booking
-      if (!createOrderRes.ok || orderData.configured === false || !window.Razorpay) {
-        console.log('Online gateway inactive or pending keys; confirming order with verified record');
-        const directResult = await confirmDirectly(paymentMethod === 'upi' ? 'upi_instant' : 'card_direct');
-        onSuccess(directResult);
-        return;
+      if (!createOrderRes.ok) {
+        throw new Error(orderData.error || 'पेमेंट ऑर्डर तयार करता आली नाही.');
       }
 
-      // Step 2: Open Razorpay checkout
+      if (!window.Razorpay) {
+        throw new Error('Razorpay गेटवे लोड होत आहे. कृपया २ सेकंद थांबा आणि पुन्हा प्रयत्न करा.');
+      }
+
+      // Step 2: Open official Razorpay Checkout modal
       const options = {
         key: orderData.keyId,
         amount: orderData.amount,
-        currency: orderData.currency,
-        name: 'MahaTicket',
-        description: `${language === 'mr' ? event.titleMr : event.title}`,
+        currency: orderData.currency || 'INR',
+        name: 'MahaTicket (महाटिकिट)',
+        description: `${language === 'mr' ? event.titleMr || event.title : event.title}`,
         order_id: orderData.orderId,
         prefill: {
           name: userName.trim(),
-          email: userEmail.trim(),
-          contact: userPhone.trim(),
+          email: userEmail.trim().toLowerCase(),
+          contact: `+91${cleanPhone}`,
         },
         theme: {
           color: '#ea580c',
@@ -243,14 +210,14 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
             setIsProcessing(false);
             setErrorMessage(
               language === 'mr'
-                ? 'पेमेंट रद्द केले. पुन्हा प्रयत्न करा.'
-                : 'Payment was cancelled. You can retry.'
+                ? 'पेमेंट रद्द केले. आपण पुन्हा प्रयत्न करू शकता.'
+                : 'Payment was cancelled. You can retry anytime before hold expires.'
             );
           },
         },
         handler: async (response: any) => {
           try {
-            // Verify payment and confirm booking
+            // Step 3: Server-side cryptographic signature verification
             const verifyRes = await fetch('/api/payments/verify', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -263,7 +230,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
                 seatIds: holdData.seatIds,
                 userName: userName.trim(),
                 userEmail: userEmail.trim().toLowerCase(),
-                userPhone: userPhone.trim(),
+                userPhone: cleanPhone,
                 couponCode: couponInput || null,
               }),
             });
@@ -276,7 +243,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
             onSuccess(verifyData);
           } catch (err: any) {
             console.error('Payment verification error:', err);
-            setErrorMessage(err.message || 'Payment verification failed.');
+            setErrorMessage(err.message || 'पेमेंट पडताळणी अयशस्वी.');
             setIsProcessing(false);
           }
         },
@@ -286,14 +253,8 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
       razorpay.open();
     } catch (err: any) {
       console.error('Booking processing error:', err);
-      // Fallback attempt to complete booking if payment succeeded
-      try {
-        const fallback = await confirmDirectly('online_verified');
-        onSuccess(fallback);
-      } catch (fallbackErr: any) {
-        setErrorMessage(err.message || 'Booking confirmation failed. Please retry.');
-        setIsProcessing(false);
-      }
+      setErrorMessage(err.message || 'पेमेंट सुरू करताना त्रुटी आली. कृपया पुन्हा प्रयत्न करा.');
+      setIsProcessing(false);
     }
   };
 
@@ -368,14 +329,24 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     {t.phone} * (WhatsApp)
                   </label>
-                  <input
-                    type="tel"
-                    required
-                    placeholder="98233 44556"
-                    value={userPhone}
-                    onChange={(e) => setUserPhone(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 focus:bg-white rounded-xl px-3.5 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#ea580c]/50 focus:border-[#ea580c] transition"
-                  />
+                  <div className="flex rounded-xl border border-slate-300 bg-slate-50 overflow-hidden focus-within:ring-2 focus-within:ring-[#ea580c]/50 focus-within:border-[#ea580c] transition">
+                    <span className="px-3 py-2 bg-slate-100 text-slate-700 font-bold text-xs flex items-center border-r border-slate-200 select-none">
+                      +91
+                    </span>
+                    <input
+                      type="tel"
+                      required
+                      maxLength={10}
+                      placeholder="98233 44556"
+                      value={userPhone}
+                      onChange={(e) => {
+                        const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                        setUserPhone(digits);
+                      }}
+                      className="w-full bg-transparent px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none font-mono"
+                    />
+                  </div>
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">१०-अंकी भारतीय मोबाईल नंबर</span>
                 </div>
 
                 <div>
@@ -503,108 +474,34 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
             </div>
           </div>
 
-          {/* 3. Colorful Payment Options (Dribbble Cinemax Style) */}
+          {/* 3. Official Razorpay Payment Trust Section */}
           <div className="p-5 space-y-3 bg-white">
             <h3 className="text-xs font-black uppercase tracking-wider text-[#ea580c]">
-              ३. पेमेंट पर्याय (Payment Options)
+              ३. सुरक्षित पेमेंट (Official Razorpay Gateway)
             </h3>
 
-            <div className="grid grid-cols-2 gap-2.5">
-              {/* UPI Option */}
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('upi')}
-                className={`flex flex-col items-center justify-center p-3 rounded-2xl border-2 text-xs font-bold transition ${
-                  paymentMethod === 'upi'
-                    ? 'bg-orange-50 border-orange-500 text-orange-950 shadow-sm'
-                    : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300'
-                }`}
-              >
-                <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-700 mb-1">
-                  <Smartphone className="w-4 h-4" />
-                </div>
-                <span>⚡ UPI / QR</span>
-                <span className="text-[10px] text-orange-700 font-semibold mt-0.5">GPay · PhonePe · Paytm</span>
-              </button>
-
-              {/* Cards Option */}
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('card')}
-                className={`flex flex-col items-center justify-center p-3 rounded-2xl border-2 text-xs font-bold transition ${
-                  paymentMethod === 'card'
-                    ? 'bg-orange-50 border-orange-500 text-orange-950 shadow-sm'
-                    : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300'
-                }`}
-              >
-                <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-700 mb-1">
-                  <CreditCard className="w-4 h-4" />
-                </div>
-                <span>💳 Cards</span>
-                <span className="text-[10px] text-orange-700 font-semibold mt-0.5">Visa · RuPay · Master</span>
-              </button>
-
-              {/* NetBanking Option */}
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('netbanking')}
-                className={`flex flex-col items-center justify-center p-3 rounded-2xl border-2 text-xs font-bold transition ${
-                  paymentMethod === 'netbanking'
-                    ? 'bg-emerald-50 border-emerald-500 text-emerald-900 shadow-sm'
-                    : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300'
-                }`}
-              >
-                <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 mb-1">
-                  <Building className="w-4 h-4" />
-                </div>
-                <span>🏛️ NetBanking</span>
-                <span className="text-[10px] text-emerald-600 font-medium mt-0.5">SBI · HDFC · ICICI</span>
-              </button>
-
-              {/* Pay at Venue Counter Option */}
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('counter')}
-                className={`flex flex-col items-center justify-center p-3 rounded-2xl border-2 text-xs font-bold transition ${
-                  paymentMethod === 'counter'
-                    ? 'bg-amber-50 border-[#ea580c] text-amber-950 shadow-sm'
-                    : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300'
-                }`}
-              >
-                <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-[#ea580c] mb-1">
-                  <Store className="w-4 h-4" />
-                </div>
-                <span>🏪 Box Office / Counter</span>
-                <span className="text-[10px] text-amber-700 font-medium mt-0.5">Pay at Venue Counter</span>
-              </button>
-            </div>
-
-            {paymentMethod === 'upi' && (
-              <div className="p-3 bg-orange-50/70 rounded-xl border border-orange-200 text-xs space-y-2">
-                <span className="text-orange-950 font-bold block">
-                  त्वरित UPI किंवा QR द्वारे पेमेंट:
+            <div className="p-4 rounded-2xl bg-orange-50/60 border border-orange-200/80 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-orange-950 flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                  <span>Razorpay सुरक्षित पेमेंट गेटवे</span>
                 </span>
-                <input
-                  type="text"
-                  placeholder="उदा. mobile@upi किंवा UPI App निवडा"
-                  value={upiId}
-                  onChange={(e) => setUpiId(e.target.value)}
-                  className="w-full bg-white border border-orange-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500"
-                />
+                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                  100% Verified
+                </span>
               </div>
-            )}
 
-            {paymentMethod === 'counter' && (
-              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 space-y-1">
-                <p className="font-bold flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  <span>सभागृह काऊंटरवर रोख / UPI द्वारे देयक:</span>
-                </p>
-                <p className="text-[11px] text-amber-800">
-                  आपले तिकीट त्वरित आरक्षित होईल व M-Ticket ईमेल व व्हॉट्सॲपवर मिळेल. काऊंटरवर बुकिंग आयडी दाखवून पेमेंट करता येईल.
-                </p>
+              <p className="text-[11px] text-slate-600 leading-relaxed">
+                'पेमेंट करा' बटणावर क्लिक केल्यावर अधिकृत Razorpay पेमेंट विंडो उघडेल. आपण UPI (Google Pay, PhonePe, Paytm), क्रेडिट/डेबिट कार्ड, किंवा नेट बँकिंगद्वारे सुरक्षित पेमेंट करू शकता.
+              </p>
+
+              <div className="flex flex-wrap items-center gap-2 pt-1 text-[10px] text-slate-500 font-medium">
+                <span className="px-2 py-0.5 rounded bg-white border border-slate-200 font-bold text-slate-700">⚡ UPI / QR</span>
+                <span className="px-2 py-0.5 rounded bg-white border border-slate-200 font-bold text-slate-700">💳 Cards</span>
+                <span className="px-2 py-0.5 rounded bg-white border border-slate-200 font-bold text-slate-700">🏛️ NetBanking</span>
+                <span className="px-2 py-0.5 rounded bg-white border border-slate-200 font-bold text-slate-700">📱 Wallets</span>
               </div>
-            )}
+            </div>
           </div>
         </div>
 
@@ -635,14 +532,14 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
             {isProcessing ? (
               <>
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                <span>तिकीट निश्चित होत आहे...</span>
+                <span>पेमेंट विंडो उघडत आहे...</span>
               </>
             ) : (
               <>
                 <span>
-                  {paymentMethod === 'counter'
-                    ? 'काऊंटर बुकिंग निश्चित करा'
-                    : `${t.payVia} · ₹${(grandTotal / 100).toFixed(0)}`}
+                  {language === 'mr'
+                    ? `पेमेंट करा (Razorpay) 🔒 · ₹${(grandTotal / 100).toFixed(0)}`
+                    : `Pay Securely · ₹${(grandTotal / 100).toFixed(0)}`}
                 </span>
                 <ArrowRight className="w-5 h-5" />
               </>

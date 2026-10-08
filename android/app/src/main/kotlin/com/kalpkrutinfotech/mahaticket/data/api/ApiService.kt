@@ -59,6 +59,26 @@ interface MahaTicketApiService {
         @Body request: ValidateCouponRequest
     ): Response<CouponValidationResponse>
 
+    @POST("/api/payments/create-order")
+    suspend fun createPaymentOrder(
+        @Body request: CreatePaymentOrderRequest
+    ): Response<CreatePaymentOrderResponse>
+
+    @POST("/api/auth/flow/send-otp")
+    suspend fun sendOtp(
+        @Body request: SendOtpRequest
+    ): Response<SendOtpResponse>
+
+    @POST("/api/auth/flow/verify-otp")
+    suspend fun verifyOtp(
+        @Body request: VerifyOtpRequest
+    ): Response<AuthFlowResponse>
+
+    @POST("/api/auth/flow/login-password")
+    suspend fun loginWithPassword(
+        @Body request: LoginPasswordRequest
+    ): Response<AuthFlowResponse>
+
     @GET("/api/announcements")
     suspend fun getAnnouncements(
         @Query("city") city: String? = null
@@ -348,3 +368,60 @@ data class ScannedTicketDetails(
     val eventMr: String? = null,
     val showtime: String? = null
 )
+
+data class CreatePaymentOrderRequest(
+    val sessionId: Int,
+    val seatIds: List<Int>,
+    val couponCode: String? = null
+)
+
+data class CreatePaymentOrderResponse(
+    val orderId: String? = null,
+    val amount: Int = 0,
+    val currency: String = "INR",
+    val keyId: String? = null,
+    val receipt: String? = null,
+    val pricing: PricingData? = null,
+    val error: String? = null
+)
+
+data class SendOtpRequest(
+    val email: String
+)
+
+data class SendOtpResponse(
+    val success: Boolean = false,
+    val message: String? = null,
+    val devOtp: String? = null,
+    val emailSent: Boolean? = null,
+    val error: String? = null
+)
+
+data class VerifyOtpRequest(
+    val email: String,
+    val otp: String
+)
+
+data class LoginPasswordRequest(
+    val email: String,
+    val password: String
+)
+
+data class AuthFlowResponse(
+    val success: Boolean = false,
+    val message: String? = null,
+    val user: AuthUserData? = null,
+    val needsPasswordSetup: Boolean = false,
+    val needsOtp: Boolean = false,
+    val error: String? = null
+)
+
+data class AuthUserData(
+    val id: Int? = null,
+    val uid: String? = null,
+    val email: String? = null,
+    val fullName: String? = null,
+    val phoneNumber: String? = null,
+    val role: String? = null
+)
+

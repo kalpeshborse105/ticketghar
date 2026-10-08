@@ -35,11 +35,16 @@ import com.kalpkrutinfotech.mahaticket.theme.*
 import com.kalpkrutinfotech.mahaticket.ui.components.BilingualTopBar
 import com.kalpkrutinfotech.mahaticket.ui.screens.*
 import com.kalpkrutinfotech.mahaticket.ui.viewmodel.*
+import com.kalpkrutinfotech.mahaticket.util.RazorpayPaymentManager
+import com.razorpay.Checkout
+import com.razorpay.PaymentData
+import com.razorpay.PaymentResultWithDataListener
 
-class MainActivity : ComponentActivity() {
+class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        Checkout.preload(applicationContext)
         enableEdgeToEdge()
 
         setContent {
@@ -47,6 +52,14 @@ class MainActivity : ComponentActivity() {
                 MahaTicketRoot()
             }
         }
+    }
+
+    override fun onPaymentSuccess(razorpayPaymentId: String?, paymentData: PaymentData?) {
+        RazorpayPaymentManager.handlePaymentSuccess(razorpayPaymentId, paymentData)
+    }
+
+    override fun onPaymentError(errorCode: Int, response: String?, paymentData: PaymentData?) {
+        RazorpayPaymentManager.handlePaymentError(errorCode, response, paymentData)
     }
 }
 

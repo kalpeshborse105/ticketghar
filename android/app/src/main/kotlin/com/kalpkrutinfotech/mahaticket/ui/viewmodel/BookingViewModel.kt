@@ -152,6 +152,7 @@ class BookingViewModel(
         attendeeNames: Map<Int, String> = emptyMap(),
         couponCode: String? = null,
         razorpayPaymentId: String? = null,
+        razorpayOrderId: String? = null,
         razorpaySignature: String? = null,
         onSuccess: (String) -> Unit = {},
         onError: (String) -> Unit = {}
@@ -168,7 +169,9 @@ class BookingViewModel(
                 userEmail = email ?: "customer@mahaticket.in",
                 userPhone = phoneNumber,
                 couponCode = couponCode,
-                paymentId = razorpayPaymentId
+                paymentId = razorpayPaymentId,
+                orderId = razorpayOrderId,
+                signature = razorpaySignature
             )
             
             _bookingState.value = result.fold(
@@ -180,6 +183,48 @@ class BookingViewModel(
                 onFailure = { 
                     onError(it.localizedMessage ?: "Booking failed")
                     BookingUiState.Error(it.localizedMessage ?: "Booking failed")
+                }
+            )
+        }
+    }
+
+    fun createPaymentOrder(
+        sessionId: Int,
+        seatIds: List<Int>,
+        couponCode: String? = null,
+        onSuccess: (orderId: String, amount: Int, keyId: String) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            val result = repository.createPaymentOrder(sessionId, seatIds, couponCode)
+            result.fold(
+                onSuccess = { orderResp ->
+                    val orderId = orderResp.orderId ?: ""
+                    val amount = orderResp.amount
+                    val keyId = orderResp.keyId ?: "rzp_test_TkizMeQ14N4b6s"
+                    onSuccess(orderId, amount, keyId)
+                },
+                onFailure = { err ->
+                    onError(err.localizedMessage ?: "पेमेंट ऑर्डर तयार करण्यात त्रुटी")
+                }
+            )
+        }
+    }
+
+    fun validateCoupon(
+        code: String,
+        amount: Int,
+        onSuccess: (discountPaise: Int, message: String) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            val result = repository.validateCoupon(code, amount)
+            result.fold(
+                onSuccess = { resp ->
+                    onSuccess(resp.discount, resp.message ?: "कूपन लागू झाले")
+                },
+                onFailure = { err ->
+                    onError(err.localizedMessage ?: "अवैध कूपन कोड")
                 }
             )
         }

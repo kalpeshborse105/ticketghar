@@ -508,31 +508,33 @@ private fun EventCardItem(
                         modifier = Modifier.fillMaxSize()
                     )
 
-                    // Rating Badge
-                    Surface(
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(4.dp),
-                        color = Color.Black.copy(alpha = 0.8f),
-                        shape = RoundedCornerShape(6.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                    // Rating Badge (only displayed when real rating exists)
+                    if (event.rating != null && event.rating > 0.0) {
+                        Surface(
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(4.dp),
+                            color = Color.Black.copy(alpha = 0.8f),
+                            shape = RoundedCornerShape(6.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Star,
-                                contentDescription = "Rating",
-                                tint = GoldAccent,
-                                modifier = Modifier.size(11.dp)
-                            )
-                            Spacer(modifier = Modifier.width(2.dp))
-                            Text(
-                                text = "${event.rating}",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
+                            Row(
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Star,
+                                    contentDescription = "Rating",
+                                    tint = GoldAccent,
+                                    modifier = Modifier.size(11.dp)
+                                )
+                                Spacer(modifier = Modifier.width(2.dp))
+                                Text(
+                                    text = "${event.rating}",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
                         }
                     }
                 }

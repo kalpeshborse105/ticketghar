@@ -37,7 +37,11 @@ fun ProfileScreen(
     onNavigateToLegal: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
-    var isLoggedIn by remember { mutableStateOf(false) }
+    val sessionManager = remember { com.kalpkrutinfotech.mahaticket.util.UserSessionManager.getInstance(context) }
+    val isLoggedIn by sessionManager.isLoggedIn.collectAsState()
+    val userName by sessionManager.userName.collectAsState()
+    val userPhone by sessionManager.userPhone.collectAsState()
+    val userEmail by sessionManager.userEmail.collectAsState()
 
     LazyColumn(
         modifier = Modifier
@@ -78,7 +82,7 @@ fun ProfileScreen(
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Text(
-                        text = if (isLoggedIn) "महाटिकिट सदस्य" else "महाटिकिट वापरकर्ता (Guest)",
+                        text = if (isLoggedIn) (userName?.ifBlank { null } ?: "महाटिकिट सदस्य") else "महाटिकिट वापरकर्ता (Guest)",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
@@ -87,7 +91,7 @@ fun ProfileScreen(
                     Spacer(modifier = Modifier.height(2.dp))
 
                     Text(
-                        text = if (isLoggedIn) "+91 98765 43210" else "आपली सर्व तिकिटे आपल्या फोनवर सुरक्षित आहेत",
+                        text = if (isLoggedIn) (userPhone?.ifBlank { null } ?: userEmail ?: "सत्यापित सदस्य") else "आपली सर्व तिकिटे आपल्या फोनवर सुरक्षित आहेत",
                         fontSize = 12.sp,
                         color = Color(0xFF94A3B8)
                     )
@@ -142,7 +146,7 @@ fun ProfileScreen(
                         }
                     } else {
                         OutlinedButton(
-                            onClick = { isLoggedIn = false },
+                            onClick = { sessionManager.clearSession() },
                             shape = RoundedCornerShape(10.dp),
                             border = BorderStroke(1.dp, TheatricalCrimson),
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = TheatricalCrimsonLight),

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Language, translations } from '../lib/i18n.ts';
 import { AdminScanner } from './AdminScanner';
+import { TheatreSeatDesigner } from './admin/TheatreSeatDesigner';
 import {
   LayoutDashboard,
   Calendar,
@@ -103,6 +104,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [venuesList, setVenuesList] = useState<any[]>([]);
   const [loadingVenues, setLoadingVenues] = useState(false);
   const [showCreateVenueModal, setShowCreateVenueModal] = useState(false);
+  const [showSeatDesignerModal, setShowSeatDesignerModal] = useState(false);
+  const [selectedVenueForDesigner, setSelectedVenueForDesigner] = useState<any | null>(null);
+  const [isSubmittingEvent, setIsSubmittingEvent] = useState(false);
   const [newVenueForm, setNewVenueForm] = useState({
     name: '',
     nameMr: '',
@@ -204,6 +208,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     password: '',
   });
 
+  const [isSubmittingOrganizer, setIsSubmittingOrganizer] = useState(false);
+  const [isSubmittingCredentials, setIsSubmittingCredentials] = useState(false);
+
+  // Global Deduplication Helper to Prevent Duplicate Rows
+  const dedupeById = <T extends { id: any }>(items: T[]): T[] => {
+    const map = new Map<any, T>();
+    for (const item of items) {
+      if (item && item.id != null) {
+        map.set(item.id, item);
+      }
+    }
+    return Array.from(map.values());
+  };
+
   // Create Event Form
   const [newEventForm, setNewEventForm] = useState({
     organizerId: 1,
@@ -247,7 +265,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       const res = await fetch('/api/admin/settlements');
       if (res.ok) {
         const data = await res.json();
-        setSettlements(data.settlements || []);
+        setSettlements(dedupeById(data.settlements || []));
       }
     } catch (e) {
       console.error(e);
@@ -263,7 +281,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       const res = await fetch('/api/admin/events');
       if (res.ok) {
         const data = await res.json();
-        setAdminEvents(data.events || []);
+        setAdminEvents(dedupeById(data.events || []));
       }
     } catch (e) {
       console.error(e);
@@ -279,7 +297,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       const res = await fetch('/api/admin/venues');
       if (res.ok) {
         const data = await res.json();
-        setVenuesList(data.venues || []);
+        setVenuesList(dedupeById(data.venues || []));
       }
     } catch (e) {
       console.error(e);
@@ -295,7 +313,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       const res = await fetch('/api/admin/partner-leads');
       if (res.ok) {
         const data = await res.json();
-        setLeads(data.leads || []);
+        setLeads(dedupeById(data.leads || []));
       }
     } catch (e) {
       console.error(e);
@@ -311,7 +329,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       const res = await fetch('/api/admin/organizers');
       if (res.ok) {
         const data = await res.json();
-        setOrganizersList(data.organizers || []);
+        setOrganizersList(dedupeById(data.organizers || []));
       }
     } catch (e) {
       console.error('Error fetching organizers:', e);
@@ -323,12 +341,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   // Create New Organizer
   const handleCreateOrganizer = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingOrganizer) return;
     if (!newOrganizerForm.name || !newOrganizerForm.companyName || !newOrganizerForm.email || !newOrganizerForm.phone) {
       alert('कृपया सर्व आवश्यक माहिती भरा (All fields are required)');
       return;
     }
 
     try {
+      setIsSubmittingOrganizer(true);
       const res = await fetch('/api/admin/organizers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -360,18 +380,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       }
     } catch (e: any) {
       alert('त्रुटी: ' + e.message);
+    } finally {
+      setIsSubmittingOrganizer(false);
     }
   };
 
   // Set / Reset Credentials for Organizer
   const handleSetOrganizerCredentials = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingCredentials) return;
     if (!credentialsForm.email || !credentialsForm.password) {
       alert('ईमेल आणि पासवर्ड आवश्यक आहे');
       return;
     }
 
     try {
+      setIsSubmittingCredentials(true);
       const res = await fetch('/api/admin/organizers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -401,6 +425,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       }
     } catch (e: any) {
       alert('त्रुटी: ' + e.message);
+    } finally {
+      setIsSubmittingCredentials(false);
     }
   };
 
@@ -411,7 +437,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       const res = await fetch('/api/admin/orders');
       if (res.ok) {
         const data = await res.json();
-        setOrderList(data.orders || []);
+        setOrderList(dedupeById(data.orders || []));
       }
     } catch (e) {
       console.error(e);
@@ -431,7 +457,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
-        setTicketsList(data.tickets || []);
+        setTicketsList(dedupeById(data.tickets || []));
       }
     } catch (e) {
       console.error(e);
@@ -496,7 +522,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       const res = await fetch('/api/admin/users');
       if (res.ok) {
         const data = await res.json();
-        setUsersList(data.users || []);
+        setUsersList(dedupeById(data.users || []));
       }
     } catch (e) {
       console.error(e);
@@ -512,7 +538,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       const res = await fetch('/api/admin/coupons');
       if (res.ok) {
         const data = await res.json();
-        setCouponsList(data.coupons || []);
+        setCouponsList(dedupeById(data.coupons || []));
       }
     } catch (e) {
       console.error(e);
@@ -528,7 +554,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       const res = await fetch('/api/admin/announcements');
       if (res.ok) {
         const data = await res.json();
-        setAnnouncementsList(data.announcements || []);
+        setAnnouncementsList(dedupeById(data.announcements || []));
       }
     } catch (e) {
       console.error(e);
@@ -764,7 +790,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   // Action: Create New Event
   const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingEvent) return;
     try {
+      setIsSubmittingEvent(true);
       const sessionStartTime =
         newEventForm.sessionDate && newEventForm.sessionTime
           ? `${newEventForm.sessionDate}T${newEventForm.sessionTime}:00`
@@ -786,13 +814,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       });
       if (res.ok) {
         setShowCreateEventModal(false);
-        fetchEvents();
+        await fetchEvents();
       } else {
         const err = await res.json();
         alert(err.error || 'Failed to create event');
       }
     } catch (err: any) {
       alert(err.message || 'Error creating event');
+    } finally {
+      setIsSubmittingEvent(false);
     }
   };
 
@@ -1338,11 +1368,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </div>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => setShowCreateVenueModal(true)}
+                    onClick={() => {
+                      setSelectedVenueForDesigner(null);
+                      setShowSeatDesignerModal(true);
+                    }}
                     className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs shadow-lg hover:bg-amber-400 transition"
                   >
                     <Plus className="w-4 h-4" />
-                    <span>+ नवीन नाट्यगृह / शहर जोडा</span>
+                    <span>+ नवीन नाट्यगृह / आसन डिझायनर</span>
                   </button>
                   <button
                     onClick={fetchVenues}
@@ -1360,44 +1393,58 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   {venuesList.map((v) => (
                     <div
                       key={v.id}
-                      className="p-5 bg-slate-900 border border-slate-800 rounded-2xl space-y-3 shadow-lg"
+                      className="p-5 bg-slate-900 border border-slate-800 rounded-2xl space-y-3 shadow-lg flex flex-col justify-between"
                     >
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                            {v.city}
-                          </span>
-                          <h3 className="text-base font-bold text-white mt-1">
-                            {v.nameMr || v.name}
-                          </h3>
-                          <p className="text-xs text-slate-400">{v.name}</p>
-                        </div>
-                        <Building2 className="w-5 h-5 text-amber-400 shrink-0" />
-                      </div>
-
-                      <p className="text-xs text-slate-300 leading-relaxed">
-                        📍 {v.address}
-                      </p>
-
-                      <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
-                        <span>क्षमता: <strong>{v.totalCapacity}</strong> आसने</span>
-                        <span>
-                          {v.hasSeatLayout === 1 ? '🪑 आसन नकाशा सक्रिय' : 'जनरल ॲडमिशन'}
-                        </span>
-                      </div>
-
-                      {v.sections && v.sections.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 pt-1">
-                          {v.sections.map((s: any) => (
-                            <span
-                              key={s.id}
-                              className="px-2 py-0.5 bg-slate-800 rounded text-[10px] text-amber-300 font-semibold"
-                            >
-                              {s.nameMr} (₹{s.basePrice / 100})
+                      <div className="space-y-3">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                              {v.city}
                             </span>
-                          ))}
+                            <h3 className="text-base font-bold text-white mt-1">
+                              {v.nameMr || v.name}
+                            </h3>
+                            <p className="text-xs text-slate-400">{v.name}</p>
+                          </div>
+                          <Building2 className="w-5 h-5 text-amber-400 shrink-0" />
                         </div>
-                      )}
+
+                        <p className="text-xs text-slate-300 leading-relaxed">
+                          📍 {v.address}
+                        </p>
+
+                        <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+                          <span>क्षमता: <strong>{v.totalCapacity}</strong> आसने</span>
+                          <span>
+                            {v.hasSeatLayout === 1 ? '🪑 आसन नकाशा सक्रिय' : 'जनरल ॲडमिशन'}
+                          </span>
+                        </div>
+
+                        {v.sections && v.sections.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 pt-1">
+                            {v.sections.map((s: any) => (
+                              <span
+                                key={s.id}
+                                className="px-2 py-0.5 bg-slate-800 rounded text-[10px] text-amber-300 font-semibold"
+                              >
+                                {s.nameMr} (₹{s.basePrice / 100})
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedVenueForDesigner(v);
+                          setShowSeatDesignerModal(true);
+                        }}
+                        className="mt-3 w-full py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 hover:text-amber-300 text-xs font-bold flex items-center justify-center gap-1.5 border border-slate-700 transition"
+                      >
+                        <Layers className="w-4 h-4 text-amber-400" />
+                        <span>🪑 आसन व्यवस्था डिझायनर व संपादन (Seat Designer)</span>
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -2651,125 +2698,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         </main>
       </div>
 
-      {/* MODAL 1: Create New Venue & City */}
-      {showCreateVenueModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <h3 className="text-lg font-bold text-white font-serif">
-                नवीन नाट्यगृह व आसन व्यवस्था जोडा (Add Auditorium)
-              </h3>
-              <button
-                onClick={() => setShowCreateVenueModal(false)}
-                className="p-1 rounded-lg bg-slate-800 text-slate-400 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateVenue} className="space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-slate-400 block mb-1">नाट्यगृहाचे नाव (English):</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Kalidas Natyamandir"
-                    value={newVenueForm.name}
-                    onChange={(e) => setNewVenueForm({ ...newVenueForm, name: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white"
-                  />
-                </div>
-                <div>
-                  <label className="text-slate-400 block mb-1">मराठी नाव (Marathi):</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="उदा. कालिदास नाट्यमंदिर"
-                    value={newVenueForm.nameMr}
-                    onChange={(e) => setNewVenueForm({ ...newVenueForm, nameMr: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-slate-400 block mb-1">शहर (City in Maharashtra):</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="उदा. Nashik, Kolhapur, Pune"
-                    value={newVenueForm.city}
-                    onChange={(e) => setNewVenueForm({ ...newVenueForm, city: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white font-semibold"
-                  />
-                </div>
-                <div>
-                  <label className="text-slate-400 block mb-1">एकूण आसन क्षमता (Capacity):</label>
-                  <input
-                    type="number"
-                    value={newVenueForm.totalCapacity}
-                    onChange={(e) => setNewVenueForm({ ...newVenueForm, totalCapacity: Number(e.target.value) })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-slate-400 block mb-1">पत्ता (Address):</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="उदा. एम.जी. रोड, रविवार पेठ..."
-                  value={newVenueForm.address}
-                  onChange={(e) => setNewVenueForm({ ...newVenueForm, address: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white"
-                />
-              </div>
-
-              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-3">
-                <span className="font-bold text-amber-400 block">आसन व्यवस्था दर (Section Pricing):</span>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-slate-400 block mb-1">बाल्कनी दर (₹):</label>
-                    <input
-                      type="number"
-                      value={newVenueForm.balconyPrice}
-                      onChange={(e) => setNewVenueForm({ ...newVenueForm, balconyPrice: Number(e.target.value) })}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-slate-400 block mb-1">स्टॉल / आसन दर (₹):</label>
-                    <input
-                      type="number"
-                      value={newVenueForm.stallPrice}
-                      onChange={(e) => setNewVenueForm({ ...newVenueForm, stallPrice: Number(e.target.value) })}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateVenueModal(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 font-semibold text-xs"
-                >
-                  रद्द करा
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs shadow-lg hover:bg-amber-400 transition"
-                >
-                  नाट्यगृह तयार करा (Save Venue)
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {/* MODAL 1: Theatre & Seat Layout Designer (MahaTicket Standard) */}
+      {showSeatDesignerModal && (
+        <TheatreSeatDesigner
+          venueToEdit={selectedVenueForDesigner}
+          onClose={() => {
+            setShowSeatDesignerModal(false);
+            setSelectedVenueForDesigner(null);
+          }}
+          onSaved={async () => {
+            setShowSeatDesignerModal(false);
+            setSelectedVenueForDesigner(null);
+            await fetchVenues();
+          }}
+        />
       )}
 
       {/* MODAL 2: Create New Event */}
@@ -2936,9 +2878,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs shadow-lg hover:bg-amber-400 transition"
+                  disabled={isSubmittingEvent}
+                  className="px-5 py-2 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs shadow-lg hover:bg-amber-400 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  कार्यक्रम जतन करा (Save & Publish)
+                  {isSubmittingEvent ? 'जतन करत आहे... (Saving...)' : 'कार्यक्रम जतन करा (Save & Publish)'}
                 </button>
               </div>
             </form>
@@ -3360,9 +3303,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-[#ea580c] hover:bg-[#c2410c] text-white font-bold text-xs shadow-lg transition active:scale-95"
+                  disabled={isSubmittingOrganizer}
+                  className="px-5 py-2 rounded-xl bg-[#ea580c] hover:bg-[#c2410c] text-white font-bold text-xs shadow-lg transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  नोंदणी पूर्ण करा (Register Organizer)
+                  {isSubmittingOrganizer ? 'नोंदणी करत आहे... (Registering...)' : 'नोंदणी पूर्ण करा (Register Organizer)'}
                 </button>
               </div>
             </form>
@@ -3454,9 +3398,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg transition active:scale-95"
+                  disabled={isSubmittingCredentials}
+                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  क्रेडेंशियल्स सेव्ह करा (Save Credentials)
+                  {isSubmittingCredentials ? 'जतन करत आहे... (Saving...)' : 'क्रेडेंशियल्स सेव्ह करा (Save Credentials)'}
                 </button>
               </div>
             </form>

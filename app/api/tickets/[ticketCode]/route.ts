@@ -9,9 +9,10 @@ export async function GET(
   { params }: { params: Promise<{ ticketCode: string }> }
 ) {
   try {
-    const { ticketCode } = await params;
+    const rawCode = (await params).ticketCode;
+    const cleanCode = decodeURIComponent(rawCode || '').trim();
 
-    const [ticketRecord] = await db
+    let [ticketRecord] = await db
       .select({
         ticket: tickets,
         order: orders,
@@ -20,8 +21,23 @@ export async function GET(
       .from(tickets)
       .innerJoin(orders, eq(tickets.orderId, orders.id))
       .innerJoin(eventSessions, eq(tickets.sessionId, eventSessions.id))
-      .where(eq(tickets.ticketCode, ticketCode))
+      .where(eq(tickets.ticketCode, cleanCode))
       .limit(1);
+
+    if (!ticketRecord) {
+      // Support direct order reference lookup
+      [ticketRecord] = await db
+        .select({
+          ticket: tickets,
+          order: orders,
+          session: eventSessions,
+        })
+        .from(tickets)
+        .innerJoin(orders, eq(tickets.orderId, orders.id))
+        .innerJoin(eventSessions, eq(tickets.sessionId, eventSessions.id))
+        .where(eq(orders.orderNumber, cleanCode))
+        .limit(1);
+    }
 
     if (!ticketRecord) {
       return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });

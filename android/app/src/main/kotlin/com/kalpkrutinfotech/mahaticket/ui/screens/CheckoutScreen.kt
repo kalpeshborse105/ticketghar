@@ -18,6 +18,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import android.app.Activity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -26,6 +28,8 @@ import androidx.compose.ui.unit.sp
 import com.kalpkrutinfotech.mahaticket.theme.*
 import com.kalpkrutinfotech.mahaticket.ui.components.TheaterLoaderCard
 import com.kalpkrutinfotech.mahaticket.ui.viewmodel.BookingViewModel
+import com.kalpkrutinfotech.mahaticket.util.RazorpayPaymentManager
+import com.kalpkrutinfotech.mahaticket.util.UserSessionManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -37,15 +41,20 @@ fun CheckoutScreen(
     onNavigateBack: () -> Unit,
     onBookingSuccess: (String) -> Unit
 ) {
+    val context = LocalContext.current
+    val activity = context as? Activity
+    val sessionManager = remember { UserSessionManager.getInstance(context) }
+
     val selectedSeats by bookingViewModel.selectedSeats.collectAsState()
     val holdResponse by bookingViewModel.holdResponse.collectAsState()
     val serverPricing = holdResponse?.pricing
 
-    var customerName by remember { mutableStateOf("") }
-    var customerEmail by remember { mutableStateOf("") }
-    var customerPhone by remember { mutableStateOf("") }
+    var customerName by remember { mutableStateOf(sessionManager.getName() ?: "") }
+    var customerEmail by remember { mutableStateOf(sessionManager.getEmail() ?: "") }
+    var customerPhone by remember { mutableStateOf(sessionManager.getPhone() ?: "") }
     var couponInput by remember { mutableStateOf("") }
     var appliedCoupon by remember { mutableStateOf<String?>(null) }
+    var couponSuccessMessage by remember { mutableStateOf<String?>(null) }
     var discountAmount by remember { mutableIntStateOf(0) }
     var isProcessing by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -251,7 +260,10 @@ fun CheckoutScreen(
                             // Phone Field
                             OutlinedTextField(
                                 value = customerPhone,
-                                onValueChange = { if (it.length <= 10) customerPhone = it },
+                                onValueChange = { input ->
+                                    val digits = input.filter { it.isDigit() }
+                                    if (digits.length <= 10) customerPhone = digits
+                                },
                                 label = { Text("मोबाईल नंबर (10-digit Phone)", color = Color(0xFF94A3B8)) },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                                 prefix = { Text("+91 ", color = GoldAccent, fontWeight = FontWeight.Bold) },
@@ -336,12 +348,28 @@ fun CheckoutScreen(
 
                                 Button(
                                     onClick = {
-                                        if (couponInput.trim() == "NATAK50" || couponInput.trim() == "MAHA10") {
-                                            appliedCoupon = couponInput.trim()
-                                            discountAmount = 5000 // ₹50
-                                        } else {
-                                            errorMessage = "अवैध कूपन कोड. कृपया योग्य कूपन वापरा."
+                                        if (couponInput.isBlank()) {
+                                            errorMessage = "कृपया कूपन कोड प्रविष्ट करा."
+                                            return@Button
                                         }
+                                        val code = couponInput.trim().uppercase()
+                                        errorMessage = null
+                                        bookingViewModel.validateCoupon(
+                                            code = code,
+                                            amount = basePrice,
+                                            onSuccess = { discount, msg ->
+                                                appliedCoupon = code
+                                                discountAmount = discount
+                                                couponSuccessMessage = msg
+                                                errorMessage = null
+                                            },
+                                            onError = { err ->
+                                                errorMessage = err
+                                                appliedCoupon = null
+                                                discountAmount = 0
+                                                couponSuccessMessage = null
+                                            }
+                                        )
                                     },
                                     colors = ButtonDefaults.buttonColors(containerColor = GoldAccent),
                                     shape = RoundedCornerShape(10.dp),
@@ -354,7 +382,7 @@ fun CheckoutScreen(
                             if (appliedCoupon != null) {
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    text = "✓ कूपन '$appliedCoupon' लागू केले! ₹50 सवलत मिळाली.",
+                                    text = couponSuccessMessage ?: "✓ कूपन '$appliedCoupon' यशस्वीरित्या लागू केले! ₹${discountAmount / 100} सवलत मिळाली.",
                                     color = Color(0xFF10B981),
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold
@@ -515,33 +543,72 @@ fun CheckoutScreen(
                         }
 
                         val cleanPhone = customerPhone.filter { it.isDigit() }.takeLast(10)
-                        if (customerName.isBlank() || cleanPhone.length != 10) {
-                            errorMessage = "कृपया आपले पूर्ण नाव आणि १०-अंकी मोबाईल नंबर प्रविष्ट करा."
+                        if (customerName.isBlank() || cleanPhone.length != 10 || cleanPhone.first() !in '6'..'9') {
+                            errorMessage = "कृपया आपले पूर्ण नाव आणि वैध १०-अंकी भारतीय मोबाईल नंबर प्रविष्ट करा (६ ते ९ ने सुरू होणारा)."
                             return@Button
                         }
 
                         isProcessing = true
                         errorMessage = null
 
-                        val mockPaymentId = "pay_rzp_${System.currentTimeMillis()}"
-                        val mockSignature = "sig_rzp_${System.currentTimeMillis()}"
+                        // Persist customer contact details for future convenience
+                        sessionManager.saveSession(
+                            email = customerEmail.trim().ifBlank { "customer@mahaticket.in" },
+                            name = customerName.trim(),
+                            phone = cleanPhone
+                        )
 
-                        bookingViewModel.confirmBooking(
+                        val seatIds = selectedSeats.map { it.seatId }
+
+                        bookingViewModel.createPaymentOrder(
                             sessionId = sessionId,
-                            eventId = eventId,
-                            customerName = customerName.trim(),
-                            phoneNumber = cleanPhone,
-                            email = customerEmail.trim().ifBlank { null },
+                            seatIds = seatIds,
                             couponCode = appliedCoupon,
-                            razorpayPaymentId = mockPaymentId,
-                            razorpaySignature = mockSignature,
-                            onSuccess = { orderNumber ->
-                                isProcessing = false
-                                onBookingSuccess(orderNumber)
+                            onSuccess = { orderId, amount, keyId ->
+                                if (activity != null) {
+                                    RazorpayPaymentManager.startPayment(
+                                        activity = activity,
+                                        keyId = keyId,
+                                        orderId = orderId,
+                                        amountInPaise = amount,
+                                        eventName = "महाटिकिट - तिकीट आरक्षण",
+                                        customerName = customerName.trim(),
+                                        customerEmail = customerEmail.trim().ifBlank { "customer@mahaticket.in" },
+                                        customerPhone = cleanPhone,
+                                        onSuccess = { paymentId, returnedOrderId, signature ->
+                                            bookingViewModel.confirmBooking(
+                                                sessionId = sessionId,
+                                                eventId = eventId,
+                                                customerName = customerName.trim(),
+                                                phoneNumber = cleanPhone,
+                                                email = customerEmail.trim().ifBlank { null },
+                                                couponCode = appliedCoupon,
+                                                razorpayPaymentId = paymentId,
+                                                razorpayOrderId = returnedOrderId ?: orderId,
+                                                razorpaySignature = signature,
+                                                onSuccess = { orderNumber ->
+                                                    isProcessing = false
+                                                    onBookingSuccess(orderNumber)
+                                                },
+                                                onError = { error ->
+                                                    isProcessing = false
+                                                    errorMessage = error
+                                                }
+                                            )
+                                        },
+                                        onError = { code, errorMsg ->
+                                            isProcessing = false
+                                            errorMessage = errorMsg ?: "पेमेंट अयशस्वी किंवा रद्द केले गेले."
+                                        }
+                                    )
+                                } else {
+                                    isProcessing = false
+                                    errorMessage = "पेमेंट विंडो उघडण्यात अयशस्वी. कृपया पुन्हा प्रयत्न करा."
+                                }
                             },
-                            onError = { error ->
+                            onError = { orderErr ->
                                 isProcessing = false
-                                errorMessage = error
+                                errorMessage = orderErr
                             }
                         )
                     },

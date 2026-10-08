@@ -906,15 +906,16 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* Organizer Portal Desktop Link */}
-            <a
-              href="/admin"
-              className="hidden lg:flex items-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 px-3 py-2 text-xs font-bold text-amber-800 transition"
-              title="Organizer & Gate Scanner Portal"
+            {/* Post Event / Partner CTA Desktop */}
+            <button
+              type="button"
+              onClick={handleOpenPartnerModal}
+              className="hidden lg:flex items-center gap-1.5 rounded-xl border border-orange-200 bg-orange-50/80 hover:bg-orange-100/80 px-3 py-2 text-xs font-bold text-[#ea580c] transition active:scale-95"
+              title={language === 'mr' ? 'आपला कार्यक्रम महाटिकिटवर सूचीबद्ध करा' : 'Post your event on MahaTicket'}
             >
-              <ShieldCheck className="h-3.5 w-3.5 text-amber-600" />
-              <span>{language === 'mr' ? 'आयोजक व स्कॅनर' : 'Organizer Portal'}</span>
-            </a>
+              <Building2 className="h-3.5 w-3.5 text-[#ea580c]" />
+              <span>{language === 'mr' ? 'कार्यक्रम पोस्ट करा' : 'Post Event'}</span>
+            </button>
 
             {/* MOBILE MENU */}
             <button
@@ -1055,37 +1056,23 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* Partner */}
+            {/* Post Event / Partner */}
             <button
               type="button"
               onClick={() => {
                 handleOpenPartnerModal();
                 setMobileMenuOpen(false);
               }}
-              className="flex w-full items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-bold text-slate-800"
+              className="flex w-full items-center gap-2.5 rounded-xl border border-orange-200 bg-orange-50 px-3 py-2.5 text-xs font-bold text-[#ea580c] transition hover:bg-orange-100"
             >
-              <Building2 className="h-4 w-4 text-slate-500" />
+              <Building2 className="h-4 w-4 text-[#ea580c]" />
 
               <span>
                 {language === 'mr'
-                  ? 'आमच्यासोबत भागीदारी'
-                  : 'Partner With Us'}
+                  ? 'कार्यक्रम पोस्ट करा / भागीदारी'
+                  : 'Post Event / Partner With Us'}
               </span>
             </button>
-
-            {/* Organizer & Scanner Portal Mobile */}
-            <a
-              href="/admin"
-              onClick={() => setMobileMenuOpen(false)}
-              className="flex w-full items-center gap-2.5 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-xs font-bold text-amber-900 shadow-sm transition hover:bg-amber-100"
-            >
-              <ShieldCheck className="h-4 w-4 text-amber-600" />
-              <span>
-                {language === 'mr'
-                  ? 'आयोजक व तिकीट स्कॅनर पोर्टल'
-                  : 'Organizer & Scanner Portal'}
-              </span>
-            </a>
 
             {/* Install */}
             {isInstallable && (

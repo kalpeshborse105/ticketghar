@@ -39,6 +39,10 @@ export interface EventItem {
   organizer?: OrganizerItem;
   sessions?: EventSessionItem[];
   minPrice?: number;
+  rating?: number | null;
+  ratingCount?: number | null;
+  trailerUrl?: string | null;
+  videoUrl?: string | null;
 }
 
 export interface VenueItem {

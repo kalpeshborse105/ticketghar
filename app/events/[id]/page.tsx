@@ -17,6 +17,7 @@ import {
   Award,
   Play,
   X,
+  Star,
 } from 'lucide-react';
 import { Header } from '@/src/components/Header';
 import { MTTicketLoader } from '@/src/components/ui/MTSkeleton';
@@ -86,6 +87,7 @@ export default function EventDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>('all');
   const [showFullDesc, setShowFullDesc] = useState(false);
+  const [language, setLanguage] = useState<'mr' | 'en'>('mr');
   const [copiedLink, setCopiedLink] = useState(false);
 
   // Booking flow state — all inline on this page (no redirect to home!)
@@ -287,7 +289,7 @@ export default function EventDetailPage() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-24">
       {/* Constant Header across all pages */}
-      <Header />
+      <Header language={language} onLanguageChange={setLanguage} />
 
       {/* Sub-bar: Breadcrumb & Share */}
       <div className="bg-white/95 border-b border-slate-200">
@@ -397,6 +399,15 @@ export default function EventDetailPage() {
                     <span>{event.durationMinutes} मिनिटे</span>
                   </span>
                 )}
+                {(event as any).rating && (event as any).rating > 0 && (
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                    <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                    <span>{(event as any).rating.toFixed(1)}</span>
+                    {(event as any).ratingCount ? (
+                      <span className="text-[10px] text-slate-300">({(event as any).ratingCount})</span>
+                    ) : null}
+                  </span>
+                )}
               </div>
 
               <div>
@@ -408,10 +419,61 @@ export default function EventDetailPage() {
                 )}
               </div>
 
-              <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-md px-3 py-1 rounded-xl border border-white/15 text-xs text-slate-200">
-                <Ticket className="w-3.5 h-3.5 text-orange-400" />
-                <span>MahaTicket अधिकृत तिकीट आरक्षण</span>
-              </div>
+              {/* Next Show Information Hierarchy (Parity with Section 7 Specification) */}
+              {activeSessions.length > 0 && (() => {
+                const nextSession = activeSessions[0];
+                const nextDate = new Date(nextSession.sessionStartTime);
+                const formattedDate = nextDate.toLocaleDateString(language === 'mr' ? 'mr-IN' : 'en-IN', {
+                  day: 'numeric',
+                  month: 'short',
+                  year: 'numeric',
+                });
+                const formattedTime = nextDate.toLocaleTimeString(language === 'mr' ? 'mr-IN' : 'en-IN', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                });
+                const totalAvailableSeats = activeSessions.reduce(
+                  (sum, s) => sum + s.ticketTypes.reduce((acc, t) => acc + (t.availableQuota || 0), 0),
+                  0
+                );
+                const sessionMinPrice = nextSession.ticketTypes.length > 0
+                  ? Math.min(...nextSession.ticketTypes.map((t) => t.price / 100))
+                  : minSessionPrice;
+
+                return (
+                  <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3.5 sm:p-4 border border-white/15 max-w-xl text-left space-y-2">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-white text-xs sm:text-sm">{formattedDate}</span>
+                        <span className="text-white/40">•</span>
+                        <span className="font-bold text-amber-300 text-xs sm:text-sm">{formattedTime}</span>
+                      </div>
+
+                      {totalAvailableSeats > 0 ? (
+                        <span className="text-[11px] font-bold text-emerald-300 bg-emerald-500/20 px-2.5 py-0.5 rounded-full border border-emerald-400/30">
+                          {totalAvailableSeats} जागा उपलब्ध
+                        </span>
+                      ) : (
+                        <span className="text-[11px] font-bold text-rose-300 bg-rose-500/20 px-2.5 py-0.5 rounded-full border border-rose-400/30">
+                          हाउसफुल्ल (Sold Out)
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs pt-1.5 border-t border-white/10">
+                      <div className="flex items-center gap-1.5 text-slate-200">
+                        <MapPin className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                        <span className="truncate">{event.venue.nameMr || event.venue.name}, {event.venue.city}</span>
+                      </div>
+                      {sessionMinPrice > 0 && (
+                        <span className="text-amber-300 font-extrabold font-mono text-xs sm:text-sm shrink-0">
+                          From ₹{sessionMinPrice}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 text-xs max-w-xl">
                 <div className="flex items-center gap-2.5 bg-white/5 p-2.5 rounded-xl border border-white/10">
@@ -436,7 +498,7 @@ export default function EventDetailPage() {
                   className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-[#ea580c] hover:bg-[#c2410c] text-white font-extrabold text-xs sm:text-sm shadow-xl shadow-orange-500/30 transition-all active:scale-95 cursor-pointer"
                 >
                   <Ticket className="w-4 h-4" />
-                  <span>शो व जागा निवडा{minSessionPrice > 0 ? ` — ₹${minSessionPrice} पासून` : ''}</span>
+                  <span>शो निवडा (Select Show){minSessionPrice > 0 ? ` — From ₹${minSessionPrice}` : ''}</span>
                 </a>
 
                 {videoEmbedUrl && (

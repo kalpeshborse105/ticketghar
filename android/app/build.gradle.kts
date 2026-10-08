@@ -109,4 +109,7 @@ dependencies {
     // Core Android
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.core:core-splashscreen:1.0.1")
+
+    // Razorpay Android SDK for live customer checkout
+    implementation("com.razorpay:checkout:1.6.40")
 }

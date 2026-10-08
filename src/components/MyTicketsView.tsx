@@ -220,20 +220,33 @@ export const MyTicketsView: React.FC<MyTicketsViewProps> = ({
                     </span>
                   </div>
 
-                  <button
-                    onClick={() =>
-                      onViewTicket({
-                        order: ord,
-                        tickets: tks,
-                        event: ev,
-                        pricing: {},
-                      })
-                    }
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#ea580c] hover:bg-[#c2410c] text-white font-medium text-xs shadow-sm transition active:scale-95"
-                  >
-                    <span>{language === 'mr' ? 'पास उघडा' : 'View Pass'}</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() =>
+                        onViewTicket({
+                          order: ord,
+                          tickets: tks,
+                          event: ev,
+                          pricing: {},
+                        })
+                      }
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#ea580c] hover:bg-[#c2410c] text-white font-medium text-xs shadow-sm transition active:scale-95"
+                    >
+                      <span>{language === 'mr' ? 'पास उघडा' : 'View Pass'}</span>
+                    </button>
+                    {(tks[0]?.ticketCode || ord.orderNumber) && (
+                      <a
+                        href={`/tickets/${encodeURIComponent(tks[0]?.ticketCode || ord.orderNumber)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium transition"
+                        title="थेट URL वर तिकीट पहा"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        <span className="hidden sm:inline">URL</span>
+                      </a>
+                    )}
+                  </div>
                 </div>
               </div>
             );
