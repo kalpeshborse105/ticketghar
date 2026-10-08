@@ -1,9 +1,32 @@
 /**
- * Public URL helpers — never emit localhost in production ticket/email/WhatsApp links.
+ * Public URL helpers — never emit broken/placeholder links in tickets/email/WhatsApp.
+ * Official production site: https://mahaticket.kalpkrutinfotech.com/
  */
+
+const PRODUCTION_APP_URL = 'https://mahaticket.kalpkrutinfotech.com';
+
+function stripQuotes(value: string): string {
+  return value.trim().replace(/^['"]|['"]$/g, '');
+}
+
 export function getAppBaseUrl(): string {
-  const raw = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || '';
-  return raw.replace(/\/$/, '');
+  const raw = stripQuotes(
+    process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || '',
+  );
+
+  if (raw) {
+    return raw.replace(/\/$/, '');
+  }
+
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL.replace(/\/$/, '')}`;
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    return PRODUCTION_APP_URL;
+  }
+
+  return 'http://localhost:3000';
 }
 
 export function getPublicUrl(path = ''): string {

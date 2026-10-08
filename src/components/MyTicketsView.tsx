@@ -49,7 +49,7 @@ export const MyTicketsView: React.FC<MyTicketsViewProps> = ({
       try {
         const cached =
           localStorage.getItem('mahaticket_offline_orders') ||
-          localStorage.getItem('ticketghar_offline_orders');
+          localStorage.getItem('mahaticket_offline_orders');
         if (cached) {
           cachedOrders = JSON.parse(cached);
         }

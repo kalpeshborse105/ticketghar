@@ -566,14 +566,11 @@ export const Header: React.FC<HeaderProps> = ({
 
 
   return (
-    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white text-slate-900 shadow-sm">
+    <header className="sticky top-0 z-40 border-b border-[#e7e5e4] bg-white/95 text-[#111827] shadow-sm backdrop-blur-md">
 
-      <div className="mx-auto max-w-7xl px-3 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl px-3 sm:px-5 lg:px-6">
 
-        {/* ===================================================
-            DESKTOP / TABLET MAIN HEADER
-            =================================================== */}
-        <div className="flex h-16 items-center gap-2 sm:gap-3">
+        <div className="flex h-14 items-center gap-2 sm:gap-3">
 
           {/* BRAND */}
           <button
@@ -582,23 +579,21 @@ export const Header: React.FC<HeaderProps> = ({
             className="flex shrink-0 items-center gap-2 text-left"
             aria-label="MahaTicket Home"
           >
-            <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-red-600 shadow-md shadow-orange-500/25 transition-transform hover:scale-105">
-              <Ticket className="h-5 w-5 -rotate-12 text-white" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#ea580c] shadow-sm shadow-orange-500/20">
+              <Ticket className="h-4 w-4 -rotate-12 text-white" />
             </div>
 
             <div className="hidden sm:block">
               <div className="flex items-center gap-1.5">
-                <span className="font-serif text-lg font-extrabold tracking-tight text-slate-950">
+                <span className="text-base font-extrabold tracking-tight text-[#111827]">
                   {language === 'mr' ? 'महाटिकिट' : 'MahaTicket'}
-                </span>
-
-                <span className="rounded-full border border-orange-200 bg-orange-100 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-[#ea580c]">
-                  MH
                 </span>
               </div>
 
-              <p className="max-w-[160px] truncate text-[9px] text-slate-500">
-                Maharashtra-First Ticket Marketplace
+              <p className="max-w-[200px] truncate text-[9px] font-medium text-[#64748b]">
+                {language === 'mr'
+                  ? 'महाराष्ट्राचे हक्काचे तिकीट व्यासपीठ'
+                  : "Maharashtra's ticket marketplace"}
               </p>
             </div>
           </button>
@@ -1069,8 +1064,8 @@ export const Header: React.FC<HeaderProps> = ({
 
               <span>
                 {language === 'mr'
-                  ? 'कार्यक्रम पोस्ट करा / भागीदारी'
-                  : 'Post Event / Partner With Us'}
+                  ? 'कार्यक्रम पोस्ट करा'
+                  : 'Post Event'}
               </span>
             </button>
 

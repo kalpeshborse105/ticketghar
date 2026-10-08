@@ -208,7 +208,7 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
       <div className="relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[96vh] border border-slate-200">
 
         {/* Modal Top Header */}
-        <div className="px-4 sm:px-6 py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+        <div className="flex items-center justify-between border-b border-[#e7e5e4] bg-[#111827] px-4 py-3 text-white sm:px-6">
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-base sm:text-lg font-black text-white truncate max-w-[280px] sm:max-w-md">

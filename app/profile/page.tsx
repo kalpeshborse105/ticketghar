@@ -118,7 +118,7 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="mt-shell flex min-h-screen items-center justify-center">
         <MTTicketLoader
           message="आपले खाते लोड होत आहे..."
           submessage="महाटिकिट अधिकृत पोर्टल"
@@ -132,7 +132,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 pb-20">
+    <div className="mt-shell pb-20 text-[#111827]">
       <Header />
       <div className="max-w-3xl mx-auto px-4 py-6 space-y-5">
         {/* Back Button */}

@@ -141,6 +141,7 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
   });
 
   const [activeTab, setActiveTab] = useState<'editor' | 'preview'>('editor');
+  const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -324,6 +325,38 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
       i === rowIdx ? { ...row, aisleAfter: updatedAisles } : row
     );
     updateCurrentSection({ rows: updatedRows });
+  };
+
+  // Direct Seat Toggle from Live Preview (Section 7 & 8 Parity)
+  const handleToggleSeatPropertyInSec = (secIdx: number, rowIdx: number, seatIdx: number) => {
+    setSections((prev) =>
+      prev.map((sec, sI) => {
+        if (sI !== secIdx) return sec;
+        const targetRow = sec.rows[rowIdx];
+        const targetSeat = targetRow.seats[seatIdx];
+
+        let nextBlocked = 0;
+        let nextAccessible = 0;
+        if (targetSeat.isBlocked === 0 && targetSeat.isAccessible === 0) {
+          nextBlocked = 1; // Blocked
+        } else if (targetSeat.isBlocked === 1) {
+          nextBlocked = 0;
+          nextAccessible = 1; // Accessible
+        } else {
+          nextBlocked = 0;
+          nextAccessible = 0; // Normal
+        }
+
+        const updatedSeats = targetRow.seats.map((s, idx) =>
+          idx === seatIdx ? { ...s, isBlocked: nextBlocked, isAccessible: nextAccessible } : s
+        );
+
+        return {
+          ...sec,
+          rows: sec.rows.map((r, rI) => (rI === rowIdx ? { ...r, seats: updatedSeats } : r)),
+        };
+      })
+    );
   };
 
   // SAVE TO SUPABASE VIA ADMIN API (Double-Click Protected)
@@ -803,87 +836,148 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
               )}
             </div>
           ) : (
-            /* TAB 2: LIVE PREVIEW (Exactly what customer sees in SeatMapModal) */
+            /* TAB 2: LIVE PREVIEW (Direct interactive theatre editing - Section 7, 8, 9, 10 Parity) */
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-6">
-              <div className="text-center space-y-1">
-                <span className="text-[11px] uppercase tracking-widest text-amber-400 font-black">
-                  थेट ग्राहक आसन नकाशा पूर्वावलोकन (Live Customer Layout)
-                </span>
-                <h3 className="text-lg font-bold text-white font-serif">
-                  {venueNameMr || venueName || 'नाट्यगृह आसन रचना'}
-                </h3>
-                <p className="text-xs text-slate-400">
-                  {city} • {totalSeats} एकूण आसने
-                </p>
-              </div>
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                <div className="text-center sm:text-left space-y-0.5">
+                  <div className="flex items-center justify-center sm:justify-start gap-2">
+                    <span className="text-[11px] uppercase tracking-widest text-amber-400 font-black">
+                      थेट ग्राहक आसन नकाशा (Live Theatre Layout)
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      थेट संपादन सक्रिय
+                    </span>
+                  </div>
+                  <h3 className="text-lg font-bold text-white font-serif">
+                    {venueNameMr || venueName || 'नाट्यगृह आसन रचना'}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    {city} • {totalSeats} एकूण आसने • (आसनावर थेट क्लिक करून सामान्य / ब्लॉक / दिव्यांग स्थिती बदला)
+                  </p>
+                </div>
 
-              {/* Stage Visual */}
-              <div className="max-w-lg mx-auto py-2.5 px-6 rounded-2xl bg-gradient-to-b from-amber-500/20 to-transparent border border-amber-500/30 text-center shadow-lg">
-                <div className="text-xs font-black uppercase tracking-widest text-amber-400 flex items-center justify-center gap-2">
-                  <span>🎭 रंगमंच / STAGE (समोरची बाजू)</span>
-                  <ArrowDown className="w-3.5 h-3.5" />
+                {/* Zoom & View Controls (Section 10 Parity) */}
+                <div className="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-xl p-1.5 text-xs shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setZoomLevel((z) => Math.max(0.6, Number((z - 0.1).toFixed(1))))}
+                    className="w-7 h-7 rounded-lg bg-slate-800 text-slate-200 hover:text-white font-black text-sm flex items-center justify-center transition active:scale-90"
+                    title="Zoom Out"
+                  >
+                    -
+                  </button>
+                  <span className="font-mono text-amber-400 font-black text-xs w-12 text-center">
+                    {Math.round(zoomLevel * 100)}%
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setZoomLevel((z) => Math.min(1.6, Number((z + 0.1).toFixed(1))))}
+                    className="w-7 h-7 rounded-lg bg-slate-800 text-slate-200 hover:text-white font-black text-sm flex items-center justify-center transition active:scale-90"
+                    title="Zoom In"
+                  >
+                    +
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setZoomLevel(1)}
+                    className="px-2.5 py-1 rounded-lg bg-slate-900 text-slate-400 hover:text-white text-[11px] font-semibold transition"
+                  >
+                    Reset
+                  </button>
                 </div>
               </div>
 
-              {/* Layout Sections */}
-              <div className="space-y-8">
-                {sections.map((sec, secIdx) => (
-                  <div key={secIdx} className="space-y-3">
-                    <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                      <span className="text-xs font-black text-amber-400 uppercase tracking-wider">
-                        {sec.nameMr} ({sec.name})
-                      </span>
-                      <span className="text-xs font-bold text-emerald-400 font-mono">
-                        ₹{sec.basePrice}
-                      </span>
-                    </div>
+              {/* Theatrical Curved Stage / Screen (Section 9 Parity) */}
+              <div className="max-w-xl mx-auto text-center space-y-1">
+                <div className="relative h-10 flex items-center justify-center">
+                  {/* Modern curved wide stage arch */}
+                  <div className="absolute inset-x-6 top-1/2 -translate-y-1/2 h-3 rounded-t-full bg-gradient-to-r from-amber-500/10 via-amber-400/50 to-amber-500/10 border-t-2 border-amber-400 shadow-[0_-10px_25px_rgba(245,158,11,0.3)]" />
+                  <span className="relative z-10 px-5 py-1 rounded-full bg-slate-950 border border-amber-400/60 text-[11px] font-black uppercase tracking-widest text-amber-300 flex items-center gap-2 shadow-lg">
+                    <span>🎭 रंगमंच / STAGE (SCREEN)</span>
+                    <ArrowDown className="w-3.5 h-3.5 text-amber-400" />
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-500 tracking-wider">सर्व नजरा रंगमंचाकडे (All eyes this way)</p>
+              </div>
 
-                    <div className="flex flex-col items-center gap-2 overflow-x-auto py-2">
-                      {sec.rows.map((row, rIdx) => (
-                        <div key={rIdx} className="flex items-center gap-2">
-                          <span className="w-8 text-right font-mono font-bold text-xs text-slate-400">
-                            {row.rowLabel}
+              {/* Responsive Pan & Zoom Theatre Container */}
+              <div className="overflow-auto max-h-[520px] p-4 bg-slate-950/70 border border-slate-800/80 rounded-2xl">
+                <div
+                  className="transition-transform duration-150 origin-top flex flex-col items-center gap-8 py-2 min-w-fit"
+                  style={{ transform: `scale(${zoomLevel})` }}
+                >
+                  {sections.map((sec, secIdx) => (
+                    <div key={secIdx} className="w-full max-w-3xl space-y-3">
+                      <div className="flex items-center justify-between border-b border-slate-800 pb-2 px-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-black text-amber-400 uppercase tracking-wider">
+                            {sec.nameMr} ({sec.name})
                           </span>
-
-                          <div className="flex items-center gap-1.5">
-                            {row.seats.map((seat, sIdx) => {
-                              const isAisleGap = row.aisleAfter.includes(seat.seatNumber);
-
-                              let seatColor = 'bg-white text-slate-900 border-slate-300';
-                              if (seat.isBlocked === 1) {
-                                seatColor = 'bg-slate-700 text-slate-400 border-slate-600 cursor-not-allowed';
-                              } else if (seat.isAccessible === 1) {
-                                seatColor = 'bg-blue-600 text-white border-blue-500';
-                              }
-
-                              return (
-                                <React.Fragment key={sIdx}>
-                                  <div
-                                    className={`w-6 h-6 rounded-md border text-[10px] font-bold font-mono flex items-center justify-center shadow-xs ${seatColor}`}
-                                  >
-                                    {seat.isBlocked === 1 ? (
-                                      <Lock className="w-2.5 h-2.5 text-slate-400" />
-                                    ) : seat.isAccessible === 1 ? (
-                                      <Accessibility className="w-2.5 h-2.5 text-white" />
-                                    ) : (
-                                      seat.seatNumber
-                                    )}
-                                  </div>
-
-                                  {isAisleGap && <div className="w-5" />}
-                                </React.Fragment>
-                              );
-                            })}
-                          </div>
-
-                          <span className="w-8 text-left font-mono font-bold text-xs text-slate-400">
-                            {row.rowLabel}
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-mono">
+                            {sec.tier.toUpperCase()}
                           </span>
                         </div>
-                      ))}
+                        <span className="text-xs font-bold text-emerald-400 font-mono">
+                          ₹{sec.basePrice}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-col items-center gap-2 py-2">
+                        {sec.rows.map((row, rIdx) => (
+                          <div key={rIdx} className="flex items-center gap-2">
+                            <span className="w-8 text-right font-mono font-bold text-xs text-slate-400 select-none">
+                              {row.rowLabel}
+                            </span>
+
+                            <div className="flex items-center gap-1.5">
+                              {row.seats.map((seat, sIdx) => {
+                                const isAisleGap = row.aisleAfter.includes(seat.seatNumber);
+
+                                let seatClass = 'bg-white text-slate-900 border-slate-300 hover:border-amber-400';
+                                if (seat.isBlocked === 1) {
+                                  seatClass = 'bg-red-950 text-red-300 border-red-700 hover:border-red-500';
+                                } else if (seat.isAccessible === 1) {
+                                  seatClass = 'bg-blue-600 text-white border-blue-500 hover:border-blue-300';
+                                }
+
+                                return (
+                                  <React.Fragment key={sIdx}>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleToggleSeatPropertyInSec(secIdx, rIdx, sIdx)}
+                                      title={`Seat ${row.rowLabel}${seat.seatNumber} (${
+                                        seat.isBlocked
+                                          ? 'Blocked'
+                                          : seat.isAccessible
+                                          ? 'Accessible'
+                                          : 'Normal'
+                                      }) — थेट क्लिक करून स्थिती बदला`}
+                                      className={`w-7 h-7 rounded-lg border text-[10px] font-bold font-mono flex items-center justify-center shadow-xs transition active:scale-90 cursor-pointer ${seatClass}`}
+                                    >
+                                      {seat.isBlocked === 1 ? (
+                                        <Lock className="w-3 h-3 text-red-400" />
+                                      ) : seat.isAccessible === 1 ? (
+                                        <Accessibility className="w-3 h-3 text-white" />
+                                      ) : (
+                                        seat.seatNumber
+                                      )}
+                                    </button>
+
+                                    {isAisleGap && <div className="w-5" />}
+                                  </React.Fragment>
+                                );
+                              })}
+                            </div>
+
+                            <span className="w-8 text-left font-mono font-bold text-xs text-slate-400 select-none">
+                              {row.rowLabel}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
           )}

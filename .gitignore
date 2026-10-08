@@ -1,5 +1,6 @@
 node_modules/
 .next/
+.stitch-ref/
 coverage/
 .DS_Store
 *.log

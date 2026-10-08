@@ -157,15 +157,15 @@ fun HomeScreen(
                                     .clip(RoundedCornerShape(16.dp))
                                     .clickable { onCitySelected(city) }
                                     .testTag("city_filter_$city"),
-                                color = if (isSelected) TheatricalCrimson else Color(0xFF1E293B),
+                                color = if (isSelected) MahaOrange else Color.White,
                                 shape = RoundedCornerShape(16.dp),
-                                border = BorderStroke(1.dp, if (isSelected) TheatricalCrimsonLight else Color(0xFF334155))
+                                border = BorderStroke(1.dp, if (isSelected) MahaOrange else MahaBorder)
                             ) {
                                 Text(
                                     text = city,
                                     fontSize = 12.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    color = Color.White,
+                                    color = if (isSelected) Color.White else TextPrimary,
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                                 )
                             }
@@ -215,12 +215,13 @@ fun HomeScreen(
                             .testTag("home_search_bar"),
                         shape = RoundedCornerShape(14.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = GoldAccent,
-                            unfocusedBorderColor = Color(0xFF334155),
-                            focusedContainerColor = Color(0xFF131A29),
-                            unfocusedContainerColor = Color(0xFF131A29),
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White
+                            focusedBorderColor = MahaOrange,
+                            unfocusedBorderColor = MahaBorder,
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary,
+                            focusedContainerColor = Color.White,
+                            unfocusedContainerColor = Color.White,
+                            cursorColor = MahaOrange
                         ),
                         singleLine = true
                     )
@@ -304,19 +305,19 @@ fun HomeScreen(
             item {
                 Column(modifier = Modifier.padding(vertical = 4.dp)) {
                     Text(
-                        text = "कला प्रकार निवडा (Categories)",
+                        text = "वर्ग निवडा",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White,
+                        color = TextPrimary,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                     )
 
                     val categories = listOf(
-                        "all" to "सर्व (All)",
-                        "plays" to "🎭 नाटक",
-                        "music" to "🎵 संगीत",
-                        "comedy" to "😄 कॉमेडी",
-                        "movies" to "🎬 चित्रपट"
+                        "all" to "सर्व",
+                        "plays" to "नाटक",
+                        "music" to "संगीत",
+                        "comedy" to "कॉमेडी",
+                        "movies" to "चित्रपट"
                     )
 
                     Row(
@@ -333,18 +334,18 @@ fun HomeScreen(
                                     .clip(RoundedCornerShape(12.dp))
                                     .clickable { onCategorySelected(catId) }
                                     .testTag("cat_filter_$catId"),
-                                color = if (isSelected) GoldAccent else Color(0xFF1E293B),
+                                color = if (isSelected) MahaOrange else Color.White,
                                 shape = RoundedCornerShape(12.dp),
                                 border = BorderStroke(
                                     1.dp,
-                                    if (isSelected) GoldBright else Color(0xFF334155)
+                                    if (isSelected) MahaOrange else MahaBorder
                                 )
                             ) {
                                 Text(
                                     text = catLabel,
                                     fontSize = 12.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (isSelected) Color.Black else Color.White,
+                                    color = if (isSelected) Color.White else TextPrimary,
                                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
                                 )
                             }
@@ -363,15 +364,15 @@ fun HomeScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "🎭 आगामी नाट्यप्रयोग व कार्यक्रम",
-                        fontSize = 16.sp,
+                        text = "आगामी कार्यक्रम",
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = TextPrimary
                     )
                     Text(
                         text = "${filteredEvents.size} उपलब्ध",
                         fontSize = 12.sp,
-                        color = GoldAccent,
+                        color = MahaOrange,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
@@ -401,22 +402,21 @@ fun HomeScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
                             shape = RoundedCornerShape(14.dp)
                         ) {
                             Column(
                                 modifier = Modifier.padding(20.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Text(text = "⚠️", fontSize = 28.sp)
                                 Spacer(modifier = Modifier.height(6.dp))
-                                Text(text = eventsState.message, color = Color(0xFFF87171), fontSize = 13.sp)
+                                Text(text = eventsState.message, color = ErrorRose, fontSize = 13.sp)
                                 Spacer(modifier = Modifier.height(12.dp))
                                 Button(
                                     onClick = onRetry,
-                                    colors = ButtonDefaults.buttonColors(containerColor = TheatricalCrimson)
+                                    colors = ButtonDefaults.buttonColors(containerColor = MahaOrange)
                                 ) {
-                                    Text("पुन्हा प्रयत्न करा (Retry)", color = Color.White)
+                                    Text("पुन्हा प्रयत्न करा", color = Color.White)
                                 }
                             }
                         }
@@ -483,10 +483,10 @@ private fun EventCardItem(
             .padding(horizontal = 16.dp, vertical = 6.dp)
             .clickable { onCardClick() }
             .testTag("event_card_${event.id}"),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = CinemaSurface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-        border = BorderStroke(1.dp, CinemaBorder)
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MahaSurface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = BorderStroke(1.dp, Color(0xFFE5E7EB))
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
@@ -494,12 +494,13 @@ private fun EventCardItem(
                     .fillMaxWidth()
                     .padding(12.dp)
             ) {
-                // Event Poster
+                // Event Poster (2:3 aspect ratio)
                 Box(
                     modifier = Modifier
-                        .size(width = 96.dp, height = 135.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFF1E293B))
+                        .width(80.dp)
+                        .height(120.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFFF1F5F9))
                 ) {
                     AsyncImage(
                         model = event.posterUrl,
@@ -514,8 +515,8 @@ private fun EventCardItem(
                             modifier = Modifier
                                 .align(Alignment.BottomStart)
                                 .padding(4.dp),
-                            color = Color.Black.copy(alpha = 0.8f),
-                            shape = RoundedCornerShape(6.dp)
+                            color = MahaOrange.copy(alpha = 0.9f),
+                            shape = RoundedCornerShape(5.dp)
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
@@ -524,13 +525,13 @@ private fun EventCardItem(
                                 Icon(
                                     imageVector = Icons.Outlined.Star,
                                     contentDescription = "Rating",
-                                    tint = GoldAccent,
-                                    modifier = Modifier.size(11.dp)
+                                    tint = Color.White,
+                                    modifier = Modifier.size(10.dp)
                                 )
                                 Spacer(modifier = Modifier.width(2.dp))
                                 Text(
                                     text = "${event.rating}",
-                                    fontSize = 10.sp,
+                                    fontSize = 9.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White
                                 )
@@ -544,77 +545,56 @@ private fun EventCardItem(
                 // Info Column
                 Column(modifier = Modifier.weight(1f)) {
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Surface(
-                            color = TheatricalCrimson.copy(alpha = 0.2f),
+                            color = MahaWarm,
                             shape = RoundedCornerShape(4.dp)
                         ) {
                             Text(
                                 text = event.category.displayMr,
-                                fontSize = 10.sp,
-                                color = TheatricalCrimsonLight,
+                                fontSize = 9.sp,
+                                color = MahaOrangeDeep,
                                 fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-
-                        Surface(
-                            color = Color(0xFF1E293B),
-                            shape = RoundedCornerShape(4.dp)
-                        ) {
-                            Text(
-                                text = event.certification,
-                                fontSize = 10.sp,
-                                color = Color(0xFF94A3B8),
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                             )
                         }
 
                         Text(
+                            text = event.certification,
+                            fontSize = 9.sp,
+                            color = TextSecondary,
+                            modifier = Modifier.padding(horizontal = 3.dp)
+                        )
+
+                        Text(
                             text = "• ${event.durationText}",
-                            fontSize = 10.sp,
-                            color = Color(0xFF94A3B8)
+                            fontSize = 9.sp,
+                            color = TextSecondary
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(5.dp))
 
                     Text(
                         text = event.titleMr,
-                        fontSize = 15.sp,
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        color = TextPrimary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 18.sp
                     )
 
-                    Text(
-                        text = event.titleEn,
-                        fontSize = 11.sp,
-                        color = Color(0xFF94A3B8),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(3.dp))
 
                     Text(
                         text = "📍 ${event.venue.nameMr}",
-                        fontSize = 11.sp,
-                        color = GoldAccent,
+                        fontSize = 10.sp,
+                        color = TextSecondary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
-                    )
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Text(
-                        text = "दर ₹${event.basePrice} पासून",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = GoldBright
                     )
                 }
             }
@@ -623,44 +603,23 @@ private fun EventCardItem(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFF172033))
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                TextButton(
-                    onClick = onTrailerClick,
-                    modifier = Modifier.testTag("trailer_btn_${event.id}")
-                ) {
-                    Text(
-                        text = "▶ ट्रेलर पहा (Trailer)",
-                        fontSize = 12.sp,
-                        color = GoldAccent,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-
                 Button(
                     onClick = onBookClick,
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = TheatricalCrimson),
-                    modifier = Modifier.testTag("book_now_btn_${event.id}")
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MahaOrange),
+                    modifier = Modifier.testTag("book_now_btn_${event.id}"),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Outlined.ConfirmationNumber,
-                            contentDescription = "Book",
-                            tint = Color.White,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "तिकीट बुक करा 🎭",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                    }
+                    Text(
+                        text = "बुक करा",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
                 }
             }
         }

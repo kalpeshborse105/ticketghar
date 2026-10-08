@@ -7,7 +7,6 @@ import {
   Calendar,
   MapPin,
   Ticket,
-  Clock,
   ChevronLeft,
   ChevronRight,
   Sparkles,
@@ -100,11 +99,9 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
       });
     });
 
-    // 2. Add active admin announcements (hero_banner, mid_banner, or with imageUrl)
+    // 2. Admin hero_banner only (mid_banner goes to MiddleStripBanner)
     const promoBanners = announcements.filter(
-      (a) =>
-        a.active !== 0 &&
-        (a.category === 'hero_banner' || a.category === 'mid_banner' || a.imageUrl),
+      (a) => a.active !== 0 && a.category === 'hero_banner' && a.imageUrl,
     );
 
     promoBanners.forEach((promo) => {
@@ -163,12 +160,12 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
 
   return (
     <div
-      className="relative w-full overflow-hidden select-none py-2"
+      className="relative w-full overflow-hidden select-none"
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
     >
-      {/* BookMyShow / Ticketalay Style Multi-peek Slider Track */}
-      <div className="relative w-full overflow-hidden rounded-2xl sm:rounded-3xl bg-slate-950 shadow-lg">
+      {/* Stitch cinematic hero slider */}
+      <div className="relative w-full overflow-hidden rounded-2xl bg-[#141b2b] shadow-xl">
         <div
           className="flex transition-transform duration-500 ease-out"
           style={{ transform: `translateX(-${currentIndex * 100}%)` }}
@@ -176,7 +173,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
           {slides.map((slide, idx) => (
             <div
               key={slide.id}
-              className="w-full shrink-0 relative aspect-[16/9] sm:aspect-[24/9] md:aspect-[28/9] min-h-[170px] sm:min-h-[260px] md:min-h-[320px] max-h-[420px] cursor-pointer group"
+              className="group relative w-full shrink-0 min-h-[280px] cursor-pointer sm:min-h-[380px] md:min-h-[460px]"
               onClick={() => handleSlideClick(slide)}
               role="button"
               tabIndex={0}
@@ -184,80 +181,73 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
                 if (e.key === 'Enter') handleSlideClick(slide);
               }}
             >
-              {/* Poster/Banner Image */}
               <img
                 src={slide.imageUrl}
                 alt={slide.title}
-                className="w-full h-full object-cover object-center group-hover:scale-[1.02] transition-transform duration-700 ease-out"
+                className="absolute inset-0 h-full w-full object-cover object-center opacity-50 transition-transform duration-1000 group-hover:scale-[1.02]"
                 loading={idx === 0 ? 'eager' : 'lazy'}
               />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#141b2b] via-[#141b2b]/70 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-r from-[#141b2b] via-[#141b2b]/80 to-transparent" />
 
-              {/* Dynamic Gradient Overlays */}
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/40 to-transparent" />
-              <div className="absolute inset-0 bg-gradient-to-r from-slate-950/80 via-slate-950/20 to-transparent" />
-
-              {/* Content Overlay */}
-              <div className="absolute inset-0 flex flex-col justify-end p-3 sm:p-7 md:p-9 max-w-2xl text-white">
-                {/* Desktop-only Badges */}
-                <div className="hidden sm:flex flex-wrap items-center gap-2 mb-2">
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-black bg-[#ea580c] text-white shadow-md shadow-orange-500/30">
-                    <Sparkles className="w-3 h-3" />
-                    <span>{slide.type === 'promo' ? 'विशेष ऑफर' : 'विशेष शिफारस'}</span>
-                  </span>
-
-                  {slide.category && (
-                    <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-white/20 backdrop-blur-md text-white border border-white/20">
-                      {slide.category}
+              <div className="relative z-10 flex h-full min-h-[280px] flex-col justify-end p-4 sm:min-h-[380px] sm:p-8 md:min-h-[460px] md:p-12">
+                <div className="max-w-2xl space-y-3 text-white">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-[#ea580c] px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-white shadow-sm">
+                      <Sparkles className="h-3.5 w-3.5" />
+                      {slide.type === 'promo'
+                        ? language === 'mr'
+                          ? 'विशेष ऑफर'
+                          : 'Special offer'
+                        : language === 'mr'
+                          ? 'लवकर भरत आहे'
+                          : 'Fast filling'}
                     </span>
-                  )}
-
-                  {slide.city && (
-                    <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-black/40 text-slate-200">
-                      📍 {slide.city}
-                    </span>
-                  )}
-                </div>
-
-                {/* Title — Clean 1 line on mobile, 2 lines on desktop */}
-                <h2 className="text-sm sm:text-2xl md:text-3xl font-extrabold font-serif text-white tracking-tight leading-tight drop-shadow-md line-clamp-1 sm:line-clamp-2 mb-1.5 sm:mb-2 group-hover:text-orange-300 transition-colors">
-                  {slide.title}
-                </h2>
-
-                {/* Subtitle / Venue & Timing — Desktop only */}
-                {slide.type === 'event' && (
-                  <div className="hidden sm:flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-300 mb-3">
-                    {slide.venueName && (
-                      <div className="flex items-center gap-1 font-medium">
-                        <MapPin className="w-3.5 h-3.5 text-orange-400 shrink-0" />
-                        <span className="truncate max-w-[220px]">{slide.venueName}</span>
-                      </div>
-                    )}
-                    {slide.dateStr && (
-                      <div className="flex items-center gap-1 text-slate-200">
-                        <Calendar className="w-3.5 h-3.5 text-orange-400 shrink-0" />
-                        <span>{slide.dateStr}</span>
-                      </div>
-                    )}
-                    {slide.timeStr && (
-                      <div className="flex items-center gap-1 text-slate-300">
-                        <Clock className="w-3 h-3 text-slate-300" />
-                        <span>{slide.timeStr}</span>
-                      </div>
-                    )}
+                    {slide.category ? (
+                      <span className="rounded-full bg-white/20 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur-md">
+                        {slide.category}
+                      </span>
+                    ) : null}
                   </div>
-                )}
 
-                {slide.subtitle && (
-                  <p className="hidden sm:block text-xs sm:text-sm text-slate-200 line-clamp-1 mb-3 max-w-xl">
-                    {slide.subtitle}
-                  </p>
-                )}
+                  <h2 className="line-clamp-2 text-2xl font-extrabold tracking-tight text-white drop-shadow-md sm:text-4xl md:text-5xl">
+                    {slide.title}
+                  </h2>
 
-                {/* Action CTA — Clean Book Now Button for both Mobile & Desktop */}
-                <div className="flex items-center gap-2">
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-5 sm:py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-[#ea580c] hover:from-orange-600 hover:to-orange-700 text-white font-extrabold text-[11px] sm:text-sm shadow-md shadow-orange-500/30 transition transform group-hover:scale-105 active:scale-95">
-                    <Ticket className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                    <span>{slide.ctaLabel || t.bookNow}</span>
+                  {slide.type === 'event' ? (
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-white/90 sm:text-sm">
+                      {slide.dateStr || slide.timeStr ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-lg border-0 bg-white/15 px-3 py-1.5 backdrop-blur-md">
+                          <Calendar className="h-4 w-4 text-[#ea580c]" />
+                          <span className="font-semibold">
+                            {[slide.dateStr, slide.timeStr].filter(Boolean).join(' • ')}
+                          </span>
+                        </span>
+                      ) : null}
+                      {slide.venueName ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-lg bg-white/15 px-3 py-1.5 backdrop-blur-md">
+                          <MapPin className="h-4 w-4 text-[#ea580c]" />
+                          <span className="truncate max-w-[240px]">{slide.venueName}</span>
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  {slide.subtitle ? (
+                    <p className="line-clamp-2 max-w-xl text-sm text-white/80">{slide.subtitle}</p>
+                  ) : null}
+
+                  <div className="flex flex-wrap items-center gap-3 pt-1">
+                    <span className="inline-flex items-center gap-2 rounded-xl bg-[#ea580c] px-5 py-3 text-sm font-bold text-white shadow-lg transition group-hover:bg-[#ac3400] active:scale-95">
+                      <Ticket className="h-5 w-5" />
+                      {slide.ctaLabel || t.bookNow}
+                    </span>
+                    {slide.ctaUrl && slide.type === 'promo' ? (
+                      <span className="inline-flex items-center gap-1 text-xs text-white/70">
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        {language === 'mr' ? 'अधिक माहिती' : 'Learn more'}
+                      </span>
+                    ) : null}
                   </div>
                 </div>
               </div>

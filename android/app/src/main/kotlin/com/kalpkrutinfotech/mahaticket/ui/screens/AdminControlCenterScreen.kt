@@ -98,7 +98,7 @@ fun AdminControlCenterScreen(
                             text = if (language == AppLanguage.MARATHI)
                                 "तिकीटघर कंपनी ॲडमिन व ऑपरेशन्स सिस्टीम"
                             else
-                                "TicketGhar Enterprise Operations & Security",
+                                "MahaTicket Operations",
                             color = Color(0xFF94A3B8),
                             fontSize = 11.sp
                         )

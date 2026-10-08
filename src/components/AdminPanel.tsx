@@ -157,6 +157,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [couponsList, setCouponsList] = useState<any[]>([]);
   const [loadingCoupons, setLoadingCoupons] = useState(false);
   const [showCreateCouponModal, setShowCreateCouponModal] = useState(false);
+  const [isSubmittingCoupon, setIsSubmittingCoupon] = useState(false);
+  const [newCouponForm, setNewCouponForm] = useState({
+    code: '',
+    discountType: 'percentage' as 'percentage' | 'fixed',
+    discountValue: '',
+    minOrderValue: '0',
+    maxDiscount: '',
+    usageLimit: '',
+    startsAt: '',
+    endsAt: '',
+    active: 1,
+  });
 
   // Announcements Data
   const [announcementsList, setAnnouncementsList] = useState<any[]>([]);
@@ -547,6 +559,52 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
+  const handleCreateCoupon = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCouponForm.code.trim() || !newCouponForm.discountValue) return;
+    setIsSubmittingCoupon(true);
+    try {
+      const discountRaw = Number(newCouponForm.discountValue);
+      const discountValue = Math.round(discountRaw * 100);
+      const res = await fetch('/api/admin/coupons', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: newCouponForm.code.trim().toUpperCase(),
+          discountType: newCouponForm.discountType,
+          discountValue,
+          minOrderValue: Math.round(Number(newCouponForm.minOrderValue || 0) * 100),
+          maxDiscount: newCouponForm.maxDiscount
+            ? Math.round(Number(newCouponForm.maxDiscount) * 100)
+            : undefined,
+          usageLimit: newCouponForm.usageLimit ? Number(newCouponForm.usageLimit) : 0,
+          startsAt: newCouponForm.startsAt || undefined,
+          endsAt: newCouponForm.endsAt || undefined,
+          active: newCouponForm.active,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Coupon create failed');
+      setShowCreateCouponModal(false);
+      setNewCouponForm({
+        code: '',
+        discountType: 'percentage',
+        discountValue: '',
+        minOrderValue: '0',
+        maxDiscount: '',
+        usageLimit: '',
+        startsAt: '',
+        endsAt: '',
+        active: 1,
+      });
+      await fetchCoupons();
+    } catch (err: any) {
+      alert(err?.message || 'कूपन तयार करणे अयशस्वी');
+    } finally {
+      setIsSubmittingCoupon(false);
+    }
+  };
+
   // Fetch Announcements
   const fetchAnnouncements = async () => {
     try {
@@ -827,26 +885,27 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-[#ea580c] selection:text-white">
       {/* Top Admin Header */}
-      <header className="bg-slate-900 border-b border-slate-800 px-4 sm:px-8 py-3 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-30 shadow-md">
+      <header className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 border-b border-stone-800 bg-[#111827] px-4 py-2.5 shadow-md sm:px-6">
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition text-xs font-semibold"
+            className="flex items-center gap-1.5 rounded-lg bg-stone-800 px-3 py-1.5 text-xs font-semibold text-stone-300 transition hover:bg-stone-700 hover:text-white"
             title="Return to Customer App"
           >
-            <ArrowLeft className="w-4 h-4 text-[#ea580c]" />
-            <span>{language === 'mr' ? 'ग्राहक ॲपवर परत जा' : 'Back to App'}</span>
+            <ArrowLeft className="h-4 w-4 text-[#ea580c]" />
+            <span>{language === 'mr' ? 'ग्राहक ॲप' : 'App'}</span>
           </button>
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-extrabold text-base sm:text-lg">
-                MahaTicket Control Center (महाटिकिट नियंत्रण कक्ष)
+              <span className="rounded-md bg-[#ea580c] px-1.5 py-0.5 text-[10px] font-black text-white">MT</span>
+              <span className="text-sm font-extrabold sm:text-base">
+                MahaTicket Admin
               </span>
             </div>
-            <p className="text-[11px] text-slate-400">
-              कंपनी प्रशासक कक्ष • महाराष्ट्र-प्रथम तिकीट नियंत्रण प्रणाली
+            <p className="text-[10px] text-stone-400">
+              {language === 'mr' ? 'कार्यक्रम · बुकिंग · सेटलमेंट नियंत्रण' : 'Events · bookings · settlements'}
             </p>
           </div>
         </div>
@@ -2415,7 +2474,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </div>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => alert('Create Coupon - Coming Soon')}
+                    onClick={() => setShowCreateCouponModal(true)}
                     className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500 text-slate-950 font-bold text-xs shadow-lg hover:bg-emerald-400 transition"
                   >
                     <Plus className="w-4 h-4" />
@@ -3402,6 +3461,137 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSubmittingCredentials ? 'जतन करत आहे... (Saving...)' : 'क्रेडेंशियल्स सेव्ह करा (Save Credentials)'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Create Coupon Modal */}
+      {showCreateCouponModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-950 p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-white">नवीन कूपन तयार करा</h3>
+              <button
+                type="button"
+                onClick={() => setShowCreateCouponModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleCreateCoupon} className="space-y-3 text-xs">
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">कूपन कोड *</label>
+                <input
+                  required
+                  value={newCouponForm.code}
+                  onChange={(e) => setNewCouponForm({ ...newCouponForm, code: e.target.value.toUpperCase() })}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white font-mono uppercase"
+                  placeholder="MAHA10"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-slate-300 font-semibold block mb-1">प्रकार</label>
+                  <select
+                    value={newCouponForm.discountType}
+                    onChange={(e) =>
+                      setNewCouponForm({
+                        ...newCouponForm,
+                        discountType: e.target.value as 'percentage' | 'fixed',
+                      })
+                    }
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white"
+                  >
+                    <option value="percentage">टक्के (%)</option>
+                    <option value="fixed">निश्चित (₹)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-slate-300 font-semibold block mb-1">मूल्य *</label>
+                  <input
+                    required
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={newCouponForm.discountValue}
+                    onChange={(e) => setNewCouponForm({ ...newCouponForm, discountValue: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white"
+                    placeholder={newCouponForm.discountType === 'percentage' ? '10' : '100'}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-slate-300 font-semibold block mb-1">किमान ऑर्डर (₹)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={newCouponForm.minOrderValue}
+                    onChange={(e) => setNewCouponForm({ ...newCouponForm, minOrderValue: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-300 font-semibold block mb-1">कमाल सूट (₹)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={newCouponForm.maxDiscount}
+                    onChange={(e) => setNewCouponForm({ ...newCouponForm, maxDiscount: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white"
+                    placeholder="optional"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">वापर मर्यादा</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={newCouponForm.usageLimit}
+                  onChange={(e) => setNewCouponForm({ ...newCouponForm, usageLimit: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white"
+                  placeholder="0 = unlimited"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-slate-300 font-semibold block mb-1">सुरू</label>
+                  <input
+                    type="date"
+                    value={newCouponForm.startsAt}
+                    onChange={(e) => setNewCouponForm({ ...newCouponForm, startsAt: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-300 font-semibold block mb-1">समाप्त</label>
+                  <input
+                    type="date"
+                    value={newCouponForm.endsAt}
+                    onChange={(e) => setNewCouponForm({ ...newCouponForm, endsAt: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateCouponModal(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 font-semibold"
+                >
+                  रद्द करा
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingCoupon}
+                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold disabled:opacity-50"
+                >
+                  {isSubmittingCoupon ? 'जतन...' : 'कूपन तयार करा'}
                 </button>
               </div>
             </form>

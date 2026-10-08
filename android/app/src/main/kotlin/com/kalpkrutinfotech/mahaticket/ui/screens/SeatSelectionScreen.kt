@@ -396,9 +396,9 @@ private fun TheatricalSeatGridContent(
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                LegendIndicator(color = Color(0xFF1E293B), label = "उपलब्ध (Available)", border = Color(0xFF475569))
-                LegendIndicator(color = GoldAccent, label = "निवडलेले (Selected)")
-                LegendIndicator(color = TheatricalCrimsonDark, label = "बुक (Booked)")
+                LegendIndicator(color = MahaSurface, label = "उपलब्ध", border = Color(0xFFD1D5DB))
+                LegendIndicator(color = MahaOrange, label = "निवडलेले")
+                LegendIndicator(color = Color(0xFFE2E8F0), label = "बुक झाले")
             }
         }
 
@@ -504,21 +504,21 @@ private fun TheatricalSeatChip(
     onClick: () -> Unit
 ) {
     val bgColor = when {
-        isSelected -> GoldAccent
-        !isAvailable -> TheatricalCrimsonDark.copy(alpha = 0.5f)
-        else -> Color(0xFF1E293B)
+        isSelected -> MahaOrange
+        !isAvailable -> Color(0xFFE2E8F0)
+        else -> MahaSurface
     }
 
     val textColor = when {
-        isSelected -> Color.Black
-        !isAvailable -> Color(0xFF64748B)
-        else -> Color.White
+        isSelected -> Color.White
+        !isAvailable -> Color(0xFF94A3B8)
+        else -> TextPrimary
     }
 
     val borderColor = when {
-        isSelected -> GoldBright
-        !isAvailable -> Color.Transparent
-        else -> Color(0xFF334155)
+        isSelected -> MahaOrangeDeep
+        !isAvailable -> Color(0xFFCBD5E1)
+        else -> Color(0xFFD1D5DB)
     }
 
     Surface(
@@ -552,7 +552,7 @@ private fun LegendIndicator(color: Color, label: String, border: Color? = null) 
             border = border?.let { BorderStroke(1.dp, it) }
         ) {}
         Spacer(modifier = Modifier.width(6.dp))
-        Text(text = label, fontSize = 10.sp, color = Color(0xFFCBD5E1))
+        Text(text = label, fontSize = 10.sp, color = TextSecondary)
     }
 }
 
@@ -598,12 +598,12 @@ private fun TheatricalSeatBottomBar(
 
                 Button(
                     onClick = onProceed,
-                    colors = ButtonDefaults.buttonColors(containerColor = TheatricalCrimson),
-                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MahaOrange),
+                    shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.testTag("seat_proceed_btn")
                 ) {
                     Text(
-                        text = if (isHolding) "चेकआउटकडे जा →" else "पुढे जा (Hold & Pay) 🎭",
+                        text = if (isHolding) "चेकआउट →" else "पुढे जा 🎭",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White

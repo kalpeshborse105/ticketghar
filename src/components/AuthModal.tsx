@@ -128,9 +128,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         setError(data.error || 'OTP पाठवण्यात त्रुटी आली.');
         return;
       }
-      if (data.devOtp) {
+      if (process.env.NODE_ENV !== 'production' && data.devOtp) {
         setOtp(data.devOtp);
-        setSuccessMessage(`चाचणी कोड: ${data.devOtp} (आपोआप भरला आहे)`);
+        setSuccessMessage('चाचणी कोड आपोआप भरला आहे (dev only)');
       } else {
         setSuccessMessage('६-अंकी पडताळणी कोड आपल्या ईमेलवर पाठवला आहे!');
       }

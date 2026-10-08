@@ -6,6 +6,8 @@ import { translations } from '@/src/lib/i18n';
 import { Language, EventCategory, EventItem, EventSessionItem } from '@/src/lib/types';
 import { Header } from '@/src/components/Header';
 import { EventCard } from '@/src/components/EventCard';
+import { HeroBanner } from '@/src/components/HeroBanner';
+import { MiddleStripBanner } from '@/src/components/MiddleStripBanner';
 import { SeatMapModal } from '@/src/components/SeatMapModal';
 import { CheckoutDrawer } from '@/src/components/CheckoutDrawer';
 import { TicketPassModal } from '@/src/components/TicketPassModal';
@@ -18,7 +20,6 @@ import { MTEmptyState } from '@/src/components/ui/MTEmptyState';
 import { MTToastContainer, ToastMessage } from '@/src/components/ui/MTToast';
 import { useOnlineStatus } from '@/hooks/use-pwa';
 import {
-  Sparkles,
   Theater,
   Music,
   Smile,
@@ -28,7 +29,6 @@ import {
   Palette,
   AlertTriangle,
   RefreshCw,
-  Building2,
   Tag,
   ShieldCheck,
   MapPin,
@@ -37,7 +37,7 @@ import {
 
 
 const CATEGORIES: { id: EventCategory; labelEn: string; labelMr: string; icon: any }[] = [
-  { id: 'all', labelEn: 'All Experiences', labelMr: 'सर्व कार्यक्रम', icon: Sparkles },
+  { id: 'all', labelEn: 'All Experiences', labelMr: 'सर्व कार्यक्रम', icon: Ticket },
   { id: 'plays', labelEn: 'Plays & Theatre', labelMr: 'नाटक', icon: Theater },
   { id: 'music', labelEn: 'Music & Concerts', labelMr: 'संगीत व मैफिली', icon: Music },
   { id: 'comedy', labelEn: 'Standup Comedy', labelMr: 'स्टँडअप कॉमेडी', icon: Smile },
@@ -206,7 +206,7 @@ export default function HomePage() {
     } catch (err: any) {
       console.warn('Network error fetching events:', err);
       if (typeof window !== 'undefined') {
-        const cached = localStorage.getItem('mahaticket_cached_events') || localStorage.getItem('ticketghar_cached_events');
+        const cached = localStorage.getItem('mahaticket_cached_events');
         if (cached) {
           try {
             setEvents(JSON.parse(cached));
@@ -321,34 +321,33 @@ export default function HomePage() {
     return list;
   }, [events, sortBy]);
 
-  // Filter theatre/plays events for Marathi spotlight
-  const theatreEvents = sortedEvents.filter(
-    (e) => e.category === 'plays' || e.title.includes('Sahi')
-  );
-
   return (
-    <div className="min-h-screen bg-[#fafafa] text-[#111827] flex flex-col font-sans selection:bg-[#ea580c] selection:text-white">
-      {/* Toast Notifications */}
+    <div className="mt-shell flex min-h-screen flex-col font-sans selection:bg-[#ea580c] selection:text-white">
       <MTToastContainer toasts={toasts} onDismiss={handleDismissToast} />
 
-      {/* Offline Status Alert Banner */}
       {mounted && !isOnline && (
-        <div className="bg-[#f59e0b] px-4 py-2 text-center text-xs font-bold text-white flex items-center justify-center gap-2 sticky top-0 z-50">
-          <AlertTriangle className="w-4 h-4 shrink-0" />
+        <div className="sticky top-0 z-50 flex items-center justify-center gap-2 bg-[#f59e0b] px-4 py-1.5 text-center text-xs font-bold text-white">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
           <span>{t.offlineBanner}</span>
         </div>
       )}
 
-      {/* City Auto-Detected Banner — shows after IP detection like BookMyShow */}
       {mounted && cityDetected && detectedCityName && (
-        <div className="bg-gradient-to-r from-orange-500 to-orange-600 px-4 py-2 text-center text-xs font-bold text-white flex items-center justify-center gap-2 animate-in slide-in-from-top duration-300">
-          <MapPin className="w-3.5 h-3.5 shrink-0" />
-          <span>📍 आपले शहर आढळले: <strong>{detectedCityName}</strong> — {detectedCityName} मधील कार्यक्रम दाखवत आहे</span>
+        <div className="flex items-center justify-center gap-2 border-b border-orange-200 bg-[#fff7ed] px-4 py-1.5 text-center text-xs font-semibold text-[#c2410c]">
+          <MapPin className="h-3.5 w-3.5 shrink-0" />
+          <span>
+            {language === 'mr' ? 'शहर:' : 'City:'} <strong>{detectedCityName}</strong>
+          </span>
           <button
-            onClick={() => { setSelectedCity('महाराष्ट्र (All)'); localStorage.removeItem('mahaticket_user_city'); setCityDetected(false); }}
-            className="ml-2 underline text-orange-100 hover:text-white"
+            type="button"
+            onClick={() => {
+              setSelectedCity('महाराष्ट्र (All)');
+              localStorage.removeItem('mahaticket_user_city');
+              setCityDetected(false);
+            }}
+            className="underline hover:text-[#ea580c]"
           >
-            बदला
+            {language === 'mr' ? 'बदला' : 'Change'}
           </button>
         </div>
       )}
@@ -442,198 +441,65 @@ export default function HomePage() {
             </button>
           </div>
         ) : (
-          <div className="space-y-6">
-            {/* Top Marquee Ticker (Stitch Parity) */}
-            <div className="w-full bg-[#ea580c] text-white py-1.5 px-4 overflow-hidden shadow-xs">
-              <div className="max-w-7xl mx-auto flex items-center justify-between text-xs font-semibold">
-                <div className="flex items-center gap-2 truncate">
-                  <span className="inline-flex items-center justify-center w-2 h-2 rounded-full bg-white animate-pulse shrink-0" />
-                  <span className="tracking-wide truncate">
-                    {language === 'mr'
-                      ? "विशेष सवलत: आज 'मराठी रंगभूमी दिन' विशेष! निवडक नाटकांवर थेट ५०% पर्यंत आसन आरक्षण उपलब्ध"
-                      : "Special: Up to 50% discount on select Marathi theatrical performances today!"}
-                  </span>
-                </div>
-                <div className="hidden md:flex items-center gap-4 text-[11px] text-white/90 shrink-0">
-                  <span className="flex items-center gap-1">
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    <span>अधिकृत ई-तिकीट</span>
-                  </span>
-                  <span>•</span>
-                  <span className="flex items-center gap-1">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>जलद प्रवेश पास</span>
-                  </span>
-                </div>
-              </div>
-            </div>
+          <div className="pb-4 bg-[#FFF7ED]">
+            <div className="mt-container space-y-5 pt-4">
+              {/* Stitch cinematic hero slider — events + admin hero_banner */}
+              {!searchQuery.trim() && selectedCategory === 'all' && (
+                <HeroBanner
+                  events={sortedEvents}
+                  announcements={announcements}
+                  language={language}
+                  onSelectEvent={handleSelectEvent}
+                />
+              )}
 
-            {/* Container for Main Content */}
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-              {/* 1. Cinematic Hero Section (Stitch Parity: 480px min-height, gradient scrim, badges, live date chip, CTAs) */}
-              {!searchQuery.trim() && selectedCategory === 'all' && (() => {
-                const featured = theatreEvents[0] || events[0];
-                if (!featured) return null;
-                const featTitle = language === 'mr' ? featured.titleMr || featured.title : featured.title;
-                const featVenue = language === 'mr' ? featured.venue?.nameMr || featured.venue?.name : featured.venue?.name;
-                const nextSess = featured.sessions && featured.sessions[0];
-                const dateText = nextSess
-                  ? new Date(nextSess.sessionStartTime).toLocaleDateString(language === 'mr' ? 'mr-IN' : 'en-IN', {
-                      weekday: 'long',
-                      day: 'numeric',
-                      month: 'long',
-                      year: 'numeric',
-                    }) + ' • ' + new Date(nextSess.sessionStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                  : 'आज • ७:३० PM';
-
-                return (
-                  <section className="relative w-full rounded-3xl overflow-hidden bg-slate-950 text-white shadow-2xl min-h-[420px] md:min-h-[480px] flex flex-col justify-end p-6 sm:p-8 md:p-12 group">
-                    <div className="absolute inset-0 z-0">
-                      <img
-                        src={featured.bannerUrl || featured.posterUrl || 'https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?w=1400'}
-                        alt={featTitle}
-                        className="w-full h-full object-cover opacity-50 scale-105 group-hover:scale-100 transition-transform duration-1000 ease-out"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/70 to-transparent" />
-                      <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/80 to-transparent" />
-                    </div>
-
-                    <div className="relative z-10 max-w-2xl space-y-4">
-                      {/* Badges Line */}
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="px-3 py-1 rounded-full bg-[#ea580c] text-white text-[11px] font-bold uppercase tracking-wider flex items-center gap-1 shadow-sm">
-                          <Sparkles className="w-3.5 h-3.5" />
-                          <span>लवकर भरत आहे (Fast Filling)</span>
-                        </span>
-                        <span className="px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-white text-[11px] font-semibold">
-                          {featured.categoryMr || featured.category} • {featured.language || 'मराठी'}
-                        </span>
-                        {featured.durationMinutes ? (
-                          <span className="px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-white/90 text-[11px]">
-                            {featured.durationMinutes} मिनिटे (१ मध्यंतर)
-                          </span>
-                        ) : null}
-                      </div>
-
-                      {/* Play Title */}
-                      <div className="space-y-1">
-                        <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-white drop-shadow-md font-serif">
-                          {featTitle}
-                        </h1>
-                        <p className="text-base sm:text-lg text-orange-100/90 font-medium">
-                          {featured.venue?.city ? `${featVenue}, ${featured.venue.city}` : featVenue}
-                        </p>
-                      </div>
-
-                      <p className="text-sm sm:text-base text-white/80 line-clamp-2 max-w-xl leading-relaxed">
-                        {featured.descriptionMr || featured.description || 'महाराष्ट्रातील नामवंत रंगमंदिरांमधील लोकप्रिय व सुवर्णमहोत्सवी नाटकाचा कौटुंबिक मनोरंजनाचा परिपूर्ण अनुभव.'}
-                      </p>
-
-                      {/* Venue & Live Date Chip */}
-                      <div className="flex flex-wrap items-center gap-3 py-1 text-white/95 text-xs">
-                        <div className="flex items-center gap-2 bg-white/15 backdrop-blur-md px-3.5 py-2 rounded-xl border border-white/10 shadow-inner">
-                          <Theater className="w-4 h-4 text-[#ea580c]" />
-                          <span className="font-semibold">{dateText}</span>
-                        </div>
-                        <div className="flex items-center gap-2 bg-white/15 backdrop-blur-md px-3.5 py-2 rounded-xl border border-white/10 shadow-inner">
-                          <MapPin className="w-4 h-4 text-[#ea580c]" />
-                          <span>{featVenue}</span>
-                        </div>
-                      </div>
-
-                      {/* CTAs */}
-                      <div className="pt-2 flex flex-wrap items-center gap-3">
-                        <button
-                          type="button"
-                          onClick={() => handleSelectEvent(featured)}
-                          className="px-8 py-3.5 rounded-xl bg-[#ea580c] hover:bg-[#c2410c] text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all flex items-center gap-2 transform active:scale-95 cursor-pointer"
-                        >
-                          <Ticket className="w-4 h-4" />
-                          <span>तिकीट बुक करा</span>
-                        </button>
-
-                        <a
-                          href={`/events/${featured.id}`}
-                          className="px-6 py-3.5 rounded-xl bg-white/15 hover:bg-white/25 text-white font-semibold text-sm backdrop-blur-md transition-all flex items-center gap-2 cursor-pointer"
-                        >
-                          <span>माहिती व तपशील</span>
-                        </a>
-
-                        <div className="flex items-center gap-1.5 text-white/70 text-xs ml-auto sm:ml-0 font-medium">
-                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                          <span>केवळ २२ आसने शिल्लक</span>
-                        </div>
-                      </div>
-                    </div>
-                  </section>
-                );
-              })()}
-
-              {/* 2. Premium Category Rail (Stitch Parity: Circular/rounded icon cards, 8-column layout) */}
-              <section className="space-y-3">
-                <div className="flex items-center justify-between">
+              {/* Category chips — Stitch rail */}
+              <section className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
                   <div>
-                    <span className="text-[10px] uppercase tracking-widest text-[#ea580c] font-black">श्रेणीनुसार शोधा</span>
-                    <h2 className="text-lg sm:text-xl font-bold text-slate-900">मनोरंजन प्रकार निवडा</h2>
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-[#ea580c]">
+                      {language === 'mr' ? 'श्रेणीनुसार शोधा' : 'Browse by category'}
+                    </p>
+                    <h2 className="text-lg font-bold text-[#141b2b]">
+                      {language === 'mr' ? 'मनोरंजन प्रकार निवडा' : 'Pick a category'}
+                    </h2>
                   </div>
-                  <button
-                    onClick={() => setSelectedCategory('all')}
-                    className="text-[#ea580c] hover:text-orange-700 text-xs font-semibold flex items-center gap-1"
-                  >
-                    <span>सर्व श्रेणी (All)</span>
-                    <span>→</span>
-                  </button>
+                  {selectedCategory !== 'all' && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCategory('all')}
+                      className="text-xs font-bold text-[#ea580c]"
+                    >
+                      {language === 'mr' ? 'सर्व दाखवा' : 'Show all'}
+                    </button>
+                  )}
                 </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
-                  {CATEGORIES.map((cat) => {
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
+                  {CATEGORIES.filter((c) => c.id !== 'all').map((cat) => {
                     const Icon = cat.icon;
                     const isSelected = selectedCategory === cat.id;
-                    const catCount =
-                      cat.id === 'plays'
-                        ? '४२ प्रयोग'
-                        : cat.id === 'music'
-                        ? '१८ मैफिली'
-                        : cat.id === 'comedy'
-                        ? '१४ शोज'
-                        : cat.id === 'cultural'
-                        ? '११ उत्सव'
-                        : cat.id === 'workshops'
-                        ? '७ सत्रे'
-                        : cat.id === 'movies'
-                        ? '५ चित्रपट'
-                        : 'उपलब्ध';
-
                     return (
                       <button
                         key={cat.id}
+                        type="button"
                         onClick={() => setSelectedCategory(cat.id)}
-                        className={`group flex flex-col items-center justify-center p-3.5 rounded-2xl transition-all shadow-2xs hover:shadow-md text-center border cursor-pointer ${
+                        className={`group flex flex-col items-center justify-center rounded-2xl p-3 text-center shadow-sm transition ${
                           isSelected
-                            ? 'bg-orange-50 border-[#ea580c] shadow-sm'
-                            : 'bg-white border-slate-200/80 hover:bg-orange-50/50 hover:border-orange-300'
+                            ? 'bg-[#ea580c] text-white'
+                            : 'bg-white text-[#141b2b] hover:bg-[#FFF7ED]'
                         }`}
                       >
                         <div
-                          className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-2 transition-colors p-2.5 ${
+                          className={`mb-1.5 flex h-12 w-12 items-center justify-center rounded-2xl p-2.5 transition ${
                             isSelected
-                              ? 'bg-[#ea580c] text-white shadow-xs'
-                              : 'bg-orange-50 group-hover:bg-[#ea580c] group-hover:text-white text-[#ea580c]'
+                              ? 'bg-white/20 text-white'
+                              : 'bg-[#FFF7ED] text-[#ea580c] group-hover:bg-[#ea580c] group-hover:text-white'
                           }`}
                         >
-                          <Icon className="w-6 h-6" />
+                          <Icon className="h-7 w-7" />
                         </div>
-                        <span
-                          className={`text-xs transition-colors ${
-                            isSelected
-                              ? 'text-[#ea580c] font-black'
-                              : 'text-slate-800 font-bold group-hover:text-[#ea580c]'
-                          }`}
-                        >
+                        <span className="text-xs font-semibold leading-tight">
                           {language === 'mr' ? cat.labelMr : cat.labelEn}
-                        </span>
-                        <span className="text-[10px] text-slate-400 mt-0.5">
-                          {catCount}
                         </span>
                       </button>
                     );
@@ -641,46 +507,81 @@ export default function HomePage() {
                 </div>
               </section>
 
-              {/* 3. Curated Event Rail: आज काय पाहायचं? (Stitch Parity: 4-column 2:3 vertical cards, NO PRICE!) */}
-              <section className="space-y-4 pt-2">
-                <div className="flex items-center justify-between border-b border-slate-200/80 pb-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-2.5 h-8 bg-[#ea580c] rounded-full" />
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h2 className="text-lg sm:text-2xl font-bold text-slate-900">आज काय पाहायचं?</h2>
-                        <span className="px-2 py-0.5 rounded-full bg-orange-100 text-[#ea580c] text-[10px] font-bold">
-                          आजचे थेट प्रयोग
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-500">
-                        {selectedCity} परिसरातील आज संध्याकाळचे खास मराठी नाट्य आणि स्टँडअप प्रयोग
-                      </p>
-                    </div>
-                  </div>
+              {/* Admin mid_banner ads / featured promo */}
+              {!searchQuery.trim() && selectedCategory === 'all' && (
+                <MiddleStripBanner announcements={announcements} language={language} />
+              )}
 
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-500 hidden sm:inline">{sortedEvents.length} कार्यक्रम</span>
-                    <button
-                      onClick={fetchEvents}
-                      className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-semibold text-slate-700 hover:text-slate-900 hover:border-orange-300 transition shadow-2xs"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5 text-[#ea580c]" />
-                      <span className="hidden sm:inline">ताजे करा</span>
-                    </button>
+              {/* Featured events rail */}
+              {!searchQuery.trim() &&
+                selectedCategory === 'all' &&
+                sortedEvents.filter((e) => (e as any).featured).length > 0 && (
+                  <section className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <div className="h-8 w-1.5 rounded-full bg-[#ea580c]" />
+                      <div>
+                        <h2 className="text-xl font-bold text-[#141b2b]">
+                          {language === 'mr' ? 'आज काय पाहायचं?' : "What's on today?"}
+                        </h2>
+                        <p className="text-sm text-[#64748b]">
+                          {language === 'mr'
+                            ? 'सध्या हायलाइट केलेले कार्यक्रम'
+                            : 'Currently highlighted shows'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                      {sortedEvents
+                        .filter((e) => (e as any).featured)
+                        .slice(0, 4)
+                        .map((evt) => (
+                          <EventCard
+                            key={`feat-${evt.id}`}
+                            event={evt}
+                            language={language}
+                            onSelect={handleSelectEvent}
+                          />
+                        ))}
+                    </div>
+                  </section>
+                )}
+
+              {/* Main discovery grid */}
+              <section>
+                <div className="mb-3 flex items-end justify-between gap-2">
+                  <div>
+                    <h2 className="text-xl font-bold text-[#141b2b]">
+                      {language === 'mr' ? 'ठळक कार्यक्रम' : 'All events'}
+                    </h2>
+                    <p className="text-sm text-[#64748b]">
+                      {selectedCity}
+                      {sortedEvents.length > 0
+                        ? ` · ${sortedEvents.length} ${language === 'mr' ? 'उपलब्ध' : 'available'}`
+                        : ''}
+                    </p>
                   </div>
+                  <button
+                    type="button"
+                    onClick={fetchEvents}
+                    className="inline-flex items-center gap-1 rounded-lg border border-[#e7e5e4] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#64748b] hover:border-orange-300 hover:text-[#ea580c]"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">
+                      {language === 'mr' ? 'ताजे करा' : 'Refresh'}
+                    </span>
+                  </button>
                 </div>
 
                 {loading ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 py-4">
-                    {[1, 2, 3, 4].map((n) => (
+                  <div className="mt-event-grid py-2">
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
                       <MTEventCardSkeleton key={n} />
                     ))}
                   </div>
                 ) : error ? (
                   <MTEmptyState
                     type="general"
-                    title={language === 'mr' ? 'अरेरे! काहीतरी अडचण आली.' : 'Something went wrong.'}
+                    title={language === 'mr' ? 'काहीतरी चूक झाली.' : 'Something went wrong.'}
                     description={language === 'mr' ? 'कृपया पुन्हा प्रयत्न करा.' : 'Please try again.'}
                     actionText={language === 'mr' ? 'पुन्हा प्रयत्न करा' : 'Retry'}
                     onAction={fetchEvents}
@@ -689,29 +590,25 @@ export default function HomePage() {
                   <MTEmptyState
                     type="events"
                     title={
-                      selectedCity !== 'महाराष्ट्र (All)'
-                        ? (language === 'mr' ? 'या शहरात सध्या कार्यक्रम उपलब्ध नाहीत.' : 'No events currently available in this city.')
-                        : (language === 'mr' ? 'या निवडीसाठी कोणतेही कार्यक्रम नाहीत' : 'No events found for this selection')
+                      language === 'mr'
+                        ? 'सध्या या शहरात कार्यक्रम उपलब्ध नाहीत.'
+                        : 'No events available in this city right now.'
                     }
                     description={
-                      selectedCity !== 'महाराष्ट्र (All)'
-                        ? (language === 'mr' ? 'लवकरच नवीन नाटके व सांस्कृतिक कार्यक्रम सुरू होतील. आपण संपूर्ण महाराष्ट्रातील कार्यक्रम पाहू शकता.' : 'Upcoming events will be listed soon. You can explore events across all Maharashtra.')
-                        : (language === 'mr' ? 'आपले बजेट किंवा तारीख बदलून पहा किंवा सर्व शहरांमधील कार्यक्रम शोधा.' : 'Try adjusting your budget or date filter, or explore events across Maharashtra.')
+                      language === 'mr'
+                        ? 'शहर किंवा श्रेणी बदलून पहा.'
+                        : 'Try another city or category.'
                     }
                     actionText={
-                      selectedCity !== 'महाराष्ट्र (All)'
-                        ? (language === 'mr' ? 'संपूर्ण महाराष्ट्रातील कार्यक्रम पहा' : 'View All Maharashtra Events')
-                        : (language === 'mr' ? 'सर्व कार्यक्रम पहा' : 'Show All Events')
+                      language === 'mr' ? 'सर्व महाराष्ट्र पहा' : 'View all Maharashtra'
                     }
                     onAction={() => {
-                      if (selectedCity !== 'महाराष्ट्र (All)') {
-                        setSelectedCity('महाराष्ट्र (All)');
-                      }
+                      setSelectedCity('महाराष्ट्र (All)');
                       handleResetFilters();
                     }}
                   />
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="mt-event-grid">
                     {sortedEvents.map((evt) => (
                       <EventCard
                         key={evt.id}
@@ -724,27 +621,26 @@ export default function HomePage() {
                 )}
               </section>
 
-              {/* Producer & Organizer Banner (Stitch Parity) */}
-              <div className="rounded-2xl bg-white border border-slate-200/80 p-5 sm:p-6 flex flex-col md:flex-row items-center justify-between gap-4 shadow-xs">
-                <div className="space-y-1.5 max-w-xl text-center md:text-left">
-                  <span className="text-[11px] uppercase font-bold tracking-wider text-[#ea580c] flex items-center justify-center md:justify-start gap-1">
-                    <Building2 className="w-3.5 h-3.5" />
-                    <span>नाट्य व कार्यक्रम आयोजकांसाठी</span>
-                  </span>
-                  <h3 className="text-base sm:text-lg font-bold text-slate-900 font-serif">
-                    आपला कार्यक्रम महाटिकिटवर सूचीबद्ध करा
+              {/* Post Event CTA — compact */}
+              <section className="flex flex-col items-start justify-between gap-3 rounded-xl border border-[#e7e5e4] bg-white p-4 sm:flex-row sm:items-center">
+                <div>
+                  <h3 className="text-sm font-extrabold text-[#111827]">
+                    {language === 'mr' ? 'आपला कार्यक्रम पोस्ट करा' : 'Post your event'}
                   </h3>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    पारदर्शक लेजर, थेट बँक खात्यात सेटलमेंट, मोफत व्हॉट्सॲप डिजिटल पास, आणि सभागृह गेट स्कॅनर सपोर्ट.
+                  <p className="mt-0.5 text-xs text-[#64748b]">
+                    {language === 'mr'
+                      ? 'आयोजकांसाठी सूचीबद्धता, बुकिंग आणि सेटलमेंट.'
+                      : 'Listing, bookings and settlements for organizers.'}
                   </p>
                 </div>
                 <button
+                  type="button"
                   onClick={() => setPartnerModalOpen(true)}
-                  className="px-6 py-2.5 rounded-xl bg-[#ea580c] hover:bg-[#c2410c] text-white font-bold text-xs shadow-sm transition active:scale-95 whitespace-nowrap cursor-pointer"
+                  className="mt-btn mt-btn-primary whitespace-nowrap"
                 >
-                  {t.partnerWithUs}
+                  {language === 'mr' ? 'कार्यक्रम पोस्ट करा' : 'Post Event'}
                 </button>
-              </div>
+              </section>
             </div>
           </div>
         )}
@@ -765,105 +661,12 @@ export default function HomePage() {
 
         <div className="relative mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
 
-          {/* =====================================================
-        TOP APP PROMOTION
-        ===================================================== */}
-          <div className="mb-10 overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-r from-orange-600 via-red-500 to-pink-600 p-5 shadow-2xl sm:p-7">
-
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-
-              {/* Left */}
-              <div className="flex items-start gap-4">
-
-                {/* App Icon */}
-                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-white shadow-lg sm:h-20 sm:w-20">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 via-red-500 to-pink-500 text-white shadow-md sm:h-14 sm:w-14">
-                    <svg
-                      viewBox="0 0 24 24"
-                      className="h-7 w-7 sm:h-8 sm:w-8"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
-                      <rect x="5" y="2.5" width="14" height="19" rx="3" />
-                      <path d="M9 5h6" strokeLinecap="round" />
-                      <circle cx="12" cy="18" r="1" fill="currentColor" stroke="none" />
-                    </svg>
-                  </div>
-                </div>
-
-                <div>
-                  <div className="mb-1 flex flex-wrap items-center gap-2">
-                    <h2 className="text-lg font-black tracking-tight sm:text-2xl">
-                      महाटिकिट
-                    </h2>
-
-                    <span className="rounded-full bg-white/15 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-white backdrop-blur">
-                      Official App
-                    </span>
-                  </div>
-
-                  <p className="max-w-xl text-sm font-medium text-white/90 sm:text-base">
-                    महाराष्ट्रातील नाटक, संगीत, कॉमेडी, चित्रपट,
-                    क्रीडा आणि खास कार्यक्रमांची तिकिटे एका ठिकाणी.
-                  </p>
-
-                  <p className="mt-1 text-xs text-white/70">
-                    Discover • Book • Enjoy
-                  </p>
-                </div>
-              </div>
-
-              {/* Google Play */}
-              <div className="shrink-0">
-                <a
-                  href="#"
-                  onClick={(e) => e.preventDefault()}
-                  aria-label="Get MahaTicket on Google Play"
-                  title="MahaTicket Android App — Coming Soon"
-                  className="group flex min-w-[205px] items-center gap-3 rounded-xl border border-white/20 bg-black px-4 py-3 text-white shadow-xl transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#050505] hover:shadow-2xl active:scale-[0.98]"
-                >
-
-                  {/* Google Play Multicolor Icon */}
-                  <svg
-                    viewBox="0 0 48 48"
-                    className="h-9 w-9 shrink-0"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M5.5 4.4c-.9.9-1.5 2.3-1.5 4v31.2c0 1.7.6 3.1 1.5 4l.2.2L28.1 24v-.5L5.7 4.2l-.2.2z"
-                      fill="#00D7FF"
-                    />
-                    <path
-                      d="M35.6 31.5 28.1 24v-.5l7.5-7.5.2.1 8.9 5.1c2.5 1.4 2.5 3.7 0 5.1l-8.9 5.1-.2.1z"
-                      fill="#FFD500"
-                    />
-                    <path
-                      d="m5.7 43.8 22.4-19.3 7.5 7.5-25.8 14.8c-1.6.9-3 .4-4.1-3z"
-                      fill="#FF3B5C"
-                    />
-                    <path
-                      d="M5.7 4.2c1.1-3.4 2.5-3.9 4.1-3l25.8 14.8-7.5 7.5L5.7 4.2z"
-                      fill="#00E676"
-                    />
-                  </svg>
-
-                  <div className="text-left">
-                    <p className="text-[10px] leading-none text-white/60">
-                      GET IT ON
-                    </p>
-
-                    <p className="mt-1 text-[16px] font-semibold leading-none tracking-tight">
-                      Google Play
-                    </p>
-                  </div>
-                </a>
-
-                <p className="mt-2 text-center text-[9px] font-medium text-white/60">
-                  Android app coming soon
-                </p>
-              </div>
-            </div>
+          {/* Brand strip — compact, no dead store links */}
+          <div className="mb-8 rounded-2xl border border-white/10 bg-gradient-to-r from-[#c2410c] via-[#ea580c] to-[#f97316] px-5 py-4 sm:px-6">
+            <p className="text-base font-black tracking-tight sm:text-lg">महाटिकिट</p>
+            <p className="mt-0.5 text-xs font-medium text-white/90 sm:text-sm">
+              महाराष्ट्राचे हक्काचे तिकीट व्यासपीठ
+            </p>
           </div>
 
           {/* =====================================================
@@ -1006,7 +809,7 @@ export default function HomePage() {
                   href="/admin"
                   className="block transition hover:text-orange-400"
                 >
-                  Admin / Organizer Portal
+                  Admin Login
                 </Link>
               </div>
             </div>

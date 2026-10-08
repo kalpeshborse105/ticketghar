@@ -55,10 +55,10 @@ fun ChatbotScreen(
             ChatMessage(
                 sender = "agent",
                 text = if (language == AppLanguage.MARATHI)
-                    "नमस्कार! मी 'नाट्यमित्र' (NatyaMitra), TicketGhar चा AI बुकिंग सहाय्यक आहे. 🎭\n\nमी संपूर्ण संभाषण लक्षात ठेवतो. तुम्हाला नाटक निवडणे, सलग जागा बुक करणे किंवा पेमेंटबद्दल मदत हवी आहे का?"
+                    "नमस्कार! मी महाटिकिट सहाय्यक आहे.\n\nकार्यक्रम निवडणे, आसन बुकिंग किंवा पेमेंटबद्दल मदत हवी आहे का?"
                 else
-                    "Hello! I am 'NatyaMitra', your AI booking assistant for TicketGhar. 🎭\n\nI remember our conversation context. How can I help you with selecting plays, group seating, or Razorpay checkout today?",
-                actionLabel = if (language == AppLanguage.MARATHI) "नाट्यप्रयोग एक्सप्लोर करा" else "Explore Shows",
+                    "Hello! I am the MahaTicket assistant.\n\nHow can I help with events, seat booking, or checkout today?",
+                actionLabel = if (language == AppLanguage.MARATHI) "कार्यक्रम शोधा" else "Explore Events",
                 actionTab = AppTab.EXPLORE
             )
         )
@@ -67,19 +67,19 @@ fun ChatbotScreen(
     val quickQuestions = remember(language) {
         if (language == AppLanguage.MARATHI) {
             listOf(
-                "सर्वोत्तम नाटकांची शिफारस करा",
-                "नियम व अटी लागू - आजच्या वेळा काय आहेत?",
-                "गट बुकिंगसाठी जागा कशी निवडायची?",
-                "बालगंधर्व रंगमंदिर पार्किंग सुविधा आहे का?",
-                "Razorpay पेमेंट व OTP कसे कार्य करते?"
+                "आजचे कार्यक्रम कोणते?",
+                "आसने कशी निवडायची?",
+                "कूपन कसा लागू करायचा?",
+                "Razorpay पेमेंट कसे कार्य करते?",
+                "माझी तिकिटे कुठे दिसतील?"
             )
         } else {
             listOf(
-                "Recommend top Marathi plays",
-                "Showtimes for Niyam Va Ati Laagu",
-                "How does contiguous group booking work?",
-                "Is parking available at Bal Gandharva?",
-                "Explain Razorpay checkout & OTP flow"
+                "What events are available today?",
+                "How do I select seats?",
+                "How do coupons work?",
+                "How does Razorpay payment work?",
+                "Where can I find My Tickets?"
             )
         }
     }
@@ -97,7 +97,7 @@ fun ChatbotScreen(
             // Multi-turn history formatting
             val history = chatMessages.map { (if (it.sender == "user") "user" else "model") to it.text }
 
-            val systemContext = "You are NatyaMitra, the helpful AI booking support agent for TicketGhar by Kalpkrut Infotech. You guide users through multi-step bookings. You remember the user's booking preferences (events, seat counts, tiers). Current events: Niyam Va Ati Laagu, Khara Sangaycha Tar, Sahi Re Sahi, Swargandh. Seat colors: Green for available, Red for booked, Yellow for selected. Keep responses polite, structured, and helpful in Marathi or English based on user's query."
+            val systemContext = "You are the MahaTicket booking support assistant by Kalpkrut Infotech. Guide users through event booking, seats, coupons, and Razorpay checkout. Keep responses polite, concise, and helpful in Marathi or English based on the user's query. Do not invent events, prices, or availability."
 
             val reply = viewModel.geminiService.sendMessage(
                 history = history,

@@ -228,26 +228,71 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
           </button>
         </div>
 
-        {/* Printable Pass Container with Stitch Visuals */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-100 flex justify-center">
-          <MahaTicketCard
-            ticketCode={primaryTicket || order.orderNumber}
-            seatCode={seatsList}
-            attendeeName={order.userName}
-            status="confirmed"
-            eventTitle={eventTitle || 'Event'}
-            eventCategory={language === 'mr' ? event?.categoryMr || 'कार्यक्रम' : event?.category || 'Event'}
-            venueName={venueName || 'Venue'}
-            venueCity={event?.venue?.city || 'महाराष्ट्र'}
-            showTimeStr={order.sessionStart ? new Date(order.sessionStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined}
-            showDateStr={order.createdAt ? new Date(order.createdAt).toLocaleDateString(language === 'mr' ? 'mr-IN' : 'en-IN', { weekday: 'short', day: 'numeric', month: 'short' }) : 'Today'}
-            orderNumber={order.orderNumber}
-            grandTotal={order.grandTotal}
-            qrPayload={ticketUrl}
-            totalTickets={tickets.length}
-            onDownloadPdf={handleDownloadPDF}
-            onShare={handleWhatsApp}
-          />
+        {/* QR first (above fold) + Stitch pass card */}
+        <div className="flex-1 overflow-y-auto bg-slate-100">
+          <div className="flex flex-col items-center gap-3 p-4 sm:p-5">
+            <div className="w-full max-w-sm rounded-2xl border border-[#E5E7EB] bg-white p-4 text-center shadow-sm">
+              <div className="mx-auto inline-block rounded-2xl border-2 border-[#E5E7EB] bg-white p-2 shadow-inner">
+                <QRCodeSVG
+                  value={ticketUrl || primaryTicket || order.orderNumber}
+                  size={160}
+                  level="M"
+                  includeMargin={true}
+                  className="h-40 w-40"
+                />
+              </div>
+              <p className="mt-2 text-xs font-black uppercase tracking-wide text-[#EA580C]">
+                {language === 'mr'
+                  ? 'सभागृहाच्या प्रवेशद्वारावर हा QR कोड दाखवा'
+                  : 'Show this QR at the hall entrance'}
+              </p>
+              <p className="mt-0.5 font-mono text-[10px] font-bold text-slate-400">
+                CODE: {primaryTicket || order.orderNumber}
+              </p>
+            </div>
+
+            <MahaTicketCard
+              ticketCode={primaryTicket || order.orderNumber}
+              seatCode={seatsList}
+              attendeeName={order.userName}
+              status="confirmed"
+              eventTitle={eventTitle || 'Event'}
+              eventCategory={
+                language === 'mr'
+                  ? event?.categoryMr || 'कार्यक्रम'
+                  : event?.category || 'Event'
+              }
+              venueName={venueName || 'Venue'}
+              venueCity={event?.venue?.city || 'महाराष्ट्र'}
+              showTimeStr={
+                order.sessionStart
+                  ? new Date(order.sessionStart).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })
+                  : undefined
+              }
+              showDateStr={
+                order.sessionStart
+                  ? new Date(order.sessionStart).toLocaleDateString(
+                      language === 'mr' ? 'mr-IN' : 'en-IN',
+                      { weekday: 'short', day: 'numeric', month: 'short' },
+                    )
+                  : order.createdAt
+                    ? new Date(order.createdAt).toLocaleDateString(
+                        language === 'mr' ? 'mr-IN' : 'en-IN',
+                        { weekday: 'short', day: 'numeric', month: 'short' },
+                      )
+                    : 'Today'
+              }
+              orderNumber={order.orderNumber}
+              grandTotal={order.grandTotal}
+              qrPayload={ticketUrl || primaryTicket || order.orderNumber}
+              totalTickets={tickets.length}
+              onDownloadPdf={handleDownloadPDF}
+              onShare={handleWhatsApp}
+            />
+          </div>
         </div>
 
         {/* Email delivery status banner */}
@@ -276,6 +321,26 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
           </p>
 
           <div className="flex items-center flex-wrap gap-2 w-full sm:w-auto">
+            {primaryTicket && (
+              <a
+                href={`/tickets/${primaryTicket}`}
+                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-orange-50 border border-orange-200 text-[#ea580c] hover:bg-orange-100 font-bold text-xs shadow-xs transition active:scale-95"
+              >
+                <Ticket className="w-3.5 h-3.5" />
+                <span>{language === 'mr' ? 'तिकीट पहा' : 'View Ticket'}</span>
+              </a>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== 'undefined') window.location.href = '/profile';
+              }}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs border border-slate-300 transition"
+            >
+              <span>{language === 'mr' ? 'माझी तिकिटे' : 'My Tickets'}</span>
+            </button>
+
             <button
               type="button"
               onClick={handleDownloadPDF}

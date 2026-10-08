@@ -613,8 +613,8 @@ fun CheckoutScreen(
                         )
                     },
                     enabled = !isProcessing,
-                    colors = ButtonDefaults.buttonColors(containerColor = TheatricalCrimson),
-                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MahaOrange),
+                    shape = RoundedCornerShape(10.dp),
                     modifier = Modifier
                         .height(48.dp)
                         .testTag("pay_securely_btn")
@@ -632,7 +632,7 @@ fun CheckoutScreen(
                         ) {
                             Icon(Icons.Default.Lock, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
                             Text(
-                                text = "सुरक्षित पे करा (Razorpay) 🔒",
+                                text = "पेमेंट करा 🔒",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White

@@ -1,26 +1,45 @@
 @import "tailwindcss";
 
 :root {
-  /* MahaTicket Cinemax / BookMyShow Warm Orange & White Theme */
-  --color-primary: #ea580c;
-  --color-primary-hover: #c2410c;
-  --color-primary-light: #fff7ed;
-  --color-accent: #f59e0b;
-  --color-accent-hover: #d97706;
-  --color-background: #f8fafc;
-  --color-surface: #ffffff;
-  --color-surface-elevated: #ffffff;
-  --color-border: #e2e8f0;
-  --color-border-strong: #cbd5e1;
-  --color-text-primary: #0f172a;
-  --color-text-secondary: #475569;
-  --color-text-muted: #64748b;
-  --color-success: #10b981;
-  --color-warning: #f59e0b;
-  --color-error: #ef4444;
+  /* MahaTicket Stitch design tokens */
+  --mt-primary: #ea580c;
+  --mt-secondary: #f97316;
+  --mt-deep: #c2410c;
+  --mt-warm: #fff7ed;
+  --mt-warm-strong: #ffedd5;
+  --mt-white: #ffffff;
+  --mt-bg: #faf7f2;
+  --mt-surface: #ffffff;
+  --mt-text: #111827;
+  --mt-muted: #64748b;
+  --mt-border: #e7e5e4;
+  --mt-border-strong: #d6d3d1;
+  --mt-success: #16a34a;
+  --mt-warning: #f59e0b;
+  --mt-danger: #dc2626;
+  --mt-radius: 12px;
+  --mt-radius-sm: 8px;
+  --mt-shadow: 0 1px 2px rgba(17, 24, 39, 0.06), 0 4px 12px rgba(17, 24, 39, 0.04);
+  --mt-shadow-md: 0 2px 8px rgba(17, 24, 39, 0.08);
+
+  --color-primary: var(--mt-primary);
+  --color-primary-hover: var(--mt-deep);
+  --color-primary-light: var(--mt-warm);
+  --color-accent: var(--mt-secondary);
+  --color-accent-hover: var(--mt-deep);
+  --color-background: var(--mt-bg);
+  --color-surface: var(--mt-surface);
+  --color-surface-elevated: var(--mt-surface);
+  --color-border: var(--mt-border);
+  --color-border-strong: var(--mt-border-strong);
+  --color-text-primary: var(--mt-text);
+  --color-text-secondary: var(--mt-muted);
+  --color-text-muted: var(--mt-muted);
+  --color-success: var(--mt-success);
+  --color-warning: var(--mt-warning);
+  --color-error: var(--mt-danger);
   --color-info: #0284c7;
-  
-  /* Seat colors for warm orange theme */
+
   --color-seat-available: #ffffff;
   --color-seat-available-border: #cbd5e1;
   --color-seat-selected: #ea580c;
@@ -28,10 +47,22 @@
   --color-seat-booked: #e2e8f0;
 }
 
+@theme inline {
+  --color-mt-primary: var(--mt-primary);
+  --color-mt-secondary: var(--mt-secondary);
+  --color-mt-deep: var(--mt-deep);
+  --color-mt-warm: var(--mt-warm);
+  --color-mt-bg: var(--mt-bg);
+  --color-mt-text: var(--mt-text);
+  --color-mt-muted: var(--mt-muted);
+  --color-mt-border: var(--mt-border);
+  --font-sans: var(--font-outfit), var(--font-noto-sans-devanagari), system-ui, sans-serif;
+}
+
 body {
-  background-color: var(--color-background);
-  color: var(--color-text-primary);
-  font-family: var(--font-outfit), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background-color: var(--mt-bg);
+  color: var(--mt-text);
+  font-family: var(--font-outfit), var(--font-noto-sans-devanagari), system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-tap-highlight-color: transparent;
@@ -41,7 +72,166 @@ body {
   overflow-x: hidden;
 }
 
-/* Safe area insets for Android and iOS mobile navigation bars */
+/* Stitch shell utilities */
+.mt-shell {
+  background:
+    radial-gradient(900px 420px at 10% -10%, rgba(234, 88, 12, 0.08), transparent 55%),
+    radial-gradient(700px 360px at 90% 0%, rgba(249, 115, 22, 0.06), transparent 50%),
+    var(--mt-bg);
+  min-height: 100vh;
+  color: var(--mt-text);
+}
+
+.mt-container {
+  width: 100%;
+  max-width: 72rem;
+  margin-inline: auto;
+  padding-inline: 1rem;
+}
+
+@media (min-width: 640px) {
+  .mt-container {
+    padding-inline: 1.25rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .mt-container {
+    padding-inline: 1.5rem;
+  }
+}
+
+.mt-section {
+  margin-top: 1.25rem;
+}
+
+.mt-section-title {
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--mt-text);
+  line-height: 1.25;
+}
+
+@media (min-width: 640px) {
+  .mt-section-title {
+    font-size: 1.125rem;
+  }
+}
+
+.mt-section-sub {
+  font-size: 0.75rem;
+  color: var(--mt-muted);
+  margin-top: 0.125rem;
+}
+
+.mt-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  border: 1px solid var(--mt-border);
+  background: var(--mt-white);
+  padding: 0.35rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--mt-text);
+  transition: all 0.15s ease;
+}
+
+.mt-chip[data-active='true'],
+.mt-chip-active {
+  background: var(--mt-primary);
+  border-color: var(--mt-primary);
+  color: white;
+}
+
+.mt-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border-radius: var(--mt-radius-sm);
+  font-weight: 700;
+  font-size: 0.75rem;
+  padding: 0.5rem 0.9rem;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.mt-btn-primary {
+  background: var(--mt-primary);
+  color: white;
+  box-shadow: 0 1px 2px rgba(234, 88, 12, 0.25);
+}
+
+.mt-btn-primary:hover {
+  background: var(--mt-deep);
+}
+
+.mt-btn-ghost {
+  background: white;
+  border: 1px solid var(--mt-border);
+  color: var(--mt-text);
+}
+
+.mt-btn-ghost:hover {
+  border-color: #fdba74;
+  background: var(--mt-warm);
+}
+
+.mt-card {
+  background: white;
+  border: 1px solid var(--mt-border);
+  border-radius: var(--mt-radius);
+  box-shadow: var(--mt-shadow);
+}
+
+.mt-poster {
+  aspect-ratio: 2 / 3;
+  width: 100%;
+  object-fit: cover;
+  background: #1c1917;
+}
+
+.mt-event-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .mt-event-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .mt-event-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1280px) {
+  .mt-event-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+.mt-detail-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 900px) {
+  .mt-detail-grid {
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 1.25rem;
+    align-items: start;
+  }
+}
+
 .safe-bottom {
   padding-bottom: max(env(safe-area-inset-bottom, 0px), 16px);
 }
@@ -50,18 +240,17 @@ body {
   padding-top: max(env(safe-area-inset-top, 0px), 12px);
 }
 
-/* Custom scrollbars */
 ::-webkit-scrollbar {
   width: 7px;
   height: 7px;
 }
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: #f5f5f4;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #d6d3d1;
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #a8a29e;
 }

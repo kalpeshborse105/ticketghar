@@ -10,6 +10,12 @@ import {
   ArrowRight,
   AlertCircle,
   Tag,
+  CheckCircle2,
+  Lock,
+  Eye,
+  EyeOff,
+  Mail,
+  KeyRound,
 } from 'lucide-react';
 
 declare global {
@@ -49,9 +55,39 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
   const [userPhone, setUserPhone] = useState('');
   const [userAge, setUserAge] = useState('');
 
+  // Booking Authentication State (Section 19 Parity)
+  const [authUser, setAuthUser] = useState<any>(null);
+  const [isEmailVerified, setIsEmailVerified] = useState(false);
+  const [authStep, setAuthStep] = useState<'idle' | 'otp' | 'password' | 'set_password'>('idle');
+  const [authOtp, setAuthOtp] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authConfirmPassword, setAuthConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authMessage, setAuthMessage] = useState<string | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  // Check active session on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/auth/flow/session');
+        const data = await res.json();
+        if (data?.user) {
+          setAuthUser(data.user);
+          setUserName((prev) => prev || data.user.fullName || '');
+          setUserEmail((prev) => prev || data.user.email || '');
+          if (data.user.phoneNumber) setUserPhone((prev) => prev || data.user.phoneNumber);
+          setIsEmailVerified(true);
+        }
+      } catch {}
+    })();
+  }, []);
+
   // Coupon State
   const [couponInput, setCouponInput] = useState('');
-  const [, setCouponApplied] = useState<string | null>(null);
+  const [couponApplied, setCouponApplied] = useState<string | null>(null);
   const [couponDiscount, setCouponDiscount] = useState<number>(0);
   const [couponMessage, setCouponMessage] = useState<string | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
@@ -67,7 +103,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
     script.async = true;
     script.onload = () => setRazorpayLoaded(true);
     script.onerror = () => {
-      console.warn('Razorpay script could not load — UPI QR & Counter fallback active');
+      console.warn('Razorpay script could not load');
     };
     document.body.appendChild(script);
 
@@ -107,7 +143,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
   const grossSubtotal = faceValueTotal + platformFeeTotal + gstTotal;
   const grandTotal = Math.max(0, grossSubtotal - couponDiscount);
 
-  // Apply Coupon
+  // Apply Coupon (Section 14)
   const handleApplyCoupon = async (codeToApply?: string) => {
     const code = codeToApply || couponInput;
     if (!code.trim()) return;
@@ -133,6 +169,157 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
     }
   };
 
+  // Remove Coupon (Section 15: Immediately clears state and restores original total)
+  const handleRemoveCoupon = () => {
+    setCouponInput('');
+    setCouponApplied(null);
+    setCouponDiscount(0);
+    setCouponMessage(null);
+    setCouponError(null);
+  };
+
+  // Initiate Email Auth flow for unverified users
+  const handleInitiateEmailAuth = async () => {
+    if (!userEmail.trim() || !userEmail.includes('@')) {
+      setErrorMessage(language === 'mr' ? 'कृपया वैध ईमेल प्रविष्ट करा.' : 'Please enter a valid email.');
+      return;
+    }
+    setAuthLoading(true);
+    setAuthError(null);
+    setAuthMessage(null);
+    try {
+      const cleanEmail = userEmail.trim().toLowerCase();
+      const checkRes = await fetch('/api/auth/flow/check-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail }),
+      });
+      const checkData = await checkRes.json();
+      if (checkData.hasPassword) {
+        setAuthStep('password');
+        setAuthMessage(
+          language === 'mr'
+            ? 'हा ईमेल आधीच नोंदणीकृत आहे. कृपया आपला पासवर्ड टाका किंवा OTP मागवा.'
+            : 'Email already registered. Enter password or request OTP.'
+        );
+      } else {
+        const otpRes = await fetch('/api/auth/flow/send-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: cleanEmail }),
+        });
+        const otpData = await otpRes.json();
+        if (!otpRes.ok) throw new Error(otpData.error || 'OTP पाठवता आला नाही.');
+        if (process.env.NODE_ENV !== 'production' && otpData.devOtp) {
+          setAuthOtp(otpData.devOtp);
+        }
+        setAuthStep('otp');
+        setAuthMessage(
+          process.env.NODE_ENV !== 'production' && otpData.devOtp
+            ? `चाचणी कोड भरला (dev)`
+            : language === 'mr'
+            ? '६-अंकी पडताळणी कोड आपल्या ईमेलवर पाठवला आहे!'
+            : 'Verification code sent to your email!'
+        );
+      }
+    } catch (err: any) {
+      setAuthError(err.message || 'त्रुटी आली.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (!authOtp || authOtp.length < 6) {
+      setAuthError(language === 'mr' ? 'कृपया ६-अंकी OTP टाका.' : 'Please enter 6-digit OTP.');
+      return;
+    }
+    setAuthLoading(true);
+    setAuthError(null);
+    try {
+      const cleanEmail = userEmail.trim().toLowerCase();
+      const res = await fetch('/api/auth/flow/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail, otp: authOtp.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'अवैध OTP कोड.');
+      if (data.needsPasswordSetup) {
+        setAuthStep('set_password');
+        setAuthMessage(
+          language === 'mr'
+            ? 'OTP पडताळणी यशस्वी! भविष्यातील बुकिंगसाठी सुरक्षित पासवर्ड तयार करा.'
+            : 'OTP verified! Create a secure password for future logins.'
+        );
+      } else {
+        setIsEmailVerified(true);
+        setAuthStep('idle');
+        setAuthMessage(language === 'mr' ? 'ईमेल यशस्वीरीत्या पडताळला!' : 'Email verified!');
+      }
+    } catch (err: any) {
+      setAuthError(err.message || 'पडताळणी अयशस्वी.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleSetPassword = async () => {
+    if (!authPassword || authPassword.length < 6) {
+      setAuthError(language === 'mr' ? 'पासवर्ड किमान ६ अक्षरांचा असावा.' : 'Password must be at least 6 characters.');
+      return;
+    }
+    if (authPassword !== authConfirmPassword) {
+      setAuthError(language === 'mr' ? 'दोन्ही पासवर्ड जुळत नाहीत.' : 'Passwords do not match.');
+      return;
+    }
+    setAuthLoading(true);
+    setAuthError(null);
+    try {
+      const cleanEmail = userEmail.trim().toLowerCase();
+      const res = await fetch('/api/auth/flow/set-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail, password: authPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'पासवर्ड जतन करता आला नाही.');
+      setIsEmailVerified(true);
+      setAuthStep('idle');
+      setAuthMessage(language === 'mr' ? 'खाते व पासवर्ड तयार झाले! आता पेमेंट करा.' : 'Account created! Proceed to payment.');
+    } catch (err: any) {
+      setAuthError(err.message || 'त्रुटी आली.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handlePasswordLogin = async () => {
+    if (!authPassword) {
+      setAuthError(language === 'mr' ? 'कृपया पासवर्ड प्रविष्ट करा.' : 'Please enter password.');
+      return;
+    }
+    setAuthLoading(true);
+    setAuthError(null);
+    try {
+      const cleanEmail = userEmail.trim().toLowerCase();
+      const res = await fetch('/api/auth/flow/login-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail, password: authPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'अवैध पासवर्ड.');
+      setIsEmailVerified(true);
+      setAuthStep('idle');
+      setAuthMessage(language === 'mr' ? 'लॉगिन यशस्वी!' : 'Login successful!');
+    } catch (err: any) {
+      setAuthError(err.message || 'लॉगिन अयशस्वी.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
   // Submit payment & confirm booking via real Razorpay
   const handleConfirmPayment = async () => {
     const cleanPhone = userPhone.replace(/\D/g, '').slice(-10);
@@ -152,6 +339,12 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
           ? 'कृपया वैध १०-अंकी भारतीय मोबाईल नंबर प्रविष्ट करा (६ ते ९ ने सुरू होणारा).'
           : 'Please enter a valid 10-digit Indian mobile number starting with 6-9.'
       );
+      return;
+    }
+
+    // If customer is not yet verified, initiate inline email verification first (Section 19)
+    if (!isEmailVerified) {
+      await handleInitiateEmailAuth();
       return;
     }
 
@@ -300,13 +493,22 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
         {/* Scrollable Form Body */}
         <div className="flex-1 overflow-y-auto divide-y divide-slate-100 bg-slate-50">
           
-          {/* 1. Attendee Contact Details */}
+          {/* 1. Attendee Contact Details & Account Verification (Section 19 Parity) */}
           <div className="p-5 space-y-3 bg-white">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-black uppercase tracking-wider text-[#ea580c] flex items-center gap-1.5">
                 <span>१. ग्राहक व तिकीट संपर्क तपशील</span>
               </h3>
-              <span className="text-[10px] text-slate-500 font-semibold">Instant M-Ticket</span>
+              {isEmailVerified ? (
+                <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-bold border border-emerald-200 flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                  <span>पडताळणी पूर्ण (Verified)</span>
+                </span>
+              ) : (
+                <span className="text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full font-bold border border-amber-200">
+                  पडताळणी आवश्यक
+                </span>
+              )}
             </div>
 
             <div className="space-y-3">
@@ -364,18 +566,197 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  {t.email} * (M-Ticket व PDF पाठवण्यासाठी)
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-700">
+                    {t.email} * (M-Ticket व खात्यासाठी)
+                  </label>
+                  {!isEmailVerified && userEmail.includes('@') && authStep === 'idle' && (
+                    <button
+                      type="button"
+                      onClick={handleInitiateEmailAuth}
+                      disabled={authLoading}
+                      className="text-[11px] font-bold text-[#ea580c] hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <Mail className="w-3 h-3" />
+                      <span>ईमेल पडताळा (Verify)</span>
+                    </button>
+                  )}
+                </div>
                 <input
                   type="email"
                   required
                   placeholder="sachin.patil@example.com"
                   value={userEmail}
-                  onChange={(e) => setUserEmail(e.target.value)}
+                  onChange={(e) => {
+                    setUserEmail(e.target.value);
+                    if (isEmailVerified && e.target.value !== authUser?.email) {
+                      setIsEmailVerified(false);
+                    }
+                  }}
                   className="w-full bg-slate-50 border border-slate-300 focus:bg-white rounded-xl px-3.5 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#ea580c]/50 focus:border-[#ea580c] transition"
                 />
               </div>
+
+              {/* Inline Auth Messages */}
+              {authMessage && (
+                <p className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 p-2.5 rounded-xl font-medium">
+                  {authMessage}
+                </p>
+              )}
+              {authError && (
+                <p className="text-xs text-red-700 bg-red-50 border border-red-200 p-2.5 rounded-xl font-medium">
+                  {authError}
+                </p>
+              )}
+
+              {/* STEP A: OTP Verification */}
+              {authStep === 'otp' && (
+                <div className="p-3.5 bg-orange-50/70 border border-orange-200 rounded-xl space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-orange-950 flex items-center gap-1">
+                      <KeyRound className="w-3.5 h-3.5 text-[#ea580c]" />
+                      <span>ईमेलवर आलेला ६-अंकी OTP टाका</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleInitiateEmailAuth}
+                      disabled={authLoading}
+                      className="text-[10px] text-[#ea580c] font-bold hover:underline"
+                    >
+                      पुन्हा पाठवा
+                    </button>
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      maxLength={6}
+                      placeholder="123456"
+                      value={authOtp}
+                      onChange={(e) => setAuthOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm font-mono tracking-widest text-center text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#ea580c]/50"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleVerifyOtp}
+                      disabled={authLoading || authOtp.length < 6}
+                      className="px-4 py-2 rounded-xl bg-[#ea580c] hover:bg-[#c2410c] disabled:opacity-50 text-white font-bold text-xs transition cursor-pointer"
+                    >
+                      {authLoading ? '...' : 'पडताळा'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP B: Password Creation (for new users) */}
+              {authStep === 'set_password' && (
+                <div className="p-3.5 bg-orange-50/70 border border-orange-200 rounded-xl space-y-2.5">
+                  <span className="text-xs font-bold text-orange-950 flex items-center gap-1">
+                    <Lock className="w-3.5 h-3.5 text-[#ea580c]" />
+                    <span>नवीन पासवर्ड तयार करा (Create Password)</span>
+                  </span>
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="पासवर्ड (किमान ६ अक्षरे)"
+                        value={authPassword}
+                        onChange={(e) => setAuthPassword(e.target.value)}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 pr-9 focus:outline-none focus:ring-2 focus:ring-[#ea580c]/50"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      >
+                        {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+
+                    <div className="relative">
+                      <input
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        placeholder="पासवर्ड पुष्टी करा (Confirm Password)"
+                        value={authConfirmPassword}
+                        onChange={(e) => setAuthConfirmPassword(e.target.value)}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 pr-9 focus:outline-none focus:ring-2 focus:ring-[#ea580c]/50"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      >
+                        {showConfirmPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleSetPassword}
+                      disabled={authLoading || !authPassword || !authConfirmPassword}
+                      className="w-full py-2 rounded-xl bg-[#ea580c] hover:bg-[#c2410c] disabled:opacity-50 text-white font-bold text-xs transition cursor-pointer"
+                    >
+                      {authLoading ? 'जतन होत आहे...' : 'पासवर्ड जतन करा व पुढे जा'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP C: Password Login (for existing users) */}
+              {authStep === 'password' && (
+                <div className="p-3.5 bg-orange-50/70 border border-orange-200 rounded-xl space-y-2.5">
+                  <span className="text-xs font-bold text-orange-950 flex items-center gap-1">
+                    <Lock className="w-3.5 h-3.5 text-[#ea580c]" />
+                    <span>आपला पासवर्ड टाका (Enter Password)</span>
+                  </span>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="पासवर्ड"
+                        value={authPassword}
+                        onChange={(e) => setAuthPassword(e.target.value)}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 pr-9 focus:outline-none focus:ring-2 focus:ring-[#ea580c]/50"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      >
+                        {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handlePasswordLogin}
+                      disabled={authLoading || !authPassword}
+                      className="px-4 py-2 rounded-xl bg-[#ea580c] hover:bg-[#c2410c] disabled:opacity-50 text-white font-bold text-xs transition cursor-pointer"
+                    >
+                      {authLoading ? '...' : 'लॉगिन करा'}
+                    </button>
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const otpRes = await fetch('/api/auth/flow/send-otp', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ email: userEmail.trim().toLowerCase() }),
+                        });
+                        const otpData = await otpRes.json();
+                        if (process.env.NODE_ENV !== 'production' && otpData.devOtp) {
+                          setAuthOtp(otpData.devOtp);
+                        }
+                        setAuthStep('otp');
+                        setAuthMessage('OTP पाठवला आहे.');
+                      }}
+                      className="text-[10px] text-[#ea580c] font-bold hover:underline"
+                    >
+                      पासवर्ड विसरलात? OTP द्वारे लॉगिन करा
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -418,54 +799,48 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
               </div>
             </div>
 
-            {/* Coupon Code Box */}
+            {/* Coupon Code Box with Real-time Remove Action (Section 14 & 15) */}
             <div className="space-y-2">
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="कूपन कोड (उदा. MAHA50)"
-                    value={couponInput}
-                    onChange={(e) => setCouponInput(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 uppercase font-mono placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#ea580c]/50"
-                  />
+              {couponApplied ? (
+                <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <div>
+                      <span className="font-bold text-emerald-900 font-mono">{couponApplied} लागू झाले</span>
+                      <span className="text-emerald-700 ml-1">(-₹{(couponDiscount / 100).toFixed(0)})</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleRemoveCoupon}
+                    className="px-2.5 py-1 rounded-lg bg-white border border-emerald-300 text-red-600 hover:bg-red-50 font-bold text-xs transition cursor-pointer"
+                  >
+                    काढा (Remove)
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleApplyCoupon()}
-                  className="px-4 py-2 rounded-xl bg-orange-100 hover:bg-orange-200 text-[#ea580c] font-black text-xs transition active:scale-95"
-                >
-                  {t.applyCoupon}
-                </button>
-              </div>
+              ) : (
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="कूपन कोड"
+                      value={couponInput}
+                      onChange={(e) => setCouponInput(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 uppercase font-mono placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#ea580c]/50"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleApplyCoupon()}
+                    className="px-4 py-2 rounded-xl bg-orange-100 hover:bg-orange-200 text-[#ea580c] font-black text-xs transition active:scale-95 cursor-pointer"
+                  >
+                    {t.applyCoupon}
+                  </button>
+                </div>
+              )}
 
-              {/* Quick coupons */}
-              <div className="flex items-center gap-2 text-[11px] text-slate-500 flex-wrap">
-                <span>ऑफर:</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCouponInput('MAHA50');
-                    handleApplyCoupon('MAHA50');
-                  }}
-                  className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold font-mono"
-                >
-                  MAHA50 (₹५० सूट)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCouponInput('NATAK10');
-                    handleApplyCoupon('NATAK10');
-                  }}
-                  className="px-2 py-0.5 rounded-full bg-orange-50 text-[#ea580c] border border-orange-200 font-bold font-mono"
-                >
-                  NATAK10 (१०% सूट)
-                </button>
-              </div>
-
-              {couponMessage && (
+              {couponMessage && !couponApplied && (
                 <p className="text-xs text-emerald-600 font-bold">{couponMessage}</p>
               )}
               {couponError && (
@@ -474,33 +849,14 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
             </div>
           </div>
 
-          {/* 3. Official Razorpay Payment Trust Section */}
-          <div className="p-5 space-y-3 bg-white">
-            <h3 className="text-xs font-black uppercase tracking-wider text-[#ea580c]">
-              ३. सुरक्षित पेमेंट (Official Razorpay Gateway)
-            </h3>
-
-            <div className="p-4 rounded-2xl bg-orange-50/60 border border-orange-200/80 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-orange-950 flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                  <span>Razorpay सुरक्षित पेमेंट गेटवे</span>
-                </span>
-                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
-                  100% Verified
-                </span>
-              </div>
-
-              <p className="text-[11px] text-slate-600 leading-relaxed">
-                'पेमेंट करा' बटणावर क्लिक केल्यावर अधिकृत Razorpay पेमेंट विंडो उघडेल. आपण UPI (Google Pay, PhonePe, Paytm), क्रेडिट/डेबिट कार्ड, किंवा नेट बँकिंगद्वारे सुरक्षित पेमेंट करू शकता.
-              </p>
-
-              <div className="flex flex-wrap items-center gap-2 pt-1 text-[10px] text-slate-500 font-medium">
-                <span className="px-2 py-0.5 rounded bg-white border border-slate-200 font-bold text-slate-700">⚡ UPI / QR</span>
-                <span className="px-2 py-0.5 rounded bg-white border border-slate-200 font-bold text-slate-700">💳 Cards</span>
-                <span className="px-2 py-0.5 rounded bg-white border border-slate-200 font-bold text-slate-700">🏛️ NetBanking</span>
-                <span className="px-2 py-0.5 rounded bg-white border border-slate-200 font-bold text-slate-700">📱 Wallets</span>
-              </div>
+          {/* 3. Official Razorpay Payment Trust Section (Clean & Minimal - Section 12 Parity) */}
+          <div className="p-5 bg-white">
+            <div className="py-2.5 px-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs text-slate-700">
+              <span className="flex items-center gap-1.5 font-bold">
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                <span>सुरक्षित पेमेंट (Secure Payment powered by Razorpay)</span>
+              </span>
+              <span className="text-[10px] text-slate-400 font-mono">256-Bit SSL</span>
             </div>
           </div>
         </div>

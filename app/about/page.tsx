@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowLeft, Heart, Target, Users, Sparkles, Theater, Shield } from 'lucide-react';
+import { ArrowLeft, Target, Users, Sparkles, Theater, Shield } from 'lucide-react';
 import { Header } from '@/src/components/Header';
 
 export const metadata = {
@@ -9,44 +9,42 @@ export const metadata = {
 
 export default function AboutPage() {
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 pb-20">
-      {/* Persistent Website Header */}
+    <div className="mt-shell pb-16 text-[#111827]">
       <Header />
 
-      {/* Sub-bar Navigation */}
-      <div className="bg-white border-b border-slate-200">
-        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-4">
-          <Link 
-            href="/" 
-            className="flex items-center gap-2 text-xs text-orange-600 hover:text-orange-700 font-bold transition cursor-pointer"
+      <div className="border-b border-[#e7e5e4] bg-white">
+        <div className="mt-container flex items-center gap-3 py-2">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-[#ea580c]"
           >
-            <ArrowLeft className="w-4 h-4" />
-            <span>मुख्य पृष्ठ (Back to Home)</span>
+            <ArrowLeft className="h-3.5 w-3.5" />
+            मुख्यपृष्ठ
           </Link>
         </div>
       </div>
 
-      {/* Content */}
-      <main className="max-w-4xl mx-auto px-4 py-8 space-y-8">
-        
-        {/* Hero Section */}
-        <div className="space-y-3">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-orange-600 text-white flex items-center justify-center shadow-md">
-              <Heart className="w-6 h-6" />
-            </div>
-            <h1 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">About MahaTicket</h1>
-          </div>
-          <p className="text-lg text-slate-800 font-medium leading-relaxed">
-            महाराष्ट्राच्या सांस्कृतिक कार्यक्रमांसाठी एक आधुनिक डिजिटल तिकीट प्लॅटफॉर्म
+      <main className="mt-container space-y-5 py-5">
+        <div className="space-y-2">
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#ea580c]">
+            Kalpkrut Infotech
           </p>
-          <p className="text-sm text-slate-600">
-            Maharashtra's modern digital ticketing platform for cultural events
+          <h1 className="text-xl font-extrabold tracking-tight sm:text-2xl">About MahaTicket</h1>
+          <p className="text-sm font-medium text-[#111827]">
+            महाराष्ट्राचे हक्काचे तिकीट व्यासपीठ
+          </p>
+          <p className="text-xs text-[#64748b]">
+            A product of Kalpkrut Infotech ·{' '}
+            <a
+              href="https://mahaticket.kalpkrutinfotech.com/"
+              className="font-semibold text-[#ea580c] hover:underline"
+            >
+              mahaticket.kalpkrutinfotech.com
+            </a>
           </p>
         </div>
 
-        {/* Mission Statement */}
-        <div className="bg-gradient-to-br from-orange-600 to-amber-600 rounded-2xl p-8 text-white shadow-xl">
+        <div className="rounded-xl bg-[#ea580c] p-5 text-white shadow-sm">
           <div className="flex items-start gap-4">
             <div className="w-12 h-12 rounded-lg bg-white/20 backdrop-blur-sm flex items-center justify-center shrink-0">
               <Target className="w-6 h-6" />
