@@ -29,7 +29,7 @@ export interface EventItem {
   descriptionMr: string;
   posterUrl: string;
   bannerUrl?: string | null;
-  status: 'draft' | 'published' | 'unpublish' | 'cancelled';
+  status: 'draft' | 'submitted' | 'published' | 'unpublish' | 'cancelled' | 'rejected';
   featured: number;
   convenienceFeeType: string;
   convenienceFeeValue: number;

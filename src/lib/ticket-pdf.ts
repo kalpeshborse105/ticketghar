@@ -218,7 +218,7 @@ export async function generateTicketPdfBuffer(input: TicketPdfInput): Promise<Bu
     .fillColor('#0F172A')
     .fontSize(9)
     .font('Helvetica-Bold')
-    .text('IMPORTANT INSTRUCTIONS / सूचना', margin + 30, currentY + 10);
+    .text('IMPORTANT INSTRUCTIONS & ENTRY GUIDELINES', margin + 30, currentY + 10);
 
   const instructions = [
     '• Please present this digital M-Ticket on your phone or a printed copy at the entry gate.',

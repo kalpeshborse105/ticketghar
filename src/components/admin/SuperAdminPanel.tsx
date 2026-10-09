@@ -22,7 +22,6 @@ import {
   DollarSign
 } from 'lucide-react';
 import { Language } from '../../lib/i18n.ts';
-import { STITCH_EVENTS, STITCH_VENUES } from '../../lib/stitch-data.ts';
 import { EventItem, VenueItem } from '../../lib/types.ts';
 import { AdminScanner } from '../AdminScanner';
 import { TheatreSeatDesigner } from './TheatreSeatDesigner';
@@ -47,8 +46,9 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
   const [showLiveAlert, setShowLiveAlert] = useState(false);
 
   // Data states
-  const [eventsList, setEventsList] = useState<EventItem[]>(STITCH_EVENTS);
-  const [venuesList, setVenuesList] = useState<VenueItem[]>(STITCH_VENUES);
+  const [eventsList, setEventsList] = useState<EventItem[]>([]);
+  const [venuesList, setVenuesList] = useState<VenueItem[]>([]);
+  const [dashboardData, setDashboardData] = useState<any>(null);
   const [searchEventQuery, setSearchEventQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('all');
 
@@ -59,7 +59,7 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
   // Scanner & Designer modals
   const [showScannerModal, setShowScannerModal] = useState<boolean>(false);
   const [showSeatDesigner, setShowSeatDesigner] = useState<boolean>(false);
-  const [venueForDesigner, setVenueForDesigner] = useState<VenueItem>(STITCH_VENUES[0]);
+  const [venueForDesigner, setVenueForDesigner] = useState<VenueItem | null>(null);
 
   // Event modal
   const [showAddEventModal, setShowAddEventModal] = useState<boolean>(false);
@@ -103,66 +103,183 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  const handleApprove = () => {
-    setApprovalDecision('approved');
-    triggerToast('✓ "कट्यार काळजात घुसली" प्रयोग अधिकृतपणे मंजूर झाला व विक्री सुरू झाली!');
+  const fetchAllData = async () => {
+    try {
+      const [eventsRes, venuesRes, dashRes] = await Promise.all([
+        fetch('/api/admin/events'),
+        fetch('/api/admin/venues'),
+        fetch('/api/admin/dashboard'),
+      ]);
+
+      if (eventsRes.ok) {
+        const evData = await eventsRes.json();
+        if (Array.isArray(evData.events) && evData.events.length > 0) {
+          setEventsList(evData.events);
+        }
+      }
+
+      if (venuesRes.ok) {
+        const vnData = await venuesRes.json();
+        if (Array.isArray(vnData.venues) && vnData.venues.length > 0) {
+          setVenuesList(vnData.venues);
+          setVenueForDesigner(vnData.venues[0]);
+        }
+      }
+
+      if (dashRes.ok) {
+        const dbData = await dashRes.json();
+        setDashboardData(dbData);
+        if (Array.isArray(dbData.recentScans) && dbData.recentScans.length > 0) {
+          setStreamItems(
+            dbData.recentScans.map((s: any) => ({
+              id: s.ticketCode || `#TK-${s.id}`,
+              status: s.scanResult === 'SUCCESS' ? 'valid' : 'alert',
+              text: s.scanResult === 'SUCCESS' ? 'प्रवेश वैध' : 'पुनरावृत्ती अलर्ट!',
+              venue: s.gateName || 'गेट १',
+              time: new Date(s.scannedAt).toLocaleTimeString('mr-IN', { hour: '2-digit', minute: '2-digit' }),
+              seat: s.ticketCode || '',
+            }))
+          );
+        }
+      }
+    } catch (err) {
+      console.warn('Non-blocking admin data fetch error:', err);
+    }
   };
 
-  const handleRequestChanges = () => {
-    setApprovalDecision('changes');
-    triggerToast('सुधारणा नोटीस आयोजक "स्वरश्री इव्हेंट्स" ला पाठवली आहे.');
+  React.useEffect(() => {
+    fetchAllData();
+  }, []);
+
+  const pendingEvent = eventsList.find(e => e.status === 'submitted' || e.status === 'draft') || eventsList[0];
+
+  const handleApprove = async () => {
+    if (!pendingEvent) return;
+    setIsProcessing(true);
+    try {
+      const res = await fetch('/api/admin/events', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventId: pendingEvent.id,
+          status: 'published',
+          actorId: currentUser?.email || 'admin',
+        }),
+      });
+      if (res.ok) {
+        setApprovalDecision('approved');
+        triggerToast(`✓ "${pendingEvent.titleMr || pendingEvent.title}" अधिकृतपणे मंजूर झाला व विक्री सुरू झाली!`);
+        fetchAllData();
+      } else {
+        triggerToast('मंजूर करताना त्रुटी आली');
+      }
+    } catch {
+      triggerToast('नेटवर्क त्रुटी');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
-  const handleReject = () => {
-    setApprovalDecision('rejected');
-    triggerToast('हा प्रयोग नाकारण्यात आला आहे.');
+  const handleRequestChanges = async () => {
+    if (!pendingEvent) return;
+    setIsProcessing(true);
+    try {
+      const res = await fetch('/api/admin/events', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventId: pendingEvent.id,
+          status: 'changes_requested',
+          actorId: currentUser?.email || 'admin',
+        }),
+      });
+      if (res.ok) {
+        setApprovalDecision('changes');
+        triggerToast(`सुधारणा नोटीस आयोजकांना पाठवली आहे.`);
+        fetchAllData();
+      }
+    } catch {
+      triggerToast('नेटवर्क त्रुटी');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
-  const handleSaveEvent = (e: React.FormEvent) => {
+  const handleReject = async () => {
+    if (!pendingEvent) return;
+    setIsProcessing(true);
+    try {
+      const res = await fetch('/api/admin/events', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventId: pendingEvent.id,
+          status: 'rejected',
+          actorId: currentUser?.email || 'admin',
+        }),
+      });
+      if (res.ok) {
+        setApprovalDecision('rejected');
+        triggerToast('हा प्रयोग नाकारण्यात आला आहे.');
+        fetchAllData();
+      }
+    } catch {
+      triggerToast('नेटवर्क त्रुटी');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleSaveEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!eventTitleMr.trim()) return;
 
     setIsProcessing(true);
-    setTimeout(() => {
+    try {
       const selectedVenue = venuesList.find(v => v.id === Number(eventVenueId)) || venuesList[0];
-      const newEvent: EventItem = {
-        id: editingEvent ? editingEvent.id : Date.now(),
-        organizerId: 1,
-        venueId: selectedVenue.id,
+      const payload: any = {
         title: eventTitleEn.trim() || eventTitleMr.trim(),
         titleMr: eventTitleMr.trim(),
-        slug: eventTitleEn.toLowerCase().replace(/\s+/g, '-'),
         category: eventCategory,
-        categoryMr: eventCategory === 'plays' ? 'नाटक' : 'सांस्कृतिक',
-        language: 'मराठी',
-        ageGuidance: 'सर्व वयोगट',
-        durationMinutes: 150,
+        venueId: selectedVenue ? selectedVenue.id : 1,
+        organizerId: 1,
         description: eventDescriptionMr,
         descriptionMr: eventDescriptionMr,
         posterUrl: eventPosterUrl.trim() || 'https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?w=600',
         status: 'published',
-        featured: 1,
-        convenienceFeeType: 'flat',
-        convenienceFeeValue: 3500,
-        gstPercent: 18,
-        cancellationPolicy: 'Non-refundable within 24 hours of showtime',
-        minPrice: eventBasePrice * 100,
-        tag: eventBadge,
-        venue: selectedVenue
+        ticketPrice: eventBasePrice * 100,
+        actorId: currentUser?.email || 'admin',
       };
 
       if (editingEvent) {
-        setEventsList(prev => prev.map(ev => ev.id === editingEvent.id ? newEvent : ev));
-        triggerToast('कार्यक्रम यशस्वीरित्या अद्ययावत केला!');
+        payload.eventId = editingEvent.id;
+        const res = await fetch('/api/admin/events', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          triggerToast('कार्यक्रम यशस्वीरित्या अद्ययावत केला!');
+          fetchAllData();
+        }
       } else {
-        setEventsList(prev => [newEvent, ...prev]);
-        triggerToast('नवीन कार्यक्रम थेट जोडला गेला!');
+        const res = await fetch('/api/admin/events', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          triggerToast('नवीन कार्यक्रम थेट जोडला गेला!');
+          fetchAllData();
+        }
       }
-
+    } catch {
+      triggerToast('कार्यक्रम सेव्ह करताना त्रुटी आली');
+    } finally {
       setIsProcessing(false);
       setShowAddEventModal(false);
       setEditingEvent(null);
-    }, 400);
+    }
   };
 
   const filteredEvents = eventsList.filter(ev => {
@@ -304,13 +421,15 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                 {/* Metric 1 */}
                 <div className="bg-white rounded-2xl p-4 shadow-sm border border-[#E2E8F0] flex flex-col justify-between">
                   <div className="flex items-center justify-between mb-1 text-[#64748B]">
-                    <span className="text-xs font-medium">आजची एकूण विक्री</span>
+                    <span className="text-xs font-medium">एकूण विक्री (Tickets Sold)</span>
                     <span className="text-base text-[#A33900]">🎫</span>
                   </div>
-                  <div className="text-2xl font-black text-[#141B2B] tracking-tight">८,४५०</div>
+                  <div className="text-2xl font-black text-[#141B2B] tracking-tight">
+                    {dashboardData?.kpis?.ticketsSold?.toLocaleString('en-IN') ?? '०'}
+                  </div>
                   <div className="flex items-center gap-1 mt-1 text-[#16A34A] text-xs font-semibold">
                     <TrendingUp className="w-3.5 h-3.5" />
-                    <span>+१५.२% कालच्या तुलनेत</span>
+                    <span>थेट डेटाबेस नोंद</span>
                   </div>
                 </div>
 
@@ -320,9 +439,9 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                     <span className="text-xs font-medium">सक्रिय नाट्यगृहे</span>
                     <span className="text-base text-[#A33900]">🎭</span>
                   </div>
-                  <div className="text-2xl font-black text-[#141B2B] tracking-tight">६४</div>
+                  <div className="text-2xl font-black text-[#141B2B] tracking-tight">{venuesList.length}</div>
                   <div className="text-xs text-[#64748B] mt-1 font-medium">
-                    २८ शहरे व तालुके
+                    महाराष्ट्र शहरे व तालुके
                   </div>
                 </div>
 
@@ -332,21 +451,25 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                     <span className="text-xs font-medium">नोंदणीकृत आयोजक</span>
                     <span className="text-base text-[#A33900]">👥</span>
                   </div>
-                  <div className="text-2xl font-black text-[#141B2B] tracking-tight">१२०</div>
+                  <div className="text-2xl font-black text-[#141B2B] tracking-tight">
+                    {dashboardData?.kpis?.totalOrganizers ?? 1}
+                  </div>
                   <div className="flex items-center gap-1 mt-1 text-[#16A34A] text-xs font-semibold">
-                    <span>+६ नवीन नोंदणी</span>
+                    <span>सत्यापित नाट्य संस्था</span>
                   </div>
                 </div>
 
                 {/* Metric 4 */}
                 <div className="bg-white rounded-2xl p-4 shadow-sm border border-[#E2E8F0] flex flex-col justify-between">
                   <div className="flex items-center justify-between mb-1 text-[#64748B]">
-                    <span className="text-xs font-medium">तपासणी बाकी</span>
-                    <span className="text-base text-[#DC2626]">📋</span>
+                    <span className="text-xs font-medium">एकूण कार्यक्रम</span>
+                    <span className="text-base text-[#A33900]">📋</span>
                   </div>
-                  <div className="text-2xl font-black text-[#DC2626] tracking-tight">०३</div>
-                  <div className="text-xs text-[#DC2626] font-semibold mt-1">
-                    तातडीची तपासणी आवश्यक
+                  <div className="text-2xl font-black text-[#141B2B] tracking-tight">
+                    {eventsList.length}
+                  </div>
+                  <div className="text-xs text-[#16A34A] font-semibold mt-1">
+                    सक्रिय व प्रकाशित
                   </div>
                 </div>
               </div>
@@ -356,7 +479,7 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 text-xs font-bold text-[#141B2B]">
                     <DollarSign className="w-4 h-4 text-[#A33900]" />
-                    <span>एकूण दैनिक महसूल प्रवाह</span>
+                    <span>एकूण महसूल प्रवाह (Revenue Stream)</span>
                   </div>
                   <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#FFF7ED] text-[#A33900] font-bold">
                     थेट जमा
@@ -366,15 +489,15 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                 <div className="flex items-baseline justify-between pt-1">
                   <div>
                     <div className="text-2xl sm:text-3xl font-black text-[#141B2B] tracking-tight">
-                      ₹३८,२०,०००
+                      {dashboardData?.kpis?.totalGmv ? `₹${(dashboardData.kpis.totalGmv / 100).toLocaleString('en-IN')}` : '₹०'}
                     </div>
                     <p className="text-[11px] text-[#64748B]">सकल व्यवहार मूल्य (Gross GMV)</p>
                   </div>
                   <div className="text-right">
                     <div className="text-xl sm:text-2xl font-black text-[#16A34A]">
-                      ₹१,९१,०००
+                      {dashboardData?.kpis?.platformCommissionEarned ? `₹${(dashboardData.kpis.platformCommissionEarned / 100).toLocaleString('en-IN')}` : '₹०'}
                     </div>
-                    <p className="text-[11px] text-[#64748B]">प्लॅटफॉर्म कमिशन (५%)</p>
+                    <p className="text-[11px] text-[#64748B]">प्लॅटफॉर्म कमिशन</p>
                   </div>
                 </div>
               </div>
@@ -803,7 +926,7 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
       </div>
 
       {/* Seat Designer Modal */}
-      {showSeatDesigner && (
+      {showSeatDesigner && venueForDesigner && (
         <TheatreSeatDesigner
           venueToEdit={venueForDesigner}
           onClose={() => setShowSeatDesigner(false)}

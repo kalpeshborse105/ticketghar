@@ -15,6 +15,7 @@ export interface CustomerSessionUser {
   fullName: string;
   phoneNumber?: string | null;
   role: string;
+  avatarUrl?: string | null;
 }
 
 /**
@@ -86,6 +87,7 @@ export function verifySessionToken(token: string): CustomerSessionUser | null {
       fullName: payload.fullName,
       phoneNumber: payload.phoneNumber,
       role: payload.role,
+      avatarUrl: payload.avatarUrl,
     };
   } catch {
     return null;

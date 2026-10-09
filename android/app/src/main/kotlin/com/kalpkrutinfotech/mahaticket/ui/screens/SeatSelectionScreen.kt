@@ -254,9 +254,7 @@ fun SeatSelectionScreen(
                             },
                             onError = { err ->
                                 isHoldingLoading = false
-                                // Fallback token to allow smooth offline checkout preview
-                                val fallbackToken = "hold_${sessionId}_${System.currentTimeMillis()}"
-                                onContinueToCheckout(fallbackToken, sessionId, eventId)
+                                holdErrorMessage = err.ifBlank { "जागा आरक्षित (Hold) करण्यात अडचण आली. कृपया पुन्हा प्रयत्न करा." }
                             }
                         )
                     }

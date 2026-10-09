@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
-import { users, events, eventSessions, seatInventory, ticketTypes } from '@/src/db/schema.ts';
+import { users, events, eventSessions, seatInventory, ticketTypes, orders, tickets } from '@/src/db/schema.ts';
 import { eq, and, inArray } from 'drizzle-orm';
 import { confirmBookingOrder, calculatePricing } from '@/src/lib/inventory-engine.ts';
+import { verifyPaymentSignature, isRazorpayConfigured } from '@/src/lib/payments/razorpay.ts';
 
 export async function POST(request: Request) {
   try {
@@ -127,6 +128,68 @@ export async function POST(request: Request) {
         razorpaySignature: null,
         idempotencyKey: `idem_${Date.now()}_${targetUserId}`,
       };
+    }
+
+    // 1. Idempotency Check: if this payment was already confirmed, return the existing order safely
+    if (resolvedPayment.razorpayPaymentId) {
+      const existingOrderRows = await db
+        .select()
+        .from(orders)
+        .where(eq(orders.razorpayPaymentId, resolvedPayment.razorpayPaymentId))
+        .limit(1);
+
+      if (existingOrderRows.length > 0) {
+        const existingOrder = existingOrderRows[0];
+        const existingTickets = await db
+          .select()
+          .from(tickets)
+          .where(eq(tickets.orderId, existingOrder.id));
+
+        return NextResponse.json({
+          success: true,
+          order: existingOrder,
+          tickets: existingTickets,
+          event: eventRecord,
+          pricing: {
+            faceValueTotal: existingOrder.ticketFaceValueTotal,
+            convenienceFee: existingOrder.platformFeeTotal,
+            gst: existingOrder.taxTotal,
+            discount: existingOrder.discountTotal,
+            grandTotal: existingOrder.grandTotal,
+          },
+          payment: {
+            mode: 'razorpay',
+            paymentId: existingOrder.razorpayPaymentId,
+          },
+          message: 'Booking already confirmed (idempotent)',
+        });
+      }
+    }
+
+    // 2. Server-Side Signature Verification for Razorpay
+    if (resolvedPayment.gateway === 'razorpay' && resolvedPayment.razorpayOrderId && resolvedPayment.razorpayPaymentId) {
+      if (!resolvedPayment.razorpaySignature) {
+        return NextResponse.json(
+          { error: 'Razorpay payment signature is missing. Unverified payments cannot be confirmed.' },
+          { status: 400 }
+        );
+      }
+
+      if (isRazorpayConfigured()) {
+        const isSignatureValid = verifyPaymentSignature(
+          resolvedPayment.razorpayOrderId,
+          resolvedPayment.razorpayPaymentId,
+          resolvedPayment.razorpaySignature
+        );
+
+        if (!isSignatureValid) {
+          console.error('Invalid Razorpay signature for payment:', resolvedPayment.razorpayPaymentId);
+          return NextResponse.json(
+            { error: 'Invalid payment signature. Payment verification failed on server.' },
+            { status: 400 }
+          );
+        }
+      }
     }
 
     const result = await confirmBookingOrder({

@@ -11,6 +11,7 @@ import {
   venueSections,
   coupons,
   auditLogs,
+  eventSessions,
 } from '../db/schema.ts';
 import { eq, and, sql, inArray, lt, or, ne } from 'drizzle-orm';
 import crypto from 'crypto';
@@ -514,3 +515,119 @@ export async function confirmBookingOrder(params: {
     pricing,
   };
 }
+
+/**
+ * Safely generate session seat inventory from a master venue layout template.
+ * Idempotent: Never overwrites existing orders, tickets, or seat holds.
+ */
+export async function generateSessionInventory(
+  sessionId: number,
+  venueId: number,
+  defaultPriceRupees?: number
+): Promise<{ createdCount: number; totalSeats: number }> {
+  try {
+    // 1. Fetch physical venue sections and seats
+    const sections = await db
+      .select()
+      .from(venueSections)
+      .where(eq(venueSections.venueId, venueId));
+
+    if (sections.length === 0) {
+      return { createdCount: 0, totalSeats: 0 };
+    }
+
+    const allSeats = await db
+      .select()
+      .from(seats)
+      .where(eq(seats.venueId, venueId));
+
+    if (allSeats.length === 0) {
+      return { createdCount: 0, totalSeats: 0 };
+    }
+
+    // Fetch eventId for this session
+    const [sessRecord] = await db
+      .select({ eventId: eventSessions.eventId })
+      .from(eventSessions)
+      .where(eq(eventSessions.id, sessionId))
+      .limit(1);
+
+    const eventId = sessRecord?.eventId || 1;
+
+    // 2. Fetch or create ticket types per section
+    const sectionTicketTypeMap = new Map<number, number>();
+
+    for (const sec of sections) {
+      const existingTypes = await db
+        .select()
+        .from(ticketTypes)
+        .where(
+          and(
+            eq(ticketTypes.sessionId, sessionId),
+            eq(ticketTypes.sectionId, sec.id)
+          )
+        );
+
+      if (existingTypes.length > 0) {
+        sectionTicketTypeMap.set(sec.id, existingTypes[0].id);
+      } else {
+        const secSeats = allSeats.filter((s) => s.sectionId === sec.id);
+        const pricePaise = defaultPriceRupees
+          ? Math.round(defaultPriceRupees * 100)
+          : sec.basePrice;
+
+        const [newType] = await db
+          .insert(ticketTypes)
+          .values({
+            eventId,
+            sessionId,
+            sectionId: sec.id,
+            name: sec.name,
+            nameMr: sec.nameMr,
+            price: pricePaise,
+            totalQuota: secSeats.length,
+            availableQuota: secSeats.filter((s) => s.isBlocked === 0).length,
+            isSeated: 1,
+          })
+          .returning();
+
+        sectionTicketTypeMap.set(sec.id, newType.id);
+      }
+    }
+
+    // 3. Fetch existing inventory for this session to prevent duplicates
+    const existingInventory = await db
+      .select({ seatId: seatInventory.seatId })
+      .from(seatInventory)
+      .where(eq(seatInventory.sessionId, sessionId));
+
+    const existingSeatIdSet = new Set(existingInventory.map((i) => i.seatId));
+
+    // 4. Insert missing seats into inventory
+    const inventoryToInsert: any[] = [];
+    for (const seat of allSeats) {
+      if (!existingSeatIdSet.has(seat.id)) {
+        const ticketTypeId = sectionTicketTypeMap.get(seat.sectionId) || 1;
+        inventoryToInsert.push({
+          sessionId,
+          seatId: seat.id,
+          ticketTypeId,
+          status: seat.isBlocked === 1 ? 'blocked' : 'available',
+        });
+      }
+    }
+
+    if (inventoryToInsert.length > 0) {
+      await db.insert(seatInventory).values(inventoryToInsert);
+    }
+
+    return {
+      createdCount: inventoryToInsert.length,
+      totalSeats: allSeats.length,
+    };
+  } catch (error) {
+    console.error('Error generating session inventory:', error);
+    throw error;
+  }
+}
+

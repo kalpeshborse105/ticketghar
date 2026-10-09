@@ -353,7 +353,7 @@ fun HomeScreen(
                         Triple("music", "संगीत मैफल", "🎵"),
                         Triple("comedy", "स्टँडअप", "😄"),
                         Triple("cultural", "सांस्कृतिक", "🎪"),
-                        Triple("workshop", "कार्यशाळा", "🎨"),
+                        Triple("workshops", "कार्यशाळा", "🎨"),
                         Triple("movies", "चित्रपट", "🎬"),
                         Triple("sports", "क्रीडा", "🏏")
                     )

@@ -14,6 +14,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const fullName = body.fullName !== undefined ? String(body.fullName).trim() : session.fullName;
     const phoneNumber = body.phoneNumber !== undefined ? String(body.phoneNumber).trim() : session.phoneNumber;
+    const avatarUrl = body.avatarUrl !== undefined ? String(body.avatarUrl) : session.avatarUrl;
 
     if (db && users && session.id) {
       try {
@@ -33,6 +34,7 @@ export async function POST(req: NextRequest) {
       ...session,
       fullName: fullName || session.fullName,
       phoneNumber: phoneNumber || session.phoneNumber,
+      avatarUrl: avatarUrl !== undefined ? avatarUrl : session.avatarUrl,
     };
 
     await setCustomerSessionCookie(updatedUser);

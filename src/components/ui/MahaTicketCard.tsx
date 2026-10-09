@@ -203,32 +203,6 @@ export const MahaTicketCard: React.FC<MahaTicketCardProps> = ({
             CODE: {ticketCode}
           </span>
         </div>
-
-        {/* Action Buttons */}
-        {(onDownloadPdf || onShare) && (
-          <div className="flex items-center gap-2 pt-2 w-full">
-            {onDownloadPdf && (
-              <button
-                type="button"
-                onClick={onDownloadPdf}
-                className="flex-1 py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-[#111827] text-xs font-bold transition flex items-center justify-center gap-1.5"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>PDF डाउनलोड</span>
-              </button>
-            )}
-            {onShare && (
-              <button
-                type="button"
-                onClick={onShare}
-                className="flex-1 py-2 px-3 rounded-xl bg-[#FFF7ED] hover:bg-[#FFEDD5] text-[#C2410C] text-xs font-bold transition flex items-center justify-center gap-1.5 border border-[#FED7AA]"
-              >
-                <Share2 className="w-3.5 h-3.5" />
-                <span>शेअर करा</span>
-              </button>
-            )}
-          </div>
-        )}
       </div>
     </div>
   );

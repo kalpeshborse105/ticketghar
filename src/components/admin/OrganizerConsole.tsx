@@ -23,7 +23,6 @@ import {
   Repeat
 } from 'lucide-react';
 import { Language } from '../../lib/i18n.ts';
-import { STITCH_EVENTS, STITCH_VENUES } from '../../lib/stitch-data.ts';
 import { EventItem, VenueItem } from '../../lib/types.ts';
 import { AdminScanner } from '../AdminScanner';
 import { TheatreSeatDesigner } from './TheatreSeatDesigner';
@@ -45,7 +44,11 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
   const [showAddEventModal, setShowAddEventModal] = useState<boolean>(false);
   const [showScannerModal, setShowScannerModal] = useState<boolean>(false);
   const [showSeatDesigner, setShowSeatDesigner] = useState<boolean>(false);
-  const [venueForDesigner, setVenueForDesigner] = useState<VenueItem>(STITCH_VENUES[0]);
+  const [venuesList, setVenuesList] = useState<VenueItem[]>([]);
+  const [eventsList, setEventsList] = useState<EventItem[]>([]);
+  const [ordersList, setOrdersList] = useState<any[]>([]);
+  const [settlementsList, setSettlementsList] = useState<any[]>([]);
+  const [venueForDesigner, setVenueForDesigner] = useState<VenueItem | null>(null);
 
   // Form states for new event
   const [eventTitleMr, setEventTitleMr] = useState('');
@@ -55,51 +58,108 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
   const [eventVenueId, setEventVenueId] = useState<number>(1);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Live booking transactions
-  const [liveBookings, setLiveBookings] = useState([
-    {
-      initial: 'सु',
-      name: 'सुहास कुलकर्णी',
-      seats: '२ जागा',
-      details: 'नियम व अटी लागू • स्टॉल A-१२, A-१३',
-      amount: '+₹८००',
-      time: '२ मि. पूर्वी'
-    },
-    {
-      initial: 'प्र',
-      name: 'प्रिया देसाई',
-      seats: '४ जागा',
-      details: 'अलबत्या गलबत्या • बाल्कनी B-०४-०७',
-      amount: '+₹१,२००',
-      time: '५ मि. पूर्वी'
-    },
-    {
-      initial: 'आ',
-      name: 'आनंद जोशी',
-      seats: '१ जागा',
-      details: 'नियम व अटी लागू • बॉक्स सीट ०३',
-      amount: '+₹६००',
-      time: '८ मि. पूर्वी'
-    }
-  ]);
-
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  const handleCreateEvent = (e: React.FormEvent) => {
+  const fetchOrganizerData = async () => {
+    try {
+      const [eventsRes, ordersRes, settlementsRes, venuesRes] = await Promise.all([
+        fetch('/api/admin/events'),
+        fetch('/api/admin/orders'),
+        fetch('/api/admin/settlements'),
+        fetch('/api/admin/venues'),
+      ]);
+
+      if (eventsRes.ok) {
+        const evData = await eventsRes.json();
+        if (Array.isArray(evData.events) && evData.events.length > 0) {
+          setEventsList(evData.events);
+        }
+      }
+
+      if (venuesRes.ok) {
+        const vnData = await venuesRes.json();
+        if (Array.isArray(vnData.venues) && vnData.venues.length > 0) {
+          setVenuesList(vnData.venues);
+          setVenueForDesigner(vnData.venues[0]);
+        }
+      }
+
+      if (ordersRes.ok) {
+        const ordData = await ordersRes.json();
+        if (Array.isArray(ordData.orders)) {
+          setOrdersList(ordData.orders);
+        }
+      }
+
+      if (settlementsRes.ok) {
+        const stData = await settlementsRes.json();
+        if (Array.isArray(stData.settlements)) {
+          setSettlementsList(stData.settlements);
+        }
+      }
+    } catch (err) {
+      console.warn('Non-blocking organizer data fetch error:', err);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchOrganizerData();
+  }, []);
+
+  // Compute live business metrics from database records
+  const totalRevenue = ordersList.reduce((sum, o) => sum + (o.grandTotal || 0), 0);
+  const ticketsSold = ordersList.reduce((sum, o) => sum + (o.ticketCount || 0), 0);
+  const pendingSettlement = settlementsList
+    .filter((s) => s.status === 'pending')
+    .reduce((sum, s) => sum + (s.netPayableToOrganizer || 0), 0);
+
+  const liveBookings = ordersList.slice(0, 10).map((o) => ({
+    initial: o.userName?.trim().charAt(0) || 'ग',
+    name: o.userName || 'ग्राहक',
+    seats: `${o.ticketCount || 1} जागा`,
+    details: `${o.event?.titleMr || o.event?.title || 'तिकीट'} • ${o.session?.sessionStartTime ? new Date(o.session.sessionStartTime).toLocaleDateString('mr-IN') : 'प्रयोग'}`,
+    amount: `+₹${((o.grandTotal || 0) / 100).toLocaleString('en-IN')}`,
+    time: o.createdAt ? new Date(o.createdAt).toLocaleTimeString('mr-IN', { hour: '2-digit', minute: '2-digit' }) : 'आत्ताच',
+  }));
+
+  const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!eventTitleMr.trim()) return;
 
     setIsProcessing(true);
-    setTimeout(() => {
+    try {
+      const selectedVenue = venuesList.find((v) => v.id === Number(eventVenueId)) || venuesList[0];
+      const res = await fetch('/api/admin/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: eventTitleEn.trim() || eventTitleMr.trim(),
+          titleMr: eventTitleMr.trim(),
+          category: eventCategory,
+          venueId: selectedVenue ? selectedVenue.id : 1,
+          ticketPrice: eventBasePrice * 100,
+          status: 'submitted',
+          actorId: currentUser?.email || 'organizer',
+        }),
+      });
+
+      if (res.ok) {
+        triggerToast(`✓ "${eventTitleMr}" कार्यक्रम प्रशासक मंजुरीसाठी पाठवला गेला!`);
+        setShowAddEventModal(false);
+        setEventTitleMr('');
+        setEventTitleEn('');
+        fetchOrganizerData();
+      } else {
+        triggerToast('कार्यक्रम तयार करताना त्रुटी आली');
+      }
+    } catch {
+      triggerToast('नेटवर्क त्रुटी');
+    } finally {
       setIsProcessing(false);
-      setShowAddEventModal(false);
-      triggerToast(`✓ "${eventTitleMr}" कार्यक्रम यशस्वीरित्या तयार झाला!`);
-      setEventTitleMr('');
-      setEventTitleEn('');
-    }, 400);
+    }
   };
 
   return (
@@ -123,7 +183,7 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
               </div>
               <div className="min-w-0">
                 <h2 className="text-base sm:text-lg font-black text-[#141B2B] truncate leading-tight">
-                  नमस्कार, महालक्ष्मी थिएटर्स
+                  नमस्कार, {currentUser?.fullName || 'नाट्य निर्माते'}
                 </h2>
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <span className="w-2 h-2 rounded-full bg-[#16A34A] animate-pulse inline-block"></span>
@@ -157,7 +217,7 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
         <div>
           <div className="flex items-center justify-between mb-2 px-1">
             <h3 className="text-base font-bold text-[#141B2B]">आजचे मुख्य निर्देशक</h3>
-            <span className="text-[11px] text-[#64748B]">ताजे अपडेट: आत्ताच</span>
+            <span className="text-[11px] text-[#64748B]">ताजे अपडेट: थेट डेटाबेस</span>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -170,10 +230,12 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
                 </span>
               </div>
               <div>
-                <div className="text-2xl font-black text-[#141B2B] leading-tight">₹२,८४,५००</div>
+                <div className="text-2xl font-black text-[#141B2B] leading-tight">
+                  {totalRevenue > 0 ? `₹${(totalRevenue / 100).toLocaleString('en-IN')}` : '₹०'}
+                </div>
                 <div className="flex items-center gap-1 mt-1 text-[#16A34A] text-xs font-semibold">
                   <TrendingUp className="w-3.5 h-3.5" />
-                  <span>+१४% या आठवड्यात</span>
+                  <span>थेट ऑर्डर्स नोंद</span>
                 </div>
               </div>
             </div>
@@ -187,9 +249,11 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
                 </span>
               </div>
               <div>
-                <div className="text-2xl font-black text-[#141B2B] leading-tight">१,४२०</div>
+                <div className="text-2xl font-black text-[#141B2B] leading-tight">
+                  {ticketsSold > 0 ? ticketsSold.toLocaleString('en-IN') : '०'}
+                </div>
                 <div className="text-xs text-[#64748B] mt-1 font-semibold flex items-center gap-1">
-                  <span className="text-[#16A34A]">●</span> ९२% सरासरी ऑक्युपन्सी
+                  <span className="text-[#16A34A]">●</span> {ordersList.length} बुकिंग ऑर्डर्स
                 </div>
               </div>
             </div>
@@ -203,8 +267,10 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
                 </span>
               </div>
               <div>
-                <div className="text-2xl font-black text-[#141B2B] leading-tight">०४ शोज</div>
-                <p className="text-[11px] text-[#64748B] mt-1 truncate">बालगंधर्व व यशवंतराव</p>
+                <div className="text-2xl font-black text-[#141B2B] leading-tight">
+                  {eventsList.length > 0 ? `${eventsList.length} शोज` : '० शोज'}
+                </div>
+                <p className="text-[11px] text-[#64748B] mt-1 truncate">सक्रिय नाट्यगृह प्रयोग</p>
               </div>
             </div>
 
@@ -217,8 +283,10 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
                 </span>
               </div>
               <div>
-                <div className="text-2xl font-black text-[#141B2B] leading-tight">₹४,५०,०००</div>
-                <p className="text-[11px] text-[#A33900] font-bold mt-1">पुढील पेआउट: मंगळवार</p>
+                <div className="text-2xl font-black text-[#141B2B] leading-tight">
+                  {pendingSettlement > 0 ? `₹${(pendingSettlement / 100).toLocaleString('en-IN')}` : '₹०'}
+                </div>
+                <p className="text-[11px] text-[#A33900] font-bold mt-1">थेट बँक खात्यात वर्ग</p>
               </div>
             </div>
           </div>
@@ -282,8 +350,12 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
             {/* Action 4: Seat Rates & Pricing */}
             <button
               onClick={() => {
-                setVenueForDesigner(STITCH_VENUES[0]);
-                setShowSeatDesigner(true);
+                if (venuesList[0]) {
+                  setVenueForDesigner(venuesList[0]);
+                  setShowSeatDesigner(true);
+                } else {
+                  triggerToast('नाट्यगृह लोड होत आहे...');
+                }
               }}
               className="bg-white p-4 rounded-2xl shadow-sm border border-[#E2E8F0] text-left active:scale-[0.98] transition-transform flex flex-col justify-between min-h-[110px]"
             >
@@ -394,8 +466,11 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
                 <span className="text-xs text-[#64748B]">एकूण संकलन: ₹१,२५,०००</span>
                 <button
                   onClick={() => {
-                    setVenueForDesigner(STITCH_VENUES[1]);
-                    setShowSeatDesigner(true);
+                    const targetVenue = venuesList[1] || venuesList[0];
+                    if (targetVenue) {
+                      setVenueForDesigner(targetVenue);
+                      setShowSeatDesigner(true);
+                    }
                   }}
                   className="bg-[#E1E8FD] text-[#141B2B] px-3.5 py-1.5 rounded-xl text-xs font-bold active:scale-95 transition"
                 >
@@ -603,7 +678,7 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
                   onChange={e => setEventVenueId(Number(e.target.value))}
                   className="w-full px-3 py-2 rounded-xl border border-[#E2E8F0] bg-white"
                 >
-                  {STITCH_VENUES.map(v => (
+                  {venuesList.map(v => (
                     <option key={v.id} value={v.id}>{v.nameMr} ({v.city})</option>
                   ))}
                 </select>
@@ -622,7 +697,7 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
       )}
 
       {/* Seat Designer Modal */}
-      {showSeatDesigner && (
+      {showSeatDesigner && venueForDesigner && (
         <TheatreSeatDesigner
           venueToEdit={venueForDesigner}
           onClose={() => setShowSeatDesigner(false)}

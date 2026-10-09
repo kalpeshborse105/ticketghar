@@ -272,8 +272,6 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
               grandTotal={order.grandTotal}
               qrPayload={ticketUrl || primaryTicket || order.orderNumber}
               totalTickets={tickets.length}
-              onDownloadPdf={handleDownloadPDF}
-              onShare={handleWhatsApp}
             />
           </div>
         </div>

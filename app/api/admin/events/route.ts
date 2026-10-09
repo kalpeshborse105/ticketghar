@@ -3,6 +3,7 @@ import { db } from '@/src/db/index.ts';
 import { events, venues, organizers, eventSessions, ticketTypes, auditLogs } from '@/src/db/schema.ts';
 import { eq, desc, and } from 'drizzle-orm';
 import { requireAdmin, verifyAdminSession } from '@/src/lib/admin-auth.ts';
+import { generateSessionInventory } from '@/src/lib/inventory-engine.ts';
 
 export async function GET(request: NextRequest) {
   const authError = requireAdmin(request);
@@ -16,8 +17,8 @@ export async function GET(request: NextRequest) {
     const session = verifyAdminSession(request);
     let filterOrganizerId: number | null = null;
 
-    if (session.valid && session.role === 'organizer' && session.user?.organizerId) {
-      filterOrganizerId = Number(session.user.organizerId);
+    if (session.valid && session.role === 'organizer') {
+      filterOrganizerId = Number(session.user?.organizerId || 0);
     } else if (organizerIdParam) {
       filterOrganizerId = parseInt(organizerIdParam, 10);
     }
@@ -62,6 +63,7 @@ export async function POST(request: NextRequest) {
   const authError = requireAdmin(request);
   if (authError) return authError;
   try {
+    const session = verifyAdminSession(request);
     const body = await request.json();
     const {
       title,
@@ -86,7 +88,17 @@ export async function POST(request: NextRequest) {
       castCrew,
     } = body;
 
-    const finalOrganizerId = organizerId ? parseInt(String(organizerId), 10) : 1;
+    let finalOrganizerId = organizerId ? parseInt(String(organizerId), 10) : 1;
+    let initialStatus = status || 'published';
+
+    // Server-side RBAC: organizers can only create events for their own account, and status defaults to submitted
+    if (session.valid && session.role === 'organizer') {
+      finalOrganizerId = Number(session.user?.organizerId || 1);
+      if (initialStatus === 'published') {
+        initialStatus = 'submitted';
+      }
+    }
+
     const finalVenueId = venueId ? parseInt(String(venueId), 10) : 1;
 
     if (!title || !titleMr || !category) {
@@ -122,7 +134,7 @@ export async function POST(request: NextRequest) {
         galleryUrls: typeof galleryUrls === 'string' ? galleryUrls : galleryUrls ? JSON.stringify(galleryUrls) : null,
         castCrew: typeof castCrew === 'string' ? castCrew : castCrew ? JSON.stringify(castCrew) : null,
         convenienceFeeValue: convenienceFeeValue ? parseInt(convenienceFeeValue, 10) : 3000,
-        status: status || 'published',
+        status: initialStatus,
       })
       .returning();
 
@@ -152,6 +164,17 @@ export async function POST(request: NextRequest) {
         availableQuota: 200,
         isSeated: 0,
       });
+
+      // Safely generate seated inventory from venue layout template
+      try {
+        await generateSessionInventory(
+          sess.id,
+          finalVenueId,
+          ticketPrice ? parseInt(ticketPrice, 10) / 100 : undefined
+        );
+      } catch (invErr) {
+        console.warn('Notice generating venue session inventory:', invErr);
+      }
     }
 
     // Audit log
@@ -175,6 +198,7 @@ export async function PATCH(request: NextRequest) {
   const authError = requireAdmin(request);
   if (authError) return authError;
   try {
+    const session = verifyAdminSession(request);
     const body = await request.json();
     const {
       eventId,
@@ -194,6 +218,26 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Event ID required' }, { status: 400 });
     }
 
+    const [existingEvent] = await db
+      .select()
+      .from(events)
+      .where(eq(events.id, Number(eventId)))
+      .limit(1);
+
+    if (!existingEvent) {
+      return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+    }
+
+    // Server-side ownership verification: Organizers cannot modify other organizers' events
+    if (session.valid && session.role === 'organizer') {
+      if (existingEvent.organizerId !== session.user?.organizerId) {
+        return NextResponse.json(
+          { error: 'Forbidden: You do not have permission to modify this event.' },
+          { status: 403 }
+        );
+      }
+    }
+
     const updatePayload: any = {};
     if (title !== undefined) updatePayload.title = title;
     if (titleMr !== undefined) updatePayload.titleMr = titleMr;
@@ -204,18 +248,33 @@ export async function PATCH(request: NextRequest) {
     if (castCrew !== undefined) {
       updatePayload.castCrew = typeof castCrew === 'string' ? castCrew : castCrew ? JSON.stringify(castCrew) : null;
     }
-    if (status !== undefined) updatePayload.status = status;
-    if (featured !== undefined) updatePayload.featured = featured;
+    
+    // Organizers cannot self-publish or promote to featured
+    if (status !== undefined) {
+      if (session.valid && session.role === 'organizer') {
+        if (status === 'published' && existingEvent.status !== 'published') {
+          updatePayload.status = 'submitted'; // Requires super_admin approval
+        } else {
+          updatePayload.status = status;
+        }
+      } else {
+        updatePayload.status = status;
+      }
+    }
+
+    if (featured !== undefined && (!session.valid || session.role !== 'organizer')) {
+      updatePayload.featured = featured;
+    }
 
     const [updated] = await db
       .update(events)
       .set(updatePayload)
-      .where(eq(events.id, eventId))
+      .where(eq(events.id, Number(eventId)))
       .returning();
 
     await db.insert(auditLogs).values({
-      actorId: actorId || 'admin',
-      actorRole: 'super_admin',
+      actorId: actorId || (session.user?.email || 'admin'),
+      actorRole: session.role || 'super_admin',
       action: 'EVENT_STATUS_UPDATED',
       entityType: 'event',
       entityId: String(eventId),
@@ -233,11 +292,32 @@ export async function DELETE(request: NextRequest) {
   const authError = requireAdmin(request);
   if (authError) return authError;
   try {
+    const session = verifyAdminSession(request);
     const { searchParams } = new URL(request.url);
     const eventId = searchParams.get('id');
 
     if (!eventId) {
       return NextResponse.json({ error: 'Event ID required' }, { status: 400 });
+    }
+
+    const [existingEvent] = await db
+      .select()
+      .from(events)
+      .where(eq(events.id, parseInt(eventId, 10)))
+      .limit(1);
+
+    if (!existingEvent) {
+      return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+    }
+
+    // Server-side ownership verification: Organizers can only unpublish their own events
+    if (session.valid && session.role === 'organizer') {
+      if (existingEvent.organizerId !== session.user?.organizerId) {
+        return NextResponse.json(
+          { error: 'Forbidden: You do not have permission to delete this event.' },
+          { status: 403 }
+        );
+      }
     }
 
     // Unpublish / archive rather than hard deleting to protect booking relations
@@ -248,8 +328,8 @@ export async function DELETE(request: NextRequest) {
       .returning();
 
     await db.insert(auditLogs).values({
-      actorId: 'admin',
-      actorRole: 'super_admin',
+      actorId: session.user?.email || 'admin',
+      actorRole: session.role || 'super_admin',
       action: 'EVENT_UNPUBLISHED',
       entityType: 'event',
       entityId: String(eventId),

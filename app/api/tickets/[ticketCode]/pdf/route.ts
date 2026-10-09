@@ -68,8 +68,8 @@ export async function GET(
     const pdfBuffer = await generateTicketPdfBuffer({
       ticketCode: ticketRecord.ticket.ticketCode,
       orderNumber: ticketRecord.order.orderNumber,
-      eventTitle: eventRecord?.event.titleMr || eventRecord?.event.title || 'Event',
-      venueName: eventRecord?.venue?.nameMr || eventRecord?.venue?.name || 'Venue',
+      eventTitle: eventRecord?.event.title || eventRecord?.event.titleMr || 'Event',
+      venueName: eventRecord?.venue?.name || eventRecord?.venue?.nameMr || 'Venue',
       showtime,
       seatCode: seatsSummary,
       attendeeName: ticketRecord.ticket.attendeeName || ticketRecord.order.userName,

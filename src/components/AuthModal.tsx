@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   X,
   Mail,
@@ -31,7 +32,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onSuccess,
   initialMessage,
 }) => {
+  const [mounted, setMounted] = useState(false);
   const [step, setStep] = useState<AuthStep>('email');
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -42,7 +48,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted) return null;
 
   const handleClose = () => {
     setStep('email');
@@ -269,9 +275,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
+      <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-200 my-auto max-h-[92vh] flex flex-col relative">
         {/* Header */}
         <div className="bg-gradient-to-r from-[#ea580c] to-[#f97316] p-6 text-white relative">
           <button
@@ -306,7 +312,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </div>
 
         {/* Form Body */}
-        <div className="p-6 space-y-4">
+        <div className="p-6 space-y-4 overflow-y-auto max-h-[calc(92vh-140px)] flex-1">
           {initialMessage && step === 'email' && !error && (
             <div className="p-3 rounded-xl bg-orange-50 border border-orange-200 text-xs text-[#ea580c] font-bold flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 shrink-0" />
@@ -619,6 +625,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

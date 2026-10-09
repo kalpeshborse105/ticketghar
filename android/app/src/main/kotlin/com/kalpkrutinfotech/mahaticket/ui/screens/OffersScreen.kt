@@ -131,42 +131,36 @@ fun OffersScreen(viewModel: EventViewModel) {
                         }
                     }
                     is OffersUiState.Success -> {
-                        val serverCoupons = state.coupons
-                        val defaultCoupons = listOf(
-                            CouponResponse(
-                                id = 1,
-                                code = "MAHA50",
-                                discountType = "flat",
-                                discountValue = 5000,
-                                minOrderValue = 30000,
-                                maxDiscount = 5000,
-                                active = 1
-                            ),
-                            CouponResponse(
-                                id = 2,
-                                code = "NATAK10",
-                                discountType = "percentage",
-                                discountValue = 1000,
-                                minOrderValue = 0,
-                                maxDiscount = 10000,
-                                active = 1
-                            )
-                        )
-                        val displayCoupons = if (serverCoupons.isNotEmpty()) serverCoupons else defaultCoupons
+                        val displayCoupons = state.coupons ?: emptyList()
 
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(16.dp, 16.dp, 16.dp, 90.dp),
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            item {
+                        if (displayCoupons.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(32.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
                                 Text(
-                                    text = "सक्रिय कूपन कोड (${displayCoupons.size})",
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Black,
-                                    color = Color.White
+                                    text = "सध्या कोणतेही सक्रिय कूपन उपलब्ध नाही.\n(No active offers available currently)",
+                                    color = Color(0xFF94A3B8),
+                                    fontSize = 14.sp,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                 )
                             }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(16.dp, 16.dp, 16.dp, 90.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                item {
+                                    Text(
+                                        text = "सक्रिय कूपन कोड (${displayCoupons.size})",
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = Color.White
+                                    )
+                                }
 
                             items(displayCoupons, key = { it.code }) { coupon ->
                                 Card(
@@ -239,4 +233,5 @@ fun OffersScreen(viewModel: EventViewModel) {
             }
         }
     }
+}
 }

@@ -2,13 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
 import { settlements, organizers, events, auditLogs } from '@/src/db/schema.ts';
 import { eq, desc } from 'drizzle-orm';
-import { requireAdmin } from '@/src/lib/admin-auth.ts';
+import { requireAdmin, verifyAdminSession } from '@/src/lib/admin-auth.ts';
 
 export async function GET(request: NextRequest) {
   const authError = requireAdmin(request);
   if (authError) return authError;
   try {
-    const list = await db
+    const session = verifyAdminSession(request);
+
+    const baseQuery = db
       .select({
         settlement: settlements,
         organizer: organizers,
@@ -16,8 +18,14 @@ export async function GET(request: NextRequest) {
       })
       .from(settlements)
       .innerJoin(organizers, eq(settlements.organizerId, organizers.id))
-      .innerJoin(events, eq(settlements.eventId, events.id))
-      .orderBy(desc(settlements.createdAt));
+      .innerJoin(events, eq(settlements.eventId, events.id));
+
+    const list = (session.valid && session.role === 'organizer')
+      ? await baseQuery
+          .where(eq(settlements.organizerId, Number(session.user?.organizerId || 0)))
+          .orderBy(desc(settlements.createdAt))
+      : await baseQuery
+          .orderBy(desc(settlements.createdAt));
 
     const formatted = list.map((item) => ({
       id: item.settlement.id,
@@ -57,6 +65,14 @@ export async function POST(request: NextRequest) {
   const authError = requireAdmin(request);
   if (authError) return authError;
   try {
+    const session = verifyAdminSession(request);
+    if (session.valid && session.role === 'organizer') {
+      return NextResponse.json(
+        { error: 'Forbidden: Organizers cannot execute or modify financial settlement payouts.' },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const { settlementId, status, payoutUtr, adminActor } = body;
 

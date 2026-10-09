@@ -645,27 +645,8 @@ fun CheckoutScreen(
                                 }
                             },
                             onError = { orderErr ->
-                                // If Razorpay payment order creation failed (e.g. offline, mock or gateway config),
-                                // fallback to direct booking confirmation so user is never blocked!
-                                bookingViewModel.confirmBooking(
-                                    sessionId = sessionId,
-                                    eventId = eventId,
-                                    customerName = customerName.trim(),
-                                    phoneNumber = cleanPhone,
-                                    email = customerEmail.trim().ifBlank { null },
-                                    couponCode = appliedCoupon,
-                                    razorpayPaymentId = null,
-                                    razorpayOrderId = null,
-                                    razorpaySignature = null,
-                                    onSuccess = { orderNumber ->
-                                        isProcessing = false
-                                        onBookingSuccess(orderNumber)
-                                    },
-                                    onError = { _ ->
-                                        isProcessing = false
-                                        errorMessage = orderErr
-                                    }
-                                )
+                                isProcessing = false
+                                errorMessage = orderErr.ifBlank { "पेमेंट ऑर्डर तयार करण्यात त्रुटी. कृपया पुन्हा प्रयत्न करा." }
                             }
                         )
                     },

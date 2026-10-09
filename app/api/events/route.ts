@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
 import { events, venues, organizers, eventSessions, ticketTypes } from '@/src/db/schema.ts';
 import { eq, and, desc } from 'drizzle-orm';
-import { STITCH_EVENTS } from '@/src/lib/stitch-data.ts';
 
 export async function GET(request: Request) {
   try {
@@ -16,71 +15,55 @@ export async function GET(request: Request) {
 
     let allEventsList: any[] = [];
 
-    try {
-      // Base query from database
-      const conditions = [eq(events.status, 'published')];
+    // Base query from database
+    const conditions = [eq(events.status, 'published')];
 
-      if (category && category !== 'all') {
-        conditions.push(eq(events.category, category));
-      }
-
-      if (featuredOnly) {
-        conditions.push(eq(events.featured, 1));
-      }
-
-      const dbEvents = await db
-        .select({
-          event: events,
-          venue: venues,
-          organizer: organizers,
-        })
-        .from(events)
-        .innerJoin(venues, eq(events.venueId, venues.id))
-        .innerJoin(organizers, eq(events.organizerId, organizers.id))
-        .where(and(...conditions))
-        .orderBy(desc(events.featured), desc(events.createdAt));
-
-      if (dbEvents.length > 0) {
-        const enrichedDbEvents = await Promise.all(
-          dbEvents.map(async (item) => {
-            const sessions = await db
-              .select()
-              .from(eventSessions)
-              .where(and(eq(eventSessions.eventId, item.event.id), eq(eventSessions.status, 'active')))
-              .orderBy(eventSessions.sessionStartTime);
-
-            const prices = await db
-              .select({ price: ticketTypes.price })
-              .from(ticketTypes)
-              .where(eq(ticketTypes.eventId, item.event.id));
-
-            const minPrice = prices.length > 0 ? Math.min(...prices.map((p) => p.price)) : 30000;
-
-            return {
-              ...item.event,
-              venue: item.venue,
-              organizer: item.organizer,
-              sessions,
-              minPrice,
-            };
-          })
-        );
-        allEventsList = enrichedDbEvents;
-      }
-    } catch (dbErr) {
-      console.warn('DB query skipped or failed, using Stitch mock catalog:', dbErr);
+    if (category && category !== 'all') {
+      conditions.push(eq(events.category, category));
     }
 
-    // Merge or fallback to Stitch events
-    if (allEventsList.length === 0) {
-      allEventsList = [...STITCH_EVENTS];
-    } else {
-      const existingTitles = new Set(allEventsList.map((e) => e.title.toLowerCase()));
-      const existingIds = new Set(allEventsList.map((e) => Number(e.id)));
-      const extraStitch = STITCH_EVENTS.filter(
-        (se) => !existingTitles.has(se.title.toLowerCase()) && !existingIds.has(Number(se.id))
+    if (featuredOnly) {
+      conditions.push(eq(events.featured, 1));
+    }
+
+    const dbEvents = await db
+      .select({
+        event: events,
+        venue: venues,
+        organizer: organizers,
+      })
+      .from(events)
+      .innerJoin(venues, eq(events.venueId, venues.id))
+      .innerJoin(organizers, eq(events.organizerId, organizers.id))
+      .where(and(...conditions))
+      .orderBy(desc(events.featured), desc(events.createdAt));
+
+    if (dbEvents.length > 0) {
+      const enrichedDbEvents = await Promise.all(
+        dbEvents.map(async (item) => {
+          const sessions = await db
+            .select()
+            .from(eventSessions)
+            .where(and(eq(eventSessions.eventId, item.event.id), eq(eventSessions.status, 'active')))
+            .orderBy(eventSessions.sessionStartTime);
+
+          const prices = await db
+            .select({ price: ticketTypes.price })
+            .from(ticketTypes)
+            .where(eq(ticketTypes.eventId, item.event.id));
+
+          const minPrice = prices.length > 0 ? Math.min(...prices.map((p) => p.price)) : 30000;
+
+          return {
+            ...item.event,
+            venue: item.venue,
+            organizer: item.organizer,
+            sessions,
+            minPrice,
+          };
+        })
       );
-      allEventsList = [...extraStitch, ...allEventsList];
+      allEventsList = enrichedDbEvents;
     }
 
     // Filter by category
@@ -153,8 +136,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ events: allEventsList });
   } catch (error: any) {
-    console.error('Failed to fetch events:', error);
-    return NextResponse.json({ events: STITCH_EVENTS });
+    console.error('Failed to fetch events from database:', error);
+    return NextResponse.json({ error: 'Failed to fetch events', events: [] }, { status: 500 });
   }
 }
 

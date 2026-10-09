@@ -28,7 +28,7 @@ import { MTTicketLoader } from '@/src/components/ui/MTSkeleton';
 import { SeatMapModal } from '@/src/components/SeatMapModal';
 import { CheckoutDrawer } from '@/src/components/CheckoutDrawer';
 import { TicketPassModal } from '@/src/components/TicketPassModal';
-import { getStitchEventById, STITCH_EVENTS } from '@/src/lib/stitch-data';
+
 
 interface EventDetail {
   id: number;
@@ -216,6 +216,8 @@ export default function EventDetailPage() {
     if (!eventId) return;
     const fetchEvent = async () => {
       try {
+        setLoading(true);
+        setError(null);
         const res = await fetch(`/api/events/${eventId}`);
         if (res.ok) {
           const json = await res.json();
@@ -224,25 +226,15 @@ export default function EventDetailPage() {
             if (json.event.sessions && json.event.sessions.length > 0) {
               setSelectedSession(json.event.sessions[0]);
             }
-            setLoading(false);
             return;
           }
         }
-      } catch {
-        // Fallback below
+        setError('कार्यक्रम आढळला नाही (Event not found)');
+      } catch (err: any) {
+        setError('कार्यक्रम माहिती लोड करण्यात त्रुटी आली. कृपया पुन्हा प्रयत्न करा.');
+      } finally {
+        setLoading(false);
       }
-
-      // Fallback to Stitch Mock Dataset
-      const stitchEv = getStitchEventById(eventId);
-      if (stitchEv) {
-        setEvent(stitchEv as any);
-        if (stitchEv.sessions && stitchEv.sessions.length > 0) {
-          setSelectedSession(stitchEv.sessions[0]);
-        }
-      } else {
-        setError('Event not found');
-      }
-      setLoading(false);
     };
 
     fetchEvent();

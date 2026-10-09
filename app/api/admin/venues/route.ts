@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
-import { venues, venueSections, seats, auditLogs } from '@/src/db/schema.ts';
-import { desc, eq } from 'drizzle-orm';
+import { venues, venueSections, seats, auditLogs, eventSessions, events, tickets } from '@/src/db/schema.ts';
+import { desc, eq, inArray } from 'drizzle-orm';
 import { requireAdmin } from '@/src/lib/admin-auth.ts';
 
 // GET all venues
@@ -47,6 +47,12 @@ export async function POST(request: NextRequest) {
       nameMr,
       address,
       city,
+      districtId,
+      cityId,
+      verificationStatus = 'verified',
+      isTemplate = 1,
+      ownershipType = 'public_theatre',
+      layoutConfig,
       totalCapacity = 500,
       hasSeatLayout = 1,
       customLayout = false,
@@ -70,6 +76,32 @@ export async function POST(request: NextRequest) {
     let targetVenueRecord: any;
 
     if (venueId) {
+      // Safety check: protect existing orders and tickets
+      const sessionsAtVenue = await db
+        .select({ id: eventSessions.id })
+        .from(eventSessions)
+        .innerJoin(events, eq(eventSessions.eventId, events.id))
+        .where(eq(events.venueId, Number(venueId)));
+
+      if (sessionsAtVenue.length > 0) {
+        const sessionIds = sessionsAtVenue.map((s) => s.id);
+        const existingTickets = await db
+          .select({ id: tickets.id })
+          .from(tickets)
+          .where(inArray(tickets.sessionId, sessionIds))
+          .limit(1);
+
+        if (existingTickets.length > 0) {
+          return NextResponse.json(
+            {
+              error:
+                'या नाट्यगृहातील खेळांसाठी विक्री झालेली तिकिटे अस्तित्वात असल्याने आसन रचना थेट डिलीट/बदल करता येणार नाही.',
+            },
+            { status: 409 }
+          );
+        }
+      }
+
       // UPDATE existing venue
       const [updatedVenue] = await db
         .update(venues)
@@ -78,6 +110,12 @@ export async function POST(request: NextRequest) {
           nameMr,
           address,
           city: city.trim(),
+          districtId: districtId ? Number(districtId) : undefined,
+          cityId: cityId ? Number(cityId) : undefined,
+          verificationStatus,
+          isTemplate: Number(isTemplate),
+          ownershipType,
+          layoutConfig: typeof layoutConfig === 'string' ? layoutConfig : layoutConfig ? JSON.stringify(layoutConfig) : undefined,
           totalCapacity: Number(totalCapacity),
           hasSeatLayout: Number(hasSeatLayout),
         })
@@ -99,6 +137,12 @@ export async function POST(request: NextRequest) {
           nameMr,
           address,
           city: city.trim(),
+          districtId: districtId ? Number(districtId) : undefined,
+          cityId: cityId ? Number(cityId) : undefined,
+          verificationStatus,
+          isTemplate: Number(isTemplate),
+          ownershipType,
+          layoutConfig: typeof layoutConfig === 'string' ? layoutConfig : layoutConfig ? JSON.stringify(layoutConfig) : undefined,
           totalCapacity: Number(totalCapacity),
           hasSeatLayout: Number(hasSeatLayout),
         })

@@ -116,15 +116,26 @@ export default function ProfilePage() {
     }
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       const dataUrl = event.target?.result as string;
       if (dataUrl) {
         setAvatarUrl(dataUrl);
         if (user?.email && typeof window !== 'undefined') {
           localStorage.setItem(`mahaticket_avatar_${user.email}`, dataUrl);
-          setProfileSuccessMsg('प्रोफाइल फोटो यशस्वीरीत्या बदलला!');
-          setTimeout(() => setProfileSuccessMsg(null), 3000);
         }
+        try {
+          const res = await fetch('/api/auth/flow/profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ avatarUrl: dataUrl }),
+          });
+          const d = await res.json();
+          if (res.ok && d.user) setUser(d.user);
+          setProfileSuccessMsg('प्रोफाइल फोटो यशस्वीरीत्या बदलला व जतन झाला!');
+        } catch {
+          setProfileSuccessMsg('प्रोफाइल फोटो बदलला!');
+        }
+        setTimeout(() => setProfileSuccessMsg(null), 3000);
       }
     };
     reader.readAsDataURL(file);
@@ -144,6 +155,7 @@ export default function ProfilePage() {
         body: JSON.stringify({
           fullName: fullName.trim(),
           phoneNumber: phoneNumber.trim(),
+          avatarUrl: avatarUrl || undefined,
         }),
       });
 
@@ -297,6 +309,13 @@ export default function ProfilePage() {
                   </div>
                   <div className="absolute inset-0 bg-black/40 rounded-2xl flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity">
                     <Camera className="w-5 h-5 text-white" />
+                  </div>
+                  {/* Permanent visible edit icon badge */}
+                  <div
+                    className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-[#EA580C] text-white flex items-center justify-center shadow-md border-2 border-white hover:bg-[#c2410c] transition active:scale-95"
+                    title="फोटो बदला (Edit Photo)"
+                  >
+                    <Camera className="w-3.5 h-3.5" />
                   </div>
                   <input
                     ref={fileInputRef}

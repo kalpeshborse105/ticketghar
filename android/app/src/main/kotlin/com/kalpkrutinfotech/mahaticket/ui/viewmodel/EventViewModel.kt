@@ -146,14 +146,17 @@ class EventViewModel(
     
     fun selectCategory(category: String) {
         _selectedCategory.value = category
+        loadEvents(category = if (category == "all" || category == "सर्व") null else category)
     }
 
     fun selectCity(city: String) {
         _selectedCity.value = city
+        loadEvents(city = if (city == "महाराष्ट्र (All)" || city.contains("All")) null else city)
     }
     
     fun searchEvents(query: String) {
         _searchQuery.value = query
+        loadEvents(search = query.takeIf { it.isNotBlank() })
     }
     
     fun loadEventDetails(eventId: Int) {

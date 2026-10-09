@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const limitParam = parseInt(searchParams.get('limit') || '100', 10);
 
-    const orderRows = await db
+    const baseQuery = db
       .select({
         order: orders,
         event: events,
@@ -21,11 +21,18 @@ export async function GET(request: NextRequest) {
         session: eventSessions,
       })
       .from(orders)
-      .leftJoin(events, eq(orders.eventId, events.id))
-      .leftJoin(venues, eq(events.venueId, venues.id))
-      .leftJoin(eventSessions, eq(orders.sessionId, eventSessions.id))
-      .orderBy(desc(orders.createdAt))
-      .limit(limitParam);
+      .innerJoin(events, eq(orders.eventId, events.id))
+      .innerJoin(venues, eq(events.venueId, venues.id))
+      .innerJoin(eventSessions, eq(orders.sessionId, eventSessions.id));
+
+    const orderRows = (session.valid && session.role === 'organizer')
+      ? await baseQuery
+          .where(eq(events.organizerId, Number(session.user?.organizerId || 0)))
+          .orderBy(desc(orders.createdAt))
+          .limit(limitParam)
+      : await baseQuery
+          .orderBy(desc(orders.createdAt))
+          .limit(limitParam);
 
     const enriched = await Promise.all(
       orderRows.map(async (row) => {

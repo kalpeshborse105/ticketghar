@@ -8,6 +8,7 @@ export const users = pgTable('users', {
   email: text('email').notNull(),
   fullName: text('full_name').notNull().default('Guest User'),
   phoneNumber: text('phone_number'),
+  avatarUrl: text('avatar_url'),
   role: text('role').notNull().default('customer'), // 'customer' | 'super_admin' | 'organizer' | 'manager' | 'operations' | 'finance' | 'scanner'
   preferredLanguage: text('preferred_language').notNull().default('mr'), // 'mr' | 'en'
   city: text('city').notNull().default('Pune'),
@@ -41,9 +42,48 @@ export const organizers = pgTable('organizers', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+// Location Master: Districts
+export const districts = pgTable('districts', {
+  id: serial('id').primaryKey(),
+  code: text('code').notNull().unique(),
+  name: text('name').notNull(),
+  nameMr: text('name_mr').notNull(),
+  division: text('division').notNull(),
+  divisionMr: text('division_mr').notNull(),
+  state: text('state').notNull().default('Maharashtra'),
+  isActive: integer('is_active').notNull().default(1),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Location Master: Talukas
+export const talukas = pgTable('talukas', {
+  id: serial('id').primaryKey(),
+  districtId: integer('district_id').references(() => districts.id).notNull(),
+  name: text('name').notNull(),
+  nameMr: text('name_mr').notNull(),
+  isActive: integer('is_active').notNull().default(1),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Cities / Towns catalog
+export const cities = pgTable('cities', {
+  id: serial('id').primaryKey(),
+  districtId: integer('district_id').references(() => districts.id),
+  talukaId: integer('taluka_id').references(() => talukas.id),
+  name: text('name').notNull().unique(),
+  nameMr: text('name_mr').notNull(),
+  state: text('state').notNull().default('Maharashtra'),
+  isPopular: integer('is_popular').notNull().default(0),
+  isActive: integer('is_active').notNull().default(1),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
 // 3. Venues
 export const venues = pgTable('venues', {
   id: serial('id').primaryKey(),
+  districtId: integer('district_id').references(() => districts.id),
+  cityId: integer('city_id').references(() => cities.id),
   name: text('name').notNull(),
   nameMr: text('name_mr').notNull(),
   address: text('address').notNull(),
@@ -55,6 +95,10 @@ export const venues = pgTable('venues', {
   facilities: text('facilities'), // JSON string array of facilities
   totalCapacity: integer('total_capacity').notNull().default(600),
   hasSeatLayout: integer('has_seat_layout').notNull().default(1),
+  verificationStatus: text('verification_status').notNull().default('verified'), // 'verified' | 'unverified' | 'draft'
+  isTemplate: integer('is_template').notNull().default(1),
+  ownershipType: text('ownership_type').notNull().default('public_theatre'),
+  layoutConfig: text('layout_config'), // JSON string for walkwayAfterRow, tier colors
   createdAt: timestamp('created_at').defaultNow(),
 });
 
@@ -81,17 +125,6 @@ export const seats = pgTable('seats', {
   tier: text('tier').notNull().default('standard'), // 'platinum' | 'gold' | 'silver'
   isAccessible: integer('is_accessible').notNull().default(0),
   isBlocked: integer('is_blocked').notNull().default(0),
-});
-
-// Cities catalog
-export const cities = pgTable('cities', {
-  id: serial('id').primaryKey(),
-  name: text('name').notNull().unique(),
-  nameMr: text('name_mr').notNull(),
-  state: text('state').notNull().default('Maharashtra'),
-  isActive: integer('is_active').notNull().default(1),
-  sortOrder: integer('sort_order').notNull().default(0),
-  createdAt: timestamp('created_at').defaultNow(),
 });
 
 // 6. Events

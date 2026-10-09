@@ -39,6 +39,7 @@ export interface SectionConfig {
   nameMr: string;
   basePrice: number; // in rupees
   tier: 'platinum' | 'gold' | 'silver' | 'standard';
+  walkwayAfterRow?: string;
   rows: RowConfig[];
 }
 
@@ -386,6 +387,7 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
           nameMr: sec.nameMr,
           basePrice: sec.basePrice,
           tier: sec.tier,
+          walkwayAfterRow: sec.walkwayAfterRow,
           rows: sec.rows.map((r) => ({
             rowLabel: r.rowLabel,
             aisleAfter: r.aisleAfter,
@@ -678,6 +680,22 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
                           <option value="standard">Standard / सामान्य</option>
                         </select>
                       </div>
+                      <div>
+                        <label className="text-slate-400 block mb-1">मधला रस्ता (Walkway Gap)</label>
+                        <select
+                          value={currentSection.walkwayAfterRow || ''}
+                          onChange={(e) => updateCurrentSection({ walkwayAfterRow: e.target.value || undefined })}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-white font-bold"
+                          title="Select row after which cross-aisle walkway is placed"
+                        >
+                          <option value="">नाही (No Walkway)</option>
+                          {currentSection.rows.map((r) => (
+                            <option key={r.rowLabel} value={r.rowLabel}>
+                              Row {r.rowLabel} नंतर पॅसेज
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
 
                     <button
@@ -739,10 +757,10 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
                     {/* Row List */}
                     <div className="space-y-3 max-h-[420px] overflow-y-auto pr-2">
                       {currentSection.rows.map((row, rIdx) => (
-                        <div
-                          key={rIdx}
-                          className="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-2 text-xs hover:border-slate-700 transition"
-                        >
+                        <React.Fragment key={rIdx}>
+                          <div
+                            className="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-2 text-xs hover:border-slate-700 transition"
+                          >
                           <div className="flex items-center justify-between gap-3">
                             <div className="flex items-center gap-2">
                               <span className="text-slate-400 text-[11px]">रांग:</span>
@@ -829,7 +847,14 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
                             </div>
                           </div>
                         </div>
-                      ))}
+
+                        {currentSection.walkwayAfterRow === row.rowLabel && (
+                          <div className="py-2 px-3 rounded-xl bg-amber-500/10 border border-dashed border-amber-500/40 text-[11px] text-amber-300 font-mono flex items-center justify-center gap-2">
+                            <span>🚶 मधला रस्ता / CROSS-AISLE WALKWAY GAP (Row {row.rowLabel} नंतर पॅसेज)</span>
+                          </div>
+                        )}
+                      </React.Fragment>
+                    ))}
                     </div>
                   </div>
                 </div>
@@ -923,57 +948,68 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
                       </div>
 
                       <div className="flex flex-col items-center gap-2 py-2">
-                        {sec.rows.map((row, rIdx) => (
-                          <div key={rIdx} className="flex items-center gap-2">
-                            <span className="w-8 text-right font-mono font-bold text-xs text-slate-400 select-none">
-                              {row.rowLabel}
-                            </span>
+                        {sec.rows.map((row, rIdx) => {
+                          const hasWalkway = sec.walkwayAfterRow === row.rowLabel;
+                          return (
+                            <React.Fragment key={rIdx}>
+                              <div className="flex items-center gap-2">
+                                <span className="w-8 text-right font-mono font-bold text-xs text-slate-400 select-none">
+                                  {row.rowLabel}
+                                </span>
 
-                            <div className="flex items-center gap-1.5">
-                              {row.seats.map((seat, sIdx) => {
-                                const isAisleGap = row.aisleAfter.includes(seat.seatNumber);
+                                <div className="flex items-center gap-1.5">
+                                  {row.seats.map((seat, sIdx) => {
+                                    const isAisleGap = row.aisleAfter.includes(seat.seatNumber);
 
-                                let seatClass = 'bg-white text-slate-900 border-slate-300 hover:border-amber-400';
-                                if (seat.isBlocked === 1) {
-                                  seatClass = 'bg-red-950 text-red-300 border-red-700 hover:border-red-500';
-                                } else if (seat.isAccessible === 1) {
-                                  seatClass = 'bg-blue-600 text-white border-blue-500 hover:border-blue-300';
-                                }
+                                    let seatClass = 'bg-white text-slate-900 border-slate-300 hover:border-amber-400';
+                                    if (seat.isBlocked === 1) {
+                                      seatClass = 'bg-red-950 text-red-300 border-red-700 hover:border-red-500';
+                                    } else if (seat.isAccessible === 1) {
+                                      seatClass = 'bg-blue-600 text-white border-blue-500 hover:border-blue-300';
+                                    }
 
-                                return (
-                                  <React.Fragment key={sIdx}>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleToggleSeatPropertyInSec(secIdx, rIdx, sIdx)}
-                                      title={`Seat ${row.rowLabel}${seat.seatNumber} (${
-                                        seat.isBlocked
-                                          ? 'Blocked'
-                                          : seat.isAccessible
-                                          ? 'Accessible'
-                                          : 'Normal'
-                                      }) — थेट क्लिक करून स्थिती बदला`}
-                                      className={`w-7 h-7 rounded-lg border text-[10px] font-bold font-mono flex items-center justify-center shadow-xs transition active:scale-90 cursor-pointer ${seatClass}`}
-                                    >
-                                      {seat.isBlocked === 1 ? (
-                                        <Lock className="w-3 h-3 text-red-400" />
-                                      ) : seat.isAccessible === 1 ? (
-                                        <Accessibility className="w-3 h-3 text-white" />
-                                      ) : (
-                                        seat.seatNumber
-                                      )}
-                                    </button>
+                                    return (
+                                      <React.Fragment key={sIdx}>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleToggleSeatPropertyInSec(secIdx, rIdx, sIdx)}
+                                          title={`Seat ${row.rowLabel}${seat.seatNumber} (${
+                                            seat.isBlocked
+                                              ? 'Blocked'
+                                              : seat.isAccessible
+                                              ? 'Accessible'
+                                              : 'Normal'
+                                          }) — थेट क्लिक करून स्थिती बदला`}
+                                          className={`w-7 h-7 rounded-lg border text-[10px] font-bold font-mono flex items-center justify-center shadow-xs transition active:scale-90 cursor-pointer ${seatClass}`}
+                                        >
+                                          {seat.isBlocked === 1 ? (
+                                            <Lock className="w-3 h-3 text-red-400" />
+                                          ) : seat.isAccessible === 1 ? (
+                                            <Accessibility className="w-3 h-3 text-white" />
+                                          ) : (
+                                            seat.seatNumber
+                                          )}
+                                        </button>
 
-                                    {isAisleGap && <div className="w-5" />}
-                                  </React.Fragment>
-                                );
-                              })}
-                            </div>
+                                        {isAisleGap && <div className="w-5" />}
+                                      </React.Fragment>
+                                    );
+                                  })}
+                                </div>
 
-                            <span className="w-8 text-left font-mono font-bold text-xs text-slate-400 select-none">
-                              {row.rowLabel}
-                            </span>
-                          </div>
-                        ))}
+                                <span className="w-8 text-left font-mono font-bold text-xs text-slate-400 select-none">
+                                  {row.rowLabel}
+                                </span>
+                              </div>
+
+                              {hasWalkway && (
+                                <div className="w-full flex items-center justify-center my-3 py-1.5 border-y border-dashed border-amber-500/30 bg-amber-500/5 text-[10px] font-mono tracking-widest text-amber-300">
+                                  <span>🚶 मधला रस्ता / CROSS-AISLE WALKWAY GAP</span>
+                                </div>
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
                       </div>
                     </div>
                   ))}
