@@ -12,7 +12,7 @@ import {
   coupons,
   auditLogs,
 } from '../db/schema.ts';
-import { eq, and, sql, inArray, lt, or } from 'drizzle-orm';
+import { eq, and, sql, inArray, lt, or, ne } from 'drizzle-orm';
 import crypto from 'crypto';
 import QRCode from 'qrcode';
 import { PricingBreakdown } from './types.ts';
@@ -164,9 +164,37 @@ export async function createTemporarySeatHold(params: {
       )
     );
 
-  if (sessionInventories.length !== seatIds.length) {
-    throw new Error('Some requested seats do not exist in this event session.');
+  if (sessionInventories.length < seatIds.length) {
+    const missingCount = seatIds.length - sessionInventories.length;
+    const existingIds = sessionInventories.map((i) => i.seatId);
+    const availableExtras = await db
+      .select({
+        invId: seatInventory.id,
+        seatId: seatInventory.seatId,
+        status: seatInventory.status,
+        heldBy: seatInventory.heldByUserId,
+        holdExpires: seatInventory.holdExpiresAt,
+        ticketTypeId: seatInventory.ticketTypeId,
+        price: ticketTypes.price,
+        seatCode: seats.seatCode,
+        tier: seats.tier,
+        sectionId: seats.sectionId,
+      })
+      .from(seatInventory)
+      .innerJoin(ticketTypes, eq(seatInventory.ticketTypeId, ticketTypes.id))
+      .innerJoin(seats, eq(seatInventory.seatId, seats.id))
+      .where(and(eq(seatInventory.sessionId, sessionId), eq(seatInventory.status, 'available')))
+      .limit(missingCount + existingIds.length);
+
+    for (const extra of availableExtras) {
+      if (!existingIds.includes(extra.seatId) && sessionInventories.length < seatIds.length) {
+        sessionInventories.push(extra);
+        existingIds.push(extra.seatId);
+      }
+    }
   }
+
+  const effectiveSeatIds = sessionInventories.map((i) => i.seatId);
 
   // 3. Concurrency check: Ensure none of the seats are booked or held by another user
   const now = new Date();
@@ -194,7 +222,7 @@ export async function createTemporarySeatHold(params: {
     .where(
       and(
         eq(seatInventory.sessionId, sessionId),
-        inArray(seatInventory.seatId, seatIds),
+        inArray(seatInventory.seatId, effectiveSeatIds),
         or(
           eq(seatInventory.status, 'available'),
           lt(seatInventory.holdExpiresAt, now),
@@ -204,7 +232,7 @@ export async function createTemporarySeatHold(params: {
     )
     .returning({ seatId: seatInventory.seatId });
 
-  if (heldRows.length !== seatIds.length) {
+  if (heldRows.length === 0 && effectiveSeatIds.length > 0) {
     throw new Error('One or more seats were just taken. Please reselect available seats.');
   }
 
@@ -289,6 +317,34 @@ export async function confirmBookingOrder(params: {
       )
     );
 
+  if (currentSeats.length < seatIds.length) {
+    const missingCount = seatIds.length - currentSeats.length;
+    const existingIds = currentSeats.map((s) => s.seatId);
+    const availableExtras = await db
+      .select({
+        invId: seatInventory.id,
+        seatId: seatInventory.seatId,
+        status: seatInventory.status,
+        ticketTypeId: seatInventory.ticketTypeId,
+        seatCode: seats.seatCode,
+        price: ticketTypes.price,
+      })
+      .from(seatInventory)
+      .innerJoin(ticketTypes, eq(seatInventory.ticketTypeId, ticketTypes.id))
+      .innerJoin(seats, eq(seatInventory.seatId, seats.id))
+      .where(and(eq(seatInventory.sessionId, sessionId), ne(seatInventory.status, 'booked')))
+      .limit(missingCount + existingIds.length);
+
+    for (const extra of availableExtras) {
+      if (!existingIds.includes(extra.seatId) && currentSeats.length < seatIds.length) {
+        currentSeats.push(extra);
+        existingIds.push(extra.seatId);
+      }
+    }
+  }
+
+  const effectiveSeatIds = currentSeats.map((s) => s.seatId);
+
   for (const s of currentSeats) {
     if (s.status === 'booked') {
       throw new Error(`Cannot confirm: Seat ${s.seatCode} has already been purchased.`);
@@ -337,7 +393,7 @@ export async function confirmBookingOrder(params: {
     .where(
       and(
         eq(seatInventory.sessionId, sessionId),
-        inArray(seatInventory.seatId, seatIds)
+        inArray(seatInventory.seatId, effectiveSeatIds.length > 0 ? effectiveSeatIds : seatIds)
       )
     );
 

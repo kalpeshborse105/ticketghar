@@ -46,18 +46,19 @@ fun ProfileScreen(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(CinemaBg)
+            .background(MahaBg)
             .testTag("profile_screen"),
         contentPadding = PaddingValues(16.dp, 16.dp, 16.dp, 90.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         // 1. Profile Header Card
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = CinemaSurface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                border = BorderStroke(1.dp, MahaBorder)
             ) {
                 Column(
                     modifier = Modifier
@@ -67,48 +68,48 @@ fun ProfileScreen(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(76.dp)
+                            .size(72.dp)
                             .clip(CircleShape)
-                            .background(TheatricalCrimson)
-                            .border(2.dp, GoldAccent, CircleShape),
+                            .background(MahaWarm)
+                            .border(2.dp, MahaOrange, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = if (isLoggedIn) "🎭" else "👤",
-                            fontSize = 36.sp
+                            fontSize = 32.sp
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     Text(
-                        text = if (isLoggedIn) (userName?.ifBlank { null } ?: "महाटिकिट सदस्य") else "महाटिकिट वापरकर्ता (Guest)",
-                        fontSize = 18.sp,
+                        text = if (isLoggedIn) (userName?.ifBlank { null } ?: "महाटिकिट सदस्य") else "महाटिकिट वापरकर्ता",
+                        fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = TextPrimary
                     )
 
                     Spacer(modifier = Modifier.height(2.dp))
 
                     Text(
-                        text = if (isLoggedIn) (userPhone?.ifBlank { null } ?: userEmail ?: "सत्यापित सदस्य") else "आपली सर्व तिकिटे आपल्या फोनवर सुरक्षित आहेत",
+                        text = if (isLoggedIn) (userPhone?.ifBlank { null } ?: userEmail ?: "सत्यापित सदस्य") else "आपली सर्व तिकिटे सुरक्षित आहेत",
                         fontSize = 12.sp,
-                        color = Color(0xFF94A3B8)
+                        color = TextSecondary
                     )
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Surface(
-                            color = if (isLoggedIn) Color(0xFF065F46) else Color(0xFF1E293B),
+                            color = if (isLoggedIn) Color(0xFFDCFCE7) else MahaWarmLight,
                             shape = RoundedCornerShape(6.dp)
                         ) {
                             Text(
                                 text = if (isLoggedIn) "✓ सत्यापित खाते" else "अतिथी वापरकर्ता",
-                                color = if (isLoggedIn) GoldBright else Color(0xFFCBD5E1),
+                                color = if (isLoggedIn) Color(0xFF16A34A) else TextSecondary,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -116,12 +117,12 @@ fun ProfileScreen(
                         }
 
                         Surface(
-                            color = TheatricalCrimson.copy(alpha = 0.2f),
+                            color = MahaWarm,
                             shape = RoundedCornerShape(6.dp)
                         ) {
                             Text(
-                                text = "👑 रसिक सदस्य",
-                                color = TheatricalCrimsonLight,
+                                text = "रसिक सदस्य",
+                                color = MahaOrangeDeep,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -134,25 +135,25 @@ fun ProfileScreen(
                     if (!isLoggedIn) {
                         Button(
                             onClick = onNavigateToLogin,
-                            colors = ButtonDefaults.buttonColors(containerColor = TheatricalCrimson),
-                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MahaOrange),
+                            shape = RoundedCornerShape(8.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(46.dp)
+                                .height(44.dp)
                         ) {
                             Icon(Icons.AutoMirrored.Filled.Login, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color.White)
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("लॉगिन करा / Sign In", fontWeight = FontWeight.Bold, color = Color.White)
+                            Text("लॉगिन करा", fontWeight = FontWeight.Bold, color = Color.White)
                         }
                     } else {
                         OutlinedButton(
                             onClick = { sessionManager.clearSession() },
-                            shape = RoundedCornerShape(10.dp),
-                            border = BorderStroke(1.dp, TheatricalCrimson),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = TheatricalCrimsonLight),
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, MahaOrange),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MahaOrange),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("लॉगआउट करा (Sign Out)", fontWeight = FontWeight.Bold)
+                            Text("लॉगआउट करा", fontWeight = FontWeight.Bold, color = MahaOrange)
                         }
                     }
                 }
@@ -163,28 +164,30 @@ fun ProfileScreen(
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = CinemaSurface)
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                border = BorderStroke(1.dp, MahaBorder)
             ) {
                 Column {
                     CinemaProfileMenuItem(
                         icon = Icons.Default.ConfirmationNumber,
-                        title = "माझी तिकिटे (My Tickets)",
+                        title = "माझी तिकिटे",
                         subtitle = "बुक केलेली सर्व तिकिटे व ई-पास पहा",
                         onClick = onNavigateToTickets
                     )
-                    HorizontalDivider(color = Color(0xFF1E293B), thickness = 1.dp)
+                    HorizontalDivider(color = MahaBorder, thickness = 0.5.dp)
                     CinemaProfileMenuItem(
                         icon = Icons.Default.Translate,
-                        title = "अ‍ॅप भाषा (App Language)",
+                        title = "अ‍ॅप भाषा",
                         subtitle = "मराठी (प्राथमिक भाषा) / English",
                         onClick = {}
                     )
-                    HorizontalDivider(color = Color(0xFF1E293B), thickness = 1.dp)
+                    HorizontalDivider(color = MahaBorder, thickness = 0.5.dp)
                     CinemaProfileMenuItem(
                         icon = Icons.Default.Notifications,
-                        title = "सूचना (Notifications)",
-                        subtitle = "नवीन कार्यक्रम, ऑफर आणि शो स्मरणपत्रे",
+                        title = "सूचना व स्मरणपत्रे",
+                        subtitle = "नवीन कार्यक्रम आणि शो स्मरणपत्रे",
                         onClick = {}
                     )
                 }
@@ -195,77 +198,103 @@ fun ProfileScreen(
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = CinemaSurface),
-                border = BorderStroke(1.dp, GoldAccent.copy(alpha = 0.4f))
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                border = BorderStroke(1.dp, MahaBorder)
             ) {
-                CinemaProfileMenuItem(
-                    icon = Icons.Default.Business,
-                    title = "नाट्य व कार्यक्रम आयोजक (Partner With Us)",
-                    subtitle = "आपला कार्यक्रम महाटिकिटवर सूचीबद्ध करा",
-                    iconTint = GoldAccent,
-                    onClick = {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.API_BASE_URL}/contact"))
-                        context.startActivity(intent)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Surface(
+                            color = MahaWarm,
+                            shape = CircleShape,
+                            modifier = Modifier.size(42.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(text = "🎪", fontSize = 20.sp)
+                            }
+                        }
+                        Column {
+                            Text(
+                                text = "नाट्य निर्माते व आयोजक आहात?",
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                            Text(
+                                text = "महाटिकिट वर आपले नाटक किंवा कार्यक्रम लिस्ट करा",
+                                fontSize = 11.sp,
+                                color = TextSecondary,
+                                modifier = Modifier.padding(top = 1.dp)
+                            )
+                        }
                     }
-                )
+
+                    Surface(
+                        color = MahaOrange,
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.clickable {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.API_BASE_URL}/organizer/join"))
+                            context.startActivity(intent)
+                        }
+                    ) {
+                        Text(
+                            text = "नोंदणी",
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        )
+                    }
+                }
             }
         }
 
-        // 4. Legal & Support Links Card
+        // 4. Support & Legal Policies
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = CinemaSurface)
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                border = BorderStroke(1.dp, MahaBorder)
             ) {
                 Column {
                     CinemaProfileMenuItem(
                         icon = Icons.AutoMirrored.Filled.HelpOutline,
-                        title = "मदत आणि सपोर्ट (Help Centre)",
-                        subtitle = "बुकिंग संबंधित प्रश्न व ग्राहक सहाय्य",
-                        onClick = { onNavigateToLegal("about") }
+                        title = "मदत आणि संपर्क",
+                        subtitle = "ग्राहक सेवा आणि सहाय्य केंद्र",
+                        onClick = { onNavigateToLegal("help") }
                     )
-                    HorizontalDivider(color = Color(0xFF1E293B), thickness = 1.dp)
-                    CinemaProfileMenuItem(
-                        icon = Icons.Default.Info,
-                        title = "आमच्याबद्दल (About MahaTicket)",
-                        subtitle = "महाराष्ट्राचे अधिकृत तिकीट बुकिंग व्यासपीठ",
-                        onClick = { onNavigateToLegal("about") }
-                    )
-                    HorizontalDivider(color = Color(0xFF1E293B), thickness = 1.dp)
-                    CinemaProfileMenuItem(
-                        icon = Icons.Default.AssignmentReturn,
-                        title = "परतावा व रद्दीकरण धोरण (Refund Policy)",
-                        subtitle = "तिकीट रद्द करणे व परतावा नियम",
-                        onClick = { onNavigateToLegal("refund") }
-                    )
-                    HorizontalDivider(color = Color(0xFF1E293B), thickness = 1.dp)
-                    CinemaProfileMenuItem(
-                        icon = Icons.Default.Description,
-                        title = "नियम व अटी (Terms & Conditions)",
-                        subtitle = "वापरकर्त्यांसाठी नियम व मार्गदर्शक तत्त्वे",
-                        onClick = { onNavigateToLegal("terms") }
-                    )
-                    HorizontalDivider(color = Color(0xFF1E293B), thickness = 1.dp)
+                    HorizontalDivider(color = MahaBorder, thickness = 0.5.dp)
                     CinemaProfileMenuItem(
                         icon = Icons.Default.PrivacyTip,
                         title = "गोपनीयता धोरण (Privacy Policy)",
-                        subtitle = "तुमचा डेटा आणि सुरक्षा माहिती",
+                        subtitle = "डेटा सुरक्षा आणि वापर धोरण",
                         onClick = { onNavigateToLegal("privacy") }
                     )
-                    HorizontalDivider(color = Color(0xFF1E293B), thickness = 1.dp)
+                    HorizontalDivider(color = MahaBorder, thickness = 0.5.dp)
                     CinemaProfileMenuItem(
-                        icon = Icons.Default.AccountBalanceWallet,
-                        title = "प्लॅटफॉर्म व सेवा शुल्क माहिती (Platform Fees)",
-                        subtitle = "पारदर्शक दर, कर व शुल्क संरचना",
-                        onClick = { onNavigateToLegal("fees") }
+                        icon = Icons.Default.Gavel,
+                        title = "नियम व अटी (Terms of Service)",
+                        subtitle = "अधिकृत बुकिंग नियम आणि परतावा धोरण",
+                        onClick = { onNavigateToLegal("terms") }
                     )
                 }
             }
         }
 
-        // 5. App Version Branding
+        // 5. Version Info
         item {
             Column(
                 modifier = Modifier
@@ -274,16 +303,16 @@ fun ProfileScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "${BuildConfig.APP_NAME_MR} (${BuildConfig.APP_NAME})",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = GoldBright
+                    text = "महाटिकिट • अधिकृत तिकीट आरक्षण प्लॅटफॉर्म",
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = TextSecondary
                 )
-                Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "आवृत्ती ${BuildConfig.VERSION_NAME} • Made with ❤️ in Maharashtra",
-                    fontSize = 11.sp,
-                    color = Color(0xFF64748B)
+                    text = "आवृत्ती २.४.० • कल्पकृत इन्फोटेक प्रा. लि.",
+                    fontSize = 10.5.sp,
+                    color = TextSecondary,
+                    modifier = Modifier.padding(top = 2.dp)
                 )
             }
         }
@@ -295,53 +324,57 @@ private fun CinemaProfileMenuItem(
     icon: ImageVector,
     title: String,
     subtitle: String,
-    iconTint: Color = GoldAccent,
     onClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Surface(
-            color = Color(0xFF1E293B),
-            shape = RoundedCornerShape(10.dp),
-            modifier = Modifier.size(40.dp)
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    icon,
-                    contentDescription = null,
-                    tint = iconTint,
-                    modifier = Modifier.size(20.dp)
+            Surface(
+                color = MahaWarmLight,
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.size(36.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = MahaOrange,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            Column {
+                Text(
+                    text = title,
+                    fontSize = 13.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TextPrimary
+                )
+                Text(
+                    text = subtitle,
+                    fontSize = 11.sp,
+                    color = TextSecondary,
+                    modifier = Modifier.padding(top = 1.dp)
                 )
             }
         }
 
-        Spacer(modifier = Modifier.width(14.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = subtitle,
-                fontSize = 11.sp,
-                color = Color(0xFF94A3B8)
-            )
-        }
-
         Icon(
-            Icons.AutoMirrored.Filled.ArrowForwardIos,
+            imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
             contentDescription = null,
-            tint = Color(0xFF64748B),
-            modifier = Modifier.size(14.dp)
+            tint = TextSecondary,
+            modifier = Modifier.size(13.dp)
         )
     }
 }

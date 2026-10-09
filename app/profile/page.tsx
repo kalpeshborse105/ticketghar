@@ -1,13 +1,16 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Header } from '@/src/components/Header';
 import { MTTicketLoader } from '@/src/components/ui/MTSkeleton';
+import { AuthModal } from '@/src/components/AuthModal';
+import { TicketPassModal } from '@/src/components/TicketPassModal';
 import {
   User,
   Mail,
+  Phone,
   LogOut,
   Loader2,
   ArrowLeft,
@@ -19,17 +22,31 @@ import {
   Calendar,
   MapPin,
   Clock,
+  Camera,
   ExternalLink,
   Eye,
   EyeOff,
+  Save,
+  ShoppingBag,
 } from 'lucide-react';
 
 export default function ProfilePage() {
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<any[]>([]);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [selectedPass, setSelectedPass] = useState<any | null>(null);
+
+  // Editable Profile fields
+  const [fullName, setFullName] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileSuccessMsg, setProfileSuccessMsg] = useState<string | null>(null);
 
   // Password update form
   const [newPassword, setNewPassword] = useState('');
@@ -40,39 +57,116 @@ export default function ProfilePage() {
   const [savingPassword, setSavingPassword] = useState(false);
 
   useEffect(() => {
+    let isCancelled = false;
+
     async function loadProfile() {
       try {
-        const res = await fetch('/api/auth/flow/session');
+        const res = await fetch('/api/auth/flow/session', { cache: 'no-store' });
         const data = await res.json();
 
-        if (!data.user) {
-          router.push('/');
-          return;
-        }
+        if (isCancelled) return;
 
-        setUser(data.user);
+        if (data && data.user) {
+          setUser(data.user);
+          setFullName(data.user.fullName || '');
+          setPhoneNumber(data.user.phoneNumber || '');
 
-        // Fetch user's orders
-        const ordersRes = await fetch('/api/orders');
-        if (ordersRes.ok) {
-          const ordersData = await ordersRes.json();
-          setOrders(ordersData.orders || []);
+          // Load local avatar if stored
+          if (typeof window !== 'undefined') {
+            const savedAvatar = localStorage.getItem(`mahaticket_avatar_${data.user.email}`);
+            if (savedAvatar) setAvatarUrl(savedAvatar);
+          }
+
+          // Fetch user's orders
+          try {
+            const ordersRes = await fetch('/api/orders', { cache: 'no-store' });
+            if (ordersRes.ok) {
+              const ordersData = await ordersRes.json();
+              if (!isCancelled) {
+                setOrders(ordersData.orders || []);
+              }
+            }
+          } catch {
+            // Keep default empty orders
+          }
         }
       } catch (error) {
-        console.error('Error loading profile:', error);
-        router.push('/');
+        console.warn('Error loading profile:', error);
       } finally {
-        setLoading(false);
+        if (!isCancelled) {
+          setLoading(false);
+        }
       }
     }
 
     loadProfile();
-  }, [router]);
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      alert('कृपया २ MB पेक्षा लहान फोटो निवडा (Please choose an image under 2MB).');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      if (dataUrl) {
+        setAvatarUrl(dataUrl);
+        if (user?.email && typeof window !== 'undefined') {
+          localStorage.setItem(`mahaticket_avatar_${user.email}`, dataUrl);
+          setProfileSuccessMsg('प्रोफाइल फोटो यशस्वीरीत्या बदलला!');
+          setTimeout(() => setProfileSuccessMsg(null), 3000);
+        }
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+
+    setSavingProfile(true);
+    setProfileSuccessMsg(null);
+
+    try {
+      const res = await fetch('/api/auth/flow/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: fullName.trim(),
+          phoneNumber: phoneNumber.trim(),
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.user) {
+        setUser(data.user);
+        setProfileSuccessMsg('प्रोफाइल माहिती यशस्वीरीत्या जतन केली!');
+      } else {
+        setProfileSuccessMsg(data.error || 'माहिती जतन करता आली नाही.');
+      }
+    } catch {
+      setProfileSuccessMsg('माहिती जतन करताना त्रुटी आली.');
+    } finally {
+      setSavingProfile(false);
+      setTimeout(() => setProfileSuccessMsg(null), 4000);
+    }
+  };
 
   const handleLogout = async () => {
     setLoggingOut(true);
     try {
       await fetch('/api/auth/flow/logout', { method: 'POST' });
+      setUser(null);
       router.push('/');
     } catch (error) {
       console.error('Logout error:', error);
@@ -118,23 +212,66 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="mt-shell flex min-h-screen items-center justify-center">
-        <MTTicketLoader
-          message="आपले खाते लोड होत आहे..."
-          submessage="महाटिकिट अधिकृत पोर्टल"
+      <div className="min-h-screen bg-[#F8FAFC] flex flex-col">
+        <Header />
+        <div className="flex-1 flex items-center justify-center p-6">
+          <MTTicketLoader
+            message="आपले खाते लोड होत आहे..."
+            submessage="महाटिकिट डिजिटल खाते"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // If user is not logged in, show helpful guest state
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] text-[#141B2B]">
+        <Header />
+        <div className="max-w-md mx-auto px-4 py-16 text-center space-y-4">
+          <div className="w-16 h-16 rounded-2xl bg-orange-100 text-[#EA580C] mx-auto flex items-center justify-center shadow-xs">
+            <User className="w-8 h-8" />
+          </div>
+          <h1 className="text-xl font-bold text-slate-900">
+            आपले खाते पाहण्यासाठी लॉगिन करा
+          </h1>
+          <p className="text-xs text-slate-500 leading-relaxed">
+            तिकिटे व्यवस्थापित करण्यासाठी आणि प्रोफाइल अद्ययावत करण्यासाठी कृपया आपल्या खात्यात प्रवेश करा.
+          </p>
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <button
+              onClick={() => setAuthModalOpen(true)}
+              className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-[#EA580C] hover:bg-[#C2410C] text-white text-xs font-bold shadow-sm transition active:scale-95 cursor-pointer"
+            >
+              लॉगिन किंवा नवीन खाते
+            </button>
+            <Link
+              href="/"
+              className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition"
+            >
+              मुख्य पृष्ठावर जा
+            </Link>
+          </div>
+        </div>
+
+        <AuthModal
+          isOpen={authModalOpen}
+          onClose={() => setAuthModalOpen(false)}
+          onSuccess={() => {
+            setAuthModalOpen(false);
+            window.location.reload();
+          }}
         />
       </div>
     );
   }
 
-  if (!user) {
-    return null;
-  }
-
   return (
-    <div className="mt-shell pb-20 text-[#111827]">
+    <div className="min-h-screen bg-[#F8FAFC] text-[#141B2B] pb-20">
       <Header />
-      <div className="max-w-3xl mx-auto px-4 py-6 space-y-5">
+
+      <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
         {/* Back Button */}
         <button
           onClick={() => router.push('/')}
@@ -144,30 +281,56 @@ export default function ProfilePage() {
           <span>मुख्य पृष्ठावर परत जा (Back to Home)</span>
         </button>
 
-        {/* Profile Card */}
-        <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden">
-          {/* Header */}
-          <div className="bg-gradient-to-r from-[#ea580c] to-[#f97316] px-6 py-8 text-white">
-            <div className="flex flex-col sm:flex-row items-center sm:items-start justify-between gap-4 text-center sm:text-left">
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm border border-white/20">
-                  <User className="w-8 h-8 text-white" />
+        {/* Profile Header Card */}
+        <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="bg-gradient-to-r from-[#EA580C] via-[#F97316] to-[#C2410C] px-6 py-8 text-white">
+            <div className="flex flex-col sm:flex-row items-center sm:items-start justify-between gap-5 text-center sm:text-left">
+              <div className="flex flex-col sm:flex-row items-center gap-4">
+                {/* Avatar with Upload overlay */}
+                <div className="relative group/avatar cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+                  <div className="w-20 h-20 rounded-2xl bg-white/20 overflow-hidden flex items-center justify-center backdrop-blur-sm border-2 border-white/40 shadow-inner">
+                    {avatarUrl ? (
+                      <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                    ) : (
+                      <User className="w-10 h-10 text-white" />
+                    )}
+                  </div>
+                  <div className="absolute inset-0 bg-black/40 rounded-2xl flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity">
+                    <Camera className="w-5 h-5 text-white" />
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarChange}
+                    className="hidden"
+                  />
                 </div>
+
                 <div>
                   <h1 className="text-xl sm:text-2xl font-black font-serif">
-                    {user.fullName || user.email?.split('@')[0]}
+                    {fullName || user.fullName || user.email?.split('@')[0]}
                   </h1>
                   <p className="text-orange-100 text-xs mt-0.5">{user.email}</p>
-                  <span className="inline-block mt-2 px-2.5 py-0.5 rounded-full bg-white/20 text-white text-[10px] font-bold uppercase tracking-wider">
-                    महाटिकिट अधिकृत खाते
-                  </span>
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className="px-2.5 py-0.5 rounded-full bg-white/20 text-white text-[10px] font-bold">
+                      महाटिकिट डिजिटल खाते
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="text-[10px] text-white/90 underline hover:text-white"
+                    >
+                      फोटो बदला
+                    </button>
+                  </div>
                 </div>
               </div>
 
               <button
                 onClick={handleLogout}
                 disabled={loggingOut}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition border border-white/20 active:scale-95"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition border border-white/20 active:scale-95 cursor-pointer"
               >
                 <LogOut className="w-3.5 h-3.5" />
                 <span>{loggingOut ? 'बाहेर पडत आहे...' : 'लॉगआउट'}</span>
@@ -175,37 +338,106 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* Details & Actions */}
-          <div className="p-6 space-y-8">
-            {/* Account Info */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
-                <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
-                  <Mail className="w-4 h-4 text-[#ea580c]" />
-                  <span>ईमेल पत्ता (Email)</span>
-                </div>
-                <p className="text-sm font-bold text-slate-900">{user.email}</p>
+          {/* Form: Editable Name & Phone Number */}
+          <div className="p-6 space-y-6">
+            <form onSubmit={handleSaveProfile} className="space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <User className="w-4 h-4 text-[#EA580C]" />
+                  <span>वैयक्तिक तपशील (Personal Details)</span>
+                </h2>
+                {profileSuccessMsg && (
+                  <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                    {profileSuccessMsg}
+                  </span>
+                )}
               </div>
 
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
-                <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
-                  <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                  <span>खाते स्थिती (Account Status)</span>
-                </div>
-                <p className="text-sm font-bold text-emerald-700">सक्रिय व पडताळणीकृत (Active)</p>
-              </div>
-            </div>
-
-            {/* Set / Change Password Section */}
-            <div className="p-6 rounded-2xl border border-slate-200 bg-orange-50/50 space-y-4">
-              <div className="flex items-center gap-2 border-b border-orange-200/60 pb-3">
-                <Lock className="w-5 h-5 text-[#ea580c]" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Full Name */}
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900">
-                    पासवर्ड सेट किंवा बदला (Set or Change Password)
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    पूर्ण नाव (Full Name):
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="उदा. सचिन पाटील"
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#EA580C]/40 focus:border-[#EA580C] transition"
+                  />
+                </div>
+
+                {/* Phone Number */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    मोबाईल नंबर (Phone Number):
+                  </label>
+                  <div className="flex rounded-xl border border-slate-300 bg-white overflow-hidden focus-within:ring-2 focus-within:ring-[#EA580C]/40 focus-within:border-[#EA580C] transition">
+                    <span className="px-3 py-2 bg-slate-50 text-slate-600 font-bold text-xs border-r border-slate-200">
+                      +91
+                    </span>
+                    <input
+                      type="tel"
+                      maxLength={10}
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                      placeholder="98233 44556"
+                      className="w-full px-3 py-2 text-xs text-slate-900 focus:outline-none font-mono"
+                    />
+                  </div>
+                </div>
+
+                {/* Read-only Email */}
+                <div className="sm:col-span-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-700">
+                      ईमेल पत्ता (Email - Read-only):
+                    </label>
+                    <span className="text-[10px] text-emerald-700 font-bold flex items-center gap-1">
+                      <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                      पडताळणीकृत खाते
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="email"
+                      disabled
+                      value={user.email}
+                      className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-600 cursor-not-allowed font-mono"
+                    />
+                    <Lock className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  disabled={savingProfile}
+                  className="px-5 py-2.5 rounded-xl bg-[#EA580C] hover:bg-[#C2410C] text-white text-xs font-bold shadow-sm transition active:scale-95 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {savingProfile ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Save className="w-3.5 h-3.5" />
+                  )}
+                  <span>बदल जतन करा (Save Changes)</span>
+                </button>
+              </div>
+            </form>
+
+            {/* Change Password Section */}
+            <div className="p-5 rounded-2xl border border-slate-200 bg-orange-50/40 space-y-4">
+              <div className="flex items-center gap-2 border-b border-orange-200/60 pb-3">
+                <Lock className="w-4 h-4 text-[#EA580C]" />
+                <div>
+                  <h3 className="text-xs sm:text-sm font-bold text-slate-900">
+                    पासवर्ड सेट किंवा बदला (Change Password)
                   </h3>
                   <p className="text-[11px] text-slate-600">
-                    पुढील वेळी थेट लॉगिन करण्यासाठी कायमस्वरूपी पासवर्ड तयार करा
+                    थेट लॉगिन करण्यासाठी कायमस्वरूपी पासवर्ड तयार करा
                   </p>
                 </div>
               </div>
@@ -241,12 +473,12 @@ export default function ProfilePage() {
                         placeholder="किमान ६ अक्षरे"
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
-                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 pr-9 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#ea580c]/30 focus:border-[#ea580c]"
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 pr-9 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#EA580C]/30 focus:border-[#EA580C]"
                       />
                       <button
                         type="button"
                         onClick={() => setShowNewPassword(!showNewPassword)}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 cursor-pointer"
                         title={showNewPassword ? 'Hide password' : 'Show password'}
                       >
                         {showNewPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
@@ -265,12 +497,12 @@ export default function ProfilePage() {
                         placeholder="पुष्टीसाठी पुन्हा टाका"
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
-                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 pr-9 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#ea580c]/30 focus:border-[#ea580c]"
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 pr-9 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#EA580C]/30 focus:border-[#EA580C]"
                       />
                       <button
                         type="button"
                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 cursor-pointer"
                         title={showConfirmPassword ? 'Hide password' : 'Show password'}
                       >
                         {showConfirmPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
@@ -279,118 +511,99 @@ export default function ProfilePage() {
                   </div>
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={savingPassword}
-                  className="px-5 py-2.5 rounded-xl bg-[#ea580c] hover:bg-[#c2410c] disabled:opacity-50 text-white font-extrabold text-xs shadow-md transition active:scale-95"
-                >
-                  {savingPassword ? 'जतन करत आहे...' : 'पासवर्ड जतन करा (Save Password)'}
-                </button>
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={savingPassword}
+                    className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition active:scale-95 disabled:opacity-50 cursor-pointer"
+                  >
+                    {savingPassword ? 'जतन होत आहे...' : 'पासवर्ड अपडेट करा'}
+                  </button>
+                </div>
               </form>
-            </div>
-
-            {/* Booked Tickets List */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-                <div className="flex items-center gap-2">
-                  <Ticket className="w-5 h-5 text-[#ea580c]" />
-                  <h3 className="text-base font-extrabold text-slate-900 font-serif">
-                    माझी बुक केलेली तिकिटे ({orders.length})
-                  </h3>
-                </div>
-                <Link
-                  href="/"
-                  className="text-xs font-bold text-[#ea580c] hover:underline"
-                >
-                  + नवीन तिकीट बुक करा
-                </Link>
-              </div>
-
-              {orders.length === 0 ? (
-                <div className="p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-600 space-y-2">
-                  <p className="text-sm font-bold text-slate-700">अद्याप कोणतेही तिकीट बुक केलेले नाही</p>
-                  <p className="text-xs text-slate-600">
-                    आपण बुक केलेल्या नाटकांची तिकिटे इथे आपोआप दिसून येतील.
-                  </p>
-                  <div className="pt-2">
-                    <Link
-                      href="/"
-                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#ea580c] hover:bg-[#c2410c] text-white text-xs font-bold"
-                    >
-                      <span>नाटके व कार्यक्रम पहा</span>
-                    </Link>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {orders.map((ord) => {
-                    const firstTicket = ord.tickets?.[0];
-                    const seats = (ord.tickets || []).map((t: any) => t.seatCode).join(', ');
-                    const sessionDate = ord.session?.sessionStartTime
-                      ? new Date(ord.session.sessionStartTime).toLocaleString('mr-IN', {
-                          weekday: 'short',
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })
-                      : '—';
-
-                    return (
-                      <div
-                        key={ord.id}
-                        className="p-4 sm:p-5 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 hover:border-[#ea580c] transition"
-                      >
-                        <div className="space-y-1.5 flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="px-2 py-0.5 rounded-md bg-orange-100 text-[#ea580c] font-black text-xs font-mono border border-orange-200">
-                              {ord.orderNumber}
-                            </span>
-                            <span className="text-xs font-bold text-slate-900 font-serif">
-                              {ord.event?.titleMr || ord.event?.title}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center gap-3 text-xs text-slate-600 flex-wrap">
-                            <span className="flex items-center gap-1">
-                              <Calendar className="w-3.5 h-3.5 text-[#ea580c]" />
-                              <span>{sessionDate}</span>
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                              <span>{ord.venue?.nameMr || ord.venue?.name}</span>
-                            </span>
-                          </div>
-
-                          <p className="text-xs text-slate-700">
-                            <strong>जागा:</strong> {seats || '—'}
-                          </p>
-                        </div>
-
-                        <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-2 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-200">
-                          <span className="text-sm font-black text-slate-900">
-                            ₹{(ord.grandTotal / 100).toFixed(0)}
-                          </span>
-                          {firstTicket && (
-                            <Link
-                              href={`/tickets/${firstTicket.ticketCode}`}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#ea580c] hover:bg-[#c2410c] text-white text-xs font-bold transition shadow"
-                            >
-                              <span>तिकीट पहा</span>
-                              <ExternalLink className="w-3 h-3" />
-                            </Link>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
             </div>
           </div>
         </div>
+
+        {/* Booking History Section */}
+        <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div className="flex items-center gap-2">
+              <ShoppingBag className="w-4 h-4 text-[#EA580C]" />
+              <h2 className="text-sm font-bold text-slate-900">
+                माझा बुकिंग इतिहास (Booking History)
+              </h2>
+            </div>
+            <Link
+              href="/my-tickets"
+              className="text-xs font-bold text-[#EA580C] hover:underline flex items-center gap-1"
+            >
+              <span>सर्व तिकिटे पहा</span>
+              <ExternalLink className="w-3 h-3" />
+            </Link>
+          </div>
+
+          {orders.length === 0 ? (
+            <div className="py-8 text-center space-y-2">
+              <p className="text-xs text-slate-500">आपण अद्याप कोणतेही तिकीट बुक केलेले नाही.</p>
+              <Link
+                href="/"
+                className="inline-block px-4 py-2 rounded-xl bg-[#EA580C] text-white text-xs font-bold shadow-xs transition hover:bg-[#C2410C]"
+              >
+                कार्यक्रम पहा व बुक करा
+              </Link>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {orders.slice(0, 5).map((ord) => {
+                const seats = (ord.tickets || []).map((t: any) => t.seatCode).join(', ');
+                return (
+                  <div
+                    key={ord.id}
+                    className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
+                  >
+                    <div className="space-y-1">
+                      <p className="text-xs font-bold text-slate-900">
+                        {ord.event?.titleMr || ord.event?.title || 'कार्यक्रम'}
+                      </p>
+                      <p className="text-[11px] text-slate-500 font-mono">
+                        ऑर्डर #{ord.orderNumber} • आसने: {seats || 'आरक्षित'}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+                      <span className="text-xs font-bold text-[#EA580C] font-mono">
+                        ₹{((ord.grandTotal || 0) / 100).toFixed(0)}
+                      </span>
+                      <button
+                        onClick={() =>
+                          setSelectedPass({
+                            order: ord,
+                            tickets: ord.tickets || [],
+                            event: ord.event,
+                            pricing: {},
+                          })
+                        }
+                        className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold shadow-xs transition active:scale-95 cursor-pointer"
+                      >
+                        पास उघडा
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
+
+      {selectedPass && (
+        <TicketPassModal
+          bookingResult={selectedPass}
+          language="mr"
+          onClose={() => setSelectedPass(null)}
+        />
+      )}
     </div>
   );
 }

@@ -1,18 +1,25 @@
 import type { Metadata, Viewport } from 'next';
-import { Outfit, Noto_Sans_Devanagari } from 'next/font/google';
+import { Inter, Noto_Sans, Noto_Sans_Devanagari } from 'next/font/google';
 import './globals.css';
 
-const outfit = Outfit({
+const inter = Inter({
   subsets: ['latin'],
-  variable: '--font-outfit',
-  weight: ['300', '400', '500', '600', '700', '800'],
+  variable: '--font-inter',
+  weight: ['400', '500', '600', '700'],
+  display: 'swap',
+});
+
+const notoSans = Noto_Sans({
+  subsets: ['latin'],
+  variable: '--font-noto-sans',
+  weight: ['400', '500', '600', '700', '800'],
   display: 'swap',
 });
 
 const notoSansDevanagari = Noto_Sans_Devanagari({
   subsets: ['devanagari', 'latin'],
   variable: '--font-noto-sans-devanagari',
-  weight: ['400', '500', '600', '700'],
+  weight: ['400', '500', '600', '700', '800'],
   display: 'swap',
 });
 
@@ -24,28 +31,40 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: 'MahaTicket (महाटिकिट) - Maharashtra-First Event & Ticket Marketplace',
-  description: 'Maharashtra-first digital ticket marketplace for theatre plays, music, movies, and cultural events with real-time seat reservation, verified QR passes, and instant booking.',
+  title: 'MahaTicket | महाटिकिट - महाराष्ट्राचे हक्काचे तिकीट व्यासपीठ',
+  description: 'महाराष्ट्रातील नाट्य, संगीत, लोककला आणि मनोरंजनाचे हक्काचे व्यासपीठ. पारदर्शक आरक्षण, झटपट एम-तिकीट आणि अस्सल मराठी अनुभव.',
   openGraph: {
-    title: 'MahaTicket (महाटिकिट) - Maharashtra-First Event & Ticket Marketplace',
-    description: 'Book tickets for Marathi plays, concerts, comedy, and cultural events across Pune, Mumbai, Nashik, and Maharashtra with instant digital QR passes.',
+    title: 'MahaTicket | महाटिकिट',
+    description: 'महाराष्ट्रातील नाट्य, संगीत, लोककला आणि मनोरंजनाचे हक्काचे व्यासपीठ.',
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'MahaTicket (महाटिकिट) - Maharashtra-First Event & Ticket Marketplace',
-    description: 'Book tickets for Marathi plays, concerts, comedy, and cultural events across Pune, Mumbai, Nashik, and Maharashtra with instant digital QR passes.',
+    title: 'MahaTicket | महाटिकिट',
+    description: 'महाराष्ट्रातील नाट्य, संगीत, लोककला आणि मनोरंजनाचे हक्काचे व्यासपीठ.',
+  },
+  icons: {
+    icon: '/icon.svg',
+    shortcut: '/icon.svg',
+    apple: '/icon.svg',
   },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html
-      lang="en"
-      className={`${outfit.variable} ${notoSansDevanagari.variable}`}
+      lang="mr"
+      className={`${inter.variable} ${notoSans.variable} ${notoSansDevanagari.variable}`}
       suppressHydrationWarning
     >
+      <head>
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
+        />
+      </head>
       <body suppressHydrationWarning>{children}</body>
     </html>
   );
 }
+

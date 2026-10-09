@@ -1,5 +1,6 @@
-﻿package com.kalpkrutinfotech.mahaticket.ui.screens
+package com.kalpkrutinfotech.mahaticket.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -42,7 +43,6 @@ fun ChatbotScreen(
     modifier: Modifier = Modifier
 ) {
     val language by viewModel.language.collectAsState()
-    val events by viewModel.events.collectAsState()
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
 
@@ -55,10 +55,10 @@ fun ChatbotScreen(
             ChatMessage(
                 sender = "agent",
                 text = if (language == AppLanguage.MARATHI)
-                    "नमस्कार! मी महाटिकिट सहाय्यक आहे.\n\nकार्यक्रम निवडणे, आसन बुकिंग किंवा पेमेंटबद्दल मदत हवी आहे का?"
+                    "नमस्कार! मी महाटिकिट AI सहाय्यक आहे.\n\nमहाराष्ट्रातील नाटकांची माहिती, योग्य आसन निवड आणि तिकीट आरक्षणासाठी मी मदत करू शकतो. आपल्याला काय शोधायचे आहे?"
                 else
-                    "Hello! I am the MahaTicket assistant.\n\nHow can I help with events, seat booking, or checkout today?",
-                actionLabel = if (language == AppLanguage.MARATHI) "कार्यक्रम शोधा" else "Explore Events",
+                    "Hello! I am your MahaTicket AI assistant.\n\nI can help you discover plays, choose seats, and book tickets instantly across Maharashtra. How may I help you?",
+                actionLabel = if (language == AppLanguage.MARATHI) "नाटके शोधा" else "Explore Plays",
                 actionTab = AppTab.EXPLORE
             )
         )
@@ -67,19 +67,19 @@ fun ChatbotScreen(
     val quickQuestions = remember(language) {
         if (language == AppLanguage.MARATHI) {
             listOf(
-                "आजचे कार्यक्रम कोणते?",
+                "पुण्यात आज कोणते नाटक आहे?",
+                "नियम व अटी लागू चे तिकीट",
                 "आसने कशी निवडायची?",
-                "कूपन कसा लागू करायचा?",
-                "Razorpay पेमेंट कसे कार्य करते?",
-                "माझी तिकिटे कुठे दिसतील?"
+                "कूपन कोड कसा वापरायचा?",
+                "माझी तिकिटे कुठे मिळतील?"
             )
         } else {
             listOf(
-                "What events are available today?",
-                "How do I select seats?",
-                "How do coupons work?",
-                "How does Razorpay payment work?",
-                "Where can I find My Tickets?"
+                "Popular plays in Pune today",
+                "Book Niyam Va Ati Laagu",
+                "How to select 6 seats?",
+                "Apply promo coupon",
+                "Where is my ticket QR pass?"
             )
         }
     }
@@ -94,10 +94,9 @@ fun ChatbotScreen(
         scope.launch {
             listState.animateScrollToItem(chatMessages.size - 1)
 
-            // Multi-turn history formatting
             val history = chatMessages.map { (if (it.sender == "user") "user" else "model") to it.text }
 
-            val systemContext = "You are the MahaTicket booking support assistant by Kalpkrut Infotech. Guide users through event booking, seats, coupons, and Razorpay checkout. Keep responses polite, concise, and helpful in Marathi or English based on the user's query. Do not invent events, prices, or availability."
+            val systemContext = "You are the smart AI assistant for MahaTicket, Maharashtra's official Marathi theatre and cultural booking platform. Help users with real play suggestions, booking guidance, and venue details. Keep responses warm, helpful, and concise in Marathi or English. Emphasize that users can book up to 6 seats per transaction with 100% secure Razorpay checkout."
 
             val reply = viewModel.geminiService.sendMessage(
                 history = history,
@@ -105,22 +104,22 @@ fun ChatbotScreen(
                 systemContext = systemContext
             )
 
-            // Determine if contextual shortcut button is appropriate
             val lower = textToSend.lowercase()
             val action = when {
-                lower.contains("seat") || lower.contains("जागा") || lower.contains("book") ->
+                lower.contains("seat") || lower.contains("जागा") || lower.contains("बुक") || lower.contains("book") ->
                     (if (language == AppLanguage.MARATHI) "थेट जागा निवडा" else "Select Seats") to AppTab.LIVE_BOOKING
-                lower.contains("ticket") || lower.contains("तिकीट") ->
+                lower.contains("ticket") || lower.contains("तिकीट") || lower.contains("पास") ->
                     (if (language == AppLanguage.MARATHI) "माझी तिकिटे पहा" else "My Tickets") to AppTab.MY_TICKETS
-                else -> null
+                else ->
+                    (if (language == AppLanguage.MARATHI) "नाटके एक्सप्लोर करा" else "Explore Events") to AppTab.EXPLORE
             }
 
             chatMessages.add(
                 ChatMessage(
                     sender = "agent",
                     text = reply,
-                    actionLabel = action?.first,
-                    actionTab = action?.second
+                    actionLabel = action.first,
+                    actionTab = action.second
                 )
             )
             isThinking = false
@@ -131,14 +130,15 @@ fun ChatbotScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(CinemaBg)
+            .background(MahaBg)
             .testTag("chatbot_screen")
     ) {
-        // Chat Header
+        // Chat Header (Stitch Light Theme)
         Surface(
-            color = CinemaSurface,
-            tonalElevation = 6.dp,
-            modifier = Modifier.fillMaxWidth()
+            color = Color.White,
+            modifier = Modifier.fillMaxWidth(),
+            border = BorderStroke(1.dp, MahaBorder),
+            shadowElevation = 1.dp
         ) {
             Row(
                 modifier = Modifier
@@ -150,37 +150,37 @@ fun ChatbotScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
-                            .size(42.dp)
-                            .background(TheatricalCrimson, CircleShape),
+                            .size(38.dp)
+                            .background(MahaWarm, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(text = "🎭", fontSize = 22.sp)
+                        Text(text = "🎭", fontSize = 20.sp)
                     }
 
-                    Spacer(modifier = Modifier.width(12.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
 
                     Column {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = if (language == AppLanguage.MARATHI) "नाट्यमित्र (NatyaMitra AI)" else "NatyaMitra AI Assistant",
+                                text = if (language == AppLanguage.MARATHI) "नाट्यमित्र AI" else "NatyaMitra AI",
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                color = TextPrimary
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Box(
                                 modifier = Modifier
-                                    .size(8.dp)
-                                    .background(SuccessEmerald, CircleShape)
+                                    .size(7.dp)
+                                    .background(Color(0xFF16A34A), CircleShape)
                             )
                         }
                         Text(
                             text = if (language == AppLanguage.MARATHI)
-                                "मल्टी-स्टेप बुकिंग व तिकीट सहाय्यक"
+                                "स्मार्ट तिकीट व नाट्य सल्लागार"
                             else
-                                "Context-Aware Multi-Step Booking Agent",
+                                "Smart Ticketing & Show Advisor",
                             fontSize = 11.sp,
-                            color = GoldAccent
+                            color = TextSecondary
                         )
                     }
                 }
@@ -203,7 +203,7 @@ fun ChatbotScreen(
                     Icon(
                         imageVector = Icons.Default.Refresh,
                         contentDescription = "Restart Chat",
-                        tint = Color(0xFF94A3B8)
+                        tint = TextSecondary
                     )
                 }
             }
@@ -217,7 +217,7 @@ fun ChatbotScreen(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
             contentPadding = PaddingValues(vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             items(chatMessages) { msg ->
                 val isUser = msg.sender == "user"
@@ -226,37 +226,40 @@ fun ChatbotScreen(
                     horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
                 ) {
                     Surface(
-                        color = if (isUser) TheatricalCrimson else Color(0xFF1E293B),
+                        color = if (isUser) MahaOrange else Color.White,
                         shape = RoundedCornerShape(
-                            topStart = 16.dp,
-                            topEnd = 16.dp,
-                            bottomStart = if (isUser) 16.dp else 4.dp,
-                            bottomEnd = if (isUser) 4.dp else 16.dp
+                            topStart = 14.dp,
+                            topEnd = 14.dp,
+                            bottomStart = if (isUser) 14.dp else 2.dp,
+                            bottomEnd = if (isUser) 2.dp else 14.dp
                         ),
-                        border = if (!isUser) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF334155)) else null,
+                        border = if (!isUser) BorderStroke(1.dp, MahaBorder) else null,
+                        shadowElevation = 1.dp,
                         modifier = Modifier.widthIn(max = 320.dp)
                     ) {
-                        Column(modifier = Modifier.padding(14.dp)) {
+                        Column(modifier = Modifier.padding(12.dp)) {
                             Text(
                                 text = msg.text,
                                 fontSize = 13.sp,
-                                color = Color.White,
+                                color = if (isUser) Color.White else TextPrimary,
                                 lineHeight = 19.sp
                             )
 
                             // Contextual Action Shortcut
                             if (msg.actionLabel != null && msg.actionTab != null) {
-                                Spacer(modifier = Modifier.height(10.dp))
+                                Spacer(modifier = Modifier.height(8.dp))
                                 Button(
                                     onClick = { viewModel.setTab(msg.actionTab) },
-                                    colors = ButtonDefaults.buttonColors(containerColor = GoldAccent),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (isUser) Color.White else MahaOrange
+                                    ),
                                     shape = RoundedCornerShape(8.dp),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Text(
                                         text = "${msg.actionLabel} ➜",
-                                        color = Color.Black,
-                                        fontSize = 11.sp,
+                                        color = if (isUser) MahaOrangeDeep else Color.White,
+                                        fontSize = 11.5.sp,
                                         fontWeight = FontWeight.Bold
                                     )
                                 }
@@ -264,12 +267,12 @@ fun ChatbotScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(2.dp))
 
                     Text(
-                        text = if (isUser) "You" else "NatyaMitra",
-                        fontSize = 10.sp,
-                        color = Color(0xFF64748B),
+                        text = if (isUser) "तुम्ही" else "नाट्यमित्र",
+                        fontSize = 9.5.sp,
+                        color = TextSecondary,
                         modifier = Modifier.padding(horizontal = 4.dp)
                     )
                 }
@@ -281,12 +284,12 @@ fun ChatbotScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(8.dp)
                     ) {
-                        Text(text = "🎭", fontSize = 16.sp)
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = "🎭", fontSize = 15.sp)
+                        Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = if (language == AppLanguage.MARATHI) "नाट्यमित्र विचार करत आहे..." else "NatyaMitra is thinking...",
+                            text = if (language == AppLanguage.MARATHI) "नाट्यमित्र विचार करत आहे..." else "NatyaMitra is typing...",
                             fontSize = 12.sp,
-                            color = GoldAccent,
+                            color = MahaOrangeDeep,
                             fontWeight = FontWeight.Medium
                         )
                     }
@@ -305,16 +308,17 @@ fun ChatbotScreen(
             quickQuestions.forEach { prompt ->
                 Surface(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(14.dp))
+                        .clip(RoundedCornerShape(16.dp))
                         .clickable { handleSend(prompt) },
-                    color = Color(0xFF131A29),
-                    shape = RoundedCornerShape(14.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, GoldAccent.copy(alpha = 0.4f))
+                    color = Color.White,
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, MahaBorder),
+                    shadowElevation = 1.dp
                 ) {
                     Text(
                         text = prompt,
                         fontSize = 11.sp,
-                        color = Color(0xFFE2E8F0),
+                        color = TextPrimary,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                     )
                 }
@@ -323,11 +327,11 @@ fun ChatbotScreen(
 
         // Input Bar
         Surface(
-            color = CinemaSurface,
-            tonalElevation = 8.dp,
+            color = Color.White,
+            border = BorderStroke(1.dp, MahaBorder),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 8.dp)
+                .padding(bottom = 6.dp)
         ) {
             Row(
                 modifier = Modifier
@@ -341,11 +345,11 @@ fun ChatbotScreen(
                     placeholder = {
                         Text(
                             text = if (language == AppLanguage.MARATHI)
-                                "नाट्यमित्राला विचारा (उदा. 4 जागा कोणत्या चांगल्या आहेत?)..."
+                                "नाट्यमित्राला विचारा (उदा. 4 जागा कोणत्या चांगल्या?)..."
                             else
                                 "Ask NatyaMitra about seats, plays, booking...",
                             fontSize = 12.sp,
-                            color = Color(0xFF64748B)
+                            color = TextSecondary
                         )
                     },
                     modifier = Modifier
@@ -353,12 +357,12 @@ fun ChatbotScreen(
                         .testTag("chat_input_field"),
                     shape = RoundedCornerShape(20.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = GoldAccent,
-                        unfocusedBorderColor = Color(0xFF334155),
-                        focusedContainerColor = Color(0xFF0F1420),
-                        unfocusedContainerColor = Color(0xFF0F1420),
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White
+                        focusedBorderColor = MahaOrange,
+                        unfocusedBorderColor = MahaBorder,
+                        focusedContainerColor = MahaWarmLight,
+                        unfocusedContainerColor = MahaWarmLight,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary
                     ),
                     singleLine = true
                 )
@@ -369,9 +373,9 @@ fun ChatbotScreen(
                     onClick = { handleSend(inputQuery) },
                     enabled = inputQuery.isNotBlank() && !isThinking,
                     modifier = Modifier
-                        .size(44.dp)
+                        .size(42.dp)
                         .background(
-                            if (inputQuery.isNotBlank()) GoldAccent else Color(0xFF334155),
+                            if (inputQuery.isNotBlank()) MahaOrange else Color(0xFFE2E8F0),
                             CircleShape
                         )
                         .testTag("chat_send_button")
@@ -379,7 +383,7 @@ fun ChatbotScreen(
                     Icon(
                         imageVector = Icons.Default.Send,
                         contentDescription = "Send",
-                        tint = if (inputQuery.isNotBlank()) Color.Black else Color.Gray,
+                        tint = if (inputQuery.isNotBlank()) Color.White else Color.Gray,
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -387,4 +391,3 @@ fun ChatbotScreen(
         }
     }
 }
-

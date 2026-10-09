@@ -220,37 +220,20 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
             </div>
           </div>
           <button
-            onClick={onClose}
-            className="p-1 rounded-lg bg-black/20 hover:bg-black/30 text-white transition"
+            onClick={() => {
+              onClose();
+              if (typeof window !== 'undefined') window.location.href = '/my-tickets';
+            }}
+            className="p-1.5 rounded-full bg-black/20 hover:bg-black/30 text-white transition cursor-pointer"
             title="Close"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* QR first (above fold) + Stitch pass card */}
+        {/* Single authentic Stitch digital pass */}
         <div className="flex-1 overflow-y-auto bg-slate-100">
           <div className="flex flex-col items-center gap-3 p-4 sm:p-5">
-            <div className="w-full max-w-sm rounded-2xl border border-[#E5E7EB] bg-white p-4 text-center shadow-sm">
-              <div className="mx-auto inline-block rounded-2xl border-2 border-[#E5E7EB] bg-white p-2 shadow-inner">
-                <QRCodeSVG
-                  value={ticketUrl || primaryTicket || order.orderNumber}
-                  size={160}
-                  level="M"
-                  includeMargin={true}
-                  className="h-40 w-40"
-                />
-              </div>
-              <p className="mt-2 text-xs font-black uppercase tracking-wide text-[#EA580C]">
-                {language === 'mr'
-                  ? 'सभागृहाच्या प्रवेशद्वारावर हा QR कोड दाखवा'
-                  : 'Show this QR at the hall entrance'}
-              </p>
-              <p className="mt-0.5 font-mono text-[10px] font-bold text-slate-400">
-                CODE: {primaryTicket || order.orderNumber}
-              </p>
-            </div>
-
             <MahaTicketCard
               ticketCode={primaryTicket || order.orderNumber}
               seatCode={seatsList}
@@ -314,83 +297,82 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
           </div>
         ) : null}
 
-        {/* Bottom Actions */}
-        <div className="p-3.5 sm:p-4 border-t border-slate-200 bg-white flex flex-wrap items-center justify-between gap-2 safe-bottom">
-          <p className="text-xs text-slate-600 hidden sm:block">
-            {t.showAtGate}
-          </p>
-
-          <div className="flex items-center flex-wrap gap-2 w-full sm:w-auto">
-            {primaryTicket && (
-              <a
-                href={`/tickets/${primaryTicket}`}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-orange-50 border border-orange-200 text-[#ea580c] hover:bg-orange-100 font-bold text-xs shadow-xs transition active:scale-95"
-              >
-                <Ticket className="w-3.5 h-3.5" />
-                <span>{language === 'mr' ? 'तिकीट पहा' : 'View Ticket'}</span>
-              </a>
-            )}
-
+        {/* Bottom Actions: Circular icon buttons for WhatsApp, Share, Download + My Tickets CTA */}
+        <div className="p-3.5 sm:p-4 border-t border-slate-200 bg-white flex items-center justify-between gap-3 safe-bottom">
+          {/* Circular Icon Action Buttons */}
+          <div className="flex items-center gap-2.5">
+            {/* WhatsApp Icon Button */}
             <button
               type="button"
-              onClick={() => {
-                if (typeof window !== 'undefined') window.location.href = '/profile';
-              }}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs border border-slate-300 transition"
+              onClick={handleWhatsApp}
+              title="WhatsApp वर पाठवा (Share on WhatsApp)"
+              aria-label="WhatsApp"
+              className="w-10 h-10 rounded-full bg-[#25D366] hover:bg-[#20ba59] text-white flex items-center justify-center shadow-sm transition active:scale-95 cursor-pointer"
             >
-              <span>{language === 'mr' ? 'माझी तिकिटे' : 'My Tickets'}</span>
+              <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.885-9.888 9.885m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L0 24l6.335-1.662c1.746.953 3.71 1.456 5.711 1.457h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+              </svg>
             </button>
 
+            {/* Share Native / Link Icon Button */}
+            <button
+              type="button"
+              onClick={async () => {
+                if (typeof navigator !== 'undefined' && navigator.share && ticketUrl) {
+                  try {
+                    await navigator.share({
+                      title: event?.title || 'MahaTicket Pass',
+                      text: `माझे तिकीट (${event?.title || 'कार्यक्रम'}): ${ticketUrl}`,
+                      url: ticketUrl,
+                    });
+                    return;
+                  } catch {
+                    // fall through
+                  }
+                }
+                if (typeof navigator !== 'undefined' && navigator.clipboard && ticketUrl) {
+                  await navigator.clipboard.writeText(ticketUrl);
+                  alert(language === 'mr' ? 'तिकीट लिंक कॉपी झाली!' : 'Ticket link copied to clipboard!');
+                }
+              }}
+              title="शेअर करा (Share)"
+              aria-label="Share"
+              className="w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 flex items-center justify-center shadow-xs transition active:scale-95 cursor-pointer"
+            >
+              <Share2 className="w-4 h-4" />
+            </button>
+
+            {/* Download PDF Icon Button */}
             <button
               type="button"
               onClick={handleDownloadPDF}
               disabled={isDownloading}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#ea580c] hover:bg-[#c2410c] text-white font-bold text-xs shadow-sm transition active:scale-95 disabled:opacity-50"
+              title="PDF डाउनलोड करा (Download PDF)"
+              aria-label="Download PDF"
+              className="w-10 h-10 rounded-full bg-[#ea580c] hover:bg-[#c2410c] text-white flex items-center justify-center shadow-sm transition active:scale-95 disabled:opacity-50 cursor-pointer"
             >
               {isDownloading ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Downloading...</span>
-                </>
+                <Loader2 className="w-4 h-4 animate-spin" />
               ) : downloadSuccess ? (
-                <>
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>Downloaded!</span>
-                </>
+                <CheckCircle2 className="w-4 h-4 text-white" />
               ) : (
-                <>
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Download PDF</span>
-                </>
+                <Download className="w-4 h-4" />
               )}
             </button>
-
-            <button
-              type="button"
-              onClick={handlePrint}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs border border-slate-300 transition"
-            >
-              <Printer className="w-3.5 h-3.5 text-slate-600" />
-              <span>Print</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleWhatsApp}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-[#25D366] hover:bg-[#20ba59] text-white font-semibold text-xs transition"
-            >
-              <Share2 className="w-3.5 h-3.5" />
-              <span>WhatsApp</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm transition active:scale-95"
-            >
-              {t.backToHome}
-            </button>
           </div>
+
+          {/* Primary View My Tickets Redirect Button */}
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              if (typeof window !== 'undefined') window.location.href = '/my-tickets';
+            }}
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-full bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-md transition active:scale-95 cursor-pointer"
+          >
+            <span>{language === 'mr' ? 'माझी तिकिटे पहा' : 'View My Tickets'}</span>
+            <Ticket className="w-3.5 h-3.5 text-orange-400" />
+          </button>
         </div>
       </div>
     </div>

@@ -55,6 +55,17 @@ class BookingViewModel(
     
     var activeSessionId: Int = 1
     var activeEventId: Int = 1
+    var activeEventTitle: String = "नियम व अटी लागू"
+    var activeEventPoster: String = ""
+    var activeVenueName: String = "बाळ गंधर्व रंगमंदिर, पुणे"
+    var activeSessionTime: String = "शनिवार, १२ ऑक्टोबर • संध्या. ०५:००"
+
+    fun setActiveBookingContext(title: String, poster: String, venue: String, time: String) {
+        if (title.isNotBlank()) activeEventTitle = title
+        if (poster.isNotBlank()) activeEventPoster = poster
+        if (venue.isNotBlank()) activeVenueName = venue
+        if (time.isNotBlank()) activeSessionTime = time
+    }
 
     val isOnline: StateFlow<Boolean> = networkMonitor.isOnline
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), networkMonitor.isCurrentlyOnline())
@@ -257,7 +268,7 @@ class BookingViewModel(
         if (currentSeats.any { it.seatId == seat.seatId }) {
             currentSeats.removeAll { it.seatId == seat.seatId }
         } else {
-            if (currentSeats.size >= 8) return // Limit to 8
+            if (currentSeats.size >= 6) return // Strictly limit to max 6 seats per booking
             currentSeats.add(seat)
         }
         _selectedSeats.value = currentSeats

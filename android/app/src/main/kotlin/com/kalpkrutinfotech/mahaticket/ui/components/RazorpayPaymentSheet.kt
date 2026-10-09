@@ -67,7 +67,7 @@ fun RazorpayPaymentSheet(
                             border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF0284C7))
                         ) {
                             Text(
-                                text = "Razorpay",
+                                text = "MahaTicket Pay",
                                 color = Color(0xFF38BDF8),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Black,
@@ -303,7 +303,7 @@ fun RazorpayPaymentSheet(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "🔒 256-Bit SSL Secured • Razorpay Gateway Integration",
+                        text = "🔒 256-Bit SSL Secured • Secure Gateway Integration",
                         fontSize = 9.sp,
                         color = Color(0xFF64748B)
                     )

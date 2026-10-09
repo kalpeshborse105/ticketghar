@@ -43,6 +43,8 @@ export interface EventItem {
   ratingCount?: number | null;
   trailerUrl?: string | null;
   videoUrl?: string | null;
+  cast?: string | null;
+  tag?: string | null;
 }
 
 export interface VenueItem {

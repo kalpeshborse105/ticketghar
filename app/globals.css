@@ -1,44 +1,51 @@
 @import "tailwindcss";
 
 :root {
-  /* MahaTicket Stitch design tokens */
+  /* MahaTicket Stitch design tokens from projects/5418001882719593041 */
   --mt-primary: #ea580c;
-  --mt-secondary: #f97316;
-  --mt-deep: #c2410c;
-  --mt-warm: #fff7ed;
-  --mt-warm-strong: #ffedd5;
-  --mt-white: #ffffff;
-  --mt-bg: #faf7f2;
-  --mt-surface: #ffffff;
-  --mt-text: #111827;
-  --mt-muted: #64748b;
-  --mt-border: #e7e5e4;
-  --mt-border-strong: #d6d3d1;
-  --mt-success: #16a34a;
-  --mt-warning: #f59e0b;
-  --mt-danger: #dc2626;
-  --mt-radius: 12px;
-  --mt-radius-sm: 8px;
-  --mt-shadow: 0 1px 2px rgba(17, 24, 39, 0.06), 0 4px 12px rgba(17, 24, 39, 0.04);
-  --mt-shadow-md: 0 2px 8px rgba(17, 24, 39, 0.08);
+  --mt-primary-deep: #a33900;
+  --mt-secondary: #ac3400;
+  --mt-secondary-container: #fd6b36;
+  --mt-tertiary: #994100;
+  --mt-tertiary-container: #c05400;
+  --mt-surface-cream: #fff7ed;
+  --mt-surface-card: #ffffff;
+  --mt-surface: #f9f9ff;
+  --mt-surface-dim: #d3daef;
+  --mt-surface-container: #e9edff;
+  --mt-surface-container-low: #f1f3ff;
+  --mt-surface-container-high: #e1e8fd;
+  --mt-surface-container-highest: #dce2f7;
+  --mt-on-surface: #141b2b;
+  --mt-on-surface-variant: #5a4138;
+  --mt-text-secondary: #64748b;
+  --mt-border-subtle: #e5e7eb;
+  --mt-seat-available: #ffffff;
+  --mt-seat-selected: #ea580c;
+  --mt-seat-occupied: #e2e8f0;
+  --mt-state-success: #16a34a;
+  --mt-state-warning: #f59e0b;
+  --mt-state-error: #dc2626;
+  --mt-state-info: #2563eb;
+  --mt-inverse-surface: #293040;
+  --mt-inverse-on-surface: #edf0ff;
 
   --color-primary: var(--mt-primary);
-  --color-primary-hover: var(--mt-deep);
-  --color-primary-light: var(--mt-warm);
+  --color-primary-hover: var(--mt-primary-deep);
+  --color-primary-light: var(--mt-surface-cream);
   --color-accent: var(--mt-secondary);
-  --color-accent-hover: var(--mt-deep);
-  --color-background: var(--mt-bg);
-  --color-surface: var(--mt-surface);
-  --color-surface-elevated: var(--mt-surface);
-  --color-border: var(--mt-border);
-  --color-border-strong: var(--mt-border-strong);
-  --color-text-primary: var(--mt-text);
-  --color-text-secondary: var(--mt-muted);
-  --color-text-muted: var(--mt-muted);
-  --color-success: var(--mt-success);
-  --color-warning: var(--mt-warning);
-  --color-error: var(--mt-danger);
-  --color-info: #0284c7;
+  --color-background: var(--mt-surface-cream);
+  --color-surface: var(--mt-surface-card);
+  --color-surface-elevated: var(--mt-surface-card);
+  --color-border: var(--mt-border-subtle);
+  --color-border-strong: #d1d5db;
+  --color-text-primary: var(--mt-on-surface);
+  --color-text-secondary: var(--mt-text-secondary);
+  --color-text-muted: var(--mt-text-secondary);
+  --color-success: var(--mt-state-success);
+  --color-warning: var(--mt-state-warning);
+  --color-error: var(--mt-state-error);
+  --color-info: var(--mt-state-info);
 
   --color-seat-available: #ffffff;
   --color-seat-available-border: #cbd5e1;
@@ -48,16 +55,33 @@
 }
 
 @theme inline {
-  --color-mt-primary: var(--mt-primary);
-  --color-mt-secondary: var(--mt-secondary);
-  --color-mt-deep: var(--mt-deep);
-  --color-mt-warm: var(--mt-warm);
-  --color-mt-bg: var(--mt-bg);
-  --color-mt-text: var(--mt-text);
-  --color-mt-muted: var(--mt-muted);
-  --color-mt-border: var(--mt-border);
-  --font-sans: var(--font-outfit), var(--font-noto-sans-devanagari), system-ui, sans-serif;
+  --color-surface-cream: var(--mt-surface-cream);
+  --color-surface-card: var(--mt-surface-card);
+  --color-surface: var(--mt-surface);
+  --color-surface-dim: var(--mt-surface-dim);
+  --color-surface-container: var(--mt-surface-container);
+  --color-surface-container-low: var(--mt-surface-container-low);
+  --color-surface-container-high: var(--mt-surface-container-high);
+  --color-surface-container-highest: var(--mt-surface-container-highest);
+  --color-on-surface: var(--mt-on-surface);
+  --color-on-surface-variant: var(--mt-on-surface-variant);
+  --color-text-secondary: var(--mt-text-secondary);
+  --color-border-subtle: var(--mt-border-subtle);
+  --color-seat-available: var(--mt-seat-available);
+  --color-seat-selected: var(--mt-seat-selected);
+  --color-seat-occupied: var(--mt-seat-occupied);
+  --color-state-success: var(--mt-state-success);
+  --color-state-warning: var(--mt-state-warning);
+  --color-state-error: var(--mt-state-error);
+  --color-state-info: var(--mt-state-info);
+  --color-inverse-surface: var(--mt-inverse-surface);
+  --color-inverse-on-surface: var(--mt-inverse-on-surface);
+
+  --font-sans: var(--font-noto-sans), var(--font-noto-sans-devanagari), var(--font-inter), system-ui, sans-serif;
+  --font-headline: var(--font-noto-sans), var(--font-noto-sans-devanagari), sans-serif;
+  --font-label: var(--font-inter), sans-serif;
 }
+
 
 body {
   background-color: var(--mt-bg);

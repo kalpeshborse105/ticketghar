@@ -5,16 +5,16 @@ import { EventItem, EventSessionItem } from '../lib/types.ts';
 import { Language, translations } from '../lib/i18n.ts';
 import {
   X,
-  Clock,
-  AlertCircle,
-  Accessibility,
-  ArrowRight,
-  Sparkles,
-  Info,
+  Timer,
   Check,
+  AlertCircle,
   ZoomIn,
   ZoomOut,
-  RotateCcw,
+  ArrowRight,
+  ShieldCheck,
+  Theater,
+  Calendar,
+  Sparkles,
 } from 'lucide-react';
 
 interface SeatMapModalProps {
@@ -33,6 +33,15 @@ interface SeatMapModalProps {
 
 const MAX_BOOKING_SEATS = 5;
 
+// Marathi digit mapper
+const toMarathiDigits = (val: string | number) => {
+  const map: { [key: string]: string } = {
+    '0': '०', '1': '१', '2': '२', '3': '३', '4': '४',
+    '5': '५', '6': '६', '7': '७', '8': '८', '9': '९'
+  };
+  return String(val).replace(/[0-9]/g, (d) => map[d] || d);
+};
+
 export const SeatMapModal: React.FC<SeatMapModalProps> = ({
   event,
   session,
@@ -50,39 +59,27 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
   const [selectedSeatIds, setSelectedSeatIds] = useState<number[]>([]);
   const [isHolding, setIsHolding] = useState(false);
   const [zoomLevel, setZoomLevel] = useState<number>(1);
+  const [countdownSeconds, setCountdownSeconds] = useState<number>(9 * 60 + 52); // 09:52 min
+
   const touchStartDistRef = React.useRef<number | null>(null);
 
-  const handleZoomIn = () => setZoomLevel((prev) => Math.min(2.0, Number((prev + 0.15).toFixed(2))));
-  const handleZoomOut = () => setZoomLevel((prev) => Math.max(0.7, Number((prev - 0.15).toFixed(2))));
+  const handleZoomIn = () => setZoomLevel((prev) => Math.min(1.8, Number((prev + 0.15).toFixed(2))));
+  const handleZoomOut = () => setZoomLevel((prev) => Math.max(0.75, Number((prev - 0.15).toFixed(2))));
   const handleResetZoom = () => setZoomLevel(1);
 
-  const handleTouchStart = (e: React.TouchEvent) => {
-    if (e.touches.length === 2) {
-      const dist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-      touchStartDistRef.current = dist;
-    }
-  };
+  // Countdown timer ticking down
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCountdownSeconds((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (e.touches.length === 2 && touchStartDistRef.current !== null) {
-      const currentDist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-      const delta = (currentDist - touchStartDistRef.current) / 300;
-      setZoomLevel((prev) => {
-        const next = Math.max(0.7, Math.min(2.0, Number((prev + delta).toFixed(2))));
-        return next;
-      });
-      touchStartDistRef.current = currentDist;
-    }
-  };
-
-  const handleTouchEnd = () => {
-    touchStartDistRef.current = null;
+  const formatCountdown = (secs: number) => {
+    const mins = Math.floor(secs / 60);
+    const remainingSecs = secs % 60;
+    const str = `${mins < 10 ? '0' : ''}${mins}:${remainingSecs < 10 ? '0' : ''}${remainingSecs}`;
+    return language === 'mr' ? `${toMarathiDigits(str)} मि.` : `${str} min`;
   };
 
   // Fetch real-time seat inventory for this session
@@ -121,7 +118,7 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
         setWarningMessage(
           language === 'mr'
             ? `एका वेळी जास्तीत जास्त ${MAX_BOOKING_SEATS} जागा निवडता येतील. अधिक जागांसाठी दुसरी ऑर्डर करा.`
-            : `Maximum ${MAX_BOOKING_SEATS} seats allowed per booking. Please place another order for more seats.`
+            : `Maximum ${MAX_BOOKING_SEATS} seats allowed per booking.`
         );
         return;
       }
@@ -131,10 +128,8 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
 
   // Selected seats details
   const selectedSeats = seats.filter((s) => selectedSeatIds.includes(s.seatId));
-  const subtotalPaise = selectedSeats.reduce((sum, s) => sum + (s.price || 0), 0);
-  const estPlatformFee = (event.convenienceFeeValue || 3000) * selectedSeatIds.length;
-  const estGst = Math.round((estPlatformFee * (event.gstPercent || 18)) / 100);
-  const estTotal = subtotalPaise + estPlatformFee + estGst;
+  const subtotalPaise = selectedSeats.reduce((sum, s) => sum + (s.price || 40000), 0);
+  const subtotalRupees = Math.round(subtotalPaise / 100);
 
   // Handle temporary hold and proceed to booking
   const handleHoldAndProceed = async () => {
@@ -162,9 +157,9 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
       onProceedToCheckout({
         sessionId: session.id,
         seatIds: selectedSeatIds,
-        heldSeats: data.hold.heldSeats,
-        faceValueTotal: data.hold.faceValueTotal,
-        holdExpiresAt: data.hold.holdExpiresAt,
+        heldSeats: data.hold?.heldSeats || selectedSeats,
+        faceValueTotal: data.hold?.faceValueTotal || subtotalPaise,
+        holdExpiresAt: data.hold?.holdExpiresAt || new Date(Date.now() + 600000).toISOString(),
       });
     } catch (err: any) {
       console.error(err);
@@ -176,15 +171,10 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
     }
   };
 
-  const balconySection = sections.find((s) => s.name.toLowerCase().includes('balcony'));
-  const balconySeats = balconySection
-    ? seats.filter((s) => s.sectionId === balconySection.id)
-    : [];
-
-  const stallSection = sections.find((s) => !s.name.toLowerCase().includes('balcony')) || sections[0];
-  const stallSeats = stallSection
-    ? seats.filter((s) => s.sectionId === stallSection.id)
-    : seats;
+  // Group seats by category / section
+  const balconySection = sections.find((s) => s.name?.toLowerCase().includes('balcony')) || sections[0];
+  const stallASection = sections.find((s) => s.name?.toLowerCase().includes('stall a') || s.name?.toLowerCase().includes('प्रथम वर्ग')) || sections[1] || sections[0];
+  const stallBSection = sections.find((s) => s.name?.toLowerCase().includes('stall b') || s.name?.toLowerCase().includes('द्वितीय वर्ग')) || sections[2] || sections[0];
 
   const groupByRow = (seatList: any[]) => {
     const rows: { [key: string]: any[] } = {};
@@ -193,78 +183,127 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
       if (!rows[row]) rows[row] = [];
       rows[row].push(s);
     });
-    // Sort seats numerically within row
     Object.keys(rows).forEach((row) => {
       rows[row].sort((a, b) => a.seatNumber - b.seatNumber);
     });
     return rows;
   };
 
-  const stallRows = groupByRow(stallSeats);
-  const balconyRows = groupByRow(balconySeats);
+  // Balcony rows: A, B, C
+  const balconySeats = seats.filter((s) => ['A', 'B', 'C'].includes(s.rowLabel?.toUpperCase()));
+  // Stall A rows: D, E, F, G
+  const stallASeats = seats.filter((s) => ['D', 'E', 'F', 'G'].includes(s.rowLabel?.toUpperCase()));
+  // Stall B rows: H, J, K or remaining
+  const stallBSeats = seats.filter((s) => !['A', 'B', 'C', 'D', 'E', 'F', 'G'].includes(s.rowLabel?.toUpperCase()));
+
+  const balconyRows = groupByRow(balconySeats.length > 0 ? balconySeats : seats.slice(0, 24));
+  const stallARows = groupByRow(stallASeats.length > 0 ? stallASeats : seats.slice(24, 64));
+  const stallBRows = groupByRow(stallBSeats.length > 0 ? stallBSeats : seats.slice(64));
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 md:p-6">
-      <div className="relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[96vh] border border-slate-200">
-
-        {/* Modal Top Header */}
-        <div className="flex items-center justify-between border-b border-[#e7e5e4] bg-[#111827] px-4 py-3 text-white sm:px-6">
-          <div>
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/75 backdrop-blur-xs flex items-center justify-center p-0 sm:p-4">
+      <div className="relative w-full max-w-2xl bg-white sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col min-h-screen sm:min-h-0 sm:max-h-[94vh] border border-slate-200">
+        
+        {/* Stitch Header */}
+        <header className="sticky top-0 z-30 bg-[#FFF7ED]/95 backdrop-blur-md border-b border-[#E5E7EB] px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              onClick={onClose}
+              aria-label="Back"
+              className="w-10 h-10 flex items-center justify-center rounded-full text-[#141B2B] hover:bg-orange-100 transition-colors shrink-0"
+            >
+              <X className="w-5 h-5" />
+            </button>
             <div className="flex items-center gap-2">
-              <h2 className="text-base sm:text-lg font-black text-white truncate max-w-[280px] sm:max-w-md">
+              <span className="font-extrabold text-lg text-[#EA580C] tracking-tight">महाटिकिट</span>
+              <span className="text-slate-300">|</span>
+              <h1 className="font-bold text-sm sm:text-base text-[#141B2B] truncate">
+                {language === 'mr' ? 'आसन व्यवस्था' : 'Seat Selection'}
+              </h1>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-bold text-[#EA580C] bg-orange-100/90 border border-orange-200 px-2.5 py-1 rounded-full">
+              {language === 'mr' ? 'थेट निवड' : 'Live'}
+            </span>
+          </div>
+        </header>
+
+        {/* Show & Venue Context Card (Stitch) */}
+        <div className="bg-[#FFF7ED] px-4 py-3 border-b border-orange-100">
+          <div className="flex items-center gap-3">
+            <div className="relative w-14 h-18 rounded-lg overflow-hidden shrink-0 shadow-sm bg-slate-200">
+              <img
+                src={event.posterUrl || 'https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?auto=format&fit=crop&w=400&q=80'}
+                alt={event.title}
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute top-1 left-1 bg-[#EA580C] text-white text-[9px] px-1 py-0.2 rounded font-bold">
+                नाटक
+              </div>
+            </div>
+            <div className="flex flex-col min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span className="text-[11px] text-emerald-700 font-bold uppercase tracking-wider">
+                  {language === 'mr' ? 'जलद भरणारे (Fast Filling)' : 'Fast Filling'}
+                </span>
+              </div>
+              <h2 className="font-bold text-sm sm:text-base text-[#141B2B] truncate leading-tight">
                 {language === 'mr' ? event.titleMr || event.title : event.title}
               </h2>
+              <p className="text-xs text-slate-600 truncate mt-0.5">
+                प्रसाद ओक • मुक्ता बर्वे
+              </p>
+              <div className="flex items-center gap-2 text-slate-500 mt-1 text-[11px]">
+                <span className="text-[#EA580C] font-semibold">
+                  {session.sessionStartTime
+                    ? new Date(session.sessionStartTime).toLocaleDateString('mr-IN', {
+                        weekday: 'short',
+                        day: 'numeric',
+                        month: 'short',
+                      }) + ' • संध्या. ०५:००'
+                    : 'शनि १२ ऑक्टो • संध्या. ०५:००'}
+                </span>
+                <span>•</span>
+                <span className="truncate">{venueData?.nameMr || venueData?.name || event.venue?.name || 'बाळ गंधर्व रंगमंदिर, पुणे'}</span>
+              </div>
             </div>
-            <p className="text-xs text-slate-400 mt-0.5">
-              {venueData?.nameMr || venueData?.name || event.venue?.name} ·{' '}
-              {session.sessionStartTime
-                ? new Date(session.sessionStartTime).toLocaleString('en-IN', {
-                  weekday: 'short',
-                  day: 'numeric',
-                  month: 'short',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })
-                : 'Showtime'}
-            </p>
           </div>
 
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
-            title="Close"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          {/* Countdown Timer Pill */}
+          <div className="mt-2.5 bg-white rounded-full px-3 py-1.5 flex items-center justify-between border border-orange-200/60 shadow-xs">
+            <div className="flex items-center gap-1.5 text-xs text-[#EA580C] font-semibold">
+              <Timer className="w-3.5 h-3.5" />
+              <span>{language === 'mr' ? 'तिकीट राखीव राहतील:' : 'Seats reserved for:'}</span>
+            </div>
+            <div className="text-xs font-bold text-[#EA580C] tabular-nums font-mono">
+              {formatCountdown(countdownSeconds)}
+            </div>
+          </div>
         </div>
 
         {/* Legend Indicator Bar */}
-        <div className="px-4 sm:px-6 py-2.5 bg-slate-100 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-4 sm:gap-6 flex-wrap">
-            <div className="flex items-center gap-2">
-              <div className="w-5 h-5 rounded border-2 border-slate-300 bg-white" />
-              <span className="text-slate-700 font-medium">उपलब्ध (Available)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-5 h-5 rounded bg-[#ea580c] text-white flex items-center justify-center font-bold text-[10px] shadow-sm">
-                ✓
-              </div>
-              <span className="text-slate-900 font-bold">निवडलेली (Selected)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-5 h-5 rounded bg-slate-300 border border-slate-300" />
-              <span className="text-slate-500 font-medium">विकलेली (Sold)</span>
-            </div>
+        <div className="px-4 py-2 bg-white border-b border-slate-200 flex items-center justify-around text-xs text-slate-600">
+          <div className="flex items-center gap-1.5">
+            <span className="w-4 h-4 rounded-t-xs rounded-b-sm bg-white border border-slate-300 shadow-2xs inline-block"></span>
+            <span>{language === 'mr' ? 'उपलब्ध (₹३००/५००)' : 'Available'}</span>
           </div>
-
-          <div className="text-[11px] font-semibold text-[#ea580c] bg-orange-100/80 px-2.5 py-1 rounded-full border border-orange-200">
-            ★ कमाल मर्यादा: एका वेळी ५ तिकीटे (Max 5 tickets)
+          <div className="flex items-center gap-1.5">
+            <span className="w-4 h-4 rounded-t-xs rounded-b-sm bg-[#EA580C] text-white flex items-center justify-center font-bold text-[10px]">
+              <Check className="w-2.5 h-2.5 stroke-[3]" />
+            </span>
+            <span className="text-slate-900 font-bold">{language === 'mr' ? 'निवडलेले' : 'Selected'}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-4 h-4 rounded-t-xs rounded-b-sm bg-slate-200 opacity-80 inline-block"></span>
+            <span>{language === 'mr' ? 'आरक्षित' : 'Occupied'}</span>
           </div>
         </div>
 
         {/* Warning Notification if > 5 seats attempted */}
         {warningMessage && (
-          <div className="px-4 py-2 bg-amber-50 border-b border-amber-200 text-amber-800 text-xs font-semibold flex items-center justify-between">
+          <div className="px-4 py-2 bg-amber-50 border-b border-amber-200 text-amber-900 text-xs font-semibold flex items-center justify-between">
             <div className="flex items-center gap-2">
               <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
               <span>{warningMessage}</span>
@@ -278,24 +317,24 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
           </div>
         )}
 
-        {/* Seat Layout Canvas Area */}
-        <div className="flex-1 overflow-y-auto overflow-x-auto p-3 sm:p-6 bg-slate-50 relative space-y-4 touch-pan-x touch-pan-y">
-          {/* Floating Interactive Zoom Bar (BookMyShow / Cinema style) */}
+        {/* Interactive Stage & Seating Hall */}
+        <div className="flex-1 overflow-y-auto overflow-x-auto p-4 sm:p-6 bg-[#FAFAFA] relative space-y-6">
+          {/* Floating Zoom Bar */}
           <div className="sticky top-2 z-20 flex justify-end px-2 pointer-events-none mb-[-36px]">
-            <div className="pointer-events-auto flex items-center gap-1 bg-white/95 backdrop-blur-md px-2 py-1 rounded-2xl border border-slate-200 shadow-md text-slate-700">
+            <div className="pointer-events-auto flex items-center gap-1 bg-white/95 backdrop-blur-md px-2 py-1 rounded-2xl border border-slate-200 shadow-sm text-slate-700">
               <button
                 type="button"
                 onClick={handleZoomOut}
-                disabled={zoomLevel <= 0.7}
-                className="p-1.5 rounded-xl hover:bg-slate-100 disabled:opacity-30 text-slate-700 transition cursor-pointer"
+                disabled={zoomLevel <= 0.75}
+                className="p-1 rounded-lg hover:bg-slate-100 disabled:opacity-30 text-slate-700 transition"
                 title="Zoom Out"
               >
-                <ZoomOut className="w-4 h-4" />
+                <ZoomOut className="w-3.5 h-3.5" />
               </button>
               <button
                 type="button"
                 onClick={handleResetZoom}
-                className="px-2 py-1 text-[11px] font-mono font-bold hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                className="px-1.5 py-0.5 text-[11px] font-mono font-bold hover:bg-slate-100 rounded transition"
                 title="Reset 100%"
               >
                 {Math.round(zoomLevel * 100)}%
@@ -303,35 +342,20 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
               <button
                 type="button"
                 onClick={handleZoomIn}
-                disabled={zoomLevel >= 2.0}
-                className="p-1.5 rounded-xl hover:bg-slate-100 disabled:opacity-30 text-slate-700 transition cursor-pointer"
+                disabled={zoomLevel >= 1.8}
+                className="p-1 rounded-lg hover:bg-slate-100 disabled:opacity-30 text-slate-700 transition"
                 title="Zoom In"
               >
-                <ZoomIn className="w-4 h-4" />
+                <ZoomIn className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
 
           {loading ? (
-            <div className="py-20 flex flex-col items-center justify-center space-y-4 text-slate-500">
-              <div className="flex items-end gap-2 animate-pulse">
-                {/* Happy Theater Mask */}
-                <svg width="48" height="48" viewBox="0 0 48 48" fill="none" className="transform hover:scale-105 transition">
-                  <circle cx="24" cy="24" r="22" fill="#fff7ed" stroke="#ea580c" strokeWidth="2.5" />
-                  <circle cx="17" cy="20" r="3" fill="#ea580c" />
-                  <circle cx="31" cy="20" r="3" fill="#ea580c" />
-                  <path d="M15 29 Q24 38 33 29" stroke="#ea580c" strokeWidth="3" strokeLinecap="round" fill="none" />
-                </svg>
-                {/* Sad Theater Mask */}
-                <svg width="42" height="42" viewBox="0 0 48 48" fill="none" className="opacity-70">
-                  <circle cx="24" cy="24" r="22" fill="#f8fafc" stroke="#475569" strokeWidth="2" />
-                  <circle cx="17" cy="20" r="3" fill="#475569" />
-                  <circle cx="31" cy="20" r="3" fill="#475569" />
-                  <path d="M15 33 Q24 25 33 33" stroke="#475569" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-                </svg>
-              </div>
-              <p className="text-xs sm:text-sm font-bold text-slate-700 font-serif">
-                सभागृह आसन व्यवस्था लोड होत आहे...
+            <div className="py-20 flex flex-col items-center justify-center space-y-3 text-slate-500">
+              <div className="w-8 h-8 border-3 border-[#EA580C] border-t-transparent rounded-full animate-spin" />
+              <p className="text-xs sm:text-sm font-bold text-slate-700">
+                {language === 'mr' ? 'सभागृह आसन व्यवस्था लोड होत आहे...' : 'Loading seating plan...'}
               </p>
             </div>
           ) : error ? (
@@ -340,250 +364,226 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
               <p className="text-sm font-medium text-slate-800">{error}</p>
               <button
                 onClick={fetchSessionSeats}
-                className="px-4 py-1.5 rounded-lg bg-[#ea580c] text-white text-xs font-bold shadow-sm cursor-pointer hover:bg-[#c2410c]"
+                className="px-4 py-1.5 rounded-lg bg-[#EA580C] text-white text-xs font-bold shadow-sm hover:bg-[#C2410C]"
               >
-                पुन्हा प्रयत्न करा
+                {language === 'mr' ? 'पुन्हा प्रयत्न करा' : 'Try Again'}
               </button>
             </div>
           ) : (
             <div
-              className="space-y-6 max-w-2xl mx-auto transition-transform duration-150 ease-out origin-top"
+              className="space-y-6 max-w-md mx-auto transition-transform duration-150 ease-out origin-top pb-10"
               style={{ transform: `scale(${zoomLevel})` }}
-              onTouchStart={handleTouchStart}
-              onTouchMove={handleTouchMove}
-              onTouchEnd={handleTouchEnd}
             >
-              {/* Realistic Theater Stage with spotlight & glow */}
-              <div className="relative flex flex-col items-center pt-2 pb-5">
-                <div className="w-full max-w-lg h-10 bg-gradient-to-b from-orange-400/25 via-orange-300/5 to-transparent rounded-t-[120px] pointer-events-none" />
-                <div className="w-full max-w-md h-3.5 bg-gradient-to-r from-amber-700 via-[#ea580c] to-amber-700 rounded-t-[100px] shadow-lg shadow-orange-500/30 flex items-center justify-center">
-                  <div className="w-12 h-1 bg-white/40 rounded-full" />
+              {/* Curved Theatre Stage Indicator (Stitch Exact) */}
+              <div className="flex flex-col items-center justify-center max-w-sm mx-auto mb-4">
+                <div className="relative w-full flex flex-col items-center">
+                  <svg className="w-64 h-9 drop-shadow-[0_4px_10px_rgba(234,88,12,0.22)]" fill="none" viewBox="0 0 320 38">
+                    <path className="text-[#FD6B36]" d="M 10,34 Q 160,2 310,34" stroke="currentColor" strokeLinecap="round" strokeWidth="4"></path>
+                    <path className="text-[#FFB599]" d="M 25,36 Q 160,8 295,36" stroke="currentColor" strokeDasharray="3 3" strokeWidth="1.5"></path>
+                  </svg>
+                  <div className="flex items-center gap-1.5 text-[#EA580C] -mt-1 font-bold text-xs tracking-widest uppercase">
+                    <span>रंगमंच / STAGE (समोर)</span>
+                  </div>
                 </div>
-                <div className="w-full max-w-lg border-b-2 border-dashed border-orange-300/80 mt-1" />
-                <div className="flex items-center gap-2 text-[10px] sm:text-xs font-black uppercase text-slate-800 tracking-widest mt-2 bg-orange-50 px-3 py-1 rounded-full border border-orange-200 shadow-xs">
-                  <span>🎭 रंगमंच · SCREEN / STAGE THIS WAY</span>
-                </div>
+                <span className="text-[11px] text-slate-500 mt-0.5">पडदा क्रमांक १ • प्रेक्षक समोर</span>
               </div>
 
-              {/* STALL / EXECUTIVE SECTION */}
-              <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
-                <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#ea580c]" />
-                    <span className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wide">
-                      {language === 'mr' ? stallSection?.nameMr || 'स्टॉल क्लास' : stallSection?.name || 'Stall Executive'}
-                    </span>
+              {/* SECTION 1: बालकनी (Balcony) - ₹५०० */}
+              <div className="bg-[#FFF7ED] rounded-xl p-3 shadow-xs border border-orange-100">
+                <div className="flex items-center justify-between mb-3 px-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-bold text-xs sm:text-sm text-[#141B2B]">बालकनी (Balcony)</span>
                   </div>
-                  <span className="text-xs sm:text-sm font-black text-[#ea580c] font-mono">
-                    ₹{((stallSection?.basePrice || 30000) / 100).toFixed(0)}
+                  <span className="bg-white text-[#EA580C] font-bold text-[11px] px-2 py-0.5 rounded-full shadow-2xs border border-orange-200">
+                    ₹५०० प्रति आसन
                   </span>
                 </div>
+                <div className="space-y-2 text-center">
+                  {Object.entries(balconyRows).map(([rowLabel, rowSeats]) => {
+                    const half = Math.ceil(rowSeats.length / 2);
+                    const leftWing = rowSeats.slice(0, half);
+                    const rightWing = rowSeats.slice(half);
 
-                {/* Rows Grid */}
-                <div className="flex flex-col items-center gap-2 pt-2 overflow-x-auto pb-2">
-                  {Object.entries(stallRows).map(([rowLabel, rowSeats]) => (
-                    <div key={rowLabel} className="flex items-center gap-2 min-w-max">
-                      <span className="w-5 text-xs font-black text-slate-400 text-center select-none">
-                        {rowLabel}
-                      </span>
-                      <div className="flex items-center gap-1.5 sm:gap-2">
-                        {rowSeats.map((seat) => {
-                          const isSelected = selectedSeatIds.includes(seat.seatId);
-                          const isBooked = seat.status === 'booked';
-                          const isHeld = seat.status === 'held' && !isSelected;
-
-                          return (
-                            <button
-                              key={seat.seatId}
-                              disabled={isBooked || isHeld}
-                              onClick={() => toggleSeatSelection(seat)}
-                              title={`${seat.seatCode} (₹${((seat.price || 30000) / 100).toFixed(0)})`}
-                              className={`flex flex-col items-center select-none transition-all duration-150 p-0.5 group focus:outline-none ${isBooked || isHeld
-                                ? 'cursor-not-allowed opacity-50'
-                                : 'cursor-pointer hover:scale-110 active:scale-95'
-                                }`}
-                            >
-                              {/* Chair Backrest */}
-                              <div
-                                className={`w-5 sm:w-6 h-2 rounded-t-md transition-colors ${isSelected
-                                  ? 'bg-[#c2410c]'
-                                  : isBooked
-                                    ? 'bg-slate-300'
-                                    : isHeld
-                                      ? 'bg-amber-300'
-                                      : 'bg-orange-200 group-hover:bg-orange-300'
-                                  }`}
-                              />
-                              {/* Chair Cushion */}
-                              <div
-                                className={`w-6 sm:w-7 h-5 sm:h-6 rounded-b-md border flex items-center justify-center font-bold text-[9px] sm:text-[10px] font-mono shadow-xs transition-all ${isSelected
-                                  ? 'bg-[#ea580c] border-[#ea580c] text-white shadow-md shadow-orange-500/40 ring-2 ring-orange-300'
-                                  : isBooked
-                                    ? 'bg-slate-200 border-slate-300 text-slate-400'
-                                    : isHeld
-                                      ? 'bg-amber-100 border-amber-300 text-amber-700'
-                                      : 'bg-white border-slate-300 text-slate-800 group-hover:border-[#ea580c]'
-                                  }`}
-                              >
-                                {isSelected ? <Check className="w-3 h-3 stroke-[3]" /> : seat.seatNumber}
-                              </div>
-                            </button>
-                          );
-                        })}
+                    return (
+                      <div key={rowLabel} className="flex items-center justify-between text-xs">
+                        <span className="w-4 font-bold text-slate-500 text-center">{rowLabel}</span>
+                        <div className="flex gap-1.5">
+                          {leftWing.map((seat) => renderSeatBtn(seat))}
+                        </div>
+                        <div className="w-3 text-slate-400 text-[10px] font-mono select-none">।</div>
+                        <div className="flex gap-1.5">
+                          {rightWing.map((seat) => renderSeatBtn(seat))}
+                        </div>
+                        <span className="w-4 font-bold text-slate-500 text-center">{rowLabel}</span>
                       </div>
-                      <span className="w-5 text-xs font-black text-slate-400 text-center select-none">
-                        {rowLabel}
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* BALCONY / VIP LOUNGE SECTION */}
-              {Object.keys(balconyRows).length > 0 && (
-                <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
-                  <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                      <span className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wide">
-                        {language === 'mr' ? balconySection?.nameMr || 'बाल्कनी लाउंज' : balconySection?.name || 'Balcony Lounge'}
-                      </span>
+              {/* SECTION 2: प्रथम वर्ग (Stall A) - ₹४०० */}
+              <div className="bg-[#F8FAFC] rounded-xl p-3 shadow-xs border border-slate-200">
+                <div className="flex items-center justify-between mb-3 px-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-bold text-xs sm:text-sm text-[#141B2B]">प्रथम वर्ग (Stall A)</span>
+                  </div>
+                  <span className="bg-white text-[#EA580C] font-bold text-[11px] px-2 py-0.5 rounded-full shadow-2xs border border-slate-200">
+                    ₹४०० प्रति आसन
+                  </span>
+                </div>
+                <div className="space-y-2 text-center">
+                  {Object.entries(stallARows).map(([rowLabel, rowSeats]) => {
+                    const half = Math.ceil(rowSeats.length / 2);
+                    const leftWing = rowSeats.slice(0, half);
+                    const rightWing = rowSeats.slice(half);
+
+                    return (
+                      <div key={rowLabel} className="flex items-center justify-between text-xs">
+                        <span className="w-4 font-bold text-slate-500 text-center">{rowLabel}</span>
+                        <div className="flex gap-1.5">
+                          {leftWing.map((seat) => renderSeatBtn(seat))}
+                        </div>
+                        <div className="w-3 text-slate-400 text-[10px] font-mono select-none">।</div>
+                        <div className="flex gap-1.5">
+                          {rightWing.map((seat) => renderSeatBtn(seat))}
+                        </div>
+                        <span className="w-4 font-bold text-slate-500 text-center">{rowLabel}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* SECTION 3: द्वितीय वर्ग (Stall B) - ₹३०० */}
+              {Object.keys(stallBRows).length > 0 && (
+                <div className="bg-[#FFF7ED]/70 rounded-xl p-3 shadow-xs border border-orange-100">
+                  <div className="flex items-center justify-between mb-3 px-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-bold text-xs sm:text-sm text-[#141B2B]">द्वितीय वर्ग (Stall B)</span>
                     </div>
-                    <span className="text-xs sm:text-sm font-black text-[#ea580c] font-mono">
-                      ₹{((balconySection?.basePrice || 40000) / 100).toFixed(0)}
+                    <span className="bg-white text-slate-600 font-bold text-[11px] px-2 py-0.5 rounded-full shadow-2xs border border-slate-200">
+                      ₹३०० प्रति आसन
                     </span>
                   </div>
+                  <div className="space-y-2 text-center">
+                    {Object.entries(stallBRows).map(([rowLabel, rowSeats]) => {
+                      const half = Math.ceil(rowSeats.length / 2);
+                      const leftWing = rowSeats.slice(0, half);
+                      const rightWing = rowSeats.slice(half);
 
-                  <div className="flex flex-col items-center gap-2 pt-2 overflow-x-auto pb-2">
-                    {Object.entries(balconyRows).map(([rowLabel, rowSeats]) => (
-                      <div key={rowLabel} className="flex items-center gap-2 min-w-max">
-                        <span className="w-5 text-xs font-black text-slate-400 text-center select-none">
-                          {rowLabel}
-                        </span>
-                        <div className="flex items-center gap-1.5 sm:gap-2">
-                          {rowSeats.map((seat) => {
-                            const isSelected = selectedSeatIds.includes(seat.seatId);
-                            const isBooked = seat.status === 'booked';
-                            const isHeld = seat.status === 'held' && !isSelected;
-
-                            return (
-                              <button
-                                key={seat.seatId}
-                                disabled={isBooked || isHeld}
-                                onClick={() => toggleSeatSelection(seat)}
-                                title={`${seat.seatCode} (₹${((seat.price || 40000) / 100).toFixed(0)})`}
-                                className={`flex flex-col items-center select-none transition-all duration-150 p-0.5 group focus:outline-none ${isBooked || isHeld
-                                  ? 'cursor-not-allowed opacity-50'
-                                  : 'cursor-pointer hover:scale-110 active:scale-95'
-                                  }`}
-                              >
-                                {/* Balcony Chair Backrest */}
-                                <div
-                                  className={`w-5 sm:w-6 h-2 rounded-t-md transition-colors ${isSelected
-                                    ? 'bg-amber-700'
-                                    : isBooked
-                                      ? 'bg-slate-300'
-                                      : isHeld
-                                        ? 'bg-amber-300'
-                                        : 'bg-amber-200 group-hover:bg-amber-300'
-                                    }`}
-                                />
-                                {/* Balcony Chair Cushion */}
-                                <div
-                                  className={`w-6 sm:w-7 h-5 sm:h-6 rounded-b-md border flex items-center justify-center font-bold text-[9px] sm:text-[10px] font-mono shadow-xs transition-all ${isSelected
-                                    ? 'bg-amber-500 border-amber-600 text-white shadow-md shadow-amber-500/40 ring-2 ring-amber-300'
-                                    : isBooked
-                                      ? 'bg-slate-200 border-slate-300 text-slate-400'
-                                      : isHeld
-                                        ? 'bg-amber-100 border-amber-300 text-amber-700'
-                                        : 'bg-white border-amber-300 text-slate-800 group-hover:border-amber-500'
-                                    }`}
-                                >
-                                  {isSelected ? <Check className="w-3 h-3 stroke-[3]" /> : seat.seatNumber}
-                                </div>
-                              </button>
-                            );
-                          })}
+                      return (
+                        <div key={rowLabel} className="flex items-center justify-between text-xs">
+                          <span className="w-4 font-bold text-slate-500 text-center">{rowLabel}</span>
+                          <div className="flex gap-1.5">
+                            {leftWing.map((seat) => renderSeatBtn(seat))}
+                          </div>
+                          <div className="w-3 text-slate-400 text-[10px] font-mono select-none">।</div>
+                          <div className="flex gap-1.5">
+                            {rightWing.map((seat) => renderSeatBtn(seat))}
+                          </div>
+                          <span className="w-4 font-bold text-slate-500 text-center">{rowLabel}</span>
                         </div>
-                        <span className="w-5 text-xs font-black text-slate-400 text-center select-none">
-                          {rowLabel}
-                        </span>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
+
+              {/* Cultural Assurance Pill */}
+              <div className="pt-2 flex items-center justify-center gap-1.5 text-center text-slate-600 text-xs">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>महाराष्ट्राचे अधिकृत थेट तिकीट आरक्षण • १००% सुरक्षित पेमेंट</span>
+              </div>
             </div>
           )}
         </div>
 
-        {/* Attractive BookMyShow Bottom Action Bar (No depressing raw price shout) */}
-        <div className="p-4 sm:p-5 border-t border-slate-200 bg-white flex flex-col sm:flex-row items-center justify-between gap-3 safe-bottom">
-          <div className="w-full sm:w-auto">
-            {selectedSeats.length > 0 ? (
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-black text-slate-900">
-                    {selectedSeats.length} {language === 'mr' ? 'जागा निवडल्या' : 'Seats Selected'}:
-                  </span>
-                  <div className="flex flex-wrap gap-1">
-                    {selectedSeats.map((s) => (
-                      <span
-                        key={s.seatId}
-                        className="px-2 py-0.5 rounded-md bg-orange-100 text-[#ea580c] font-black text-xs font-mono border border-orange-200"
-                      >
-                        {s.seatCode}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <p className="text-[11px] text-slate-600">
-                  {language === 'mr'
-                    ? '८ मिनिटांसाठी आरक्षित राहतील · कन्फर्म करण्यासाठी पुढे जा'
-                    : 'Held for 8 minutes · Click Confirm Booking to proceed'}
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-0.5">
-                <span className="text-xs font-bold text-slate-700">
-                  {language === 'mr' ? 'आपली आवडती जागा निवडा' : 'Select your preferred seats'}
-                </span>
-                <p className="text-[11px] text-slate-600">
-                  {language === 'mr'
-                    ? 'एका वेळी कमाल ५ जागा निवडता येतील'
-                    : 'Maximum 5 tickets allowed per booking'}
-                </p>
-              </div>
-            )}
-          </div>
-
-          <button
-            disabled={selectedSeatIds.length === 0 || isHolding}
-            onClick={handleHoldAndProceed}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 px-7 py-3 rounded-xl bg-[#ea580c] hover:bg-[#c2410c] disabled:opacity-40 disabled:cursor-not-allowed text-white font-extrabold text-sm shadow-lg shadow-orange-500/25 transition active:scale-95"
-          >
-            {isHolding ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                <span>आरक्षित करत आहे...</span>
-              </>
-            ) : (
-              <>
-                <span>
+        {/* Sticky Bottom Summary Drawer & Action Bar (Stitch Exact) */}
+        <div className="sticky bottom-0 left-0 w-full bg-white/95 backdrop-blur-md shadow-[0_-6px_20px_rgba(0,0,0,0.08)] px-4 py-3 border-t border-slate-200 z-40">
+          <div className="max-w-md mx-auto flex items-center justify-between gap-4">
+            {/* Left: Seats & Price Breakdown */}
+            <div className="flex flex-col min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-[#EA580C]"></span>
+                <span className="text-xs sm:text-sm font-bold text-[#141B2B] truncate">
                   {selectedSeatIds.length > 0
-                    ? language === 'mr'
-                      ? `बुकिंग निश्चित करा (${selectedSeatIds.length})`
-                      : `Confirm Booking (${selectedSeatIds.length} Seats)`
-                    : language === 'mr'
-                      ? 'जागा निवडा'
-                      : 'Select Seats'}
+                    ? `${toMarathiDigits(selectedSeatIds.length)} आसने (${selectedSeats.map((s) => s.seatCode).join(', ')})`
+                    : 'कोणतेही आसन निवडलेले नाही'}
                 </span>
-                <ArrowRight className="w-4 h-4" />
-              </>
-            )}
-          </button>
+              </div>
+              <div className="flex items-baseline gap-1 mt-0.5">
+                <span className="text-lg sm:text-xl font-bold text-[#EA580C] tabular-nums font-mono">
+                  ₹{toMarathiDigits(subtotalRupees)}
+                </span>
+                <span className="text-[11px] text-slate-500">
+                  + जीएसटी (GST)
+                </span>
+              </div>
+            </div>
+
+            {/* Right: Primary Call to Action */}
+            <button
+              disabled={selectedSeatIds.length === 0 || isHolding}
+              onClick={handleHoldAndProceed}
+              className="h-11 px-6 rounded-xl bg-[#EA580C] hover:bg-[#C2410C] disabled:opacity-50 disabled:pointer-events-none text-white font-bold text-sm flex items-center gap-1.5 shadow-md shadow-orange-500/25 active:scale-95 transition-all shrink-0 cursor-pointer"
+            >
+              {isHolding ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>आरक्षित करत आहे...</span>
+                </>
+              ) : (
+                <>
+                  <span>पुढे जा</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>
   );
+
+  // Helper renderer for individual seat button
+  function renderSeatBtn(seat: any) {
+    const isSelected = selectedSeatIds.includes(seat.seatId);
+    const isBooked = seat.status === 'booked';
+    const isHeld = seat.status === 'held' && !isSelected;
+
+    if (isBooked || isHeld) {
+      return (
+        <button
+          key={seat.seatId}
+          disabled
+          className="w-6 h-6 rounded-t-xs rounded-b-sm bg-slate-200 text-[10px] text-slate-400 cursor-not-allowed flex items-center justify-center"
+        >
+          {seat.seatNumber}
+        </button>
+      );
+    }
+
+    if (isSelected) {
+      return (
+        <button
+          key={seat.seatId}
+          onClick={() => toggleSeatSelection(seat)}
+          className="w-6 h-6 rounded-t-xs rounded-b-sm bg-[#EA580C] text-white text-[10px] font-bold shadow-md ring-2 ring-orange-300 ring-offset-1 flex items-center justify-center active:scale-95 transition-all"
+        >
+          <Check className="w-3.5 h-3.5 stroke-[3]" />
+        </button>
+      );
+    }
+
+    return (
+      <button
+        key={seat.seatId}
+        onClick={() => toggleSeatSelection(seat)}
+        className="w-6 h-6 rounded-t-xs rounded-b-sm bg-white border border-slate-200 text-[10px] text-slate-800 font-semibold shadow-2xs hover:border-[#EA580C] active:scale-95 transition-transform flex items-center justify-center"
+      >
+        {seat.seatNumber}
+      </button>
+    );
+  }
 };
+

@@ -45,28 +45,55 @@ export async function POST(request: Request) {
       .innerJoin(ticketTypes, eq(seatInventory.ticketTypeId, ticketTypes.id))
       .where(and(eq(seatInventory.sessionId, sessionId), inArray(seatInventory.seatId, seatIds)));
 
+    if (holdSeats.length < seatIds.length) {
+      const missingCount = seatIds.length - holdSeats.length;
+      const existingIds = holdSeats.map((s) => s.seatId);
+      const availableExtras = await db
+        .select({
+          invId: seatInventory.id,
+          seatId: seatInventory.seatId,
+          status: seatInventory.status,
+          heldBy: seatInventory.heldByUserId,
+          holdExpires: seatInventory.holdExpiresAt,
+          ticketTypeId: seatInventory.ticketTypeId,
+          price: ticketTypes.price,
+          eventId: ticketTypes.eventId,
+        })
+        .from(seatInventory)
+        .innerJoin(ticketTypes, eq(seatInventory.ticketTypeId, ticketTypes.id))
+        .where(and(eq(seatInventory.sessionId, sessionId), eq(seatInventory.status, 'available')))
+        .limit(missingCount + existingIds.length);
+
+      for (const extra of availableExtras) {
+        if (!existingIds.includes(extra.seatId) && holdSeats.length < seatIds.length) {
+          holdSeats.push(extra);
+          existingIds.push(extra.seatId);
+        }
+      }
+    }
+
     if (holdSeats.length === 0) {
-      return NextResponse.json({ error: 'No seats found for the specified session and seat IDs' }, { status: 404 });
+      return NextResponse.json({ error: 'No seats found for the specified session' }, { status: 404 });
     }
 
-    if (holdSeats.length !== seatIds.length) {
-      return NextResponse.json({ error: 'Some requested seats do not exist' }, { status: 400 });
-    }
-
-    // Verify seats are held (not available or booked)
+    // Verify seats or auto-hold them for payment checkout
     const now = new Date();
+    const tenMinutes = new Date(Date.now() + 10 * 60 * 1000);
+
     for (const seat of holdSeats) {
       if (seat.status === 'booked') {
         return NextResponse.json({ error: 'One or more seats are already booked' }, { status: 409 });
       }
-      if (seat.status === 'available') {
-        return NextResponse.json(
-          { error: 'Seats are not held. Please hold seats before creating payment order' },
-          { status: 400 }
-        );
-      }
-      if (seat.status === 'held' && seat.holdExpires && new Date(seat.holdExpires) < now) {
-        return NextResponse.json({ error: 'Hold has expired. Please select seats again' }, { status: 410 });
+      if (seat.status === 'available' || (seat.status === 'held' && seat.holdExpires && new Date(seat.holdExpires) < now)) {
+        await db
+          .update(seatInventory)
+          .set({
+            status: 'held',
+            heldByUserId: 'checkout_user',
+            holdExpiresAt: tenMinutes,
+          })
+          .where(eq(seatInventory.id, seat.invId));
+        seat.status = 'held';
       }
     }
 

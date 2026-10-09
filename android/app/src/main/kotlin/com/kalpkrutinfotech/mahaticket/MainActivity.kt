@@ -155,10 +155,11 @@ fun MahaTicketRoot() {
     Scaffold(
         modifier = Modifier
             .fillMaxSize()
-            .background(CinemaBg)
+            .background(Color.White)
             .windowInsetsPadding(WindowInsets.systemBars),
         topBar = {
             if (isTopLevelRoute) {
+                val currentCity by eventViewModel.selectedCity.collectAsState()
                 BilingualTopBar(
                     currentLanguage = currentLanguage,
                     onLanguageToggle = { mainViewModel.setLanguage(it) },
@@ -179,6 +180,14 @@ fun MahaTicketRoot() {
                                 launchSingleTop = true
                             }
                         }
+                    },
+                    selectedCity = currentCity,
+                    onCityClick = {},
+                    onCitySelected = { selectedCityName ->
+                        eventViewModel.selectCity(selectedCityName)
+                    },
+                    onProfileClick = {
+                        navController.navigate(Screen.Profile.route)
                     },
                     notificationCount = notifications.count { !it.isRead },
                     onNotificationClick = { navController.navigate(Screen.Notifications.route) },
@@ -363,6 +372,7 @@ fun MahaTicketRoot() {
                         sessionId = sessionId,
                         eventId = eventId,
                         bookingViewModel = bookingViewModel,
+                        eventViewModel = eventViewModel,
                         onNavigateBack = { navController.popBackStack() },
                         onContinueToCheckout = { holdToken, sessId, evId ->
                             navController.navigate(BookingRoutes.checkout(holdToken, sessId, evId))
@@ -473,58 +483,75 @@ fun TheatricalBottomNavigationBar(
             Screen.Home,
             Screen.Explore,
             Screen.Tickets,
-            Screen.Offers,
             Screen.Profile
         )
     }
 
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
 
-    NavigationBar(
-        containerColor = CinemaSurface,
-        tonalElevation = 8.dp
+    Surface(
+        color = Color.White,
+        shadowElevation = 10.dp,
+        border = androidx.compose.foundation.BorderStroke(0.5.dp, MahaBorder),
+        modifier = Modifier.fillMaxWidth()
     ) {
-        screens.forEach { screen ->
-            val isSelected = currentRoute == screen.route
-            val iconScale by animateFloatAsState(
-                targetValue = if (isSelected) 1.15f else 1.0f,
-                animationSpec = tween(200),
-                label = "navIconScale"
-            )
+        NavigationBar(
+            containerColor = Color.White,
+            tonalElevation = 0.dp,
+            modifier = Modifier.height(64.dp)
+        ) {
+            screens.forEach { screen ->
+                val isSelected = currentRoute == screen.route
+                val labelText = when (screen) {
+                    Screen.Home -> "मुखपृष्ठ"
+                    Screen.Explore -> "शोधा"
+                    Screen.Tickets -> "माझी तिकिटे"
+                    Screen.Profile -> "प्रोफाइल"
+                    else -> screen.title
+                }
 
-            NavigationBarItem(
-                selected = isSelected,
-                onClick = {
-                    if (currentRoute != screen.route) {
-                        navController.navigate(screen.route) {
-                            popUpTo(Screen.Home.route) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    }
-                },
-                icon = {
-                    Icon(
-                        screen.icon,
-                        contentDescription = screen.title,
-                        modifier = Modifier.scale(iconScale)
-                    )
-                },
-                label = {
-                    Text(
-                        screen.title,
-                        fontSize = 11.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                    )
-                },
-                colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = GoldBright,
-                    selectedTextColor = GoldBright,
-                    indicatorColor = TheatricalCrimson,
-                    unselectedIconColor = Color(0xFF94A3B8),
-                    unselectedTextColor = Color(0xFF94A3B8)
+                val iconScale by animateFloatAsState(
+                    targetValue = if (isSelected) 1.12f else 1.0f,
+                    animationSpec = tween(200),
+                    label = "navIconScale"
                 )
-            )
+
+                NavigationBarItem(
+                    selected = isSelected,
+                    onClick = {
+                        if (currentRoute != screen.route) {
+                            navController.navigate(screen.route) {
+                                popUpTo(Screen.Home.route) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
+                    },
+                    icon = {
+                        Icon(
+                            screen.icon,
+                            contentDescription = labelText,
+                            modifier = Modifier
+                                .size(22.dp)
+                                .scale(iconScale)
+                        )
+                    },
+                    label = {
+                        Text(
+                            text = labelText,
+                            fontSize = 10.5.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                        )
+                    },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = MahaOrangeDeep,
+                        selectedTextColor = MahaOrangeDeep,
+                        indicatorColor = MahaWarm,
+                        unselectedIconColor = TextSecondary,
+                        unselectedTextColor = TextSecondary
+                    )
+                )
+            }
         }
     }
 }

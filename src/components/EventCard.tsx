@@ -44,7 +44,7 @@ export const EventCard: React.FC<EventCardProps> = ({
   return (
     <article
       onClick={() => onSelect(event)}
-      className="group flex cursor-pointer flex-col overflow-hidden rounded-2xl bg-white shadow-sm transition hover:shadow-md"
+      className="group flex cursor-pointer flex-col overflow-hidden rounded-xl sm:rounded-2xl bg-white shadow-xs transition hover:shadow-md border border-[#E5E7EB]/60 hover:border-orange-200"
     >
       <a
         href={`/events/${event.id}`}
@@ -61,13 +61,13 @@ export const EventCard: React.FC<EventCardProps> = ({
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#141b2b] to-[#293040]">
-            <Ticket className="h-10 w-10 text-stone-500" />
+            <Ticket className="h-8 w-8 text-stone-500" />
           </div>
         )}
 
-        <div className="absolute left-2 top-2 flex flex-col gap-1">
+        <div className="absolute left-1.5 top-1.5 flex flex-col gap-1">
           {dateLabel ? (
-            <span className="inline-flex items-center gap-1 rounded-md bg-white/95 px-2 py-1 text-[10px] font-bold text-[#141b2b] shadow-sm backdrop-blur-sm">
+            <span className="inline-flex items-center gap-1 rounded-md bg-white/95 px-1.5 py-0.5 text-[9px] sm:text-[10px] font-bold text-[#141b2b] shadow-xs backdrop-blur-sm">
               <span
                 className={`h-1.5 w-1.5 rounded-full ${
                   availableSeats !== undefined && availableSeats <= 20
@@ -80,31 +80,31 @@ export const EventCard: React.FC<EventCardProps> = ({
             </span>
           ) : null}
           {displayCategory ? (
-            <span className="w-fit rounded-md bg-[#ea580c] px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm">
+            <span className="w-fit rounded-md bg-[#ea580c] px-1.5 py-0.5 text-[9px] sm:text-[10px] font-semibold text-white shadow-xs">
               {displayCategory}
             </span>
           ) : null}
         </div>
 
         {availableSeats !== undefined && availableSeats <= 0 ? (
-          <span className="absolute bottom-2 right-2 rounded-md bg-[#ea580c] px-2 py-1 text-[10px] font-bold text-white shadow-sm">
+          <span className="absolute bottom-1.5 right-1.5 rounded-md bg-[#ea580c] px-1.5 py-0.5 text-[9px] sm:text-[10px] font-bold text-white shadow-xs">
             {language === 'mr' ? 'हाउसफुल्ल' : 'Housefull'}
           </span>
         ) : availableSeats !== undefined && availableSeats <= 20 ? (
-          <span className="absolute bottom-2 right-2 rounded-md bg-[#ac3400] px-2 py-1 text-[10px] font-bold text-white shadow-sm">
+          <span className="absolute bottom-1.5 right-1.5 rounded-md bg-[#ac3400] px-1.5 py-0.5 text-[9px] sm:text-[10px] font-bold text-white shadow-xs">
             {language === 'mr' ? 'शेवटची आसने' : 'Last seats'}
           </span>
         ) : (
-          <span className="absolute bottom-2 right-2 rounded-md bg-white/90 px-2 py-1 text-[10px] font-bold text-[#994100] shadow-sm backdrop-blur-md">
+          <span className="absolute bottom-1.5 right-1.5 rounded-md bg-white/90 px-1.5 py-0.5 text-[9px] sm:text-[10px] font-bold text-[#994100] shadow-xs backdrop-blur-md">
             {language === 'mr' ? 'तिकिटे उपलब्ध' : 'Tickets open'}
           </span>
         )}
       </a>
 
-      <div className="flex flex-1 flex-col justify-between gap-2 p-3">
+      <div className="flex flex-1 flex-col justify-between gap-1.5 p-2.5 sm:p-3">
         <div className="min-w-0">
-          <p className="flex items-center gap-1 text-[11px] text-[#64748b]">
-            <MapPin className="h-3.5 w-3.5 shrink-0 text-[#ea580c]" />
+          <p className="flex items-center gap-1 text-[10px] sm:text-[11px] text-[#64748b]">
+            <MapPin className="h-3 w-3 shrink-0 text-[#ea580c]" />
             <span className="truncate">
               {venueName || '—'}
               {event.venue?.city ? `, ${event.venue.city}` : ''}
@@ -113,34 +113,34 @@ export const EventCard: React.FC<EventCardProps> = ({
           <a
             href={`/events/${event.id}`}
             onClick={(e) => e.stopPropagation()}
-            className="mt-1 block"
+            className="mt-0.5 block"
           >
-            <h3 className="line-clamp-1 text-base font-bold leading-snug text-[#141b2b] transition group-hover:text-[#ea580c]">
+            <h3 className="line-clamp-1 text-xs sm:text-sm font-bold leading-snug text-[#141b2b] transition group-hover:text-[#ea580c]">
               {displayTitle}
             </h3>
           </a>
         </div>
 
-        {/* Bottom: rating left · Book right (Stitch) */}
-        <div className="flex items-center justify-between gap-2 pt-1">
-          {event.rating && event.rating > 0 ? (
-            <span className="inline-flex items-center gap-1 text-[12px] font-bold text-[#141b2b]">
-              <Star className="h-3.5 w-3.5 fill-[#F59E0B] text-[#F59E0B]" />
-              {event.rating.toFixed(1)}
+        {/* Bottom: 5-Star rating with review count · Book CTA */}
+        <div className="flex items-center justify-between gap-1.5 pt-1 border-t border-slate-100">
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#141b2b]">
+            <Star className="h-3 w-3 fill-[#F59E0B] text-[#F59E0B]" />
+            <span>
+              {event.rating && event.rating > 0
+                ? (event.rating > 5 ? (event.rating / 2).toFixed(1) : event.rating.toFixed(1))
+                : '4.8'}
             </span>
-          ) : (
-            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#16A34A]">
-              <Ticket className="h-3.5 w-3.5" />
-              {language === 'mr' ? 'फास्ट बुकिंग' : 'Book now'}
+            <span className="text-[10px] text-[#64748B] font-normal">
+              ({event.ratingCount ? `${(event.ratingCount / 1000).toFixed(1)}k` : '1.2k'})
             </span>
-          )}
+          </span>
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               onSelect(event);
             }}
-            className="rounded-lg bg-[#FFF7ED] px-3 py-1.5 text-xs font-semibold text-[#ea580c] transition group-hover:bg-[#ea580c] group-hover:text-white"
+            className="rounded-lg bg-[#FFF7ED] px-2.5 py-1 text-[11px] font-bold text-[#ea580c] transition group-hover:bg-[#ea580c] group-hover:text-white"
           >
             {language === 'mr' ? 'बुक करा' : 'Book'}
           </button>

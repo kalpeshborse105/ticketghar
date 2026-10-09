@@ -47,7 +47,7 @@ fun TicketDetailScreen(
             venueAddress = "कोथरूड, पुणे, महाराष्ट्र",
             showDate = "आज, संध्याकाळी",
             showTime = "०७:०० PM",
-            seatIds = listOf("A-12", "A-13"),
+            seatIds = listOf("E-8", "E-9"),
             ticketCount = 2,
             baseAmount = 600,
             convenienceFee = 70,
@@ -64,14 +64,16 @@ fun TicketDetailScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(CinemaBg)
+            .background(MahaBg)
             .testTag("ticket_detail_screen")
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             // Header Bar
             Surface(
-                color = CinemaSurface,
-                modifier = Modifier.fillMaxWidth()
+                color = Color.White,
+                modifier = Modifier.fillMaxWidth(),
+                border = BorderStroke(1.dp, MahaBorder),
+                shadowElevation = 1.dp
             ) {
                 Row(
                     modifier = Modifier
@@ -86,21 +88,21 @@ fun TicketDetailScreen(
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = Color.White
+                            tint = TextPrimary
                         )
                     }
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            "अधिकृत ई-पास (Digital Pass)",
+                            text = "अधिकृत ई-पास",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = TextPrimary
                         )
                         Text(
-                            "तिकीट कोड: $ticketCode",
-                            fontSize = 11.sp,
-                            color = GoldAccent
+                            text = "तिकीट कोड: $ticketCode",
+                            fontSize = 11.5.sp,
+                            color = TextSecondary
                         )
                     }
 
@@ -114,7 +116,7 @@ fun TicketDetailScreen(
                         Icon(
                             Icons.Default.Download,
                             contentDescription = "Download PDF",
-                            tint = GoldAccent
+                            tint = MahaOrange
                         )
                     }
                 }
@@ -126,7 +128,7 @@ fun TicketDetailScreen(
                     .fillMaxSize()
                     .weight(1f),
                 contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 // Official TicketPassCard
                 item {
@@ -149,8 +151,10 @@ fun TicketDetailScreen(
                 // Venue Directions Card
                 item {
                     Card(
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = CinemaSurface),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                        border = BorderStroke(1.dp, MahaBorder),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
@@ -158,15 +162,16 @@ fun TicketDetailScreen(
                                 Text(text = "📍 ", fontSize = 18.sp)
                                 Column {
                                     Text(
-                                        text = "नाट्यगृह पत्ता व मार्ग (Directions)",
+                                        text = "नाट्यगृह पत्ता व मार्ग",
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color.White
+                                        color = TextPrimary
                                     )
                                     Text(
                                         text = bookingData.venueAddress,
-                                        fontSize = 12.sp,
-                                        color = Color(0xFF94A3B8)
+                                        fontSize = 11.5.sp,
+                                        color = TextSecondary,
+                                        modifier = Modifier.padding(top = 1.dp)
                                     )
                                 }
                             }
@@ -180,15 +185,15 @@ fun TicketDetailScreen(
                                     mapIntent.setPackage("com.google.android.apps.maps")
                                     try {
                                         context.startActivity(mapIntent)
-                                    } catch (e: Exception) {
+                                    } catch (_: Exception) {
                                         context.startActivity(Intent(Intent.ACTION_VIEW, gmmIntentUri))
                                     }
                                 },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E293B)),
-                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = MahaOrange),
+                                shape = RoundedCornerShape(8.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Icon(Icons.Default.Directions, contentDescription = null, tint = GoldAccent, modifier = Modifier.size(16.dp))
+                                Icon(Icons.Default.Directions, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text("गुगल मॅप्सवर रस्ता पहा", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
@@ -199,23 +204,23 @@ fun TicketDetailScreen(
                 // Important Advisory Notes Card
                 item {
                     Surface(
-                        color = Color(0xFF131A29),
+                        color = Color.White,
                         shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(1.dp, Color(0xFF334155)),
+                        border = BorderStroke(1.dp, MahaBorder),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Text(
-                                text = "महत्त्वाच्या सूचना (Important Notice):",
-                                fontSize = 12.sp,
+                                text = "महत्त्वाच्या सूचना:",
+                                fontSize = 12.5.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = GoldAccent
+                                color = MahaOrangeDeep
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
                                 text = "• कृपया प्रयोग सुरू होण्यापूर्वी किमान २० मिनिटे आधी सभागृहात उपस्थित राहा.\n• सभागृहात मोबाईल फोन सायलेंट मोडवर ठेवावा.\n• हा डिजिटल पास प्रवेशद्वारावर स्कॅन केल्यानंतरच वैध ठरेल.",
-                                fontSize = 11.sp,
-                                color = Color(0xFFCBD5E1),
+                                fontSize = 11.5.sp,
+                                color = TextSecondary,
                                 lineHeight = 18.sp
                             )
                         }

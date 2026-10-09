@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Language, translations } from '../lib/i18n.ts';
 import { usePWAInstall } from '@/hooks/use-pwa';
 import { AuthModal } from './AuthModal.tsx';
+import { TheatreMaskLogo } from './ui/TheatreMaskLogo';
 import {
   Ticket,
   MapPin,
@@ -148,7 +149,7 @@ export const Header: React.FC<HeaderProps> = ({
     if (onOpenMyTickets) {
       onOpenMyTickets();
     } else if (typeof window !== 'undefined') {
-      window.location.href = '/profile';
+      window.location.href = '/my-tickets';
     }
   };
 
@@ -566,76 +567,59 @@ export const Header: React.FC<HeaderProps> = ({
 
 
   return (
-    <header className="sticky top-0 z-40 border-b border-[#e7e5e4] bg-white/95 text-[#111827] shadow-sm backdrop-blur-md">
+    <header className="sticky top-0 z-50 w-full bg-white/95 text-[#141B2B] shadow-[0_1px_6px_rgba(0,0,0,0.03)] backdrop-blur-md">
+      <div className="mx-auto max-w-[1280px] px-3 sm:px-5 lg:px-8">
+        {/* Tier 1: Brand, City, Search, Actions */}
+        <div className="flex h-16 items-center justify-between gap-3 md:gap-5">
+          {/* Brand & City */}
+          <div className="flex items-center gap-3 lg:gap-4 shrink-0">
+            <button
+              type="button"
+              onClick={handleHomeClickAction}
+              className="flex items-center gap-2.5 text-left group cursor-pointer"
+              aria-label="MahaTicket Home"
+            >
+              <TheatreMaskLogo className="w-10 h-8 shrink-0 group-hover:scale-105 transition-transform" />
 
-      <div className="mx-auto max-w-7xl px-3 sm:px-5 lg:px-6">
-
-        <div className="flex h-14 items-center gap-2 sm:gap-3">
-
-          {/* BRAND */}
-          <button
-            type="button"
-            onClick={handleHomeClickAction}
-            className="flex shrink-0 items-center gap-2 text-left"
-            aria-label="MahaTicket Home"
-          >
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#ea580c] shadow-sm shadow-orange-500/20">
-              <Ticket className="h-4 w-4 -rotate-12 text-white" />
-            </div>
-
-            <div className="hidden sm:block">
-              <div className="flex items-center gap-1.5">
-                <span className="text-base font-extrabold tracking-tight text-[#111827]">
+              <div className="flex flex-col leading-none">
+                <span className="text-lg font-black tracking-tight text-[#EA580C]">
                   {language === 'mr' ? 'महाटिकिट' : 'MahaTicket'}
                 </span>
+                <span className="text-[10px] uppercase tracking-wider text-[#64748B] font-semibold">
+                  MahaTicket
+                </span>
               </div>
+            </button>
 
-              <p className="max-w-[200px] truncate text-[9px] font-medium text-[#64748b]">
-                {language === 'mr'
-                  ? 'महाराष्ट्राचे हक्काचे तिकीट व्यासपीठ'
-                  : "Maharashtra's ticket marketplace"}
-              </p>
-            </div>
-          </button>
-
-          {/* CITY SELECTOR */}
-          <div className="relative hidden shrink-0 md:flex md:items-center">
-
-            <MapPin className="pointer-events-none absolute left-3 h-3.5 w-3.5 text-[#ea580c]" />
-
-            <select
-              value={selectedCity}
-              onChange={(event) => handleCityChange(event.target.value)}
-              className="max-w-[175px] cursor-pointer appearance-none rounded-xl border border-slate-200 bg-slate-50 py-2 pl-8 pr-8 text-xs font-bold text-slate-800 outline-none transition hover:border-orange-300 focus:border-[#ea580c] focus:ring-2 focus:ring-orange-500/20"
-              aria-label="Select city"
-            >
-              {cityList.map((city) => (
-                <option
-                  key={city}
-                  value={city}
-                  className="bg-white text-slate-900"
+            {/* City Selector Pill */}
+            <div className="relative hidden sm:block">
+              <div className="flex items-center gap-1.5 rounded-lg bg-[#FFF7ED] px-3 py-1.5 font-semibold text-xs text-[#141B2B] transition-colors hover:bg-orange-100">
+                <MapPin className="h-4 w-4 text-[#EA580C]" />
+                <select
+                  value={selectedCity}
+                  onChange={(event) => handleCityChange(event.target.value)}
+                  className="cursor-pointer appearance-none bg-transparent pr-4 text-xs font-semibold text-[#141B2B] outline-none"
+                  aria-label="Select city"
                 >
-                  {city === 'महाराष्ट्र (All)' ? t.allMaharashtra : city}
-                </option>
-              ))}
-            </select>
-
-            {detectingCity ? (
-              <Loader2 className="pointer-events-none absolute right-2 h-3.5 w-3.5 animate-spin text-[#ea580c]" />
-            ) : (
-              <ChevronDown className="pointer-events-none absolute right-2 h-3.5 w-3.5 text-slate-400" />
-            )}
+                  {cityList.map((city) => (
+                    <option key={city} value={city} className="bg-white text-slate-900">
+                      {city === 'महाराष्ट्र (All)' ? t.allMaharashtra : city}
+                    </option>
+                  ))}
+                </select>
+                {detectingCity ? (
+                  <Loader2 className="pointer-events-none absolute right-2 h-3.5 w-3.5 animate-spin text-[#EA580C]" />
+                ) : (
+                  <ChevronDown className="pointer-events-none absolute right-2 h-3.5 w-3.5 text-[#64748B]" />
+                )}
+              </div>
+            </div>
           </div>
 
-          {/* LIVE SEARCH */}
-          <div
-            ref={searchRef}
-            className="relative min-w-0 flex-1 max-w-md lg:max-w-lg mx-auto"
-          >
-            <div className="relative">
-
-              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-
+          {/* Search bar */}
+          <div ref={searchRef} className="relative hidden md:block flex-1 max-w-xl mx-2">
+            <div className="relative flex items-center w-full">
+              <Search className="pointer-events-none absolute left-3.5 h-4 w-4 text-[#64748B]" />
               <input
                 type="search"
                 value={searchQuery}
@@ -644,22 +628,16 @@ export const Header: React.FC<HeaderProps> = ({
                 onKeyDown={handleSearchKeyDown}
                 placeholder={
                   language === 'mr'
-                    ? 'नाटक, संगीत, शहर, कार्यक्रम शोधा...'
-                    : 'Search plays, music, cities, events...'
+                    ? 'कार्यक्रम, कलाकार, नाटक, संगीत शोधा...'
+                    : 'Search plays, artists, venues, music...'
                 }
                 autoComplete="off"
                 spellCheck={false}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-10 pr-10 text-xs sm:text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#ea580c] focus:ring-2 focus:ring-orange-500/20 focus:bg-white shadow-xs"
+                className="w-full h-10 pl-10 pr-9 rounded-full bg-[#FFF7ED] border border-[#E5E7EB] text-xs font-medium text-[#141B2B] placeholder:text-[#64748B] focus:outline-none focus:border-[#EA580C] focus:bg-white transition-all"
                 aria-label="Search events"
               />
-
-              {/* IMPORTANT:
-                  spinner now correctly shows while searching.
-                  The previous code had !searchQuery here,
-                  which prevented the spinner from appearing
-                  during an actual search. */}
               {searching ? (
-                <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-[#ea580c]" />
+                <Loader2 className="absolute right-3 h-4 w-4 animate-spin text-[#EA580C]" />
               ) : searchQuery ? (
                 <button
                   type="button"
@@ -668,7 +646,7 @@ export const Header: React.FC<HeaderProps> = ({
                     setLiveResults([]);
                     setSearchFocused(false);
                   }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-slate-400 transition hover:bg-slate-200 hover:text-slate-700"
+                  className="absolute right-3 rounded-full p-0.5 text-slate-400 hover:text-slate-700"
                   aria-label="Clear search"
                 >
                   <X className="h-4 w-4" />
@@ -679,21 +657,15 @@ export const Header: React.FC<HeaderProps> = ({
             {/* LIVE RESULTS */}
             {showResults && (
               <div className="absolute left-0 right-0 top-full z-[60] mt-1 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-
                 {searching ? (
                   <div className="flex items-center gap-3 px-4 py-4 text-xs text-slate-500">
-                    <Loader2 className="h-4 w-4 animate-spin text-[#ea580c]" />
-                    <span>
-                      {language === 'mr'
-                        ? 'कार्यक्रम शोधत आहे...'
-                        : 'Searching events...'}
-                    </span>
+                    <Loader2 className="h-4 w-4 animate-spin text-[#EA580C]" />
+                    <span>{language === 'mr' ? 'कार्यक्रम शोधत आहे...' : 'Searching events...'}</span>
                   </div>
                 ) : liveResults.length > 0 ? (
                   <>
-                    <div className="flex items-center gap-1.5 border-b border-slate-100 px-4 py-2.5">
-                      <TrendingUp className="h-3.5 w-3.5 text-[#ea580c]" />
-
+                    <div className="flex items-center gap-1.5 border-b border-slate-100 px-4 py-2">
+                      <TrendingUp className="h-3.5 w-3.5 text-[#EA580C]" />
                       <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
                         {language === 'mr'
                           ? `तुमच्यासाठी ${liveResults.length} कार्यक्रम`
@@ -708,181 +680,118 @@ export const Header: React.FC<HeaderProps> = ({
                         onClick={() => handleSearchResultClick(event)}
                         className="group flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-orange-50"
                       >
-                        <div className="h-11 w-11 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+                        <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
                           {event.posterUrl ? (
-                            <img
-                              src={event.posterUrl}
-                              alt=""
-                              loading="lazy"
-                              className="h-full w-full object-cover"
-                            />
+                            <img src={event.posterUrl} alt="" loading="lazy" className="h-full w-full object-cover" />
                           ) : (
-                            <div className="flex h-full w-full items-center justify-center text-[#ea580c]">
-                              <Ticket className="h-5 w-5" />
+                            <div className="flex h-full w-full items-center justify-center text-[#EA580C]">
+                              <Ticket className="h-4 w-4" />
                             </div>
                           )}
                         </div>
-
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-xs font-bold text-slate-900 transition group-hover:text-[#ea580c]">
-                            {language === 'mr'
-                              ? event.titleMr || event.title
-                              : event.title || event.titleMr}
+                          <p className="truncate text-xs font-bold text-slate-900 group-hover:text-[#EA580C]">
+                            {language === 'mr' ? event.titleMr || event.title : event.title || event.titleMr}
                           </p>
-
-                          <p className="mt-0.5 flex items-center gap-1 truncate text-[11px] text-slate-500">
+                          <p className="flex items-center gap-1 truncate text-[11px] text-slate-500">
                             <MapPin className="h-3 w-3 shrink-0" />
-
-                            <span>
-                              {event.venue?.nameMr ||
-                                event.venue?.name ||
-                                ''}
-
-                              {event.venue?.city
-                                ? ` · ${event.venue.city}`
-                                : ''}
-                            </span>
+                            <span>{event.venue?.nameMr || event.venue?.name || ''}</span>
                           </p>
                         </div>
-
-                        <div className="shrink-0 rounded-lg border border-orange-200 bg-orange-50 px-2 py-1 text-[10px] font-black text-[#ea580c]">
-                          {event.minPrice
-                            ? `₹${event.minPrice}`
-                            : 'View'}
+                        <div className="shrink-0 rounded-md bg-[#FFF7ED] px-2 py-1 text-[10px] font-bold text-[#EA580C]">
+                          {event.minPrice ? `₹${event.minPrice}` : 'View'}
                         </div>
                       </button>
                     ))}
-
-                    <div className="border-t border-slate-100 px-4 py-2 text-center">
-                      <p className="text-[10px] text-slate-400">
-                        {language === 'mr'
-                          ? 'Enter दाबा किंवा कार्यक्रम निवडा'
-                          : 'Select an event above'}
-                      </p>
-                    </div>
                   </>
                 ) : (
-                  <div className="flex items-center gap-3 px-4 py-5 text-xs text-slate-500">
+                  <div className="flex items-center gap-3 px-4 py-4 text-xs text-slate-500">
                     <Search className="h-4 w-4 text-slate-300" />
-
-                    <span>
-                      {language === 'mr'
-                        ? `"${searchQuery}" साठी कार्यक्रम आढळला नाही`
-                        : `No events found for "${searchQuery}"`}
-                    </span>
+                    <span>{language === 'mr' ? `"${searchQuery}" साठी कार्यक्रम आढळला नाही` : `No events found`}</span>
                   </div>
                 )}
               </div>
             )}
           </div>
 
-          {/* RIGHT ACTIONS */}
-          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-
-            {/* =================================================
-                LANGUAGE SWITCH
-                En / म
-                Active language = ORANGE
-                ================================================= */}
-            <div
-              className="hidden items-center rounded-xl border border-slate-200 bg-slate-50 p-0.5 sm:flex"
-              aria-label="Language selector"
+          {/* Right Actions */}
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            {/* Post Event / Partner */}
+            <button
+              type="button"
+              onClick={handleOpenPartnerModal}
+              className="hidden lg:inline-flex items-center px-3 py-1.5 rounded-lg bg-[#FFF7ED] hover:bg-orange-100 text-[#A33900] text-xs font-bold transition-colors"
             >
+              {language === 'mr' ? 'कार्यक्रम आयोजित करा' : 'List Your Show'}
+            </button>
+
+            {/* My Tickets */}
+            <button
+              type="button"
+              onClick={handleMyTicketsClick}
+              className="hidden sm:inline-flex items-center gap-1 text-xs font-bold text-[#64748B] hover:text-[#141B2B] transition-colors"
+            >
+              <Bookmark className="h-4 w-4" />
+              <span>{language === 'mr' ? 'माझी तिकिटे' : 'My Tickets'}</span>
+            </button>
+
+            {/* Language Switch Pill */}
+            <div className="flex items-center rounded-lg border border-[#E5E7EB] bg-[#FFF7ED] p-0.5 text-xs">
               <button
                 type="button"
                 onClick={() => handleLanguageChange('en')}
-                className={`min-w-[34px] rounded-lg px-2 py-1.5 text-[11px] font-black transition-all ${language === 'en'
-                  ? 'bg-[#ea580c] text-white shadow-sm'
-                  : 'text-slate-500 hover:bg-white hover:text-slate-800'
-                  }`}
-                aria-pressed={language === 'en'}
+                className={`rounded px-1.5 py-0.5 text-[10px] font-bold transition ${
+                  language === 'en' ? 'bg-[#EA580C] text-white shadow-xs' : 'text-[#64748B]'
+                }`}
               >
-                En
+                EN
               </button>
-
               <button
                 type="button"
                 onClick={() => handleLanguageChange('mr')}
-                className={`min-w-[34px] rounded-lg px-2 py-1.5 text-[11px] font-black transition-all ${language === 'mr'
-                  ? 'bg-[#ea580c] text-white shadow-sm'
-                  : 'text-slate-500 hover:bg-white hover:text-slate-800'
-                  }`}
-                aria-pressed={language === 'mr'}
+                className={`rounded px-1.5 py-0.5 text-[10px] font-bold transition ${
+                  language === 'mr' ? 'bg-[#EA580C] text-white shadow-xs' : 'text-[#64748B]'
+                }`}
               >
                 म
               </button>
             </div>
 
-            {/* USER / ACCOUNT */}
+            {/* User Profile Avatar / Menu */}
             {user ? (
-              <div
-                ref={userMenuRef}
-                className="relative"
-              >
+              <div ref={userMenuRef} className="relative">
                 <button
                   type="button"
-                  onClick={() => setUserMenuOpen((open) => !open)}
-                  className={`flex items-center gap-1.5 rounded-xl border px-2 py-1.5 text-xs font-bold transition ${userMenuOpen
-                    ? 'border-orange-300 bg-orange-50 text-[#ea580c]'
-                    : 'border-slate-200 bg-white text-slate-800 hover:border-orange-200 hover:bg-orange-50/50'
-                    }`}
-                  aria-expanded={userMenuOpen}
-                  aria-haspopup="menu"
+                  onClick={() => setUserMenuOpen((o) => !o)}
+                  className="w-8 h-8 rounded-full bg-[#A33900] flex items-center justify-center text-white shadow-sm hover:opacity-90 transition"
+                  title="माझे प्रोफाइल"
                 >
-                  {/* Fixed profile icon */}
-                  <span
-                    className={`flex h-7 w-7 items-center justify-center rounded-full transition ${userMenuOpen
-                      ? 'bg-[#ea580c] text-white'
-                      : 'bg-orange-100 text-[#ea580c]'
-                      }`}
-                  >
-                    <User className="h-4 w-4" />
-                  </span>
-
-                  <span className="hidden sm:block">
-                    {language === 'mr' ? 'माझे खाते' : 'My Account'}
-                  </span>
-
-                  <ChevronDown
-                    className={`h-3.5 w-3.5 transition-transform ${userMenuOpen ? 'rotate-180' : ''
-                      }`}
-                  />
+                  <User className="h-4 w-4" />
                 </button>
-
-                {/* ONLY TWO SUB OPTIONS */}
                 {userMenuOpen && (
-                  <div className="absolute right-0 top-full z-[70] mt-2 w-52 overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-2xl">
-
+                  <div className="absolute right-0 top-full z-[70] mt-2 w-48 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
                     <button
                       type="button"
                       onClick={handleMyTicketsClick}
-                      className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-xs font-bold text-slate-800 transition hover:bg-orange-50 hover:text-[#ea580c]"
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-slate-800 hover:bg-orange-50 hover:text-[#EA580C]"
                     >
-                      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-100 text-[#ea580c]">
-                        <Bookmark className="h-4 w-4" />
-                      </span>
-
-                      <span>
-                        {language === 'mr'
-                          ? 'माझी तिकिटे'
-                          : 'My Tickets'}
-                      </span>
+                      <Bookmark className="h-4 w-4" />
+                      <span>{language === 'mr' ? 'माझी तिकिटे' : 'My Tickets'}</span>
                     </button>
-
                     <button
                       type="button"
                       onClick={handleProfileClick}
-                      className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-xs font-bold text-slate-800 transition hover:bg-orange-50 hover:text-[#ea580c]"
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-slate-800 hover:bg-orange-50 hover:text-[#EA580C]"
                     >
-                      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
-                        <User className="h-4 w-4" />
-                      </span>
-
-                      <span>
-                        {language === 'mr'
-                          ? 'माझे प्रोफाइल'
-                          : 'My Profile'}
-                      </span>
+                      <User className="h-4 w-4" />
+                      <span>{language === 'mr' ? 'माझे प्रोफाइल' : 'Profile'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-red-600 hover:bg-red-50"
+                    >
+                      <span>{language === 'mr' ? 'लॉगआउट' : 'Logout'}</span>
                     </button>
                   </div>
                 )}
@@ -891,41 +800,75 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 type="button"
                 onClick={handleLoginClick}
-                className="flex items-center gap-1.5 rounded-xl bg-[#ea580c] px-3 py-2 text-xs font-extrabold text-white shadow-md shadow-orange-500/20 transition hover:bg-[#c2410c] active:scale-95 sm:px-4"
+                className="w-8 h-8 rounded-full bg-[#A33900] flex items-center justify-center text-white shadow-sm hover:opacity-90 transition"
+                title={language === 'mr' ? 'लॉगिन करा' : 'Login'}
               >
-                <User className="h-3.5 w-3.5" />
-
-                <span>
-                  {language === 'mr' ? 'लॉगिन' : 'Login'}
-                </span>
+                <User className="h-4 w-4" />
               </button>
             )}
 
-            {/* Post Event / Partner CTA Desktop */}
+            {/* Mobile menu button */}
             <button
               type="button"
-              onClick={handleOpenPartnerModal}
-              className="hidden lg:flex items-center gap-1.5 rounded-xl border border-orange-200 bg-orange-50/80 hover:bg-orange-100/80 px-3 py-2 text-xs font-bold text-[#ea580c] transition active:scale-95"
-              title={language === 'mr' ? 'आपला कार्यक्रम महाटिकिटवर सूचीबद्ध करा' : 'Post your event on MahaTicket'}
+              onClick={() => setMobileMenuOpen((o) => !o)}
+              className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 md:hidden"
+              aria-label="Toggle menu"
             >
-              <Building2 className="h-3.5 w-3.5 text-[#ea580c]" />
-              <span>{language === 'mr' ? 'कार्यक्रम पोस्ट करा' : 'Post Event'}</span>
+              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
+          </div>
+        </div>
 
-            {/* MOBILE MENU */}
+        {/* Tier 2: Category Navigation Rail + Official badge */}
+        <div className="flex items-center justify-between border-t border-[#E5E7EB]/70 py-1.5 overflow-x-auto no-scrollbar text-xs">
+          <nav className="flex items-center gap-5 sm:gap-6 whitespace-nowrap">
             <button
               type="button"
-              onClick={() => setMobileMenuOpen((open) => !open)}
-              className="rounded-xl border border-slate-200 bg-white p-2 text-slate-700 transition hover:border-orange-300 hover:text-[#ea580c] md:hidden"
-              aria-label="Open menu"
-              aria-expanded={mobileMenuOpen}
+              onClick={() => onCategorySelect && onCategorySelect('plays')}
+              className="font-semibold text-[#64748B] hover:text-[#EA580C] transition-colors pb-0.5"
             >
-              {mobileMenuOpen ? (
-                <X className="h-5 w-5" />
-              ) : (
-                <Menu className="h-5 w-5" />
-              )}
+              नाटक (Theatre)
             </button>
+            <button
+              type="button"
+              onClick={() => onCategorySelect && onCategorySelect('music')}
+              className="font-semibold text-[#64748B] hover:text-[#EA580C] transition-colors pb-0.5"
+            >
+              संगीत (Music)
+            </button>
+            <button
+              type="button"
+              onClick={() => onCategorySelect && onCategorySelect('comedy')}
+              className="font-semibold text-[#64748B] hover:text-[#EA580C] transition-colors pb-0.5"
+            >
+              कॉमेडी (Comedy)
+            </button>
+            <button
+              type="button"
+              onClick={() => onCategorySelect && onCategorySelect('cultural')}
+              className="font-semibold text-[#64748B] hover:text-[#EA580C] transition-colors pb-0.5"
+            >
+              सांस्कृतिक (Cultural)
+            </button>
+            <button
+              type="button"
+              onClick={() => onCategorySelect && onCategorySelect('workshops')}
+              className="font-semibold text-[#64748B] hover:text-[#EA580C] transition-colors pb-0.5"
+            >
+              कार्यशाळा (Workshops)
+            </button>
+            <button
+              type="button"
+              onClick={() => onCategorySelect && onCategorySelect('sports')}
+              className="font-semibold text-[#64748B] hover:text-[#EA580C] transition-colors pb-0.5"
+            >
+              क्रीडा (Sports)
+            </button>
+          </nav>
+
+          <div className="hidden xl:flex items-center gap-1.5 text-[11px] text-[#64748B] shrink-0 font-medium">
+            <span className="w-2 h-2 rounded-full bg-[#16A34A]"></span>
+            <span>{language === 'mr' ? 'महाराष्ट्राचे हक्काचे नाट्य व्यासपीठ' : 'Maharashtra Cultural Platform'}</span>
           </div>
         </div>
 

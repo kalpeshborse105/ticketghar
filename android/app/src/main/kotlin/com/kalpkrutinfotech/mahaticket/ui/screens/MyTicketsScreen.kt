@@ -47,14 +47,16 @@ fun MyTicketsScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(CinemaBg)
+            .background(MahaBg)
             .testTag("my_tickets_screen")
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             // Header Bar
             Surface(
-                color = CinemaSurface,
-                modifier = Modifier.fillMaxWidth()
+                color = Color.White,
+                modifier = Modifier.fillMaxWidth(),
+                border = BorderStroke(1.dp, MahaBorder),
+                shadowElevation = 1.dp
             ) {
                 Column(
                     modifier = Modifier
@@ -68,26 +70,27 @@ fun MyTicketsScreen(
                     ) {
                         Column {
                             Text(
-                                text = "माझी डिजिटल तिकिटे (My Passes)",
+                                text = "माझी डिजिटल तिकिटे",
                                 fontSize = 18.sp,
-                                fontWeight = FontWeight.Black,
-                                color = Color.White
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
                             )
                             Text(
                                 text = "आपली सर्व वैध तिकिटे व प्रवेश पास येथे उपलब्ध आहेत",
-                                fontSize = 11.sp,
-                                color = GoldAccent
+                                fontSize = 11.5.sp,
+                                color = TextSecondary,
+                                modifier = Modifier.padding(top = 2.dp)
                             )
                         }
 
                         Surface(
-                            color = TheatricalCrimson.copy(alpha = 0.2f),
-                            shape = RoundedCornerShape(10.dp)
+                            color = MahaWarm,
+                            shape = RoundedCornerShape(8.dp)
                         ) {
                             Text(
                                 text = "🎫 ई-पास",
-                                color = TheatricalCrimsonLight,
-                                fontSize = 12.sp,
+                                color = MahaOrangeDeep,
+                                fontSize = 11.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                             )
@@ -100,12 +103,14 @@ fun MyTicketsScreen(
                     OutlinedTextField(
                         value = lookupQuery,
                         onValueChange = { lookupQuery = it },
-                        placeholder = { Text("मोबाईल नंबर किंवा बुकिंग क्रमांक टाका", fontSize = 13.sp, color = Color(0xFF64748B)) },
+                        placeholder = {
+                            Text("मोबाईल नंबर किंवा बुकिंग क्रमांक टाका", fontSize = 13.sp, color = TextSecondary)
+                        },
                         leadingIcon = {
                             Icon(
                                 Icons.Default.PhoneAndroid,
                                 contentDescription = null,
-                                tint = GoldAccent,
+                                tint = MahaOrange,
                                 modifier = Modifier.size(18.dp)
                             )
                         },
@@ -115,20 +120,20 @@ fun MyTicketsScreen(
                                     Icon(
                                         Icons.Default.Search,
                                         contentDescription = "Search",
-                                        tint = GoldAccent
+                                        tint = MahaOrange
                                     )
                                 }
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(10.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedContainerColor = Color(0xFF1E293B),
-                            unfocusedContainerColor = Color(0xFF1E293B),
-                            focusedBorderColor = GoldAccent,
-                            unfocusedBorderColor = Color(0xFF334155)
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary,
+                            focusedContainerColor = MahaWarmLight,
+                            unfocusedContainerColor = MahaWarmLight,
+                            focusedBorderColor = MahaOrange,
+                            unfocusedBorderColor = MahaBorder
                         ),
                         singleLine = true
                     )
@@ -162,27 +167,27 @@ fun MyTicketsScreen(
                                 Icon(
                                     Icons.Default.ConfirmationNumber,
                                     contentDescription = null,
-                                    tint = TheatricalCrimson.copy(alpha = 0.6f),
-                                    modifier = Modifier.size(56.dp)
+                                    tint = MahaOrange,
+                                    modifier = Modifier.size(52.dp)
                                 )
-                                Spacer(modifier = Modifier.height(14.dp))
+                                Spacer(modifier = Modifier.height(12.dp))
                                 Text(
                                     text = "कोणतेही तिकीट सापडले नाही",
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                                    color = TextPrimary
                                 )
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(
                                     text = "कृपया बुकिंग करताना दिलेला अचूक मोबाईल नंबर टाका.",
                                     fontSize = 12.sp,
-                                    color = Color(0xFF94A3B8)
+                                    color = TextSecondary
                                 )
                                 Spacer(modifier = Modifier.height(16.dp))
                                 Button(
                                     onClick = { viewModel.loadMyTickets() },
-                                    colors = ButtonDefaults.buttonColors(containerColor = TheatricalCrimson),
-                                    shape = RoundedCornerShape(10.dp)
+                                    colors = ButtonDefaults.buttonColors(containerColor = MahaOrange),
+                                    shape = RoundedCornerShape(8.dp)
                                 ) {
                                     Text("पुन्हा प्रयत्न करा", fontWeight = FontWeight.Bold, color = Color.White)
                                 }
@@ -201,28 +206,28 @@ fun MyTicketsScreen(
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                     modifier = Modifier.padding(24.dp)
                                 ) {
-                                    Text(text = "🎭", fontSize = 54.sp)
-                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text(text = "🎭", fontSize = 48.sp)
+                                    Spacer(modifier = Modifier.height(14.dp))
                                     Text(
                                         text = "अद्याप कोणतेही तिकीट बुक केलेले नाही",
                                         fontSize = 16.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color.White
+                                        color = TextPrimary
                                     )
                                     Spacer(modifier = Modifier.height(6.dp))
                                     Text(
                                         text = "आजच लोकप्रिय नाटक किंवा संगीत कार्यक्रमाचे तिकीट बुक करा.",
                                         fontSize = 12.sp,
-                                        color = Color(0xFF94A3B8),
+                                        color = TextSecondary,
                                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                     )
-                                    Spacer(modifier = Modifier.height(20.dp))
+                                    Spacer(modifier = Modifier.height(18.dp))
                                     Button(
                                         onClick = onNavigateToHome,
-                                        colors = ButtonDefaults.buttonColors(containerColor = GoldAccent),
-                                        shape = RoundedCornerShape(10.dp)
+                                        colors = ButtonDefaults.buttonColors(containerColor = MahaOrange),
+                                        shape = RoundedCornerShape(8.dp)
                                     ) {
-                                        Text("कार्यक्रम शोधा (Explore)", fontWeight = FontWeight.Bold, color = Color.Black)
+                                        Text("कार्यक्रम शोधा", fontWeight = FontWeight.Bold, color = Color.White)
                                     }
                                 }
                             }
@@ -230,7 +235,7 @@ fun MyTicketsScreen(
                             LazyColumn(
                                 modifier = Modifier.fillMaxSize(),
                                 contentPadding = PaddingValues(16.dp, 16.dp, 16.dp, 90.dp),
-                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                                verticalArrangement = Arrangement.spacedBy(14.dp)
                             ) {
                                 items(orders, key = { it.orderNumber }) { order ->
                                     val booking = order.toBooking()

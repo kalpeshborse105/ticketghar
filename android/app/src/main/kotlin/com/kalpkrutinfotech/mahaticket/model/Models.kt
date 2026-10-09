@@ -312,7 +312,7 @@ fun BookingOrder.toBooking(): Booking {
         userEmail = "guest@mahaticket.in",
         userPhone = "9822000000",
         paymentId = "pay_rzp_$orderNumber",
-        paymentMethod = "Razorpay UPI",
+        paymentMethod = "MahaUPI / NetBanking",
         qrCodeData = qr
     )
 }

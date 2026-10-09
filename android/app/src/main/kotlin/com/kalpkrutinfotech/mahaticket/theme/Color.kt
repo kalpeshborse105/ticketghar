@@ -7,6 +7,7 @@ val MahaOrange = Color(0xFFEA580C)
 val MahaOrangeDeep = Color(0xFFC2410C)
 val MahaOrangeLight = Color(0xFFF97316)
 val MahaWarm = Color(0xFFFFF7ED)
+val MahaWarmLight = Color(0xFFF8FAFC)
 
 // Surfaces (light marketplace)
 val MahaBg = Color(0xFFF7F8FC)

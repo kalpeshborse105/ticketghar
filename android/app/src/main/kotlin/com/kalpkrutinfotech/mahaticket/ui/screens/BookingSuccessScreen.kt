@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.platform.testTag
@@ -26,6 +27,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kalpkrutinfotech.mahaticket.theme.*
+import com.kalpkrutinfotech.mahaticket.ui.components.SimulatedQrGraphic
 
 @Composable
 fun BookingSuccessScreen(
@@ -47,7 +49,7 @@ fun BookingSuccessScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(CinemaBg)
+            .background(MahaBg)
             .testTag("booking_success_screen")
     ) {
         LazyColumn(
@@ -56,23 +58,23 @@ fun BookingSuccessScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            item { Spacer(modifier = Modifier.height(20.dp)) }
+            item { Spacer(modifier = Modifier.height(16.dp)) }
 
             // Celebration Badge
             item {
                 Box(
                     modifier = Modifier
-                        .size(90.dp)
+                        .size(80.dp)
                         .scale(checkmarkScale)
-                        .background(Color(0xFF065F46), CircleShape)
-                        .border(3.dp, GoldAccent, CircleShape),
+                        .background(Color(0xFFDCFCE7), CircleShape)
+                        .border(3.dp, Color(0xFF16A34A), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         Icons.Default.Check,
                         contentDescription = "Success",
-                        tint = GoldBright,
-                        modifier = Modifier.size(52.dp)
+                        tint = Color(0xFF16A34A),
+                        modifier = Modifier.size(44.dp)
                     )
                 }
             }
@@ -82,41 +84,39 @@ fun BookingSuccessScreen(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         text = "बुकिंग यशस्वी झाली!",
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Black,
-                        color = Color.White
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Booking Confirmed • E-Pass Ready",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = GoldAccent
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
                         text = "आपले तिकीट निश्चित झाले आहे व डिजिटल पास तयार आहे.",
                         fontSize = 13.sp,
-                        color = Color(0xFFCBD5E1),
+                        color = TextSecondary,
                         textAlign = TextAlign.Center
                     )
                 }
             }
 
-            // Digital Ticket Stub Card with Perforation Tear Line
+            // Digital Ticket Stub Card
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = CinemaSurface),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    border = BorderStroke(1.dp, MahaBorder)
                 ) {
                     Column(modifier = Modifier.fillMaxWidth()) {
                         // Card Header
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(TheatricalCrimson)
+                                .background(
+                                    Brush.horizontalGradient(
+                                        colors = listOf(MahaOrange, MahaOrangeDeep)
+                                    )
+                                )
                                 .padding(horizontal = 16.dp, vertical = 12.dp)
                         ) {
                             Row(
@@ -127,7 +127,7 @@ fun BookingSuccessScreen(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(text = "🎭 ", fontSize = 16.sp)
                                     Text(
-                                        text = "MahaTicket Digital Pass",
+                                        text = "महाटिकिट • डिजिटल पास",
                                         color = Color.White,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 13.sp
@@ -135,12 +135,12 @@ fun BookingSuccessScreen(
                                 }
 
                                 Surface(
-                                    color = Color.Black.copy(alpha = 0.35f),
+                                    color = Color.White.copy(alpha = 0.25f),
                                     shape = RoundedCornerShape(6.dp)
                                 ) {
                                     Text(
                                         text = "#$orderNumber",
-                                        color = GoldBright,
+                                        color = Color.White,
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
@@ -159,20 +159,28 @@ fun BookingSuccessScreen(
                                 text = "ऑर्डर क्रमांक: $orderNumber",
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                color = TextPrimary
                             )
                             Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "स्थिती: निश्चित (Confirmed & Paid)",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFF10B981)
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(
+                                    color = Color(0xFFDCFCE7),
+                                    shape = RoundedCornerShape(4.dp)
+                                ) {
+                                    Text(
+                                        text = "✓ निश्चित (Confirmed)",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF16A34A),
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "कृपया नाट्यगृहाच्या प्रवेशद्वारावर QR कोड स्कॅन करून प्रवेश मिळवा.",
+                                text = "नाट्यगृहाच्या प्रवेशद्वारावर QR कोड स्कॅन करून थेट प्रवेश मिळवा.",
                                 fontSize = 12.sp,
-                                color = Color(0xFF94A3B8),
+                                color = TextSecondary,
                                 lineHeight = 18.sp
                             )
                         }
@@ -184,15 +192,15 @@ fun BookingSuccessScreen(
                                 .height(16.dp)
                         ) {
                             drawLine(
-                                color = Color(0xFF475569),
+                                color = Color(0xFFCBD5E1),
                                 start = Offset(0f, size.height / 2),
                                 end = Offset(size.width, size.height / 2),
-                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(15f, 15f), 0f),
-                                strokeWidth = 2f
+                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f),
+                                strokeWidth = 1.5f
                             )
                         }
 
-                        // QR Graphic Placeholder / Pass Badge
+                        // QR Graphic Box
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -200,26 +208,16 @@ fun BookingSuccessScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Surface(
-                                color = Color.White,
+                                color = Color(0xFFF8FAFC),
                                 shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(1.dp, MahaBorder),
                                 modifier = Modifier.size(130.dp)
                             ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text(text = "📲", fontSize = 36.sp)
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(
-                                            text = "TICKET PASS",
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Black,
-                                            color = Color.Black
-                                        )
-                                        Text(
-                                            text = orderNumber.take(8),
-                                            fontSize = 9.sp,
-                                            color = Color.Gray
-                                        )
-                                    }
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier.padding(10.dp)
+                                ) {
+                                    SimulatedQrGraphic(seed = orderNumber)
                                 }
                             }
                         }
@@ -235,43 +233,43 @@ fun BookingSuccessScreen(
                 ) {
                     Button(
                         onClick = { onViewTicket(orderNumber) },
-                        colors = ButtonDefaults.buttonColors(containerColor = GoldAccent),
-                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MahaOrange),
+                        shape = RoundedCornerShape(10.dp),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(50.dp)
+                            .height(48.dp)
                             .testTag("view_ticket_pass_btn")
                     ) {
                         Icon(
                             Icons.Default.ConfirmationNumber,
                             contentDescription = null,
-                            tint = Color.Black,
+                            tint = Color.White,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "ई-तिकीट व पास पहा (View E-Pass)",
+                            text = "ई-तिकीट व पास पहा",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.Black
+                            color = Color.White
                         )
                     }
 
                     OutlinedButton(
                         onClick = onGoHome,
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, Color(0xFF475569)),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, MahaBorder),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(50.dp)
+                            .height(48.dp)
                             .testTag("back_to_home_btn")
                     ) {
                         Text(
-                            text = "मुख्यपृष्ठावर परत जा (Back to Home)",
+                            text = "मुखपृष्ठावर परत जा",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = Color.White
+                            color = TextPrimary
                         )
                     }
                 }

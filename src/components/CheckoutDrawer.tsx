@@ -342,12 +342,6 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
       return;
     }
 
-    // If customer is not yet verified, initiate inline email verification first (Section 19)
-    if (!isEmailVerified) {
-      await handleInitiateEmailAuth();
-      return;
-    }
-
     if (timeLeft <= 0) {
       setErrorMessage(
         language === 'mr'
@@ -493,22 +487,15 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
         {/* Scrollable Form Body */}
         <div className="flex-1 overflow-y-auto divide-y divide-slate-100 bg-slate-50">
           
-          {/* 1. Attendee Contact Details & Account Verification (Section 19 Parity) */}
+          {/* 1. Attendee Contact Details */}
           <div className="p-5 space-y-3 bg-white">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-black uppercase tracking-wider text-[#ea580c] flex items-center gap-1.5">
                 <span>१. ग्राहक व तिकीट संपर्क तपशील</span>
               </h3>
-              {isEmailVerified ? (
-                <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-bold border border-emerald-200 flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                  <span>पडताळणी पूर्ण (Verified)</span>
-                </span>
-              ) : (
-                <span className="text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full font-bold border border-amber-200">
-                  पडताळणी आवश्यक
-                </span>
-              )}
+              <span className="text-[10px] text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full font-semibold">
+                थेट बुकिंग (Guest Checkout)
+              </span>
             </div>
 
             <div className="space-y-3">
@@ -566,33 +553,15 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-bold text-slate-700">
-                    {t.email} * (M-Ticket व खात्यासाठी)
-                  </label>
-                  {!isEmailVerified && userEmail.includes('@') && authStep === 'idle' && (
-                    <button
-                      type="button"
-                      onClick={handleInitiateEmailAuth}
-                      disabled={authLoading}
-                      className="text-[11px] font-bold text-[#ea580c] hover:underline flex items-center gap-1 cursor-pointer"
-                    >
-                      <Mail className="w-3 h-3" />
-                      <span>ईमेल पडताळा (Verify)</span>
-                    </button>
-                  )}
-                </div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  {t.email} * (M-Ticket व खात्यासाठी)
+                </label>
                 <input
                   type="email"
                   required
                   placeholder="sachin.patil@example.com"
                   value={userEmail}
-                  onChange={(e) => {
-                    setUserEmail(e.target.value);
-                    if (isEmailVerified && e.target.value !== authUser?.email) {
-                      setIsEmailVerified(false);
-                    }
-                  }}
+                  onChange={(e) => setUserEmail(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-300 focus:bg-white rounded-xl px-3.5 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#ea580c]/50 focus:border-[#ea580c] transition"
                 />
               </div>

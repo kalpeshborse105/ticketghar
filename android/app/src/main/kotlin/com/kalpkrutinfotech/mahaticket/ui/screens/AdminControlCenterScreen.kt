@@ -1,11 +1,11 @@
-﻿package com.kalpkrutinfotech.mahaticket.ui.screens
+package com.kalpkrutinfotech.mahaticket.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -15,23 +15,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.kalpkrutinfotech.mahaticket.model.AuditLog
-import com.kalpkrutinfotech.mahaticket.model.SeatLayoutConfig
-import com.kalpkrutinfotech.mahaticket.ui.viewmodel.TicketGharViewModel
+import coil.compose.AsyncImage
 import com.kalpkrutinfotech.mahaticket.theme.*
-import java.text.SimpleDateFormat
-import java.util.*
-
-enum class AdminSubSection {
-    ANALYTICS,
-    SEATING_DESIGNER,
-    BROADCAST_ALERTS,
-    AUDIT_LOGS
-}
+import com.kalpkrutinfotech.mahaticket.ui.viewmodel.TicketGharViewModel
 
 @Composable
 fun AdminControlCenterScreen(
@@ -41,665 +32,555 @@ fun AdminControlCenterScreen(
     val language by viewModel.language.collectAsState()
     val events by viewModel.events.collectAsState()
     val bookings by viewModel.bookings.collectAsState()
-    val auditLogs by viewModel.auditLogs.collectAsState()
-    val layoutConfig by viewModel.currentLayoutConfig.collectAsState()
 
-    var activeSubSection by remember { mutableStateOf(AdminSubSection.ANALYTICS) }
+    var showToast by remember { mutableStateOf<String?>(null) }
+    var approvalStatus by remember { mutableStateOf("pending") }
 
-    // Alert broadcast form states
-    var alertTitle by remember { mutableStateOf("") }
-    var alertMessage by remember { mutableStateOf("") }
-    var alertIsUrgent by remember { mutableStateOf(true) }
-    var broadcastSuccess by remember { mutableStateOf(false) }
-
-    // Seating Designer states
-    var designerRowsCount by remember { mutableStateOf(layoutConfig.rows.size) }
-    var designerSeatsPerRow by remember { mutableStateOf(layoutConfig.seatsPerRow) }
-    var designerAisleOffset by remember { mutableStateOf(layoutConfig.aisleAfterSeat) }
-    var layoutSavedFeedback by remember { mutableStateOf(false) }
-
-    val totalRevenue = bookings.sumOf { it.totalAmount }
-    val totalTicketsSold = bookings.sumOf { it.ticketCount }
-    val checkedInCount = bookings.count { it.isCheckedIn }
+    LaunchedEffect(showToast) {
+        if (showToast != null) {
+            kotlinx.coroutines.delay(3000)
+            showToast = null
+        }
+    }
 
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .background(CinemaBg)
+            .background(Color(0xFFF9F9FF))
             .testTag("admin_control_center_screen"),
-        contentPadding = PaddingValues(16.dp, 16.dp, 16.dp, 90.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 100.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // Top Header
+        // 1. Top System Pulse Strip
         item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF131A29)),
-                shape = RoundedCornerShape(16.dp),
+            Surface(
+                color = Color(0xFFE9EDFF),
+                shape = RoundedCornerShape(20.dp),
+                border = BorderStroke(1.dp, Color(0xFFDCE2F7)),
+                shadowElevation = 1.dp,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(text = "👑 ", fontSize = 20.sp)
-                            Text(
-                                text = "Kalpkrut Control Center",
-                                color = GoldBright,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Black
-                            )
-                        }
-                        Text(
-                            text = if (language == AppLanguage.MARATHI)
-                                "तिकीटघर कंपनी ॲडमिन व ऑपरेशन्स सिस्टीम"
-                            else
-                                "MahaTicket Operations",
-                            color = Color(0xFF94A3B8),
-                            fontSize = 11.sp
-                        )
-                    }
-
-                    Surface(
-                        color = TheatricalCrimson,
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text(
-                            text = "ADMIN ACTIVE",
-                            color = Color.White,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
-                    }
-                }
-            }
-        }
-
-        // Sub-navigation Tab Row
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                AdminSubSection.values().forEach { section ->
-                    val isSelected = activeSubSection == section
-                    val label = when (section) {
-                        AdminSubSection.ANALYTICS -> if (language == AppLanguage.MARATHI) "अ‍ॅनालिटिक्स" else "Analytics"
-                        AdminSubSection.SEATING_DESIGNER -> if (language == AppLanguage.MARATHI) "आसन लेआउट" else "Seating Designer"
-                        AdminSubSection.BROADCAST_ALERTS -> if (language == AppLanguage.MARATHI) "पुश सूचना" else "Push Alerts"
-                        AdminSubSection.AUDIT_LOGS -> if (language == AppLanguage.MARATHI) "ऑडिट लॉग्स" else "Audit Logs"
-                    }
-
-                    Surface(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .clickable { activeSubSection = section }
-                            .testTag("admin_tab_${section.name}"),
-                        color = if (isSelected) TheatricalCrimson else Color(0xFF1E293B),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Text(
-                            text = label,
-                            fontSize = 10.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            color = Color.White,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                            modifier = Modifier.padding(vertical = 10.dp, horizontal = 2.dp)
-                        )
-                    }
-                }
-            }
-        }
-
-        // SUBSECTION 1: ANALYTICS
-        if (activeSubSection == AdminSubSection.ANALYTICS) {
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(
-                        text = if (language == AppLanguage.MARATHI) "📊 कंपनी व्यवसाय मेट्रिक्स" else "📊 Platform Performance Analytics",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-
-                    // 4 Metric KPI Cards Grid
+                Column(modifier = Modifier.padding(16.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        MetricKpiCard(
-                            title = if (language == AppLanguage.MARATHI) "एकूण कमाई" else "Gross Revenue",
-                            value = "₹$totalRevenue",
-                            trend = "+18.4% vs last week",
-                            color = GoldAccent,
-                            modifier = Modifier.weight(1f)
-                        )
-                        MetricKpiCard(
-                            title = if (language == AppLanguage.MARATHI) "तिकिटे विक्री" else "Tickets Sold",
-                            value = "$totalTicketsSold",
-                            trend = "+12% attendance",
-                            color = Color(0xFF38BDF8),
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        MetricKpiCard(
-                            title = if (language == AppLanguage.MARATHI) "गेट प्रवेश झालेले" else "Gate Checked-In",
-                            value = "$checkedInCount",
-                            trend = "QR Validated",
-                            color = SuccessEmerald,
-                            modifier = Modifier.weight(1f)
-                        )
-                        MetricKpiCard(
-                            title = if (language == AppLanguage.MARATHI) "सक्रिय नाट्यप्रयोग" else "Live Events",
-                            value = "${events.size}",
-                            trend = "3 Venues Active",
-                            color = TheatricalCrimsonLight,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Event Attendance Breakdown Table
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = CinemaSurface),
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(14.dp)) {
-                            Text(
-                                text = if (language == AppLanguage.MARATHI) "नाट्यप्रयोग व आसन भारमान (Occupancy %)" else "Event Occupancy & Show Tracking",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-
-                            Spacer(modifier = Modifier.height(10.dp))
-
-                            events.forEach { evt ->
-                                val occupancy = (65..95).random()
-                                Column(modifier = Modifier.padding(vertical = 6.dp)) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Text(text = evt.titleMr, fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
-                                        Text(text = "$occupancy% Occupancy", fontSize = 11.sp, color = GoldBright, fontWeight = FontWeight.Bold)
-                                    }
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    LinearProgressIndicator(
-                                        progress = { occupancy / 100f },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(6.dp)
-                                            .clip(RoundedCornerShape(3.dp)),
-                                        color = if (occupancy > 80) TheatricalCrimson else GoldAccent,
-                                        trackColor = Color(0xFF1E293B)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // SUBSECTION 2: SEATING CHART LAYOUT DESIGNER
-        if (activeSubSection == AdminSubSection.SEATING_DESIGNER) {
-            item {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = CinemaSurface),
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(text = "📐 ", fontSize = 18.sp)
-                            Column {
-                                Text(
-                                    text = if (language == AppLanguage.MARATHI) "नाट्यगृह आसन लेआउट डिझायनर" else "Auditorium Seating Chart Designer",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                                Text(
-                                    text = if (language == AppLanguage.MARATHI) "ओळी, जागा व पॅसेजचे लवचिक कॉन्फिगरेशन" else "Configure rows, seat density & aisle gaps",
-                                    fontSize = 11.sp,
-                                    color = Color(0xFF94A3B8)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        // Controls: Rows
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "${if (language == AppLanguage.MARATHI) "ओळींची संख्या (Rows)" else "Number of Rows"}: $designerRowsCount",
-                                fontSize = 12.sp,
-                                color = Color.White
-                            )
-                            Row {
-                                IconButton(
-                                    onClick = { if (designerRowsCount > 4) designerRowsCount-- },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(imageVector = Icons.Default.RemoveCircle, contentDescription = "-", tint = Color.LightGray)
-                                }
-                                IconButton(
-                                    onClick = { if (designerRowsCount < 12) designerRowsCount++ },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(imageVector = Icons.Default.AddCircle, contentDescription = "+", tint = GoldAccent)
-                                }
-                            }
-                        }
-
-                        // Controls: Seats Per Row
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "${if (language == AppLanguage.MARATHI) "प्रति ओळ जागा (Seats / Row)" else "Seats Per Row"}: $designerSeatsPerRow",
-                                fontSize = 12.sp,
-                                color = Color.White
-                            )
-                            Row {
-                                IconButton(
-                                    onClick = { if (designerSeatsPerRow > 6) designerSeatsPerRow -= 2 },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(imageVector = Icons.Default.RemoveCircle, contentDescription = "-", tint = Color.LightGray)
-                                }
-                                IconButton(
-                                    onClick = { if (designerSeatsPerRow < 16) designerSeatsPerRow += 2 },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(imageVector = Icons.Default.AddCircle, contentDescription = "+", tint = GoldAccent)
-                                }
-                            }
-                        }
-
-                        // Controls: Aisle position
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "${if (language == AppLanguage.MARATHI) "पॅसेज / मार्ग स्थान (Aisle Gap)" else "Aisle Offset"}: After Seat $designerAisleOffset",
-                                fontSize = 12.sp,
-                                color = Color.White
-                            )
-                            Row {
-                                IconButton(
-                                    onClick = { if (designerAisleOffset > 2) designerAisleOffset-- },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(imageVector = Icons.Default.RemoveCircle, contentDescription = "-", tint = Color.LightGray)
-                                }
-                                IconButton(
-                                    onClick = { if (designerAisleOffset < designerSeatsPerRow - 2) designerAisleOffset++ },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(imageVector = Icons.Default.AddCircle, contentDescription = "+", tint = GoldAccent)
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(14.dp))
-
-                        // Live Mini-Preview of Layout
-                        Surface(
-                            color = Color(0xFF0F1420),
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(10.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text(
-                                    text = "🎭 STAGE / SCREEN PREVIEW",
-                                    fontSize = 9.sp,
-                                    color = GoldAccent,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                val rowNames = ('A' until ('A' + designerRowsCount)).map { it.toString() }
-                                rowNames.take(4).forEach { r ->
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(3.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(text = r, fontSize = 8.sp, color = Color.Gray)
-                                        for (s in 1..designerSeatsPerRow) {
-                                            if (s == designerAisleOffset + 1) {
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                            }
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(10.dp)
-                                                    .background(GoldAccent.copy(alpha = 0.6f), RoundedCornerShape(2.dp))
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(14.dp))
-
-                        // Save Configuration Button
-                        Button(
-                            onClick = {
-                                val generatedRows = ('A' until ('A' + designerRowsCount)).map { it.toString() }
-                                viewModel.updateSeatingLayout(
-                                    SeatLayoutConfig(
-                                        rows = generatedRows,
-                                        seatsPerRow = designerSeatsPerRow,
-                                        aisleAfterSeat = designerAisleOffset
-                                    )
-                                )
-                                layoutSavedFeedback = true
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = GoldAccent),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("save_layout_config_btn")
-                        ) {
-                            Text(
-                                text = if (language == AppLanguage.MARATHI) "नवीन आसन लेआउट सेव्ह करा 🎭" else "Save & Apply Auditorium Layout 🎭",
-                                color = Color.Black,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp
-                            )
-                        }
-
-                        if (layoutSavedFeedback) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "✅ Seating Layout Updated & Audit Logged!",
-                                color = SuccessEmerald,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // SUBSECTION 3: BROADCAST ALERTS
-        if (activeSubSection == AdminSubSection.BROADCAST_ALERTS) {
-            item {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = CinemaSurface),
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(text = "📢 ", fontSize = 18.sp)
-                            Column {
-                                Text(
-                                    text = if (language == AppLanguage.MARATHI) "तातडीची पुश सूचना पाठवा" else "Broadcast Real-Time Push Alert",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                                Text(
-                                    text = if (language == AppLanguage.MARATHI) "सर्व प्रेक्षक व नाट्यगृह कर्मचाऱ्यांना त्वरित संदेश" else "Urgent event updates & gate announcements",
-                                    fontSize = 11.sp,
-                                    color = Color(0xFF94A3B8)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(14.dp))
-
-                        OutlinedTextField(
-                            value = alertTitle,
-                            onValueChange = { alertTitle = it },
-                            label = { Text(if (language == AppLanguage.MARATHI) "सूचनेचे शीर्षक" else "Alert Title") },
-                            placeholder = { Text("उदा. नाट्यप्रयोग १५ मिनिटे उशिराने सुरू होईल") },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("alert_title_input"),
-                            shape = RoundedCornerShape(10.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = GoldAccent,
-                                unfocusedBorderColor = Color(0xFF334155),
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White
-                            )
-                        )
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        OutlinedTextField(
-                            value = alertMessage,
-                            onValueChange = { alertMessage = it },
-                            label = { Text(if (language == AppLanguage.MARATHI) "सविस्तर संदेश" else "Message Body") },
-                            placeholder = { Text("Enter detailed broadcast information...") },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(90.dp)
-                                .testTag("alert_message_input"),
-                            shape = RoundedCornerShape(10.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = GoldAccent,
-                                unfocusedBorderColor = Color(0xFF334155),
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White
-                            )
-                        )
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth()
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Checkbox(
-                                checked = alertIsUrgent,
-                                onCheckedChange = { alertIsUrgent = it },
-                                colors = CheckboxDefaults.colors(checkedColor = TheatricalCrimson)
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .background(Color(0xFF16A34A), CircleShape)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = if (language == AppLanguage.MARATHI) "तातडीची सूचना (Urgent Notification Banner)" else "Mark as Urgent (Triggers Device Sound)",
-                                fontSize = 12.sp,
-                                color = Color.White
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(14.dp))
-
-                        Button(
-                            onClick = {
-                                if (alertTitle.isNotBlank() && alertMessage.isNotBlank()) {
-                                    viewModel.broadcastUrgentAlert(alertTitle, alertMessage, alertIsUrgent)
-                                    broadcastSuccess = true
-                                    alertTitle = ""
-                                    alertMessage = ""
-                                }
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = TheatricalCrimson),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("send_broadcast_btn")
-                        ) {
-                            Text(
-                                text = if (language == AppLanguage.MARATHI) "सर्व उपकरणांवर सूचना पाठवा 📢" else "Broadcast Real-Time Alert 📢",
-                                color = Color.White,
+                                text = "थेट नेटवर्क सुरू • v4.8 Admin",
+                                fontSize = 11.5.sp,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp
+                                color = MahaOrangeDeep
+                            )
+                        }
+                        Text(
+                            text = "कल्पकृत इन्फोटेक सिस्टीम्स",
+                            fontSize = 11.sp,
+                            color = TextSecondary
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "महाटिकिट नियंत्रण केंद्र",
+                                fontSize = 19.sp,
+                                fontWeight = FontWeight.Black,
+                                color = TextPrimary
+                            )
+                            Text(
+                                text = "महाराष्ट्र राज्य ऑपरेशन्स डॅशबोर्ड",
+                                fontSize = 11.5.sp,
+                                color = TextSecondary,
+                                modifier = Modifier.padding(top = 2.dp)
                             )
                         }
 
-                        if (broadcastSuccess) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "✅ Broadcast Alert Dispatched Successfully!",
-                                color = SuccessEmerald,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            IconButton(
+                                onClick = { showToast = "पुणे व मुंबई विभागासाठी तात्काळ नोटीफिकेशन पाठवले!" },
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .background(Color(0xFFFFF7ED), RoundedCornerShape(10.dp))
+                            ) {
+                                Icon(Icons.Default.Campaign, contentDescription = null, tint = MahaOrange, modifier = Modifier.size(18.dp))
+                            }
+
+                            Button(
+                                onClick = { showToast = "दैनिक ऑपरेशन्स अहवाल डाउनलोड होत आहे..." },
+                                colors = ButtonDefaults.buttonColors(containerColor = MahaOrange),
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                                modifier = Modifier.height(38.dp)
+                            ) {
+                                Icon(Icons.Default.Download, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("अहवाल", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            }
                         }
                     }
                 }
             }
         }
 
-        // SUBSECTION 4: IMMUTABLE AUDIT LOGS
-        if (activeSubSection == AdminSubSection.AUDIT_LOGS) {
-            item {
+        // 2. Metrics Grid (2x2)
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
+                    Text(
+                        text = "थेट प्लॅटफॉर्म मॅट्रिक्स",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                    Text(
+                        text = "प्रत्येक ३० सेकंदांनी ताजे",
+                        fontSize = 11.sp,
+                        color = TextSecondary
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // Metric 1: Sales
+                    Surface(
+                        color = Color.White,
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, MahaBorder),
+                        shadowElevation = 1.dp,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("आजची एकूण विक्री", fontSize = 11.sp, color = TextSecondary)
+                                Text("🎫", fontSize = 14.sp)
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text("८,४५०", fontSize = 20.sp, fontWeight = FontWeight.Black, color = TextPrimary)
+                            Text("+१५.२% कालच्या तुलनेत", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF16A34A))
+                        }
+                    }
+
+                    // Metric 2: Venues
+                    Surface(
+                        color = Color.White,
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, MahaBorder),
+                        shadowElevation = 1.dp,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("सक्रिय नाट्यगृहे", fontSize = 11.sp, color = TextSecondary)
+                                Text("🎭", fontSize = 14.sp)
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text("६४", fontSize = 20.sp, fontWeight = FontWeight.Black, color = TextPrimary)
+                            Text("२८ शहरे व तालुके", fontSize = 10.sp, color = TextSecondary)
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // Metric 3: Organizers
+                    Surface(
+                        color = Color.White,
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, MahaBorder),
+                        shadowElevation = 1.dp,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("नोंदणीकृत आयोजक", fontSize = 11.sp, color = TextSecondary)
+                                Text("👥", fontSize = 14.sp)
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text("१२०", fontSize = 20.sp, fontWeight = FontWeight.Black, color = TextPrimary)
+                            Text("+६ नवीन नोंदणी", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF16A34A))
+                        }
+                    }
+
+                    // Metric 4: Pending
+                    Surface(
+                        color = Color.White,
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, MahaBorder),
+                        shadowElevation = 1.dp,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("तपासणी बाकी", fontSize = 11.sp, color = TextSecondary)
+                                Text("📋", fontSize = 14.sp)
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text("०३", fontSize = 20.sp, fontWeight = FontWeight.Black, color = Color(0xFFDC2626))
+                            Text("तातडीची तपासणी आवश्यक", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFDC2626))
+                        }
+                    }
+                }
+
+                // Financial Revenue Card
+                Surface(
+                    color = Color(0xFFE9EDFF),
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, Color(0xFFDCE2F7)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("₹", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MahaOrange)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("एकूण दैनिक महसूल प्रवाह", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                            }
+                            Surface(
+                                color = Color(0xFFFFF7ED),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text("थेट जमा", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MahaOrange, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.Bottom
+                        ) {
+                            Column {
+                                Text("₹३८,२०,०००", fontSize = 22.sp, fontWeight = FontWeight.Black, color = TextPrimary)
+                                Text("सकल व्यवहार मूल्य (Gross GMV)", fontSize = 10.5.sp, color = TextSecondary)
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text("₹१,९१,०००", fontSize = 17.sp, fontWeight = FontWeight.Black, color = Color(0xFF16A34A))
+                                Text("प्लॅटफॉर्म कमिशन (५%)", fontSize = 10.5.sp, color = TextSecondary)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Urgent Verification & Approval Queue
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.VerifiedUser, contentDescription = null, tint = MahaOrange, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = if (language == AppLanguage.MARATHI) "🔒 कंपनी सुरक्षा आणि ऑडिट लॉग्स" else "🔒 Company Security & Audit Ledger",
-                            fontSize = 14.sp,
+                            text = "तातडीची तपासणी व मंजुरी",
+                            fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                        Text(
-                            text = if (language == AppLanguage.MARATHI) "आर्थिक व तिकीट बदलांची अपरिवर्तनीय नोंद" else "Immutable tamper-evident record of actions",
-                            fontSize = 11.sp,
-                            color = Color(0xFF94A3B8)
+                            color = TextPrimary
                         )
                     }
 
                     Surface(
-                        color = Color(0xFF1E293B),
-                        shape = RoundedCornerShape(6.dp)
+                        color = if (approvalStatus == "pending") Color(0xFFFEE2E2) else Color(0xFFDCFCE7),
+                        shape = RoundedCornerShape(10.dp)
                     ) {
                         Text(
-                            text = "${auditLogs.size} logs",
+                            text = if (approvalStatus == "pending") "१ प्रलंबित" else "मंजूर ✓",
                             fontSize = 10.sp,
-                            color = GoldAccent,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            fontWeight = FontWeight.Bold,
+                            color = if (approvalStatus == "pending") Color(0xFFDC2626) else Color(0xFF16A34A),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                         )
                     }
                 }
-            }
 
-            items(auditLogs) { log ->
-                AuditLogItemCard(log = log)
-            }
-        }
-    }
-}
-
-@Composable
-private fun MetricKpiCard(
-    title: String,
-    value: String,
-    trend: String,
-    color: Color,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = CinemaSurface)
-    ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Text(text = title, fontSize = 11.sp, color = Color(0xFF94A3B8))
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(text = value, fontSize = 20.sp, fontWeight = FontWeight.Black, color = color)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(text = trend, fontSize = 10.sp, color = SuccessEmerald, fontWeight = FontWeight.Medium)
-        }
-    }
-}
-
-@Composable
-private fun AuditLogItemCard(log: AuditLog) {
-    val dateStr = remember(log.timestamp) {
-        SimpleDateFormat("dd MMM yyyy, hh:mm:ss a", Locale.getDefault()).format(Date(log.timestamp))
-    }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF131A29))
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
                 Surface(
-                    color = TheatricalCrimson.copy(alpha = 0.2f),
-                    shape = RoundedCornerShape(4.dp)
+                    color = Color.White,
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, MahaBorder),
+                    shadowElevation = 1.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            AsyncImage(
+                                model = "https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?w=400",
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .size(70.dp, 95.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                            )
+
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Surface(color = Color(0xFFFFF7ED), shape = RoundedCornerShape(6.dp)) {
+                                        Text("मराठी संगीत नाटक", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = MahaOrange, modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
+                                    }
+                                    Text("पुणे केंद्र", fontSize = 9.sp, color = TextSecondary)
+                                }
+                                Text("कट्यार काळजात घुसली", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                Text("सुवर्णमहोत्सवी विशेष प्रयोग", fontSize = 11.sp, color = TextSecondary)
+                                Text("आयोजक: स्वरश्री इव्हेंट्स, पुणे", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MahaOrangeDeep)
+                                Text("📍 बालगंधर्व रंगमंदिर • २० मे, सायं. ५:००", fontSize = 10.5.sp, color = TextSecondary)
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Legal documents pills
+                        Surface(
+                            color = Color(0xFFF1F3FF),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(8.dp)) {
+                                Text("कायदेशीर परवाने व दाखले:", fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = TextSecondary)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text("✓ पोलीस परवाना", fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFF16A34A))
+                                    Text("✓ करमणूक कर", fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFF16A34A))
+                                    Text("✓ नाट्यगृह पावती", fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFF16A34A))
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    approvalStatus = "approved"
+                                    showToast = "✓ 'कट्यार काळजात घुसली' प्रयोग मंजूर झाला!"
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.weight(1f).height(38.dp)
+                            ) {
+                                Text("मंजूर करा", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            }
+
+                            Button(
+                                onClick = {
+                                    showToast = "सुधारणा नोटीस आयोजकांना पाठवली"
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFF7ED)),
+                                border = BorderStroke(1.dp, Color(0xFFFFEDD5)),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.weight(1f).height(38.dp)
+                            ) {
+                                Text("सुधारणा", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = MahaOrange)
+                            }
+
+                            Button(
+                                onClick = {
+                                    approvalStatus = "rejected"
+                                    showToast = "प्रयोग नाकारण्यात आला"
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFEE2E2)),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.weight(1f).height(38.dp)
+                            ) {
+                                Text("नाकारा", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFFDC2626))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 4. Live Gate Scanner Stream
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = log.actionType,
-                        color = TheatricalCrimsonLight,
-                        fontSize = 10.sp,
+                        text = "थेट गेट स्कॅनर प्रवाह",
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        color = TextPrimary
                     )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(modifier = Modifier.size(6.dp).background(Color(0xFF16A34A), CircleShape))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("सक्रिय स्कॅनर्स: १८", fontSize = 11.sp, color = TextSecondary)
+                    }
                 }
 
-                Text(
-                    text = dateStr,
-                    fontSize = 9.sp,
-                    color = Color(0xFF64748B)
-                )
+                Surface(
+                    color = Color.White,
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, MahaBorder),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        // Scan 1
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color(0xFFF1F3FF), RoundedCornerShape(10.dp))
+                                .padding(10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Surface(shape = CircleShape, color = Color(0xFF16A34A), modifier = Modifier.size(32.dp)) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                    }
+                                }
+                                Column {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Text("#TK-7892", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                        Text("प्रवेश वैध", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF16A34A))
+                                    }
+                                    Text("बालगंधर्व रंगमंदिर, पुणे • गेट २", fontSize = 10.sp, color = TextSecondary)
+                                }
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text("आत्ताच", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                Text("सीट F-14", fontSize = 10.sp, color = TextSecondary)
+                            }
+                        }
+
+                        // Scan 2 - Alert
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color(0xFFFEE2E2), RoundedCornerShape(10.dp))
+                                .padding(10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Surface(shape = CircleShape, color = Color(0xFFDC2626), modifier = Modifier.size(32.dp)) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Default.Warning, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                    }
+                                }
+                                Column {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Text("#TK-7840", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                        Text("पुनरावृत्ती अलर्ट!", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFDC2626))
+                                    }
+                                    Text("प्रबोधनकार ठाकरे, बोरीवली • गेट ३", fontSize = 10.sp, color = TextSecondary)
+                                }
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text("२ सेकंद आधी", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFDC2626))
+                                Text("दुपारी वापरले", fontSize = 10.sp, color = TextSecondary)
+                            }
+                        }
+                    }
+                }
             }
+        }
 
-            Spacer(modifier = Modifier.height(6.dp))
-
-            Text(
-                text = log.details,
-                fontSize = 12.sp,
-                color = Color.White
-            )
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+        // 5. Emergency Controls
+        item {
+            Surface(
+                color = Color(0xFFE9EDFF),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, Color(0xFFDCE2F7)),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
-                    text = "Actor: ${log.actorEmail} (${log.actorRole.name})",
-                    fontSize = 10.sp,
-                    color = Color(0xFF94A3B8)
-                )
-                Text(
-                    text = "Target: ${log.resourceTarget}",
-                    fontSize = 10.sp,
-                    color = GoldAccent
-                )
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Shield, contentDescription = null, tint = Color(0xFFDC2626), modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("आणीबाणी प्लॅटफॉर्म नियंत्रणे", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    }
+                    Text("केवळ मुख्य प्रशासक व ऑपरेशन्स टीमसाठी सुरक्षित अ‍ॅक्सेस", fontSize = 10.5.sp, color = TextSecondary, modifier = Modifier.padding(top = 2.dp))
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Button(
+                            onClick = { showToast = "⚠️ तिकीट विक्री थांबवण्यात आली." },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f).height(38.dp)
+                        ) {
+                            Text("तिकीट विक्री थांबवा", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+
+                        Button(
+                            onClick = { showToast = "✓ गेट लिंक रीसेट झाली." },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.White),
+                            border = BorderStroke(1.dp, MahaBorder),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f).height(38.dp)
+                        ) {
+                            Text("गेट लिंक रीसेट", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        }
+                    }
+                }
             }
         }
     }
 }
-
