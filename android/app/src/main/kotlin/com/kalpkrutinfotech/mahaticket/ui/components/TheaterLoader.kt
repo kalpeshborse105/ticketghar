@@ -49,92 +49,68 @@ fun TheaterLoaderCard(
     message: String = "कृपया प्रतीक्षा करा...",
     modifier: Modifier = Modifier
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "stitch_theatre_mask_anim")
+    val infiniteTransition = rememberInfiniteTransition(label = "ticket_loading_anim")
 
     val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 0.95f,
-        targetValue = 1.05f,
+        initialValue = 0.92f,
+        targetValue = 1.06f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = FastOutSlowInEasing),
+            animation = tween(900, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "pulseScale"
     )
 
-    val auraAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.45f,
-        targetValue = 0.9f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = EaseInOutCubic),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "auraAlpha"
-    )
-
     Surface(
         modifier = modifier
-            .fillMaxWidth()
-            .padding(20.dp),
-        shape = RoundedCornerShape(20.dp),
+            .wrapContentWidth()
+            .padding(16.dp),
+        shape = RoundedCornerShape(16.dp),
         color = Color.White,
         border = androidx.compose.foundation.BorderStroke(1.dp, MahaBorder),
-        shadowElevation = 8.dp
+        shadowElevation = 3.dp
     ) {
         Column(
             modifier = Modifier
-                .padding(24.dp)
-                .fillMaxWidth(),
+                .padding(horizontal = 24.dp, vertical = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Animated Stitch Theatre Mask Graphic
+            // Ticket Sticker with pulsing animation
             Box(
                 modifier = Modifier
-                    .size(130.dp)
-                    .scale(pulseScale),
+                    .size(64.dp)
+                    .scale(pulseScale)
+                    .background(Color(0xFFFFF7ED), CircleShape)
+                    .border(1.5.dp, Color(0xFFFFEDD5), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                // Background warm radiant aura
-                Box(
-                    modifier = Modifier
-                        .size(126.dp)
-                        .background(
-                            Brush.radialGradient(
-                                colors = listOf(
-                                    Color(0xFFFFF7ED).copy(alpha = auraAlpha),
-                                    Color(0xFFFFEDD5).copy(alpha = auraAlpha * 0.4f),
-                                    Color.Transparent
-                                )
-                            ),
-                            shape = CircleShape
-                        )
+                Text(
+                    text = "🎟️",
+                    fontSize = 32.sp
                 )
-
-                MarathiTheatreMaskCanvas(modifier = Modifier.size(118.dp))
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             Text(
                 text = "महाटिकिट • MahaTicket",
                 color = MahaOrangeDeep,
-                fontWeight = FontWeight.Black,
-                fontSize = 15.sp,
-                letterSpacing = 0.5.sp
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                letterSpacing = 0.3.sp
             )
 
             Spacer(modifier = Modifier.height(4.dp))
 
             Text(
                 text = message.ifBlank { "कृपया प्रतीक्षा करा..." },
-                color = TextPrimary,
-                fontSize = 13.5.sp,
-                fontWeight = FontWeight.Medium,
-                textAlign = TextAlign.Center,
-                lineHeight = 19.sp
+                color = TextSecondary,
+                fontSize = 12.sp,
+                textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             // Three Shimmering Golden Loading Dots
             Row(

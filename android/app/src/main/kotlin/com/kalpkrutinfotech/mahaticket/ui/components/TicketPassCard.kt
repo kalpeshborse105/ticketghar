@@ -29,7 +29,7 @@ import com.kalpkrutinfotech.mahaticket.theme.*
 @Composable
 fun TicketPassCard(
     booking: Booking,
-    language: AppLanguage,
+    language: AppLanguage = AppLanguage.MARATHI,
     onShareClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {

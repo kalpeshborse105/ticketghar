@@ -3,6 +3,7 @@ import { db } from '@/src/db/index.ts';
 import { tickets, ticketScans, events, orders, eventSessions, users } from '@/src/db/schema.ts';
 import { eq, desc } from 'drizzle-orm';
 import crypto from 'crypto';
+import { decryptSecureTicketQr } from '@/src/lib/ticket-crypto.ts';
 
 function getTicketSecret(): string {
   return process.env.TICKET_SECRET || 'mahaticket_secure_signing_key_2026';
@@ -13,7 +14,14 @@ const TICKET_SECRET = getTicketSecret();
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { ticketCodeOrPayload, gateName, scannerUserId, scannerDevice } = body;
+    const {
+      ticketCodeOrPayload,
+      gateName,
+      scannerUserId,
+      scannerDevice,
+      targetEventId,
+      scannerOrganizerId,
+    } = body;
 
     if (!ticketCodeOrPayload) {
       return NextResponse.json(
@@ -22,14 +30,27 @@ export async function POST(request: Request) {
       );
     }
 
-    // Extract code if scanned string is a full ticket URL or JSON
-    let targetCode = ticketCodeOrPayload.trim();
-    if (targetCode.includes('/tickets/')) {
+    let targetCode = String(ticketCodeOrPayload).trim();
+    let embeddedEventId: number | undefined;
+
+    // 0. Check if this is an encrypted MTSEC token
+    if (targetCode.startsWith('MTSEC:v1:')) {
+      const decrypted = decryptSecureTicketQr(targetCode);
+      if (!decrypted || !decrypted.ticketCode) {
+        return NextResponse.json({
+          valid: false,
+          scanResult: 'INVALID_SIGNATURE',
+          message: 'अवैध किंवा बनावट क्युआर कोड! (Invalid or counterfeit ticket QR signature).',
+        });
+      }
+      targetCode = decrypted.ticketCode;
+      embeddedEventId = decrypted.eventId;
+    } else if (targetCode.includes('/tickets/')) {
       const parts = targetCode.split('/tickets/');
       targetCode = decodeURIComponent(parts[1].split('?')[0].split('#')[0].trim());
-    } else if (ticketCodeOrPayload.startsWith('{')) {
+    } else if (targetCode.startsWith('{')) {
       try {
-        const parsed = JSON.parse(ticketCodeOrPayload);
+        const parsed = JSON.parse(targetCode);
         if (parsed.code) {
           targetCode = parsed.code.trim();
         }
@@ -63,6 +84,38 @@ export async function POST(request: Request) {
     }
 
     const { ticket, order, session, event } = ticketRows[0];
+
+    // 2. Strict Organizer & Event Isolation Check:
+    // Organizer can ONLY scan tickets for their own event or assigned show
+    if (targetEventId && Number(order.eventId) !== Number(targetEventId)) {
+      return NextResponse.json({
+        valid: false,
+        scanResult: 'WRONG_EVENT',
+        message: `हे तिकीट या कार्यक्रमाचे नाही! (Wrong Event: तिकीट '${event.titleMr || event.title}' चे आहे).`,
+        ticket: {
+          code: 'PROTECTED',
+          seat: ticket.seatCode,
+          attendee: ticket.attendeeName,
+          event: event.title,
+          eventMr: event.titleMr,
+        },
+      });
+    }
+
+    if (scannerOrganizerId && Number(event.organizerId) !== Number(scannerOrganizerId)) {
+      return NextResponse.json({
+        valid: false,
+        scanResult: 'WRONG_ORGANIZER',
+        message: `सावधान! हे तिकीट तुमच्या संस्थेच्या / आयोजकाच्या कार्यक्रमाचे नाही (Unauthorized Organizer Scan).`,
+        ticket: {
+          code: 'PROTECTED',
+          seat: ticket.seatCode,
+          attendee: ticket.attendeeName,
+          event: event.title,
+          eventMr: event.titleMr,
+        },
+      });
+    }
 
     // 2. Check if ticket was already scanned / used
     if (ticket.status === 'used') {

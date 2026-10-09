@@ -116,12 +116,12 @@ fun LegalScreen(
                             text = titleMr,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = TextPrimary
                         )
                         Text(
                             text = titleEn,
                             fontSize = 11.sp,
-                            color = GoldAccent
+                            color = MahaOrangeDeep
                         )
                     }
                 },
@@ -130,16 +130,16 @@ fun LegalScreen(
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = Color.White
+                            tint = TextPrimary
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = CinemaSurface
+                    containerColor = Color.White
                 )
             )
         },
-        containerColor = CinemaBg,
+        containerColor = MahaBg,
         modifier = Modifier.testTag("legal_screen")
     ) { innerPadding ->
         LazyColumn(
@@ -151,11 +151,13 @@ fun LegalScreen(
         ) {
             item {
                 Surface(
-                    color = CinemaSurface,
+                    color = Color.White,
                     shape = RoundedCornerShape(16.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MahaBorder),
+                    shadowElevation = 1.dp,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column(modifier = Modifier.padding(18.dp)) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -163,27 +165,27 @@ fun LegalScreen(
                             Icon(
                                 imageVector = Icons.Default.Policy,
                                 contentDescription = null,
-                                tint = GoldAccent,
+                                tint = MahaOrange,
                                 modifier = Modifier.size(20.dp)
                             )
                             Text(
                                 text = "अधिकृत महाटिकिट धोरण (Official Policy)",
-                                fontSize = 13.sp,
+                                fontSize = 13.5.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = GoldBright
+                                color = TextPrimary
                             )
                         }
 
                         HorizontalDivider(
-                            color = Color(0xFF334155),
+                            color = MahaBorder,
                             thickness = 1.dp,
                             modifier = Modifier.padding(vertical = 12.dp)
                         )
 
                         Text(
                             text = content,
-                            fontSize = 13.sp,
-                            color = Color(0xFFE2E8F0),
+                            fontSize = 13.5.sp,
+                            color = TextPrimary.copy(alpha = 0.9f),
                             lineHeight = 22.sp
                         )
                     }

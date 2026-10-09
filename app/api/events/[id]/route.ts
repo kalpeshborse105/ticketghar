@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
 import { events, venues, organizers, eventSessions, ticketTypes, venueSections } from '@/src/db/schema.ts';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 
 export async function GET(
   request: Request,
@@ -71,6 +71,26 @@ export async function GET(
       .from(venueSections)
       .where(eq(venueSections.venueId, item.venue.id));
 
+    // Fetch rating stats from event_reviews
+    let rating = 0;
+    let ratingCount = 0;
+    try {
+      const statsRes = await db.execute(sql`
+        SELECT 
+          ROUND(AVG(rating)::numeric, 1) as avg_rating, 
+          COUNT(*)::int as count 
+        FROM public.event_reviews 
+        WHERE event_id = ${eventId}
+      `);
+      if (statsRes.rows && statsRes.rows.length > 0) {
+        const row: any = statsRes.rows[0];
+        rating = row.avg_rating ? Number(row.avg_rating) : 0;
+        ratingCount = row.count ? Number(row.count) : 0;
+      }
+    } catch {
+      // Ignore if table not created
+    }
+
     return NextResponse.json({
       event: {
         ...item.event,
@@ -80,6 +100,8 @@ export async function GET(
         },
         organizer: item.organizer,
         sessions: sessionDetails,
+        rating,
+        ratingCount,
       },
     });
   } catch (error: any) {

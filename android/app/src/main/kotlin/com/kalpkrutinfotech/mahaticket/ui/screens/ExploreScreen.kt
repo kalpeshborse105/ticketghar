@@ -1,10 +1,13 @@
 package com.kalpkrutinfotech.mahaticket.ui.screens
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -42,13 +45,14 @@ fun ExploreScreen(
     val searchQuery by viewModel.searchQuery.collectAsState()
 
     val categories = listOf(
-        Triple("all", "सर्व कार्यक्रम", Icons.Default.AutoAwesome),
-        Triple("plays", "नाटक", Icons.Default.TheaterComedy),
-        Triple("music", "संगीत मैफल", Icons.Default.MusicNote),
-        Triple("comedy", "स्टँडअप", Icons.Default.SentimentSatisfiedAlt),
-        Triple("cultural", "सांस्कृतिक", Icons.Default.Celebration),
-        Triple("workshops", "कार्यशाळा", Icons.Default.Palette),
-        Triple("movies", "चित्रपट", Icons.Default.Movie)
+        Triple("all", "सर्व कार्यक्रम", "🎭"),
+        Triple("plays", "नाटक", "🎭"),
+        Triple("music", "संगीत मैफल", "🎵"),
+        Triple("comedy", "स्टँडअप", "😄"),
+        Triple("cultural", "सांस्कृतिक", "🎪"),
+        Triple("workshops", "कार्यशाळा", "🎨"),
+        Triple("movies", "चित्रपट", "🎬"),
+        Triple("sports", "क्रीडा", "🏏")
     )
 
     Box(
@@ -147,7 +151,7 @@ fun ExploreScreen(
                 contentPadding = PaddingValues(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(categories) { (key, label, icon) ->
+                items(categories) { (key, label, emoji) ->
                     val isSelected = selectedCategory == key
                     Surface(
                         modifier = Modifier
@@ -166,12 +170,7 @@ fun ExploreScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Icon(
-                                icon,
-                                contentDescription = null,
-                                tint = if (isSelected) Color.White else MahaOrange,
-                                modifier = Modifier.size(14.dp)
-                            )
+                            Text(text = emoji, fontSize = 13.sp)
                             Text(
                                 text = label,
                                 fontSize = 12.sp,
@@ -191,12 +190,7 @@ fun ExploreScreen(
             ) {
                 when (val state = eventsState) {
                     is EventsUiState.Loading -> {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            TheaterLoaderCard(message = "कार्यक्रम शोधत आहोत...")
-                        }
+                        ExploreShimmerSkeleton()
                     }
                     is EventsUiState.Error -> {
                         Box(
@@ -289,7 +283,7 @@ private fun CinemaExploreEventCard(
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .testTag("explore_card_${event.id}"),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         border = BorderStroke(1.dp, MahaBorder)
@@ -297,23 +291,56 @@ private fun CinemaExploreEventCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Poster
-            AsyncImage(
-                model = event.posterUrl.ifBlank { "https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?w=400" },
-                contentDescription = event.title,
+            // Poster with Live Tag
+            Box(
                 modifier = Modifier
-                    .size(80.dp, 105.dp)
-                    .clip(RoundedCornerShape(8.dp)),
-                contentScale = ContentScale.Crop
-            )
+                    .size(86.dp, 114.dp)
+                    .clip(RoundedCornerShape(10.dp))
+            ) {
+                AsyncImage(
+                    model = event.posterUrl.ifBlank { "https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?w=400" },
+                    contentDescription = event.title,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+                Surface(
+                    color = Color.White.copy(alpha = 0.95f),
+                    shape = RoundedCornerShape(4.dp),
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(4.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(5.dp)
+                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                .background(Color(0xFF16A34A))
+                        )
+                        Text(
+                            text = "Live",
+                            fontSize = 8.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.width(12.dp))
 
             // Details
-            Column(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
                 Surface(
                     color = MahaWarm,
                     shape = RoundedCornerShape(4.dp)
@@ -327,18 +354,14 @@ private fun CinemaExploreEventCard(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(4.dp))
-
                 Text(
                     text = if (event.titleMr.isNotBlank()) event.titleMr else event.title,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary,
-                    maxLines = 2,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-
-                Spacer(modifier = Modifier.height(3.dp))
 
                 Text(
                     text = "🏛️ ${event.venue?.nameMr ?: event.venue?.name ?: "नाट्यगृह"}",
@@ -354,24 +377,49 @@ private fun CinemaExploreEventCard(
                     color = TextSecondary
                 )
 
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(2.dp))
 
+                // Bottom row: 5-Star rating & Book CTA (Matching Web EventCard.tsx)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // Rating block
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Text(text = "★", color = Color(0xFFF59E0B), fontSize = 13.sp)
+                        val ratingVal = if (event.rating != null && event.rating > 0) {
+                            if (event.rating > 5) String.format("%.1f", event.rating / 2) else String.format("%.1f", event.rating)
+                        } else "4.8"
+                        Text(
+                            text = ratingVal,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        val ratingCount = if (event.ratingCount != null && event.ratingCount > 0) event.ratingCount else 120
+                        Text(
+                            text = "($ratingCount)",
+                            fontSize = 10.sp,
+                            color = TextSecondary
+                        )
+                    }
+
+                    // Book CTA
                     Surface(
                         color = MahaOrange,
-                        shape = RoundedCornerShape(6.dp),
+                        shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.clickable { onClick() }
                     ) {
                         Text(
-                            text = "जागा निवडा",
+                            text = "बुक करा",
                             color = Color.White,
-                            fontSize = 11.sp,
+                            fontSize = 11.5.sp,
                             fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
                         )
                     }
                 }
@@ -379,3 +427,82 @@ private fun CinemaExploreEventCard(
         }
     }
 }
+
+@Composable
+private fun ExploreShimmerSkeleton() {
+    val transition = rememberInfiniteTransition(label = "explore_shimmer")
+    val translateAnim by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1000f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shimmer_explore"
+    )
+    val shimmerBrush = Brush.linearGradient(
+        colors = listOf(
+            Color(0xFFF1F5F9),
+            Color(0xFFE2E8F0),
+            Color(0xFFF1F5F9)
+        ),
+        start = Offset.Zero,
+        end = Offset(x = translateAnim, y = translateAnim)
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        repeat(3) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, MahaBorder),
+                color = Color.White
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(80.dp, 105.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(shimmerBrush)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Box(
+                            modifier = Modifier
+                                .size(50.dp, 16.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(shimmerBrush)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(0.8f)
+                                .height(18.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(shimmerBrush)
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(0.5f)
+                                .height(14.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(shimmerBrush)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+

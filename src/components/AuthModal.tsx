@@ -62,22 +62,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     onClose();
   };
 
-  const handleGoogleLogin = async () => {
-    try {
-      setLoading(true);
-      setError('');
-      const res = await fetch('/api/auth/google');
-      const data = await res.json();
-      if (res.ok && data.url) {
-        window.location.href = data.url;
-      } else {
-        setError(data.error || 'Google login failed to initialize.');
-        setLoading(false);
-      }
-    } catch {
-      setError('Google login network error.');
-      setLoading(false);
-    }
+  const handleGoogleLogin = () => {
+    setLoading(true);
+    setError('');
+    window.location.href = '/api/auth/google?direct=true';
   };
 
   // Step 1: Submit Email to check if password exists or OTP needed

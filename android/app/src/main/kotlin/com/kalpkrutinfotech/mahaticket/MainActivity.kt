@@ -7,6 +7,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.*
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -31,6 +32,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.navigation.navDeepLink
 import com.kalpkrutinfotech.mahaticket.theme.*
 import com.kalpkrutinfotech.mahaticket.ui.components.BilingualTopBar
 import com.kalpkrutinfotech.mahaticket.ui.screens.*
@@ -72,7 +74,7 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
     data object Admin : Screen("admin_control", "नियंत्रण", Icons.Default.AdminPanelSettings)
     data object Organizer : Screen("organizer_dashboard", "आयोजक", Icons.Default.Dashboard)
     data object QrScanner : Screen("qr_scanner", "स्कॅनर", Icons.Default.QrCodeScanner)
-    data object Chatbot : Screen("chatbot", "नाट्यमित्र", Icons.Default.SmartToy)
+    data object Chatbot : Screen("chatbot", "टिकिटमित्र", Icons.Default.SmartToy)
     data object Notifications : Screen("notifications", "सूचना", Icons.Default.Notifications)
 }
 
@@ -203,22 +205,27 @@ fun MahaTicketRoot() {
                 BookingRoutes.CHECKOUT
             )
             if (showFab) {
-                FloatingActionButton(
+                Surface(
                     onClick = { navController.navigate(Screen.Chatbot.route) },
-                    containerColor = GoldAccent,
-                    contentColor = Color.Black,
-                    modifier = Modifier.testTag("ai_assistant_fab")
+                    shape = androidx.compose.foundation.shape.CircleShape,
+                    color = MahaOrange,
+                    shadowElevation = 4.dp,
+                    border = BorderStroke(1.5.dp, Color.White),
+                    modifier = Modifier
+                        .size(52.dp)
+                        .testTag("ai_assistant_fab")
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
                     ) {
-                        Text(text = "🎭", fontSize = 18.sp)
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(text = "🎭", fontSize = 16.sp)
                         Text(
-                            text = if (currentLanguage == AppLanguage.MARATHI) "नाट्यमित्र AI" else "NatyaMitra",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
+                            text = "तिकीटमित्र",
+                            fontSize = 7.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
                         )
                     }
                 }
@@ -301,6 +308,9 @@ fun MahaTicketRoot() {
                         viewModel = bookingViewModel,
                         onNavigateToHome = {
                             navController.navigate(Screen.Home.route)
+                        },
+                        onNavigateToLogin = {
+                            navController.navigate(BookingRoutes.LOGIN)
                         }
                     )
                 }
@@ -347,7 +357,12 @@ fun MahaTicketRoot() {
                 // Booking Flow screens
                 composable(
                     route = BookingRoutes.EVENT_DETAIL,
-                    arguments = listOf(navArgument("eventId") { type = NavType.IntType })
+                    arguments = listOf(navArgument("eventId") { type = NavType.IntType }),
+                    deepLinks = listOf(
+                        navDeepLink { uriPattern = "https://mahaticket.kalpkrutinfotech.com/events/{eventId}" },
+                        navDeepLink { uriPattern = "https://ticketghar.com/events/{eventId}" },
+                        navDeepLink { uriPattern = "mahaticket://app/events/{eventId}" }
+                    )
                 ) { backStackEntry ->
                     val eventId = backStackEntry.arguments?.getInt("eventId") ?: 0
                     EventDetailScreen(
@@ -483,6 +498,7 @@ fun TheatricalBottomNavigationBar(
             Screen.Home,
             Screen.Explore,
             Screen.Tickets,
+            Screen.Offers,
             Screen.Profile
         )
     }
@@ -503,10 +519,11 @@ fun TheatricalBottomNavigationBar(
             screens.forEach { screen ->
                 val isSelected = currentRoute == screen.route
                 val labelText = when (screen) {
-                    Screen.Home -> "मुखपृष्ठ"
+                    Screen.Home -> "मुख्यपृष्ठ"
                     Screen.Explore -> "शोधा"
                     Screen.Tickets -> "माझी तिकिटे"
-                    Screen.Profile -> "प्रोफाइल"
+                    Screen.Offers -> "ऑफर्स"
+                    Screen.Profile -> "प्रोफाईल"
                     else -> screen.title
                 }
 

@@ -83,8 +83,15 @@ export function verifyPaymentSignature(orderId: string, paymentId: string, signa
     .update(`${orderId}|${paymentId}`)
     .digest('hex');
 
+  const expectedBuf = Buffer.from(expectedSignature, 'utf8');
+  const actualBuf = Buffer.from(signature, 'utf8');
+
+  if (expectedBuf.length !== actualBuf.length) {
+    return false;
+  }
+
   // Constant-time comparison to prevent timing attacks
-  return crypto.timingSafeEqual(Buffer.from(expectedSignature), Buffer.from(signature));
+  return crypto.timingSafeEqual(expectedBuf, actualBuf);
 }
 
 /**
@@ -94,7 +101,7 @@ export function verifyPaymentSignature(orderId: string, paymentId: string, signa
  * @returns true if signature is valid
  */
 export function verifyWebhookSignature(body: string, signature: string): boolean {
-  const webhookSecret = process.env.PAYMENT_WEBHOOK_SECRET;
+  const webhookSecret = process.env.PAYMENT_WEBHOOK_SECRET || process.env.RAZORPAY_WEBHOOK_SECRET;
 
   if (!webhookSecret || webhookSecret.toLowerCase().includes('placeholder')) {
     console.warn('Webhook secret not configured - skipping signature verification');
@@ -107,7 +114,12 @@ export function verifyWebhookSignature(body: string, signature: string): boolean
     .digest('hex');
 
   try {
-    return crypto.timingSafeEqual(Buffer.from(expectedSignature), Buffer.from(signature));
+    const expectedBuf = Buffer.from(expectedSignature, 'utf8');
+    const actualBuf = Buffer.from(signature, 'utf8');
+    if (expectedBuf.length !== actualBuf.length) {
+      return false;
+    }
+    return crypto.timingSafeEqual(expectedBuf, actualBuf);
   } catch (error) {
     console.error('Webhook signature verification failed:', error);
     return false;

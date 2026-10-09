@@ -59,37 +59,44 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
           </div>
 
-          {/* Role Switcher Pill */}
+          {/* Role Header Info / Badge */}
           <div className="flex items-center gap-3">
-            <div className="bg-[#FFF7ED] border border-[#FFEDD5] p-1 rounded-xl flex items-center gap-1 shadow-inner">
-              <button
-                onClick={() => setCurrentRole('SUPER_ADMIN')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-                  currentRole === 'SUPER_ADMIN'
-                    ? 'bg-[#A33900] text-white shadow-sm'
-                    : 'text-[#64748B] hover:text-[#141B2B]'
-                }`}
-              >
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>सुपर अ‍ॅडमिन (Admin)</span>
-              </button>
-              <button
-                onClick={() => setCurrentRole('ORGANIZER')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-                  currentRole === 'ORGANIZER'
-                    ? 'bg-[#A33900] text-white shadow-sm'
-                    : 'text-[#64748B] hover:text-[#141B2B]'
-                }`}
-              >
-                <Building2 className="w-3.5 h-3.5" />
-                <span>आयोजक (Organizer)</span>
-              </button>
-            </div>
+            {!isInitialOrg ? (
+              <div className="bg-[#FFF7ED] border border-[#FFEDD5] p-1 rounded-xl flex items-center gap-1 shadow-inner">
+                <button
+                  onClick={() => setCurrentRole('SUPER_ADMIN')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                    currentRole === 'SUPER_ADMIN'
+                      ? 'bg-[#A33900] text-white shadow-sm'
+                      : 'text-[#64748B] hover:text-[#141B2B]'
+                  }`}
+                >
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>सुपर अ‍ॅडमिन (Admin)</span>
+                </button>
+                <button
+                  onClick={() => setCurrentRole('ORGANIZER')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                    currentRole === 'ORGANIZER'
+                      ? 'bg-[#A33900] text-white shadow-sm'
+                      : 'text-[#64748B] hover:text-[#141B2B]'
+                  }`}
+                >
+                  <Building2 className="w-3.5 h-3.5" />
+                  <span>आयोजक व्ह्यू (Organizer View)</span>
+                </button>
+              </div>
+            ) : (
+              <div className="bg-orange-100 border border-orange-200 text-[#A33900] px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5">
+                <Building2 className="w-4 h-4 text-[#A33900]" />
+                <span>अधिकृत आयोजक कन्सोल (Organizer Access)</span>
+              </div>
+            )}
 
             {onLogout && (
               <button
                 onClick={onLogout}
-                className="text-xs font-semibold text-[#64748B] hover:text-[#A33900] px-3 py-1.5 rounded-lg border border-[#E2E8F0] hover:bg-slate-50 transition"
+                className="text-xs font-semibold text-[#64748B] hover:text-[#A33900] px-3 py-1.5 rounded-lg border border-[#E2E8F0] hover:bg-slate-50 transition cursor-pointer"
               >
                 लॉगआउट
               </button>

@@ -22,12 +22,14 @@ import {
   Calendar,
   Sparkles,
   Info,
+  Loader2,
 } from 'lucide-react';
 import { Header } from '@/src/components/Header';
 import { MTTicketLoader } from '@/src/components/ui/MTSkeleton';
 import { SeatMapModal } from '@/src/components/SeatMapModal';
 import { CheckoutDrawer } from '@/src/components/CheckoutDrawer';
 import { TicketPassModal } from '@/src/components/TicketPassModal';
+import { AuthModal } from '@/src/components/AuthModal';
 
 
 interface EventDetail {
@@ -100,106 +102,121 @@ export default function EventDetailPage() {
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [confirmedBooking, setConfirmedBooking] = useState<any>(null);
   const [showVideoModal, setShowVideoModal] = useState(false);
+  const [showPhotoModal, setShowPhotoModal] = useState(false);
+  const [activePhotoIndex, setActivePhotoIndex] = useState(0);
 
-  // Reviews state
-  const [reviews, setReviews] = useState<any[]>([
-    {
-      id: 'rev-1',
-      author: 'राहुल जोशी',
-      city: 'पुणे',
-      rating: 5,
-      date: 'काल',
-      comment: 'अतिशय विचार करायला लावणारे कौटुंबिक नाटक. शेवटच्या २० मिनिटांतील संवाद डोळ्यात पाणी आणतात. प्रसाद ओक आणि मुक्ता बर्वे यांचा अभिनय अप्रतिम!',
-      verified: true,
-      helpful: 42,
-    },
-    {
-      id: 'rev-2',
-      author: 'स्नेहल कुलकर्णी',
-      city: 'मुंबई',
-      rating: 5,
-      date: '३ दिवसांपूर्वी',
-      comment: 'मुक्ता बर्वे आणि प्रसाद ओक यांच्यातील जुगलबंदी पाहण्यासारखी आहे. आधुनिक संसारातील खरीखुरी गोष्ट. सहकुटुंब जरूर पाहावे.',
-      verified: true,
-      helpful: 28,
-    },
-    {
-      id: 'rev-3',
-      author: 'अमित देसाई',
-      city: 'नाशिक',
-      rating: 4,
-      date: '५ दिवसांपूर्वी',
-      comment: 'दिग्दर्शन उत्तम. संगीताची जोड सुरेख आहे. बालगंधर्व रंगमंदिरात प्रयोग पाहण्याचा आनंद वेगळाच!',
-      verified: true,
-      helpful: 19,
-    },
-  ]);
+  // Database-backed Reviews state
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [reviewStats, setReviewStats] = useState({
+    totalCount: 0,
+    averageRating: 0,
+    breakdown: { five: 0, four: 0, three: 0, two: 0, one: 0 },
+  });
+  const [hasUserReviewed, setHasUserReviewed] = useState(false);
+  const [currentUser, setCurrentUser] = useState<{ id: number; name: string; email: string } | null>(null);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [userRating, setUserRating] = useState(5);
   const [hoverRating, setHoverRating] = useState(0);
-  const [reviewerName, setReviewerName] = useState('');
   const [reviewCity, setReviewCity] = useState('');
   const [reviewComment, setReviewComment] = useState('');
   const [submittingReview, setSubmittingReview] = useState(false);
   const [reviewSuccess, setReviewSuccess] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
 
   // Accordion state for rules & advisory
   const [openRuleIndex, setOpenRuleIndex] = useState<number | null>(0);
 
-  useEffect(() => {
-    if (typeof window !== 'undefined' && eventId) {
-      try {
-        const stored = localStorage.getItem(`mahaticket_reviews_${eventId}`);
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setReviews((prev) => [...parsed, ...prev]);
-          }
-        }
-      } catch {
-        // ignore
+  const fetchReviews = async () => {
+    if (!eventId) return;
+    try {
+      const res = await fetch(`/api/events/${eventId}/reviews`, { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        setReviews(data.reviews || []);
+        setReviewStats({
+          totalCount: data.totalCount ?? 0,
+          averageRating: data.averageRating ?? 0,
+          breakdown: data.breakdown || { five: 0, four: 0, three: 0, two: 0, one: 0 },
+        });
+        setHasUserReviewed(Boolean(data.hasUserReviewed));
+        setCurrentUser(data.currentUser || null);
       }
+    } catch (err) {
+      console.warn('Failed to load reviews', err);
     }
+  };
+
+  useEffect(() => {
+    fetchReviews();
   }, [eventId]);
 
-  const handleSubmitReview = (e: React.FormEvent) => {
+  const handleOpenReviewModal = () => {
+    if (!currentUser) {
+      setAuthModalOpen(true);
+      return;
+    }
+    if (hasUserReviewed) {
+      alert(
+        language === 'mr'
+          ? 'तुम्ही या कार्यक्रमाचे परीक्षण आधीच नोंदवले आहे (You have already reviewed this event).'
+          : 'You have already reviewed this event.'
+      );
+      return;
+    }
+    setReviewError(null);
+    setShowReviewModal(true);
+  };
+
+  const handleSubmitReview = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reviewComment.trim() || !reviewerName.trim()) return;
-
-    setSubmittingReview(true);
-    const newRev = {
-      id: `rev-${Date.now()}`,
-      author: reviewerName.trim(),
-      city: reviewCity.trim() || 'महाराष्ट्र',
-      rating: userRating,
-      date: 'आत्ताच',
-      comment: reviewComment.trim(),
-      verified: true,
-      helpful: 1,
-    };
-
-    const updated = [newRev, ...reviews];
-    setReviews(updated);
-
-    if (typeof window !== 'undefined' && eventId) {
-      try {
-        const stored = localStorage.getItem(`mahaticket_reviews_${eventId}`);
-        const parsed = stored ? JSON.parse(stored) : [];
-        localStorage.setItem(`mahaticket_reviews_${eventId}`, JSON.stringify([newRev, ...parsed]));
-      } catch {
-        // ignore
-      }
+    if (!currentUser) {
+      setAuthModalOpen(true);
+      return;
+    }
+    if (!reviewComment.trim()) {
+      setReviewError(
+        language === 'mr'
+          ? 'कृपया आपले मत किंवा परीक्षण लिहा'
+          : 'Please enter your review comment'
+      );
+      return;
     }
 
-    setSubmittingReview(false);
-    setReviewSuccess(true);
-    setTimeout(() => {
-      setReviewSuccess(false);
-      setShowReviewModal(false);
-      setReviewComment('');
-      setReviewerName('');
-      setReviewCity('');
-    }, 1500);
+    try {
+      setSubmittingReview(true);
+      setReviewError(null);
+
+      const res = await fetch(`/api/events/${eventId}/reviews`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rating: userRating,
+          comment: reviewComment.trim(),
+          city: reviewCity.trim() || undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'परीक्षण नोंदवताना त्रुटी आली');
+      }
+
+      setReviewSuccess(true);
+      setHasUserReviewed(true);
+      await fetchReviews();
+
+      setTimeout(() => {
+        setReviewSuccess(false);
+        setShowReviewModal(false);
+        setReviewComment('');
+        setReviewCity('');
+      }, 1500);
+    } catch (err: any) {
+      setReviewError(err.message || 'परीक्षण नोंदवताना त्रुटी आली');
+    } finally {
+      setSubmittingReview(false);
+    }
   };
 
   const formatRichDescription = (text: string) => {
@@ -223,9 +240,7 @@ export default function EventDetailPage() {
           const json = await res.json();
           if (json.event) {
             setEvent(json.event);
-            if (json.event.sessions && json.event.sessions.length > 0) {
-              setSelectedSession(json.event.sessions[0]);
-            }
+            // User must explicitly pick a showtime session, do not auto-select
             return;
           }
         }
@@ -256,11 +271,34 @@ export default function EventDetailPage() {
     setConfirmedBooking(result);
   };
 
-  const handleShare = () => {
-    if (typeof window !== 'undefined') {
-      navigator.clipboard.writeText(window.location.href);
+  const handleShare = async () => {
+    if (typeof window === 'undefined') return;
+
+    const shareUrl = window.location.href;
+    const shareTitle = `${event?.titleMr || event?.title || 'महाटिकिट'} - तिकीट बुकिंग`;
+    const shareVenue = event?.venue?.nameMr || event?.venue?.name || 'नाट्यगृह';
+    const shareText = `🎭 '${event?.titleMr || event?.title}' - प्रयोगाचे तिकीट बुक करा!\n📍 ठिकाण: ${shareVenue}\n🎟️ महाटिकिटवर त्वरित व थेट आसन आरक्षण:\n${shareUrl}`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: shareTitle,
+          text: shareText,
+          url: shareUrl,
+        });
+        return;
+      } catch (err: any) {
+        if (err.name === 'AbortError') return;
+      }
+    }
+
+    // Fallback: Copy to clipboard
+    try {
+      await navigator.clipboard.writeText(shareUrl);
       setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 2000);
+      setTimeout(() => setCopiedLink(false), 2500);
+    } catch {
+      // Ignored
     }
   };
 
@@ -344,9 +382,8 @@ export default function EventDetailPage() {
             </button>
             <button
               onClick={() => setSaved(!saved)}
-              className={`flex items-center gap-1 px-3 py-1 rounded-full bg-white shadow-xs hover:shadow-sm transition-all text-xs font-semibold ${
-                saved ? 'text-[#EA580C]' : 'text-[#64748B] hover:text-[#EA580C]'
-              }`}
+              className={`flex items-center gap-1 px-3 py-1 rounded-full bg-white shadow-xs hover:shadow-sm transition-all text-xs font-semibold ${saved ? 'text-[#EA580C]' : 'text-[#64748B] hover:text-[#EA580C]'
+                }`}
             >
               <Bookmark className={`h-3.5 w-3.5 ${saved ? 'fill-[#EA580C]' : ''}`} />
               <span>{saved ? 'जतन केले' : 'जतन करा'}</span>
@@ -379,12 +416,16 @@ export default function EventDetailPage() {
                 <div className="absolute bottom-3 left-3 right-3 p-2.5 rounded-xl bg-[#141B2B]/90 backdrop-blur-md text-white flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
                     <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                    <span className="text-sm font-bold">४.८ / ५</span>
-                    <span className="text-[10px] text-white/70">({reviews.length} मते)</span>
+                    <span className="text-sm font-bold">
+                      {reviewStats.totalCount > 0 ? `${reviewStats.averageRating.toFixed(1)} / ५` : 'नवीन'}
+                    </span>
+                    <span className="text-[10px] text-white/70">
+                      ({reviewStats.totalCount > 0 ? `${reviewStats.totalCount} मते` : 'अद्याप रेटिंग नाही'})
+                    </span>
                   </div>
                   <button
                     type="button"
-                    onClick={() => setShowReviewModal(true)}
+                    onClick={handleOpenReviewModal}
                     className="px-2.5 py-1 rounded-lg bg-[#EA580C] text-white text-[10px] font-bold hover:bg-[#A33900] transition-colors cursor-pointer"
                   >
                     परीक्षण द्या
@@ -410,21 +451,33 @@ export default function EventDetailPage() {
                   </div>
                 </div>
 
-                <div className="relative aspect-video rounded-lg overflow-hidden cursor-pointer shadow-xs bg-slate-100">
+                <div
+                  onClick={() => {
+                    setActivePhotoIndex(0);
+                    setShowPhotoModal(true);
+                  }}
+                  className="relative aspect-video rounded-lg overflow-hidden cursor-pointer shadow-xs bg-slate-100 group/img"
+                >
                   <img
                     src="https://lh3.googleusercontent.com/aida-public/AB6AXuAi380G45imoiU_ykp9lqaSetPxGCs4JixChO1OysCiXvWZTjDdqWanVFvDqLKLDyak4apv7GVJQKDeUkzGge-S1o64M94T0voAk_TwYaUme8YerJFhJZ37rt2tD-S7cF-bhXk3Mz1JmfOSEHa5JDNRFEJygtOdNVvZFd0P99-ddy7c6u2JDPNAqAQpsA-ko9OaZkyglII5Md9cJnPxadW8ujcj6hZR6pkrLtXPBnY"
                     alt="Play photo 1"
-                    className="w-full h-full object-cover hover:scale-105 transition-transform"
+                    className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-300"
                   />
                 </div>
 
-                <div className="relative aspect-video rounded-lg overflow-hidden cursor-pointer shadow-xs bg-slate-100">
+                <div
+                  onClick={() => {
+                    setActivePhotoIndex(1);
+                    setShowPhotoModal(true);
+                  }}
+                  className="relative aspect-video rounded-lg overflow-hidden cursor-pointer shadow-xs bg-slate-100 group/img"
+                >
                   <img
                     src="https://lh3.googleusercontent.com/aida-public/AB6AXuCVL9_Ox5vPd0mccgYaRBsJxQWJy_q_OZmBPboNnJGZcCJezx1kr90Ig5FaY7yWUAl-6CKqqJoxnjuK37wjPSLzSdMRgNBGw6xM4G8rtiZUXEa4brEdWAnqmjEv8-ZnwC5lYIfYsKNd_CvrgaBkWuQdbF02e-iiiPFo1QEntOepqM9LLs_6V_TTmxGlMpzuKAw4m5vYUVoLV1jxHT3yvHB_ce6g09mSZfHPvv99nBY"
                     alt="Play photo 2"
-                    className="w-full h-full object-cover hover:scale-105 transition-transform"
+                    className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-300"
                   />
-                  <div className="absolute inset-0 bg-[#141B2B]/60 flex items-center justify-center text-white text-xs font-bold">
+                  <div className="absolute inset-0 bg-[#141B2B]/60 group-hover/img:bg-[#141B2B]/75 transition-colors flex items-center justify-center text-white text-xs font-bold">
                     +१२ फोटो
                   </div>
                 </div>
@@ -469,21 +522,26 @@ export default function EventDetailPage() {
                 <div className="w-2 h-5 rounded-full bg-[#EA580C]" />
                 <h3 className="text-base font-bold text-[#141B2B]">नाट्य कथानक (Synopsis)</h3>
               </div>
-              <div 
+              <div
                 className="text-xs text-[#64748B] leading-relaxed space-y-2"
                 dangerouslySetInnerHTML={{
                   __html: formatRichDescription(
-                    event.descriptionMr || event.description || "'नियम व अटी लागू' हे आजच्या काळातील नात्यांचे वास्तव मांडणारे एक खुसखुशीत तरीही विचार करायला लावणारे कौटुंबिक नाटक आहे. आधुनिक संसार, करिअर, अहंकार आणि अटींच्या गुंत्यात अडकलेल्या एका जोडप्याचा मनोरंजक व भावूक प्रवास."
+                    (event.descriptionMr && event.descriptionMr.trim() !== 'क्युए वर्णन')
+                      ? event.descriptionMr
+                      : (event.description && event.description.trim() !== 'QA Description')
+                        ? event.description
+                        : `'${event.titleMr || event.title}' हे आजच्या काळातील नात्यांचे वास्तव मांडणारे एक खुसखुशीत तरीही विचार करायला लावणारे कौटुंबिक नाटक आहे. आधुनिक संसार, करिअर, अहंकार आणि परस्पर समजुतीच्या गुंत्यात अडकलेल्या पात्रांचा मनोरंजक व भावूक प्रवास. रंगभूमीवरील उत्कृष्ट दिग्दर्शन आणि कलाकारांचा जिवंत अभिनय प्रेक्षकांना खिळवून ठेवतो.`
                   )
                 }}
               />
-              <div 
-                onClick={() => setShowReviewModal(true)}
-                className="pt-1 flex items-center gap-1.5 text-[#EA580C] text-xs font-bold cursor-pointer hover:underline"
+              <button
+                type="button"
+                onClick={handleOpenReviewModal}
+                className="pt-1 flex items-center gap-1.5 text-[#EA580C] text-xs font-bold cursor-pointer hover:underline text-left bg-transparent border-0 p-0"
               >
                 <span>सविस्तर परीक्षण वाचा व मत नोंदवा</span>
                 <ChevronRight className="h-3.5 w-3.5" />
-              </div>
+              </button>
             </div>
           </div>
 
@@ -587,11 +645,10 @@ export default function EventDetailPage() {
                       key={idx}
                       type="button"
                       onClick={() => setSelectedDateIndex(idx)}
-                      className={`flex-shrink-0 flex flex-col items-center justify-center w-20 py-2.5 rounded-xl transition-all shadow-xs cursor-pointer ${
-                        isSelected
+                      className={`flex-shrink-0 flex flex-col items-center justify-center w-20 py-2.5 rounded-xl transition-all shadow-xs cursor-pointer ${isSelected
                           ? 'bg-[#EA580C] text-white'
                           : 'bg-[#FFF7ED] hover:bg-orange-100 text-[#141B2B]'
-                      }`}
+                        }`}
                     >
                       <span className={`text-[10px] uppercase font-bold ${isSelected ? 'text-white/90' : 'text-[#64748B]'}`}>
                         {d.label}
@@ -655,11 +712,10 @@ export default function EventDetailPage() {
                             <button
                               type="button"
                               onClick={() => handleBookSession(sess)}
-                              className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 ${
-                                isSelected
+                              className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 ${isSelected
                                   ? 'bg-[#EA580C] text-white shadow-sm'
                                   : 'bg-[#FFF7ED] hover:bg-[#EA580C] text-[#EA580C] hover:text-white'
-                              }`}
+                                }`}
                             >
                               <span>{isSelected ? 'निवडले ✓' : 'निवडा'}</span>
                               <ChevronRight className="h-4 w-4" />
@@ -816,11 +872,12 @@ export default function EventDetailPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setShowReviewModal(true)}
-                  className="px-4 py-2 rounded-xl bg-[#EA580C] hover:bg-[#A33900] text-white text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95"
+                  onClick={handleOpenReviewModal}
+                  className={`px-4 py-2 rounded-xl text-white text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95 ${hasUserReviewed ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-[#EA580C] hover:bg-[#A33900]'
+                    }`}
                 >
                   <Star className="h-3.5 w-3.5 fill-white" />
-                  <span>आपले परीक्षण नोंदवा</span>
+                  <span>{hasUserReviewed ? 'परीक्षण नोंदवले आहे ✓' : 'आपले परीक्षण नोंदवा'}</span>
                 </button>
               </div>
 
@@ -828,94 +885,145 @@ export default function EventDetailPage() {
               <div className="p-4 rounded-xl bg-[#FFF7ED] border border-orange-200/60 flex flex-col sm:flex-row items-center gap-6">
                 <div className="flex flex-col items-center sm:items-start text-center sm:text-left shrink-0">
                   <div className="flex items-baseline gap-1.5">
-                    <span className="text-4xl font-extrabold text-[#141B2B]">४.८</span>
+                    <span className="text-4xl font-extrabold text-[#141B2B]">
+                      {reviewStats.totalCount > 0 ? reviewStats.averageRating.toFixed(1) : '–'}
+                    </span>
                     <span className="text-sm font-semibold text-[#64748B]">/ ५</span>
                   </div>
                   <div className="flex items-center gap-1 my-1">
                     {[1, 2, 3, 4, 5].map((s) => (
-                      <Star key={s} className="h-4 w-4 fill-amber-400 text-amber-400" />
+                      <Star
+                        key={s}
+                        className={`h-4 w-4 ${reviewStats.totalCount > 0 && s <= Math.round(reviewStats.averageRating)
+                            ? 'fill-amber-400 text-amber-400'
+                            : 'fill-slate-200 text-slate-200'
+                          }`}
+                      />
                     ))}
                   </div>
-                  <span className="text-xs text-[#64748B] font-medium">एकूण {reviews.length} प्रेक्षक मते</span>
+                  <span className="text-xs text-[#64748B] font-medium">
+                    {reviewStats.totalCount > 0
+                      ? `एकूण ${reviewStats.totalCount} प्रेक्षक मते`
+                      : 'अद्याप रेटिंग नाही (पहिले मत द्या)'}
+                  </span>
                 </div>
 
                 <div className="w-full flex-1 space-y-1.5 border-t sm:border-t-0 sm:border-l border-orange-200/70 pt-3 sm:pt-0 sm:pl-6 text-xs">
                   <div className="flex items-center gap-2">
                     <span className="w-8 text-[11px] font-semibold text-[#64748B]">५ ★</span>
                     <div className="flex-1 h-2 rounded-full bg-orange-100 overflow-hidden">
-                      <div className="h-full bg-[#EA580C] rounded-full w-[88%]" />
+                      <div
+                        className="h-full bg-[#EA580C] rounded-full transition-all duration-500"
+                        style={{ width: `${reviewStats.breakdown.five}%` }}
+                      />
                     </div>
-                    <span className="text-[11px] font-bold text-[#141B2B]">८८%</span>
+                    <span className="text-[11px] font-bold text-[#141B2B]">
+                      {reviewStats.breakdown.five}%
+                    </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="w-8 text-[11px] font-semibold text-[#64748B]">४ ★</span>
                     <div className="flex-1 h-2 rounded-full bg-orange-100 overflow-hidden">
-                      <div className="h-full bg-amber-500 rounded-full w-[9%]" />
+                      <div
+                        className="h-full bg-amber-500 rounded-full transition-all duration-500"
+                        style={{ width: `${reviewStats.breakdown.four}%` }}
+                      />
                     </div>
-                    <span className="text-[11px] font-bold text-[#141B2B]">९%</span>
+                    <span className="text-[11px] font-bold text-[#141B2B]">
+                      {reviewStats.breakdown.four}%
+                    </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="w-8 text-[11px] font-semibold text-[#64748B]">३ ★</span>
                     <div className="flex-1 h-2 rounded-full bg-orange-100 overflow-hidden">
-                      <div className="h-full bg-amber-400 rounded-full w-[2%]" />
+                      <div
+                        className="h-full bg-amber-400 rounded-full transition-all duration-500"
+                        style={{ width: `${reviewStats.breakdown.three}%` }}
+                      />
                     </div>
-                    <span className="text-[11px] font-bold text-[#141B2B]">२%</span>
+                    <span className="text-[11px] font-bold text-[#141B2B]">
+                      {reviewStats.breakdown.three}%
+                    </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="w-8 text-[11px] font-semibold text-[#64748B]">२ ★</span>
                     <div className="flex-1 h-2 rounded-full bg-orange-100 overflow-hidden">
-                      <div className="h-full bg-slate-300 rounded-full w-[1%]" />
+                      <div
+                        className="h-full bg-slate-300 rounded-full transition-all duration-500"
+                        style={{ width: `${reviewStats.breakdown.two}%` }}
+                      />
                     </div>
-                    <span className="text-[11px] font-bold text-[#141B2B]">१%</span>
+                    <span className="text-[11px] font-bold text-[#141B2B]">
+                      {reviewStats.breakdown.two}%
+                    </span>
                   </div>
                 </div>
               </div>
 
               {/* Review Cards List */}
               <div className="space-y-3">
-                {reviews.map((rev) => (
-                  <div
-                    key={rev.id}
-                    className="p-4 rounded-xl border border-slate-200/80 hover:border-orange-200 bg-white transition space-y-2"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-full bg-orange-100 text-[#EA580C] font-bold text-xs flex items-center justify-center shrink-0">
-                          {rev.author.charAt(0)}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-xs font-bold text-[#141B2B]">{rev.author}</span>
-                            {rev.city && (
-                              <span className="text-[10px] text-[#64748B]">({rev.city})</span>
-                            )}
-                            {rev.verified && (
-                              <span className="text-[10px] px-1.5 py-0.2 rounded bg-green-50 text-green-700 font-semibold border border-green-200/50">
-                                ✓ उपस्थित प्रेक्षक
-                              </span>
-                            )}
+                {reviews.length > 0 ? (
+                  reviews.map((rev) => (
+                    <div
+                      key={rev.id}
+                      className="p-4 rounded-xl border border-slate-200/80 hover:border-orange-200 bg-white transition space-y-2"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-full bg-orange-100 text-[#EA580C] font-bold text-xs flex items-center justify-center shrink-0">
+                            {(rev.author || 'U').charAt(0)}
                           </div>
-                          <span className="text-[10px] text-[#94A3B8]">{rev.date}</span>
+                          <div>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-xs font-bold text-[#141B2B]">{rev.author}</span>
+                              {rev.city && (
+                                <span className="text-[10px] text-[#64748B]">({rev.city})</span>
+                              )}
+                              {rev.verified && (
+                                <span className="text-[10px] px-1.5 py-0.2 rounded bg-green-50 text-green-700 font-semibold border border-green-200/50">
+                                  ✓ उपस्थित प्रेक्षक
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[10px] text-[#94A3B8]">{rev.date}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-0.5">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <Star
+                              key={star}
+                              className={`h-3.5 w-3.5 ${star <= rev.rating
+                                  ? 'fill-amber-400 text-amber-400'
+                                  : 'text-slate-200 fill-slate-200'
+                                }`}
+                            />
+                          ))}
                         </div>
                       </div>
-                      <div className="flex items-center gap-0.5">
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <Star
-                            key={star}
-                            className={`h-3.5 w-3.5 ${
-                              star <= rev.rating
-                                ? 'fill-amber-400 text-amber-400'
-                                : 'text-slate-200 fill-slate-200'
-                            }`}
-                          />
-                        ))}
-                      </div>
+                      <p className="text-xs text-[#334155] leading-relaxed pl-10">
+                        {rev.comment}
+                      </p>
                     </div>
-                    <p className="text-xs text-[#334155] leading-relaxed pl-10">
-                      {rev.comment}
+                  ))
+                ) : (
+                  <div className="p-6 rounded-xl border border-dashed border-orange-200 bg-orange-50/40 text-center space-y-2">
+                    <Star className="h-8 w-8 text-[#EA580C] mx-auto fill-orange-200" />
+                    <p className="text-xs font-bold text-[#141B2B]">
+                      या नाटकाचे अद्याप कोणतेही परीक्षण नोंदवले गेलेले नाही.
                     </p>
+                    <p className="text-[11px] text-[#64748B]">
+                      आपण प्रयोग पाहिला असल्यास आपले पहिले परीक्षण नक्की नोंदवा!
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleOpenReviewModal}
+                      className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#EA580C] text-white text-xs font-bold shadow-xs hover:bg-[#A33900] transition cursor-pointer"
+                    >
+                      <Star className="h-3 w-3 fill-white" />
+                      <span>पहिले मत नोंदवा</span>
+                    </button>
                   </div>
-                ))}
+                )}
               </div>
             </div>
           </div>
@@ -931,7 +1039,7 @@ export default function EventDetailPage() {
             </div>
             <div className="min-w-0">
               <p className="text-xs font-bold text-[#141B2B] truncate">
-                {title} • <span className="text-[#EA580C]">{currentShowSession ? new Date(currentShowSession.sessionStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '०४:३० PM'}</span>
+                {title} • <span className="text-[#EA580C]">{selectedSession ? new Date(selectedSession.sessionStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'शो वेळ निवडा'}</span>
               </p>
               <div className="flex items-center gap-2 text-[10px] text-[#64748B]">
                 <span className="truncate">{venueName}</span>
@@ -944,13 +1052,18 @@ export default function EventDetailPage() {
           <button
             type="button"
             onClick={() => {
-              if (currentShowSession) {
-                handleBookSession(currentShowSession);
+              if (selectedSession) {
+                handleBookSession(selectedSession);
+              } else {
+                const bookingFlow = document.getElementById('booking-flow');
+                if (bookingFlow) {
+                  bookingFlow.scrollIntoView({ behavior: 'smooth' });
+                }
               }
             }}
             className="px-5 py-3 rounded-xl bg-[#EA580C] hover:bg-[#A33900] text-white font-bold text-xs shadow-md transition-all flex items-center gap-2 shrink-0 cursor-pointer active:scale-95"
           >
-            <span>शो निवडा आणि आसन निवडा</span>
+            <span>{selectedSession ? 'आसन निवडा (Select Seats)' : 'शो व वेळ निवडा'}</span>
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
@@ -978,6 +1091,60 @@ export default function EventDetailPage() {
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
               />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Photo Gallery Lightbox Modal */}
+      {showPhotoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4">
+          <div className="relative w-full max-w-4xl overflow-hidden rounded-2xl border border-stone-800 bg-stone-950 p-4">
+            <div className="flex items-center justify-between border-b border-stone-800 pb-3 mb-3">
+              <p className="truncate text-sm font-bold text-white">छायाचित्र दालन (Photo Gallery) — {title}</p>
+              <button
+                type="button"
+                onClick={() => setShowPhotoModal(false)}
+                className="rounded-full p-1.5 text-stone-300 hover:bg-stone-800 hover:text-white transition cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <div className="relative aspect-video w-full rounded-xl overflow-hidden bg-black flex items-center justify-center">
+              <img
+                src={
+                  [
+                    'https://lh3.googleusercontent.com/aida-public/AB6AXuAi380G45imoiU_ykp9lqaSetPxGCs4JixChO1OysCiXvWZTjDdqWanVFvDqLKLDyak4apv7GVJQKDeUkzGge-S1o64M94T0voAk_TwYaUme8YerJFhJZ37rt2tD-S7cF-bhXk3Mz1JmfOSEHa5JDNRFEJygtOdNVvZFd0P99-ddy7c6u2JDPNAqAQpsA-ko9OaZkyglII5Md9cJnPxadW8ujcj6hZR6pkrLtXPBnY',
+                    'https://lh3.googleusercontent.com/aida-public/AB6AXuCVL9_Ox5vPd0mccgYaRBsJxQWJy_q_OZmBPboNnJGZcCJezx1kr90Ig5FaY7yWUAl-6CKqqJoxnjuK37wjPSLzSdMRgNBGw6xM4G8rtiZUXEa4brEdWAnqmjEv8-ZnwC5lYIfYsKNd_CvrgaBkWuQdbF02e-iiiPFo1QEntOepqM9LLs_6V_TTmxGlMpzuKAw4m5vYUVoLV1jxHT3yvHB_ce6g09mSZfHPvv99nBY',
+                    event.posterUrl || 'https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?auto=format&fit=crop&w=1200&q=80',
+                  ][activePhotoIndex] || event.posterUrl
+                }
+                alt={`Photo ${activePhotoIndex + 1}`}
+                className="max-h-[70vh] w-full object-contain"
+              />
+            </div>
+
+            <div className="flex items-center justify-between mt-4 px-2">
+              <span className="text-xs text-stone-400 font-mono">
+                फोटो {activePhotoIndex + 1} / 3
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActivePhotoIndex((prev) => (prev > 0 ? prev - 1 : 2))}
+                  className="px-3 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-white text-xs font-bold transition cursor-pointer"
+                >
+                  ◀ मागे
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActivePhotoIndex((prev) => (prev < 2 ? prev + 1 : 0))}
+                  className="px-3 py-1.5 rounded-lg bg-[#EA580C] hover:bg-[#C2410C] text-white text-xs font-bold transition cursor-pointer"
+                >
+                  पुढे ▶
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1065,11 +1232,10 @@ export default function EventDetailPage() {
                           className="p-1 cursor-pointer transition active:scale-95"
                         >
                           <Star
-                            className={`h-7 w-7 ${
-                              star <= (hoverRating || userRating)
+                            className={`h-7 w-7 ${star <= (hoverRating || userRating)
                                 ? 'fill-amber-400 text-amber-400'
                                 : 'text-slate-300 fill-slate-200'
-                            }`}
+                              }`}
                           />
                         </button>
                       ))}
@@ -1077,43 +1243,42 @@ export default function EventDetailPage() {
                         {hoverRating === 5 || (!hoverRating && userRating === 5)
                           ? '५/५ — उत्कृष्ट'
                           : hoverRating === 4 || (!hoverRating && userRating === 4)
-                          ? '४/५ — खूप छान'
-                          : hoverRating === 3 || (!hoverRating && userRating === 3)
-                          ? '३/५ — छान'
-                          : hoverRating === 2 || (!hoverRating && userRating === 2)
-                          ? '२/५ — साधारण'
-                          : '१/५ — कमी'}
+                            ? '४/५ — खूप छान'
+                            : hoverRating === 3 || (!hoverRating && userRating === 3)
+                              ? '३/५ — छान'
+                              : hoverRating === 2 || (!hoverRating && userRating === 2)
+                                ? '२/५ — साधारण'
+                                : '१/५ — कमी'}
                       </span>
                     </div>
                   </div>
 
-                  {/* Name and City */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-semibold text-[#64748B] mb-1">
-                        आपले पूर्ण नाव *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={reviewerName}
-                        onChange={(e) => setReviewerName(e.target.value)}
-                        placeholder="उदा. राहुल जोशी"
-                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:border-[#EA580C] focus:ring-1 focus:ring-[#EA580C] outline-hidden"
-                      />
+                  {/* Logged in User Profile Info (Auto-filled) */}
+                  <div className="flex items-center gap-3 p-3 rounded-xl bg-orange-50/80 border border-orange-200/70">
+                    <div className="w-8 h-8 rounded-full bg-[#EA580C] text-white flex items-center justify-center font-bold text-xs shrink-0">
+                      {(currentUser?.name || 'U').charAt(0).toUpperCase()}
                     </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-[#64748B] mb-1">
-                        गाव / शहर
-                      </label>
-                      <input
-                        type="text"
-                        value={reviewCity}
-                        onChange={(e) => setReviewCity(e.target.value)}
-                        placeholder="उदा. पुणे / मुंबई"
-                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:border-[#EA580C] focus:ring-1 focus:ring-[#EA580C] outline-hidden"
-                      />
+                    <div className="min-w-0 flex-1 text-xs">
+                      <p className="font-bold text-[#141B2B] truncate">{currentUser?.name}</p>
+                      <p className="text-[11px] text-[#64748B] truncate">{currentUser?.email}</p>
                     </div>
+                    <span className="shrink-0 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      लॉगिन वापरकर्ता ✓
+                    </span>
+                  </div>
+
+                  {/* Optional City */}
+                  <div>
+                    <label className="block text-xs font-semibold text-[#64748B] mb-1">
+                      आपले गाव / शहर (City - ऐच्छिक)
+                    </label>
+                    <input
+                      type="text"
+                      value={reviewCity}
+                      onChange={(e) => setReviewCity(e.target.value)}
+                      placeholder="उदा. पुणे / मुंबई / नाशिक"
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:border-[#EA580C] focus:ring-1 focus:ring-[#EA580C] outline-hidden"
+                    />
                   </div>
 
                   {/* Comment */}
@@ -1131,6 +1296,12 @@ export default function EventDetailPage() {
                     />
                   </div>
 
+                  {reviewError && (
+                    <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-600 font-medium">
+                      {reviewError}
+                    </div>
+                  )}
+
                   {/* Buttons */}
                   <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                     <button
@@ -1142,10 +1313,19 @@ export default function EventDetailPage() {
                     </button>
                     <button
                       type="submit"
-                      disabled={submittingReview}
-                      className="px-5 py-2 rounded-xl text-xs font-bold bg-[#EA580C] hover:bg-[#A33900] text-white shadow-sm transition cursor-pointer disabled:opacity-50"
+                      disabled={submittingReview || hasUserReviewed}
+                      className="px-5 py-2 rounded-xl text-xs font-bold bg-[#EA580C] hover:bg-[#A33900] disabled:bg-slate-300 text-white shadow-sm transition cursor-pointer disabled:cursor-not-allowed flex items-center gap-1.5"
                     >
-                      {submittingReview ? 'जतन करत आहे...' : 'परीक्षण पोस्ट करा'}
+                      {submittingReview ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          <span>जतन करत आहे...</span>
+                        </>
+                      ) : hasUserReviewed ? (
+                        <span>परीक्षण आधीच नोंदवले आहे ✓</span>
+                      ) : (
+                        <span>परीक्षण पोस्ट करा</span>
+                      )}
                     </button>
                   </div>
                 </>
@@ -1154,6 +1334,17 @@ export default function EventDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Auth Modal for Mandatory Login */}
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        onSuccess={() => {
+          setAuthModalOpen(false);
+          fetchReviews();
+        }}
+        initialMessage={language === 'mr' ? 'परीक्षण व रेटिंग नोंदवण्यासाठी कृपया लॉगिन करा' : 'Please login to rate and review this show'}
+      />
     </div>
   );
 }

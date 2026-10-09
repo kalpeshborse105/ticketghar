@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/src/db/index.ts';
+import { db, pool } from '@/src/db/index.ts';
 import { events, venues, organizers, eventSessions, ticketTypes } from '@/src/db/schema.ts';
 import { eq, and, desc } from 'drizzle-orm';
 
@@ -14,6 +14,27 @@ export async function GET(request: Request) {
     const featuredOnly = searchParams.get('featured') === 'true';
 
     let allEventsList: any[] = [];
+
+    // Fetch real rating aggregates from event_reviews table
+    const reviewStatsMap: Record<number, { rating: number; count: number }> = {};
+    try {
+      const statsRes = await pool.query(`
+        SELECT 
+          event_id, 
+          ROUND(AVG(rating)::numeric, 1) as avg_rating, 
+          COUNT(*)::int as count 
+        FROM public.event_reviews 
+        GROUP BY event_id
+      `);
+      statsRes.rows.forEach((r: any) => {
+        reviewStatsMap[Number(r.event_id)] = {
+          rating: Number(r.avg_rating),
+          count: Number(r.count),
+        };
+      });
+    } catch {
+      // Table may not exist yet or empty
+    }
 
     // Base query from database
     const conditions = [eq(events.status, 'published')];
@@ -53,6 +74,7 @@ export async function GET(request: Request) {
             .where(eq(ticketTypes.eventId, item.event.id));
 
           const minPrice = prices.length > 0 ? Math.min(...prices.map((p) => p.price)) : 30000;
+          const stats = reviewStatsMap[item.event.id];
 
           return {
             ...item.event,
@@ -60,6 +82,8 @@ export async function GET(request: Request) {
             organizer: item.organizer,
             sessions,
             minPrice,
+            rating: stats ? stats.rating : 0,
+            ratingCount: stats ? stats.count : 0,
           };
         })
       );

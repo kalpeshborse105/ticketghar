@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
 import { seatInventory, seats, ticketTypes, venueSections, eventSessions, venues, events } from '@/src/db/schema.ts';
 import { eq, and } from 'drizzle-orm';
-import { releaseExpiredHolds } from '@/src/lib/inventory-engine.ts';
+import { releaseExpiredHolds, generateSessionInventory } from '@/src/lib/inventory-engine.ts';
 
 export async function GET(
   request: Request,
@@ -67,59 +67,31 @@ export async function GET(
       .innerJoin(ticketTypes, eq(seatInventory.ticketTypeId, ticketTypes.id))
       .where(eq(seatInventory.sessionId, sessionId));
 
-    // If inventory is empty, auto-generate standard layout so users are never blocked
-    if (inventoryRows.length === 0) {
-      const venueSeats = await db.select().from(seats).where(eq(seats.venueId, venue.id));
-      let currentTTs = await db.select().from(ticketTypes).where(eq(ticketTypes.sessionId, sessionId));
+    // If inventory is empty and venue has seat layout, generate from venue master template
+    if (inventoryRows.length === 0 && venue.hasSeatLayout === 1) {
+      await generateSessionInventory(sessionId, venue.id);
 
-      if (currentTTs.length === 0) {
-        const [defaultTT] = await db
-          .insert(ticketTypes)
-          .values({
-            eventId: event.id,
-            sessionId: session.id,
-            name: 'General Admission / प्रवेशिका',
-            nameMr: 'प्रवेशिका',
-            price: 35000,
-            totalQuota: 100,
-            availableQuota: 100,
-            isSeated: 1,
-          })
-          .returning();
-        currentTTs = [defaultTT];
-      }
-
-      if (venueSeats.length > 0 && currentTTs.length > 0) {
-        const invValues = venueSeats.map((s) => ({
-          sessionId: session.id,
-          seatId: s.id,
-          ticketTypeId: currentTTs[0].id,
-          status: 'available',
-        }));
-        await db.insert(seatInventory).values(invValues);
-
-        // Re-fetch
-        inventoryRows = await db
-          .select({
-            inventoryId: seatInventory.id,
-            status: seatInventory.status,
-            heldByUserId: seatInventory.heldByUserId,
-            holdExpiresAt: seatInventory.holdExpiresAt,
-            seatId: seats.id,
-            rowLabel: seats.rowLabel,
-            seatNumber: seats.seatNumber,
-            seatCode: seats.seatCode,
-            tier: seats.tier,
-            isAccessible: seats.isAccessible,
-            sectionId: seats.sectionId,
-            ticketTypeId: ticketTypes.id,
-            price: ticketTypes.price,
-          })
-          .from(seatInventory)
-          .innerJoin(seats, eq(seatInventory.seatId, seats.id))
-          .innerJoin(ticketTypes, eq(seatInventory.ticketTypeId, ticketTypes.id))
-          .where(eq(seatInventory.sessionId, sessionId));
-      }
+      // Re-fetch
+      inventoryRows = await db
+        .select({
+          inventoryId: seatInventory.id,
+          status: seatInventory.status,
+          heldByUserId: seatInventory.heldByUserId,
+          holdExpiresAt: seatInventory.holdExpiresAt,
+          seatId: seats.id,
+          rowLabel: seats.rowLabel,
+          seatNumber: seats.seatNumber,
+          seatCode: seats.seatCode,
+          tier: seats.tier,
+          isAccessible: seats.isAccessible,
+          sectionId: seats.sectionId,
+          ticketTypeId: ticketTypes.id,
+          price: ticketTypes.price,
+        })
+        .from(seatInventory)
+        .innerJoin(seats, eq(seatInventory.seatId, seats.id))
+        .innerJoin(ticketTypes, eq(seatInventory.ticketTypeId, ticketTypes.id))
+        .where(eq(seatInventory.sessionId, sessionId));
     }
 
     // If no individual seat rows (for general admission), return ticket types quotas

@@ -59,6 +59,11 @@ interface MahaTicketApiService {
         @Body request: ValidateCouponRequest
     ): Response<CouponValidationResponse>
 
+    @POST("/api/tikitmitra/chat")
+    suspend fun chatWithTikitMitra(
+        @Body request: TikitMitraChatRequest
+    ): Response<TikitMitraChatResponse>
+
     @POST("/api/payments/create-order")
     suspend fun createPaymentOrder(
         @Body request: CreatePaymentOrderRequest
@@ -88,6 +93,22 @@ interface MahaTicketApiService {
     suspend fun registerFcmToken(
         @Body request: RegisterTokenRequest
     ): Response<Unit>
+
+    @POST("/api/bookings/release")
+    suspend fun releaseSeats(
+        @Body request: ReleaseSeatsRequest
+    ): Response<ReleaseSeatsResponse>
+
+    @GET("/api/events/{id}/reviews")
+    suspend fun getEventReviews(
+        @Path("id") eventId: Int
+    ): Response<EventReviewsResponse>
+
+    @POST("/api/events/{id}/reviews")
+    suspend fun submitEventReview(
+        @Path("id") eventId: Int,
+        @Body request: SubmitReviewRequest
+    ): Response<SubmitReviewResponse>
 }
 
 // Request & Response DTOs matching Next.js API endpoints
@@ -118,6 +139,9 @@ data class EventResponse(
     val galleryUrls: List<String>? = null,
     val minPrice: Int? = null,
     val featured: Int? = null,
+    val ageGuidance: String? = null,
+    val cast: String? = null,
+    val director: String? = null,
     val venue: VenueResponse? = null,
     val sessions: List<SessionResponse>? = null
 )
@@ -423,5 +447,77 @@ data class AuthUserData(
     val fullName: String? = null,
     val phoneNumber: String? = null,
     val role: String? = null
+)
+
+data class TikitMitraChatRequest(
+    @SerializedName("message") val message: String,
+    @SerializedName("language") val language: String = "mr"
+)
+
+data class TikitMitraAction(
+    @SerializedName("type") val type: String,
+    @SerializedName("label") val label: String,
+    @SerializedName("payload") val payload: Map<String, Any>? = null
+)
+
+data class TikitMitraChatResponse(
+    @SerializedName("success") val success: Boolean = false,
+    @SerializedName("reply") val reply: String = "",
+    @SerializedName("action") val action: TikitMitraAction? = null,
+    @SerializedName("source") val source: String? = null,
+    @SerializedName("error") val error: String? = null
+)
+
+data class ReleaseSeatsRequest(
+    val sessionId: Int,
+    val holdToken: String,
+    val seatIds: List<Int>? = null
+)
+
+data class ReleaseSeatsResponse(
+    val success: Boolean = false,
+    val message: String? = null,
+    val releasedCount: Int = 0,
+    val error: String? = null
+)
+
+data class EventReviewsResponse(
+    val reviews: List<ReviewItemResponse>? = null,
+    val totalCount: Int = 0,
+    val averageRating: Double = 4.8,
+    val breakdown: ReviewBreakdownResponse? = null,
+    val hasUserReviewed: Boolean = false,
+    val error: String? = null
+)
+
+data class ReviewBreakdownResponse(
+    val five: Int = 88,
+    val four: Int = 9,
+    val three: Int = 2,
+    val two: Int = 1,
+    val one: Int = 0
+)
+
+data class ReviewItemResponse(
+    val id: Int,
+    val author: String,
+    val email: String? = null,
+    val city: String? = null,
+    val rating: Int = 5,
+    val date: String? = null,
+    val comment: String,
+    val verified: Boolean = false
+)
+
+data class SubmitReviewRequest(
+    val rating: Int,
+    val comment: String,
+    val city: String? = null
+)
+
+data class SubmitReviewResponse(
+    val success: Boolean = false,
+    val message: String? = null,
+    val error: String? = null
 )
 

@@ -31,6 +31,9 @@ import com.kalpkrutinfotech.mahaticket.ui.viewmodel.BookingViewModel
 import com.kalpkrutinfotech.mahaticket.util.RazorpayPaymentManager
 import com.kalpkrutinfotech.mahaticket.util.UserSessionManager
 
+import androidx.activity.compose.BackHandler
+import kotlinx.coroutines.delay
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CheckoutScreen(
@@ -58,6 +61,29 @@ fun CheckoutScreen(
     var discountAmount by remember { mutableIntStateOf(0) }
     var isProcessing by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var nameError by remember { mutableStateOf<String?>(null) }
+    var phoneError by remember { mutableStateOf<String?>(null) }
+    var emailError by remember { mutableStateOf<String?>(null) }
+
+    // 5-Minute Seat Hold Timer & Discard State
+    var timeLeftSeconds by remember { mutableIntStateOf(300) }
+    var isExpired by remember { mutableStateOf(false) }
+    var showDiscardDialog by remember { mutableStateOf(false) }
+
+    // Timer countdown: 5 minutes (300 seconds)
+    LaunchedEffect(Unit) {
+        while (timeLeftSeconds > 0) {
+            delay(1000L)
+            timeLeftSeconds--
+        }
+        isExpired = true
+        bookingViewModel.releaseHold(sessionId, holdToken, selectedSeats.map { it.seatId })
+    }
+
+    // Intercept system back button
+    BackHandler(enabled = true) {
+        showDiscardDialog = true
+    }
 
     val basePrice = serverPricing?.faceValueTotal?.takeIf { it > 0 } ?: selectedSeats.sumOf { it.price }
     val convenienceFee = serverPricing?.convenienceFee ?: 0
@@ -87,7 +113,7 @@ fun CheckoutScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(
-                        onClick = onNavigateBack,
+                        onClick = { showDiscardDialog = true },
                         modifier = Modifier.testTag("checkout_back_btn")
                     ) {
                         Icon(
@@ -124,6 +150,47 @@ fun CheckoutScreen(
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         )
                     }
+                }
+            }
+
+            // 5-Minute Seat Hold Countdown Banner
+            Surface(
+                color = if (isExpired || timeLeftSeconds < 60) Color(0xFFFEE2E2) else Color(0xFFFEF3C7),
+                modifier = Modifier.fillMaxWidth(),
+                border = BorderStroke(1.dp, if (isExpired || timeLeftSeconds < 60) Color(0xFFFCA5A5) else Color(0xFFFDE68A))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 7.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Timer,
+                            contentDescription = null,
+                            tint = if (isExpired || timeLeftSeconds < 60) Color(0xFFDC2626) else Color(0xFFD97706),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = if (isExpired) "जागा आरक्षणाची मुदत संपली आहे" else "जागा ५ मिनिटांसाठी आरक्षित आहेत:",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (isExpired || timeLeftSeconds < 60) Color(0xFF991B1B) else Color(0xFF92400E)
+                        )
+                    }
+                    val mins = timeLeftSeconds / 60
+                    val secs = timeLeftSeconds % 60
+                    Text(
+                        text = if (isExpired) "मुदत संपली" else String.format("%02d:%02d", mins, secs),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Black,
+                        color = if (isExpired || timeLeftSeconds < 60) Color(0xFFDC2626) else Color(0xFFB45309)
+                    )
                 }
             }
 
@@ -274,8 +341,17 @@ fun CheckoutScreen(
                             // Name Field
                             OutlinedTextField(
                                 value = customerName,
-                                onValueChange = { customerName = it },
-                                label = { Text("पूर्ण नाव (Full Name)", color = TextSecondary) },
+                                onValueChange = {
+                                    customerName = it
+                                    if (nameError != null) nameError = null
+                                },
+                                label = { Text("पूर्ण नाव (Full Name)", color = if (nameError != null) Color(0xFFDC2626) else TextSecondary) },
+                                isError = nameError != null,
+                                supportingText = {
+                                    if (nameError != null) {
+                                        Text(text = nameError ?: "", color = Color(0xFFDC2626), fontSize = 11.5.sp)
+                                    }
+                                },
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(10.dp),
                                 colors = OutlinedTextFieldDefaults.colors(
@@ -284,7 +360,9 @@ fun CheckoutScreen(
                                     focusedBorderColor = MahaOrange,
                                     unfocusedBorderColor = MahaBorder,
                                     focusedContainerColor = MahaWarmLight,
-                                    unfocusedContainerColor = MahaWarmLight
+                                    unfocusedContainerColor = MahaWarmLight,
+                                    errorBorderColor = Color(0xFFDC2626),
+                                    errorContainerColor = Color(0xFFFEF2F2)
                                 ),
                                 singleLine = true
                             )
@@ -297,8 +375,15 @@ fun CheckoutScreen(
                                 onValueChange = { input ->
                                     val digits = input.filter { it.isDigit() }
                                     if (digits.length <= 10) customerPhone = digits
+                                    if (phoneError != null) phoneError = null
                                 },
-                                label = { Text("मोबाईल नंबर (10-digit Phone)", color = TextSecondary) },
+                                label = { Text("मोबाईल नंबर (10-digit Phone)", color = if (phoneError != null) Color(0xFFDC2626) else TextSecondary) },
+                                isError = phoneError != null,
+                                supportingText = {
+                                    if (phoneError != null) {
+                                        Text(text = phoneError ?: "", color = Color(0xFFDC2626), fontSize = 11.5.sp)
+                                    }
+                                },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                                 prefix = { Text("+91 ", color = MahaOrangeDeep, fontWeight = FontWeight.Bold) },
                                 modifier = Modifier.fillMaxWidth(),
@@ -309,7 +394,9 @@ fun CheckoutScreen(
                                     focusedBorderColor = MahaOrange,
                                     unfocusedBorderColor = MahaBorder,
                                     focusedContainerColor = MahaWarmLight,
-                                    unfocusedContainerColor = MahaWarmLight
+                                    unfocusedContainerColor = MahaWarmLight,
+                                    errorBorderColor = Color(0xFFDC2626),
+                                    errorContainerColor = Color(0xFFFEF2F2)
                                 ),
                                 singleLine = true
                             )
@@ -320,7 +407,13 @@ fun CheckoutScreen(
                             OutlinedTextField(
                                 value = customerEmail,
                                 onValueChange = { customerEmail = it },
-                                label = { Text("ईमेल पत्ता (Email - Optional)", color = TextSecondary) },
+                                label = { Text("ईमेल पत्ता (Email Address)", color = if (emailError != null) Color(0xFFDC2626) else TextSecondary) },
+                                isError = emailError != null,
+                                supportingText = {
+                                    if (emailError != null) {
+                                        Text(text = emailError ?: "", color = Color(0xFFDC2626), fontSize = 11.5.sp)
+                                    }
+                                },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(10.dp),
@@ -582,8 +675,17 @@ fun CheckoutScreen(
                         }
 
                         val cleanPhone = customerPhone.filter { it.isDigit() }.takeLast(10)
-                        if (customerName.isBlank() || cleanPhone.length != 10 || cleanPhone.first() !in '6'..'9') {
-                            errorMessage = "कृपया आपले पूर्ण नाव आणि वैध १०-अंकी भारतीय मोबाईल नंबर प्रविष्ट करा."
+                        var hasError = false
+                        if (customerName.isBlank()) {
+                            nameError = "कृपया आपले पूर्ण नाव प्रविष्ट करा."
+                            hasError = true
+                        }
+                        if (cleanPhone.length != 10 || (cleanPhone.isNotEmpty() && cleanPhone.first() !in '6'..'9')) {
+                            phoneError = "कृपया वैध १०-अंकी भारतीय मोबाईल नंबर प्रविष्ट करा."
+                            hasError = true
+                        }
+                        if (hasError) {
+                            errorMessage = null
                             return@Button
                         }
 
@@ -650,7 +752,7 @@ fun CheckoutScreen(
                             }
                         )
                     },
-                    enabled = !isProcessing,
+                    enabled = !isProcessing && !isExpired,
                     colors = ButtonDefaults.buttonColors(containerColor = MahaOrange),
                     shape = RoundedCornerShape(10.dp),
                     modifier = Modifier
@@ -679,6 +781,52 @@ fun CheckoutScreen(
                     }
                 }
             }
+        }
+
+        // Cancel / Discard Booking Confirmation Dialog
+        if (showDiscardDialog) {
+            AlertDialog(
+                onDismissRequest = { showDiscardDialog = false },
+                title = {
+                    Text(
+                        text = "बुकिंग रद्द करायची आहे का?",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        color = TextPrimary
+                    )
+                },
+                text = {
+                    Text(
+                        text = "आपण बाहेर पडल्यास आपल्या आरक्षित जागा तात्काळ इतरांसाठी उपलब्ध केल्या जातील (५ मिनिटांची मुदत संपेल).",
+                        fontSize = 13.sp,
+                        color = TextSecondary
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showDiscardDialog = false
+                            bookingViewModel.releaseHold(
+                                sessionId = sessionId,
+                                holdToken = holdToken,
+                                seatIds = selectedSeats.map { it.seatId }
+                            )
+                            onNavigateBack()
+                        }
+                    ) {
+                        Text(
+                            text = "होय, रद्द करा",
+                            color = Color(0xFFDC2626),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDiscardDialog = false }) {
+                        Text("नाही, सुरू ठेवा", color = TextPrimary)
+                    }
+                }
+            )
         }
     }
 }

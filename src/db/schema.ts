@@ -148,6 +148,7 @@ export const events = pgTable('events', {
   galleryUrls: text('gallery_urls'), // JSON array of gallery image URLs
   status: text('status').notNull().default('published'), // 'draft' | 'submitted' | 'under_review' | 'approved' | 'rejected' | 'published' | 'unpublish' | 'unpublished' | 'cancelled' | 'completed'
   featured: integer('featured').notNull().default(0),
+  tag: text('tag'), // e.g. 'हाऊसफुल्ल' | 'सुपरहिट' | 'नवीन प्रयोग' | 'विशेष ऑफर' | 'प्रीमियर' | 'मर्यादित जागा'
   castCrew: text('cast_crew'),
   rejectionReason: text('rejection_reason'),
   convenienceFeeType: text('convenience_fee_type').notNull().default('flat'),
@@ -361,6 +362,21 @@ export const notificationLog = pgTable('notification_log', {
   dataJson: text('data_json'),
   status: text('status').notNull().default('sent'),
   createdAt: timestamp('created_at').defaultNow(),
+});
+
+// 20. Event Reviews & Ratings
+export const eventReviews = pgTable('event_reviews', {
+  id: serial('id').primaryKey(),
+  eventId: integer('event_id').references(() => events.id).notNull(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  userEmail: text('user_email').notNull(),
+  userName: text('user_name').notNull(),
+  city: text('city'),
+  rating: integer('rating').notNull(), // 1 to 5 stars
+  comment: text('comment').notNull(),
+  verifiedAttendance: integer('verified_attendance').notNull().default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
 });
 
 // Relational mappings

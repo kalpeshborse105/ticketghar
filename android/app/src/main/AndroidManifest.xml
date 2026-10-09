@@ -36,6 +36,21 @@
                     android:scheme="mahaticket"
                     android:host="app" />
             </intent-filter>
+
+            <!-- App Links for events sharing & direct APK open -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="mahaticket.kalpkrutinfotech.com"
+                    android:pathPrefix="/events" />
+                <data
+                    android:scheme="https"
+                    android:host="ticketghar.com"
+                    android:pathPrefix="/events" />
+            </intent-filter>
         </activity>
 
         <!-- Firebase Cloud Messaging Receiver Service -->

@@ -157,13 +157,6 @@ fun BilingualTopBar(
                             }
                         }
                     }
-
-                    Text(
-                        text = "महाराष्ट्राचे हक्काचे तिकीट व्यासपीठ",
-                        fontSize = 9.5.sp,
-                        color = TextSecondary,
-                        fontWeight = FontWeight.Normal
-                    )
                 }
             }
 
@@ -194,7 +187,7 @@ fun BilingualTopBar(
                     )
                 }
 
-                // Profile Avatar (Circular)
+                // Profile Avatar (Circular with user initial or photo)
                 Box {
                     Surface(
                         modifier = Modifier
@@ -202,19 +195,24 @@ fun BilingualTopBar(
                             .clip(CircleShape)
                             .clickable { showRoleMenu = true }
                             .testTag("profile_avatar_topbar"),
-                        color = MahaWarm,
+                        color = MahaOrangeDeep,
                         shape = CircleShape,
-                        border = BorderStroke(1.5.dp, MahaOrange.copy(alpha = 0.3f))
+                        border = BorderStroke(1.5.dp, MahaOrange.copy(alpha = 0.4f))
                     ) {
-                        AsyncImage(
-                            model = "https://lh3.googleusercontent.com/aida-public/AB6AXuAMSaE5fX9f8SYwcIhl78gY8h1AvUlLEYlulNTFntLQxzUV6T1k2te8LjRqQAmIjkdw0ruuSSlxvNwhHtVm2hYkZmzmHGZik9kP5_xeHfSk_CUELu6wsF2-LuI39O66cbeC4c2rnYNAYKxfDP6IlLbaRFu5Z85140MfawUoYtzcDe94RvdCycP_s8b6GfVmGwf81LvlqCfrlH2ihQyvDnw19K_hZwXTICqjB-gw8kc",
-                            contentDescription = "Profile Avatar",
-                            contentScale = ContentScale.Crop,
+                        Box(
+                            contentAlignment = Alignment.Center,
                             modifier = Modifier.fillMaxSize()
-                        )
+                        ) {
+                            Text(
+                                text = "क",
+                                color = Color.White,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
 
-                    // Role switch dropdown menu
+                    // Profile options dropdown menu (Strictly user-facing, no unauthorized admin control)
                     DropdownMenu(
                         expanded = showRoleMenu,
                         onDismissRequest = { showRoleMenu = false }
@@ -227,34 +225,22 @@ fun BilingualTopBar(
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("नाट्यमित्र AI सह गप्पा", fontSize = 13.sp) },
+                            text = { Text("टिकिटमित्र AI सह गप्पा", fontSize = 13.sp) },
                             onClick = {
                                 showRoleMenu = false
                                 onChatbotClick()
                             }
                         )
-                        HorizontalDivider()
-                        DropdownMenuItem(
-                            text = { Text("सर्वसामान्य प्रेक्षक (User)", fontSize = 12.sp) },
-                            onClick = {
-                                showRoleMenu = false
-                                onRoleSelected(UserRole.PUBLIC_USER)
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("नाट्यगृह आयोजक (Organizer)", fontSize = 12.sp) },
-                            onClick = {
-                                showRoleMenu = false
-                                onRoleSelected(UserRole.ORGANIZER)
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("प्रशासक (Admin Control)", fontSize = 12.sp) },
-                            onClick = {
-                                showRoleMenu = false
-                                onRoleSelected(UserRole.ADMIN)
-                            }
-                        )
+                        if (currentRole == UserRole.ADMIN) {
+                            HorizontalDivider()
+                            DropdownMenuItem(
+                                text = { Text("प्रशासक नियंत्रण (Admin)", fontSize = 12.sp, color = MahaOrangeDeep) },
+                                onClick = {
+                                    showRoleMenu = false
+                                    onRoleSelected(UserRole.ADMIN)
+                                }
+                            )
+                        }
                     }
                 }
             }

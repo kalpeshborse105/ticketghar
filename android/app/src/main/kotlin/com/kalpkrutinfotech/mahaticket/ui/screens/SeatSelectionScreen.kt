@@ -57,7 +57,14 @@ fun SeatSelectionScreen(
     val context = LocalContext.current
 
     LaunchedEffect(sessionId, eventId) {
+        bookingViewModel.clearSelectedSeats()
         bookingViewModel.loadSeats(sessionId, eventId)
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            bookingViewModel.clearSelectedSeats()
+        }
     }
 
     val seatsState by bookingViewModel.seatsState.collectAsState()
@@ -108,7 +115,9 @@ fun SeatSelectionScreen(
     }
 
     val handleSeatClick: (SeatItem) -> Unit = { seat ->
-        val isAlreadySelected = selectedSeats.any { it.seatId == seat.seatId }
+        val isAlreadySelected = selectedSeats.any { 
+            it.seatId == seat.seatId || it.seatCode.equals(seat.seatCode, ignoreCase = true) 
+        }
         if (!isAlreadySelected && selectedSeats.size >= 6) {
             android.widget.Toast.makeText(context, "एका वेळी जास्तीत जास्त ६ जागा निवडता येतील.", android.widget.Toast.LENGTH_SHORT).show()
         } else {
@@ -116,24 +125,70 @@ fun SeatSelectionScreen(
         }
     }
 
-    // Live Countdown Timer (9:49)
-    var countdownSeconds by remember { mutableStateOf(589) }
+    // Live Countdown Timer (5:00 minutes as per BookMyShow standard)
+    var countdownSeconds by remember { mutableIntStateOf(300) }
+    var showCancelDialog by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
-        while (countdownSeconds > 0) {
-            delay(1.seconds)
-            countdownSeconds -= 1
-        }
+    // Intercept hardware and system back gestures when seats are selected
+    androidx.activity.compose.BackHandler(enabled = selectedSeats.isNotEmpty()) {
+        showCancelDialog = true
     }
 
-    // Default pre-selection matching Stitch screenshot (E8, E9) if initially empty
-    LaunchedEffect(seatsState) {
-        if (selectedSeats.isEmpty() && seatsState is SeatsUiState.Success) {
-            val successSeats = (seatsState as SeatsUiState.Success).seats
-            val e8 = successSeats.firstOrNull { it.seatCode == "E8" }
-            val e9 = successSeats.firstOrNull { it.seatCode == "E9" }
-            if (e8 != null) bookingViewModel.toggleSeatSelection(e8)
-            if (e9 != null) bookingViewModel.toggleSeatSelection(e9)
+    if (showCancelDialog) {
+        AlertDialog(
+            onDismissRequest = { showCancelDialog = false },
+            title = {
+                Text(
+                    text = "बुकिंग रद्द करायची आहे का?",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    color = TextPrimary
+                )
+            },
+            text = {
+                Text(
+                    text = "तुम्ही मागे गेल्यास तुमची निवडलेली आसने मुक्त केली जातील आणि इतरांसाठी त्वरित उपलब्ध होतील.",
+                    fontSize = 13.sp,
+                    color = TextSecondary
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showCancelDialog = false
+                        bookingViewModel.releaseHold()
+                        onNavigateBack()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("होय, रद्द करा", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { showCancelDialog = false },
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("बुकिंग सुरू ठेवा", color = TextPrimary)
+                }
+            },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(16.dp)
+        )
+    }
+
+    LaunchedEffect(selectedSeats.isNotEmpty()) {
+        if (selectedSeats.isNotEmpty()) {
+            countdownSeconds = 300
+            while (countdownSeconds > 0) {
+                delay(1.seconds)
+                countdownSeconds -= 1
+            }
+            if (countdownSeconds == 0) {
+                bookingViewModel.releaseHold()
+                android.widget.Toast.makeText(context, "सत्र समाप्त झाले. कृपया पुन्हा आसने निवडा.", android.widget.Toast.LENGTH_LONG).show()
+            }
         }
     }
 
@@ -174,8 +229,12 @@ fun SeatSelectionScreen(
                     ) {
                         IconButton(
                             onClick = {
-                                bookingViewModel.releaseHold()
-                                onNavigateBack()
+                                if (selectedSeats.isNotEmpty()) {
+                                    showCancelDialog = true
+                                } else {
+                                    bookingViewModel.releaseHold()
+                                    onNavigateBack()
+                                }
                             },
                             modifier = Modifier.testTag("seat_selection_back_btn")
                         ) {

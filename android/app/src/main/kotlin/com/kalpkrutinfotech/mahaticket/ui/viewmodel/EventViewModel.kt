@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.kalpkrutinfotech.mahaticket.data.api.AnnouncementResponse
 import com.kalpkrutinfotech.mahaticket.data.api.CityCatalogItem
 import com.kalpkrutinfotech.mahaticket.data.api.CouponResponse
+import com.kalpkrutinfotech.mahaticket.data.api.EventReviewsResponse
 import com.kalpkrutinfotech.mahaticket.data.repository.EventRepository
 import com.kalpkrutinfotech.mahaticket.model.EventItem
 import com.kalpkrutinfotech.mahaticket.util.NetworkMonitor
@@ -167,8 +168,46 @@ class EventViewModel(
             val result = repository.getEventDetails(eventId, isCurrentlyOnline)
             
             _eventDetailState.value = result.fold(
-                onSuccess = { event -> EventDetailUiState.Success(event) },
+                onSuccess = { event -> 
+                    loadReviews(eventId)
+                    EventDetailUiState.Success(event) 
+                },
                 onFailure = { error -> EventDetailUiState.Error(error.localizedMessage ?: "कार्यक्रमाची माहिती आढळली नाही") }
+            )
+        }
+    }
+
+    private val _reviewsResponse = MutableStateFlow<EventReviewsResponse?>(null)
+    val reviewsResponse: StateFlow<EventReviewsResponse?> = _reviewsResponse.asStateFlow()
+
+    fun loadReviews(eventId: Int) {
+        viewModelScope.launch {
+            val result = repository.getEventReviews(eventId)
+            result.onSuccess {
+                _reviewsResponse.value = it
+            }
+        }
+    }
+
+    fun submitReview(
+        eventId: Int,
+        rating: Int,
+        comment: String,
+        userName: String,
+        userEmail: String,
+        onSuccess: (String) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            val result = repository.submitEventReview(eventId, rating, comment, userName, userEmail)
+            result.fold(
+                onSuccess = { res ->
+                    loadReviews(eventId)
+                    onSuccess(res.message ?: "आपले मत यशस्वीरीत्या नोंदवले गेले आहे!")
+                },
+                onFailure = { err ->
+                    onError(err.message ?: "मत नोंदवण्यात अडचण आली")
+                }
             )
         }
     }

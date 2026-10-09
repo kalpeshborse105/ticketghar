@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Plus,
@@ -49,20 +49,151 @@ interface TheatreSeatDesignerProps {
   onSaved: (venue: any) => void;
 }
 
-const MAHARASHTRA_CITIES = [
-  'Pune',
-  'Mumbai',
-  'Thane',
-  'Nashik',
-  'Kolhapur',
-  'Nagpur',
-  'Chhatrapati Sambhajinagar',
-  'Solapur',
-  'Satara',
-  'Sangli',
-  'Ratnagiri',
-  'Navi Mumbai',
+interface DistrictItem {
+  id: number;
+  name: string;
+  nameMr: string;
+}
+
+interface CityItem {
+  id: number;
+  name: string;
+  nameMr: string;
+  districtId?: number | null;
+}
+
+const DEFAULT_SECTIONS: SectionConfig[] = [
+  {
+    name: 'Stall / Orchestra',
+    nameMr: 'मुख्य स्टॉल',
+    basePrice: 350,
+    tier: 'gold',
+    walkwayAfterRow: '',
+    rows: ['A', 'B', 'C', 'D', 'E', 'F'].map((label, rIdx) => ({
+      rowLabel: label,
+      aisleAfter: [4],
+      seats: Array.from({ length: 8 }).map((_, cIdx) => ({
+        seatNumber: cIdx + 1,
+        tier: 'gold',
+        isAccessible: rIdx === 0 && cIdx === 0 ? 1 : 0,
+        isBlocked: 0,
+      })),
+    })),
+  },
+  {
+    name: 'Balcony',
+    nameMr: 'बाल्कनी',
+    basePrice: 500,
+    tier: 'platinum',
+    walkwayAfterRow: '',
+    rows: ['A', 'B', 'C'].map((label) => ({
+      rowLabel: label,
+      aisleAfter: [4],
+      seats: Array.from({ length: 8 }).map((_, cIdx) => ({
+        seatNumber: cIdx + 1,
+        tier: 'platinum',
+        isAccessible: 0,
+        isBlocked: 0,
+      })),
+    })),
+  },
 ];
+
+function parseInitialSections(venue: any): SectionConfig[] {
+  if (!venue) return DEFAULT_SECTIONS;
+
+  let layoutConfig = venue.layoutConfig;
+  if (typeof layoutConfig === 'string') {
+    try {
+      layoutConfig = JSON.parse(layoutConfig);
+    } catch {
+      layoutConfig = null;
+    }
+  }
+
+  if (layoutConfig?.sections && Array.isArray(layoutConfig.sections) && layoutConfig.sections.length > 0) {
+    return layoutConfig.sections.map((sec: any) => ({
+      name: sec.name || 'Section',
+      nameMr: sec.nameMr || 'विभाग',
+      basePrice: Number(sec.basePrice || 350),
+      tier: sec.tier || 'gold',
+      walkwayAfterRow: sec.walkwayAfterRow || '',
+      rows: (sec.rows || []).map((r: any) => ({
+        rowLabel: r.rowLabel || 'A',
+        aisleAfter: Array.isArray(r.aisleAfter) ? r.aisleAfter : [4],
+        seats: (r.seats || []).map((s: any, sIdx: number) => ({
+          seatNumber: s.seatNumber !== undefined ? Number(s.seatNumber) : sIdx + 1,
+          seatCode: s.seatCode,
+          tier: s.tier || sec.tier || 'gold',
+          isAccessible: Number(s.isAccessible || 0),
+          isBlocked: Number(s.isBlocked || 0),
+        })),
+      })),
+    }));
+  }
+
+  if (venue.sections && Array.isArray(venue.sections) && venue.sections.length > 0) {
+    return venue.sections.map((sec: any) => {
+      const secSeats = Array.isArray(sec.seats) ? sec.seats : [];
+      if (secSeats.length === 0) {
+        const rowsCount = sec.rowsCount || 4;
+        const colsCount = sec.colsCount || 8;
+        return {
+          id: sec.id,
+          name: sec.name,
+          nameMr: sec.nameMr,
+          basePrice: Math.round((sec.basePrice || 35000) / 100),
+          tier: 'gold' as const,
+          walkwayAfterRow: '',
+          rows: Array.from({ length: rowsCount }).map((_, rIdx) => ({
+            rowLabel: String.fromCharCode(65 + rIdx),
+            aisleAfter: [Math.floor(colsCount / 2)],
+            seats: Array.from({ length: colsCount }).map((_, cIdx) => ({
+              seatNumber: cIdx + 1,
+              tier: 'gold' as const,
+              isAccessible: rIdx === 0 && cIdx === 0 ? 1 : 0,
+              isBlocked: 0,
+            })),
+          })),
+        };
+      }
+
+      const rowMap = new Map<string, any[]>();
+      for (const st of secSeats) {
+        const rLabel = st.rowLabel || 'A';
+        if (!rowMap.has(rLabel)) rowMap.set(rLabel, []);
+        rowMap.get(rLabel)!.push(st);
+      }
+
+      const rows: RowConfig[] = Array.from(rowMap.entries()).map(([rLabel, seatArr]) => {
+        const sortedSeats = seatArr.sort((a, b) => a.seatNumber - b.seatNumber);
+        return {
+          rowLabel: rLabel,
+          aisleAfter: [Math.floor(sortedSeats.length / 2)],
+          seats: sortedSeats.map((s) => ({
+            seatNumber: s.seatNumber,
+            seatCode: s.seatCode,
+            tier: s.tier || 'gold',
+            isAccessible: Number(s.isAccessible || 0),
+            isBlocked: Number(s.isBlocked || 0),
+          })),
+        };
+      });
+
+      return {
+        id: sec.id,
+        name: sec.name,
+        nameMr: sec.nameMr,
+        basePrice: Math.round((sec.basePrice || 35000) / 100),
+        tier: (sec.name.toLowerCase().includes('balcony') || sec.name.toLowerCase().includes('vip') ? 'platinum' : 'gold') as any,
+        walkwayAfterRow: '',
+        rows,
+      };
+    });
+  }
+
+  return DEFAULT_SECTIONS;
+}
 
 export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
   venueToEdit,
@@ -73,73 +204,34 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
   const [venueName, setVenueName] = useState(venueToEdit?.name || '');
   const [venueNameMr, setVenueNameMr] = useState(venueToEdit?.nameMr || '');
   const [city, setCity] = useState(venueToEdit?.city || 'Pune');
+  const [districtId, setDistrictId] = useState<number | undefined>(venueToEdit?.districtId || undefined);
   const [address, setAddress] = useState(venueToEdit?.address || '');
+
+  // Dynamic location list from backend
+  const [districtsList, setDistrictsList] = useState<DistrictItem[]>([]);
+  const [citiesList, setCitiesList] = useState<CityItem[]>([]);
+
+  useEffect(() => {
+    fetch('/api/locations/districts')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.districts) setDistrictsList(d.districts);
+      })
+      .catch(() => {});
+
+    fetch('/api/locations/cities')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.cities) setCitiesList(d.cities);
+      })
+      .catch(() => {});
+  }, []);
 
   // Active section index
   const [activeSectionIdx, setActiveSectionIdx] = useState(0);
 
-  // Sections configuration
-  const [sections, setSections] = useState<SectionConfig[]>(() => {
-    if (venueToEdit?.sections && Array.isArray(venueToEdit.sections) && venueToEdit.sections.length > 0) {
-      return venueToEdit.sections.map((s: any) => ({
-        id: s.id,
-        name: s.name,
-        nameMr: s.nameMr,
-        basePrice: Math.round((s.basePrice || 35000) / 100),
-        tier: 'gold',
-        rows: Array.from({ length: s.rowsCount || 4 }).map((_, rIdx) => {
-          const letter = String.fromCharCode(65 + rIdx);
-          const cols = s.colsCount || 8;
-          return {
-            rowLabel: letter,
-            aisleAfter: [Math.floor(cols / 2)],
-            seats: Array.from({ length: cols }).map((_, cIdx) => ({
-              seatNumber: cIdx + 1,
-              tier: 'gold',
-              isAccessible: rIdx === 0 && cIdx === 0 ? 1 : 0,
-              isBlocked: 0,
-            })),
-          };
-        }),
-      }));
-    }
-
-    // Default: Realistic multi-section theatre (Stall & Balcony)
-    return [
-      {
-        name: 'Stall / Orchestra',
-        nameMr: 'मुख्य स्टॉल',
-        basePrice: 350,
-        tier: 'gold',
-        rows: ['A', 'B', 'C', 'D', 'E', 'F'].map((label, rIdx) => ({
-          rowLabel: label,
-          aisleAfter: [4],
-          seats: Array.from({ length: 8 }).map((_, cIdx) => ({
-            seatNumber: cIdx + 1,
-            tier: 'gold',
-            isAccessible: rIdx === 0 && cIdx === 0 ? 1 : 0,
-            isBlocked: 0,
-          })),
-        })),
-      },
-      {
-        name: 'Balcony',
-        nameMr: 'बाल्कनी',
-        basePrice: 500,
-        tier: 'platinum',
-        rows: ['A', 'B', 'C'].map((label) => ({
-          rowLabel: label,
-          aisleAfter: [4],
-          seats: Array.from({ length: 8 }).map((_, cIdx) => ({
-            seatNumber: cIdx + 1,
-            tier: 'platinum',
-            isAccessible: 0,
-            isBlocked: 0,
-          })),
-        })),
-      },
-    ];
-  });
+  // Sections configuration loaded from layout_config or sections table
+  const [sections, setSections] = useState<SectionConfig[]>(() => parseInitialSections(venueToEdit));
 
   const [activeTab, setActiveTab] = useState<'editor' | 'preview'>('editor');
   const [zoomLevel, setZoomLevel] = useState<number>(1);
@@ -373,21 +465,13 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
       setIsSaving(true);
       setSaveError(null);
 
-      const payload = {
-        venueId: venueToEdit?.id || undefined,
-        name: venueName.trim(),
-        nameMr: venueNameMr.trim(),
-        city: city.trim(),
-        address: address.trim(),
-        totalCapacity: totalSeats,
-        hasSeatLayout: 1,
-        customLayout: true,
+      const layoutConfigObj = {
         sections: sections.map((sec) => ({
           name: sec.name,
           nameMr: sec.nameMr,
           basePrice: sec.basePrice,
           tier: sec.tier,
-          walkwayAfterRow: sec.walkwayAfterRow,
+          walkwayAfterRow: sec.walkwayAfterRow || '',
           rows: sec.rows.map((r) => ({
             rowLabel: r.rowLabel,
             aisleAfter: r.aisleAfter,
@@ -400,6 +484,20 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
             })),
           })),
         })),
+      };
+
+      const payload = {
+        venueId: venueToEdit?.id || undefined,
+        name: venueName.trim(),
+        nameMr: venueNameMr.trim(),
+        city: city.trim(),
+        districtId: districtId || undefined,
+        address: address.trim(),
+        totalCapacity: totalSeats,
+        hasSeatLayout: 1,
+        customLayout: true,
+        layoutConfig: layoutConfigObj,
+        sections: layoutConfigObj.sections,
       };
 
       const res = await fetch('/api/admin/venues', {
@@ -539,7 +637,7 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
               <span>१. नाट्यगृह प्राथमिक तपशील (Auditorium Profile)</span>
             </h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 text-xs">
               <div>
                 <label className="text-slate-400 block mb-1">नाट्यगृहाचे नाव (English) *</label>
                 <input
@@ -565,17 +663,50 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
               </div>
 
               <div>
+                <label className="text-slate-400 block mb-1">जिल्हा (District)</label>
+                <select
+                  value={districtId || ''}
+                  onChange={(e) => {
+                    const val = e.target.value ? Number(e.target.value) : undefined;
+                    setDistrictId(val);
+                    if (val) {
+                      const matchCity = citiesList.find((c) => c.districtId === val);
+                      if (matchCity) setCity(matchCity.name);
+                    }
+                  }}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:border-amber-500"
+                >
+                  <option value="">जिल्हा निवडा (Select District)</option>
+                  {districtsList.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.nameMr} ({d.name})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
                 <label className="text-slate-400 block mb-1">शहर (City) *</label>
                 <select
                   value={city}
-                  onChange={(e) => setCity(e.target.value)}
+                  onChange={(e) => {
+                    setCity(e.target.value);
+                    const matchCity = citiesList.find((c) => c.name.toLowerCase() === e.target.value.toLowerCase());
+                    if (matchCity && matchCity.districtId) setDistrictId(matchCity.districtId);
+                  }}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:border-amber-500"
                 >
-                  {MAHARASHTRA_CITIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
+                  {citiesList.length > 0 ? (
+                    citiesList
+                      .filter((c) => !districtId || c.districtId === districtId)
+                      .map((c) => (
+                        <option key={c.id} value={c.name}>
+                          {c.nameMr} ({c.name})
+                        </option>
+                      ))
+                  ) : (
+                    <option value={city}>{city}</option>
+                  )}
                 </select>
               </div>
 

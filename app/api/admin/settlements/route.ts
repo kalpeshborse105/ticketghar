@@ -83,27 +83,41 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Require non-empty payoutUtr if marking as 'settled'
+    if (status === 'settled' && (!payoutUtr || !payoutUtr.trim())) {
+      return NextResponse.json(
+        { error: 'Payout UTR or bank transaction reference is required to mark settlement as settled.' },
+        { status: 400 }
+      );
+    }
+
     const [updated] = await db
       .update(settlements)
       .set({
         status,
-        payoutUtr: payoutUtr || null,
+        payoutUtr: payoutUtr ? payoutUtr.trim() : null,
         settledAt: status === 'settled' ? new Date() : null,
       })
       .where(eq(settlements.id, settlementId))
       .returning();
 
-    // Audit log
+    if (!updated) {
+      return NextResponse.json({ error: 'Settlement not found' }, { status: 404 });
+    }
+
+    // Immutable financial audit log
     await db.insert(auditLogs).values({
-      actorId: adminActor || 'super-admin',
-      actorRole: 'finance',
+      actorId: adminActor || session.user?.email || 'super-admin',
+      actorRole: session.role || 'finance',
       action: 'SETTLEMENT_STATUS_UPDATED',
       entityType: 'settlement',
       entityId: updated.settlementReference,
       details: JSON.stringify({
         status,
-        payoutUtr,
+        payoutUtr: updated.payoutUtr,
         netPayable: updated.netPayableToOrganizer,
+        totalGrossTicketSales: updated.totalGrossTicketSales,
+        totalRefundDeductions: updated.totalRefundDeductions,
       }),
     });
 

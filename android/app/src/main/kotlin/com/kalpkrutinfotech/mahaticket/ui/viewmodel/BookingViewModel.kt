@@ -70,9 +70,16 @@ class BookingViewModel(
     val isOnline: StateFlow<Boolean> = networkMonitor.isOnline
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), networkMonitor.isCurrentlyOnline())
     
+    fun clearSelectedSeats() {
+        _selectedSeats.value = emptyList()
+        _holdResponse.value = null
+    }
+
     fun loadSeats(sessionId: Int, eventId: Int = 1) {
         activeSessionId = sessionId
         if (eventId > 0) activeEventId = eventId
+        _selectedSeats.value = emptyList()
+        _holdResponse.value = null
         viewModelScope.launch {
             _seatsState.value = SeatsUiState.Loading
             
@@ -265,8 +272,11 @@ class BookingViewModel(
     
     fun toggleSeatSelection(seat: SeatItem) {
         val currentSeats = _selectedSeats.value.toMutableList()
-        if (currentSeats.any { it.seatId == seat.seatId }) {
-            currentSeats.removeAll { it.seatId == seat.seatId }
+        val existingIndex = currentSeats.indexOfFirst {
+            it.seatId == seat.seatId || it.seatCode.equals(seat.seatCode, ignoreCase = true)
+        }
+        if (existingIndex >= 0) {
+            currentSeats.removeAt(existingIndex)
         } else {
             if (currentSeats.size >= 6) return // Strictly limit to max 6 seats per booking
             currentSeats.add(seat)
@@ -274,7 +284,22 @@ class BookingViewModel(
         _selectedSeats.value = currentSeats
     }
     
-    fun releaseHold() {
+    fun releaseHold(
+        sessionId: Int = activeSessionId,
+        holdToken: String? = null,
+        seatIds: List<Int>? = null
+    ) {
+        val token = holdToken ?: _holdResponse.value?.holdToken
+        val targetSeatIds = seatIds ?: _selectedSeats.value.map { it.seatId }
+        if (!token.isNullOrBlank()) {
+            viewModelScope.launch {
+                try {
+                    repository.releaseHold(sessionId, token, targetSeatIds)
+                } catch (e: Exception) {
+                    // Non-blocking
+                }
+            }
+        }
         _holdResponse.value = null
         _selectedSeats.value = emptyList()
     }

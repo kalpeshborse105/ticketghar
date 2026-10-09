@@ -19,17 +19,52 @@ import QRCode from 'qrcode';
 import { PricingBreakdown } from './types.ts';
 import { getTicketShareUrl } from './public-url.ts';
 import { sendBookingTicketEmail } from './email-service.ts';
+import { generateSecureTicketQr } from './ticket-crypto.ts';
 
 function getTicketSecret(): string {
   return process.env.TICKET_SECRET || 'mahaticket_secure_signing_key_2026';
 }
 
 const TICKET_SECRET = getTicketSecret();
-const HOLD_DURATION_MINUTES = 8;
+const HOLD_DURATION_MINUTES = 5;
 const MAX_SEATS_PER_BOOKING = 5;
 
 /**
- * Release any seat holds that have expired past their 8-minute reservation window
+ * Immediately release held seats for a user session/token on back/cancel/discard
+ */
+export async function releaseSeatsHold(
+  sessionId: number,
+  holdToken: string,
+  seatIds?: number[]
+): Promise<number> {
+  try {
+    const conditions = [
+      eq(seatInventory.sessionId, sessionId),
+      eq(seatInventory.status, 'held'),
+      eq(seatInventory.heldByUserId, holdToken),
+    ];
+    if (seatIds && seatIds.length > 0) {
+      conditions.push(inArray(seatInventory.seatId, seatIds));
+    }
+    const result = await db
+      .update(seatInventory)
+      .set({
+        status: 'available',
+        heldByUserId: null,
+        holdExpiresAt: null,
+      })
+      .where(and(...conditions))
+      .returning({ id: seatInventory.id });
+
+    return result.length;
+  } catch (error) {
+    console.error('Error releasing held seats:', error);
+    return 0;
+  }
+}
+
+/**
+ * Release any seat holds that have expired past their 5-minute reservation window
  */
 export async function releaseExpiredHolds(sessionId: number): Promise<number> {
   try {
@@ -280,6 +315,34 @@ export async function confirmBookingOrder(params: {
     throw new Error(`Maximum ${MAX_SEATS_PER_BOOKING} seats allowed per booking.`);
   }
 
+  // Idempotency: If this Razorpay payment ID was already processed, return existing order and tickets safely
+  if (paymentDetails.razorpayPaymentId) {
+    const existingOrders = await db
+      .select()
+      .from(orders)
+      .where(eq(orders.razorpayPaymentId, paymentDetails.razorpayPaymentId))
+      .limit(1);
+
+    if (existingOrders.length > 0) {
+      const existingTickets = await db
+        .select()
+        .from(tickets)
+        .where(eq(tickets.orderId, existingOrders[0].id));
+
+      const [existingEvent] = await db
+        .select()
+        .from(events)
+        .where(eq(events.id, eventId));
+
+      return {
+        order: existingOrders[0],
+        tickets: existingTickets,
+        event: existingEvent,
+        pricing,
+      };
+    }
+  }
+
   // 1. Sweep expired holds first
   await releaseExpiredHolds(sessionId);
 
@@ -412,8 +475,8 @@ export async function confirmBookingOrder(params: {
       .update(rawData)
       .digest('hex');
 
-    const publicTicketUrl = getTicketShareUrl(ticketCode);
-    const qrPayload = publicTicketUrl;
+    // Secure encrypted QR barcode: hides ticket ID/number from public eyes, verified cryptographically by organizer scanner
+    const qrPayload = generateSecureTicketQr(ticketCode, eventId);
 
     // Generate real scannable QR Data URL that opens the ticket URL directly
     const qrDataUrl = await QRCode.toDataURL(qrPayload, {
@@ -607,13 +670,15 @@ export async function generateSessionInventory(
     const inventoryToInsert: any[] = [];
     for (const seat of allSeats) {
       if (!existingSeatIdSet.has(seat.id)) {
-        const ticketTypeId = sectionTicketTypeMap.get(seat.sectionId) || 1;
-        inventoryToInsert.push({
-          sessionId,
-          seatId: seat.id,
-          ticketTypeId,
-          status: seat.isBlocked === 1 ? 'blocked' : 'available',
-        });
+        const ticketTypeId = sectionTicketTypeMap.get(seat.sectionId);
+        if (ticketTypeId) {
+          inventoryToInsert.push({
+            sessionId,
+            seatId: seat.id,
+            ticketTypeId,
+            status: seat.isBlocked === 1 ? 'blocked' : 'available',
+          });
+        }
       }
     }
 

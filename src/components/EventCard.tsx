@@ -124,15 +124,17 @@ export const EventCard: React.FC<EventCardProps> = ({
         {/* Bottom: 5-Star rating with review count · Book CTA */}
         <div className="flex items-center justify-between gap-1.5 pt-1 border-t border-slate-100">
           <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#141b2b]">
-            <Star className="h-3 w-3 fill-[#F59E0B] text-[#F59E0B]" />
+            <Star className={`h-3 w-3 ${event.rating && event.rating > 0 ? 'fill-[#F59E0B] text-[#F59E0B]' : 'text-slate-300'}`} />
             <span>
               {event.rating && event.rating > 0
                 ? (event.rating > 5 ? (event.rating / 2).toFixed(1) : event.rating.toFixed(1))
-                : '4.8'}
+                : (language === 'mr' ? 'नवीन' : 'New')}
             </span>
-            <span className="text-[10px] text-[#64748B] font-normal">
-              ({event.ratingCount ? `${(event.ratingCount / 1000).toFixed(1)}k` : '1.2k'})
-            </span>
+            {event.ratingCount && event.ratingCount > 0 ? (
+              <span className="text-[10px] text-[#64748B] font-normal">
+                ({event.ratingCount})
+              </span>
+            ) : null}
           </span>
           <button
             type="button"

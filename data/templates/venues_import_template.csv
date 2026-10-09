@@ -1,0 +1,11 @@
+district,taluka,city,venue_name,venue_name_mr,address,total_capacity,has_seat_layout,verification_status,ownership_type,source_url,notes
+Pune,Haveli,Pune,Bal Gandharva Ranga Mandir,बाळ गंधर्व रंगमंदिर,"Jangali Maharaj Rd, Shivajinagar, Pune 411005",998,1,verified,public_theatre,https://pmc.gov.in,PMC Civic Auditorium
+Mumbai City,Mumbai City,Mumbai,Ravindra Natya Mandir,रवींद्र नाट्य मंदिर,"Sayani Rd, Prabhadevi, Mumbai 400025",911,1,verified,public_theatre,https://pladeshpandekalaacademy.org,PL Deshpande Kala Academy
+Nashik,Nashik,Nashik,Kalidas Natyamandir,कालिदास नाट्यमंदिर,"Shalimar, Nashik 422001",850,1,verified,public_theatre,https://nashikcorporation.in,NMC Civic Theatre
+Chhatrapati Sambhajinagar,Chhatrapati Sambhajinagar,Chhatrapati Sambhajinagar,Sant Eknath Rang Mandir,संत एकनाथ रंगमंदिर,"Osmanpura, Chhatrapati Sambhajinagar 431005",750,1,verified,public_theatre,https://aurangabadmahapalika.org,Civic Auditorium
+Nagpur,Nagpur Urban,Nagpur,Dr. Vasantrao Deshpande Hall,डॉ. वसंतराव देशपांडे सभागृह,"Civil Lines, Nagpur 440001",950,1,verified,public_theatre,https://cultural.maharashtra.gov.in,Directorate of Cultural Affairs
+Kolhapur,Karvir,Kolhapur,Keshavrao Bhosle Natyagruh,केशवराव भोसले नाट्यगृह,"Khasbag, Kolhapur 416012",800,1,verified,public_theatre,https://kolhapurcorporation.gov.in,Historic Municipal Theatre
+Solapur,Solapur North,Solapur,Hutatma Smruti Mandir,हुतात्मा स्मृती मंदिर,"Park Stadium Rd, Solapur 413001",900,1,verified,public_theatre,https://solapurcorporation.gov.in,Civic Auditorium
+Satara,Satara,Satara,Shahukala Mandir,शाहूकला मंदिर,"Rajwada, Satara 415001",700,1,verified,public_theatre,,Municipal Council Hall
+Sangli,Miraj,Sangli,Vishnudas Bhave Natyagruh,विष्णुदास भावे नाट्यगृह,"Station Road, Sangli 416416",850,1,verified,public_theatre,,Historic Marathi Theatre
+Thane,Thane,Thane,Gadkari Rangayatan,गडकरी रंगायतन,"Dr. Moose Road, Talao Pali, Thane 400601",1080,1,verified,public_theatre,https://thanecity.gov.in,TMC Main Auditorium

@@ -16,6 +16,7 @@ import {
   EyeOff,
   Mail,
   KeyRound,
+  Loader2,
 } from 'lucide-react';
 
 declare global {
@@ -33,6 +34,7 @@ interface CheckoutDrawerProps {
     heldSeats: any[];
     faceValueTotal: number;
     holdExpiresAt: string;
+    holdToken?: string;
   };
   language: Language;
   onClose: () => void;
@@ -81,7 +83,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
           if (data.user.phoneNumber) setUserPhone((prev) => prev || data.user.phoneNumber);
           setIsEmailVerified(true);
         }
-      } catch {}
+      } catch { }
     })();
   }, []);
 
@@ -95,6 +97,33 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [, setRazorpayLoaded] = useState(false);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const [isReleasing, setIsReleasing] = useState(false);
+
+  const handleRequestClose = () => {
+    setShowDiscardConfirm(true);
+  };
+
+  const handleConfirmDiscard = async () => {
+    try {
+      setIsReleasing(true);
+      await fetch('/api/bookings/release', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: session.id,
+          holdToken: holdData.holdToken,
+          seatIds: holdData.seatIds,
+        }),
+      });
+    } catch (e) {
+      console.warn('Failed to release hold:', e);
+    } finally {
+      setIsReleasing(false);
+      setShowDiscardConfirm(false);
+      onClose();
+    }
+  };
 
   // Load Razorpay checkout script
   useEffect(() => {
@@ -115,7 +144,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
   }, []);
 
   // Hold Countdown Timer
-  const [timeLeft, setTimeLeft] = useState<number>(480);
+  const [timeLeft, setTimeLeft] = useState<number>(300);
 
   useEffect(() => {
     const expireTime = new Date(holdData.holdExpiresAt).getTime();
@@ -218,8 +247,8 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
           process.env.NODE_ENV !== 'production' && otpData.devOtp
             ? `चाचणी कोड भरला (dev)`
             : language === 'mr'
-            ? '६-अंकी पडताळणी कोड आपल्या ईमेलवर पाठवला आहे!'
-            : 'Verification code sent to your email!'
+              ? '६-अंकी पडताळणी कोड आपल्या ईमेलवर पाठवला आहे!'
+              : 'Verification code sent to your email!'
         );
       }
     } catch (err: any) {
@@ -395,9 +424,10 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
         modal: {
           ondismiss: () => {
             setIsProcessing(false);
+            setShowDiscardConfirm(false);
             setErrorMessage(
               language === 'mr'
-                ? 'पेमेंट रद्द केले. आपण पुन्हा प्रयत्न करू शकता.'
+                ? 'पेमेंट प्रक्रिया रद्द केली. आपण पुन्हा प्रयत्न करू शकता.'
                 : 'Payment was cancelled. You can retry anytime before hold expires.'
             );
           },
@@ -427,6 +457,8 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
               throw new Error(verifyData.error || 'Payment verification failed');
             }
 
+            setIsProcessing(false);
+            setShowDiscardConfirm(false);
             onSuccess(verifyData);
           } catch (err: any) {
             console.error('Payment verification error:', err);
@@ -448,7 +480,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-black/80 backdrop-blur-xs flex justify-end">
       <div className="relative w-full max-w-lg bg-white border-l border-slate-200 shadow-2xl flex flex-col h-full overflow-hidden">
-        
+
         {/* Drawer Header (BookMyShow / Cinemax Style Orange & White) */}
         <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-900 text-white">
           <div>
@@ -465,8 +497,8 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
             </p>
           </div>
           <button
-            onClick={onClose}
-            className="p-1.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white transition"
+            onClick={handleRequestClose}
+            className="p-1.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white transition cursor-pointer"
             title="Close"
           >
             <X className="w-5 h-5" />
@@ -486,7 +518,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
 
         {/* Scrollable Form Body */}
         <div className="flex-1 overflow-y-auto divide-y divide-slate-100 bg-slate-50">
-          
+
           {/* 1. Attendee Contact Details */}
           <div className="p-5 space-y-3 bg-white">
             <div className="flex items-center justify-between">
@@ -872,6 +904,52 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Discard Booking Confirmation Modal */}
+      {showDiscardConfirm && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl border border-slate-200 p-5 space-y-4 text-center">
+            <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto">
+              <AlertCircle className="w-6 h-6 stroke-[2.5]" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-[#141B2B]">
+                {language === 'mr' ? 'बुकिंग रद्द करायची आहे का?' : 'Cancel Booking Session?'}
+              </h3>
+              <p className="text-xs text-[#64748B] mt-1.5 leading-relaxed">
+                {language === 'mr'
+                  ? 'आपण मागे गेल्यास आपल्या निवडलेल्या जागा तात्काळ मोकळ्या केल्या जातील आणि इतर प्रेक्षकांसाठी उपलब्ध होतील.'
+                  : 'If you leave now, your held seats will be released immediately and made available for others.'}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                type="button"
+                disabled={isReleasing}
+                onClick={() => setShowDiscardConfirm(false)}
+                className="py-2.5 px-3 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+              >
+                {language === 'mr' ? 'बुकिंग सुरू ठेवा' : 'Keep Booking'}
+              </button>
+              <button
+                type="button"
+                disabled={isReleasing}
+                onClick={handleConfirmDiscard}
+                className="py-2.5 px-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-sm transition cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                {isReleasing ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <span>सोडत आहे...</span>
+                  </>
+                ) : (
+                  <span>{language === 'mr' ? 'होय' : 'Yes'}</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

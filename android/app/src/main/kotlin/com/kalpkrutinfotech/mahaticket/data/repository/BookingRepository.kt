@@ -295,4 +295,21 @@ class BookingRepository(
             }
         }
     }
+
+    suspend fun releaseHold(
+        sessionId: Int,
+        holdToken: String,
+        seatIds: List<Int>? = null
+    ): Result<Int> = withContext(Dispatchers.IO) {
+        try {
+            val response = apiService.releaseSeats(ReleaseSeatsRequest(sessionId, holdToken, seatIds))
+            if (response.isSuccessful && response.body()?.success == true) {
+                Result.success(response.body()?.releasedCount ?: 0)
+            } else {
+                Result.failure(Exception(response.body()?.error ?: "Failed to release seats"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }

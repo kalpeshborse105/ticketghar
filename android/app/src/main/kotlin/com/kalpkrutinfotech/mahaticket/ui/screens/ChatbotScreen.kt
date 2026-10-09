@@ -12,6 +12,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -55,9 +56,9 @@ fun ChatbotScreen(
             ChatMessage(
                 sender = "agent",
                 text = if (language == AppLanguage.MARATHI)
-                    "नमस्कार! मी महाटिकिट AI सहाय्यक आहे.\n\nमहाराष्ट्रातील नाटकांची माहिती, योग्य आसन निवड आणि तिकीट आरक्षणासाठी मी मदत करू शकतो. आपल्याला काय शोधायचे आहे?"
+                    "नमस्कार! मी टिकिटमित्र, महाटिकिटचा AI सहाय्यक आहे.\n(महाटिकिट हे कल्पकृत इन्फोटेक चे अधिकृत तिकीट व्यासपीठ आहे)\n\nमहाराष्ट्रातील नाटकांची माहिती, योग्य आसन निवड आणि तिकीट आरक्षणासाठी मी मदत करू शकतो. आपल्याला काय शोधायचे आहे?"
                 else
-                    "Hello! I am your MahaTicket AI assistant.\n\nI can help you discover plays, choose seats, and book tickets instantly across Maharashtra. How may I help you?",
+                    "Hello! I am TikitMitra, your MahaTicket AI assistant.\n(MahaTicket is a product of Kalpkrut Infotech)\n\nI can help you discover plays, choose seats, and book tickets instantly across Maharashtra. How may I help you?",
                 actionLabel = if (language == AppLanguage.MARATHI) "नाटके शोधा" else "Explore Plays",
                 actionTab = AppTab.EXPLORE
             )
@@ -162,7 +163,7 @@ fun ChatbotScreen(
                     Column {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = if (language == AppLanguage.MARATHI) "नाट्यमित्र AI" else "NatyaMitra AI",
+                                text = if (language == AppLanguage.MARATHI) "टिकिटमित्र AI" else "TikitMitra AI",
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = TextPrimary
@@ -270,7 +271,7 @@ fun ChatbotScreen(
                     Spacer(modifier = Modifier.height(2.dp))
 
                     Text(
-                        text = if (isUser) "तुम्ही" else "नाट्यमित्र",
+                        text = if (isUser) "तुम्ही" else "टिकिटमित्र",
                         fontSize = 9.5.sp,
                         color = TextSecondary,
                         modifier = Modifier.padding(horizontal = 4.dp)
@@ -287,7 +288,7 @@ fun ChatbotScreen(
                         Text(text = "🎭", fontSize = 15.sp)
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = if (language == AppLanguage.MARATHI) "नाट्यमित्र विचार करत आहे..." else "NatyaMitra is typing...",
+                            text = if (language == AppLanguage.MARATHI) "टिकिटमित्र विचार करत आहे..." else "TikitMitra is typing...",
                             fontSize = 12.sp,
                             color = MahaOrangeDeep,
                             fontWeight = FontWeight.Medium
@@ -345,9 +346,9 @@ fun ChatbotScreen(
                     placeholder = {
                         Text(
                             text = if (language == AppLanguage.MARATHI)
-                                "नाट्यमित्राला विचारा (उदा. 4 जागा कोणत्या चांगल्या?)..."
+                                "टिकिटमित्राला विचारा (उदा. 4 जागा कोणत्या चांगल्या?)..."
                             else
-                                "Ask NatyaMitra about seats, plays, booking...",
+                                "Ask TikitMitra about seats, plays, booking...",
                             fontSize = 12.sp,
                             color = TextSecondary
                         )
@@ -381,7 +382,7 @@ fun ChatbotScreen(
                         .testTag("chat_send_button")
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Send,
+                        imageVector = Icons.AutoMirrored.Filled.Send,
                         contentDescription = "Send",
                         tint = if (inputQuery.isNotBlank()) Color.White else Color.Gray,
                         modifier = Modifier.size(18.dp)

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
-import { orders, auditLogs } from '@/src/db/schema.ts';
+import { orders, auditLogs, tickets, seatInventory } from '@/src/db/schema.ts';
 import { eq } from 'drizzle-orm';
 import { verifyWebhookSignature } from '@/src/lib/payments/razorpay.ts';
 
@@ -91,6 +91,10 @@ export async function POST(request: Request) {
         details: JSON.stringify({ razorpayPaymentId, event }),
       });
     } else if (event === 'payment.failed') {
+      if (order.paymentStatus === 'failed') {
+        return NextResponse.json({ received: true, status: 'already_failed' });
+      }
+
       await db
         .update(orders)
         .set({
@@ -99,6 +103,68 @@ export async function POST(request: Request) {
           updatedAt: new Date(),
         })
         .where(eq(orders.id, order.id));
+
+      // Release any held seats back to available
+      await db
+        .update(seatInventory)
+        .set({
+          status: 'available',
+          heldByUserId: null,
+          holdExpiresAt: null,
+          orderId: null,
+        })
+        .where(eq(seatInventory.orderId, order.id));
+
+      await db.insert(auditLogs).values({
+        actorId: 'gateway-webhook',
+        actorRole: 'payment_gateway',
+        action: 'WEBHOOK_PAYMENT_FAILED',
+        entityType: 'order',
+        entityId: order.orderNumber,
+        details: JSON.stringify({ razorpayOrderId, event }),
+      });
+    } else if (event === 'refund.processed' || event === 'refund.created') {
+      const refundEntity = payload.payload?.refund?.entity;
+      const refundAmount = refundEntity?.amount || order.grandTotal;
+
+      if (order.paymentStatus === 'refunded') {
+        return NextResponse.json({ received: true, status: 'already_refunded' });
+      }
+
+      await db
+        .update(orders)
+        .set({
+          paymentStatus: 'refunded',
+          orderStatus: 'cancelled',
+          updatedAt: new Date(),
+        })
+        .where(eq(orders.id, order.id));
+
+      await db
+        .update(tickets)
+        .set({
+          status: 'refunded',
+        })
+        .where(eq(tickets.orderId, order.id));
+
+      await db
+        .update(seatInventory)
+        .set({
+          status: 'available',
+          heldByUserId: null,
+          holdExpiresAt: null,
+          orderId: null,
+        })
+        .where(eq(seatInventory.orderId, order.id));
+
+      await db.insert(auditLogs).values({
+        actorId: 'gateway-webhook',
+        actorRole: 'payment_gateway',
+        action: 'WEBHOOK_REFUND_PROCESSED',
+        entityType: 'order',
+        entityId: order.orderNumber,
+        details: JSON.stringify({ refundEntity, refundAmount, event }),
+      });
     }
 
     return NextResponse.json({ received: true, processed: true });

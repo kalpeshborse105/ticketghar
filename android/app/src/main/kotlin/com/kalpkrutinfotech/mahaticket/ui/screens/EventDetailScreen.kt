@@ -3,6 +3,8 @@ package com.kalpkrutinfotech.mahaticket.ui.screens
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -43,6 +45,7 @@ import com.kalpkrutinfotech.mahaticket.ui.components.TrailerPreviewDialog
 import com.kalpkrutinfotech.mahaticket.ui.viewmodel.EventDetailUiState
 import com.kalpkrutinfotech.mahaticket.ui.viewmodel.EventViewModel
 import com.kalpkrutinfotech.mahaticket.ui.viewmodel.EventViewModelFactory
+import com.kalpkrutinfotech.mahaticket.util.UserSessionManager
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
@@ -74,17 +77,13 @@ fun EventDetailScreen(
     ) {
         when (val state = eventState) {
             is EventDetailUiState.Loading -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    TheaterLoaderCard(message = "नाट्य माहिती लोड होत आहे...")
-                }
+                EventDetailShimmerSkeleton()
             }
             is EventDetailUiState.Success -> {
                 val event = state.event
                 StitchEventDetailContent(
                     event = event,
+                    eventViewModel = eventViewModel,
                     onNavigateBack = onNavigateBack,
                     onBookSession = onBookSession,
                     onWatchTrailer = { showTrailerModal = true },
@@ -174,12 +173,24 @@ fun EventDetailScreen(
 @Composable
 private fun StitchEventDetailContent(
     event: EventItem,
+    eventViewModel: EventViewModel,
     onNavigateBack: () -> Unit,
     onBookSession: (Int, Int) -> Unit,
     onWatchTrailer: () -> Unit,
     onShareEvent: () -> Unit
 ) {
     val context = LocalContext.current
+    val sessionManager = remember { UserSessionManager.getInstance(context) }
+    val reviewsResponse by eventViewModel.reviewsResponse.collectAsState()
+    val isLoggedIn by sessionManager.isLoggedIn.collectAsState()
+
+    var showReviewDialog by remember { mutableStateOf(false) }
+    var showLoginRequiredDialog by remember { mutableStateOf(false) }
+    var reviewRating by remember { mutableIntStateOf(5) }
+    var reviewComment by remember { mutableStateOf("") }
+    var isSubmittingReview by remember { mutableStateOf(false) }
+    var reviewToast by remember { mutableStateOf<String?>(null) }
+
     val allSessions = event.sessions ?: emptyList()
     var selectedSessionId by remember(allSessions) {
         mutableStateOf(allSessions.firstOrNull()?.id ?: 1)
@@ -435,30 +446,47 @@ private fun StitchEventDetailContent(
                                                 modifier = Modifier.size(16.dp)
                                             )
                                             Spacer(modifier = Modifier.width(4.dp))
-                                            Text(
-                                                text = "९.६",
-                                                fontSize = 13.sp,
-                                                fontWeight = FontWeight.Black,
-                                                color = TextPrimary
-                                            )
-                                            Text(
-                                                text = "/१०",
-                                                fontSize = 10.sp,
-                                                color = TextSecondary
-                                            )
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Box(
-                                                modifier = Modifier
-                                                    .width(1.dp)
-                                                    .height(12.dp)
-                                                    .background(Color(0xFFE2E8F0))
-                                            )
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text(
-                                                text = "३.५k नाट्यप्रेमी मते",
-                                                fontSize = 10.sp,
-                                                color = TextSecondary
-                                            )
+                                            val totalCount = reviewsResponse?.totalCount ?: 0
+                                            val currentAvg = reviewsResponse?.averageRating ?: 0.0
+                                            if (totalCount > 0) {
+                                                Text(
+                                                    text = String.format("%.1f", currentAvg * 2),
+                                                    fontSize = 13.sp,
+                                                    fontWeight = FontWeight.Black,
+                                                    color = TextPrimary
+                                                )
+                                                Text(
+                                                    text = "/१०",
+                                                    fontSize = 10.sp,
+                                                    color = TextSecondary
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Box(
+                                                    modifier = Modifier
+                                                        .width(1.dp)
+                                                        .height(12.dp)
+                                                        .background(Color(0xFFE2E8F0))
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(
+                                                    text = "$totalCount मते",
+                                                    fontSize = 10.sp,
+                                                    color = TextSecondary
+                                                )
+                                            } else {
+                                                Text(
+                                                    text = "नवीन",
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = TextPrimary
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    text = "(अद्याप रेटिंग नाही)",
+                                                    fontSize = 10.sp,
+                                                    color = TextSecondary
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -520,65 +548,127 @@ private fun StitchEventDetailContent(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "नाट्य कलाकार व दिग्दर्शक",
+                                text = "दिग्दर्शक आणि कलाकार (Cast & Crew)",
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = TextPrimary
                             )
                         }
-                        Text(
-                            text = "सर्व पहा",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MahaOrange
-                        )
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    Surface(
+                        color = Color.White,
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(1.dp, MahaBorder),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        val artists = listOf(
-                            Triple("प्रसाद ओक", "मुख्य भूमिका", "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200"),
-                            Triple("मुक्ता बर्वे", "मुख्य भूमिका", "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=200"),
-                            Triple("चंद्रकांत कुलकर्णी", "दिग्दर्शक", "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200"),
-                            Triple("क्षिती जोग", "निर्माते", "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=200")
-                        )
-
-                        artists.forEach { (name, role, imgUrl) ->
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.width(72.dp)
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            // Top: Director Highlight
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(MahaWarmLight, RoundedCornerShape(10.dp))
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                AsyncImage(
-                                    model = imgUrl,
-                                    contentDescription = name,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier
-                                        .size(60.dp)
-                                        .clip(CircleShape)
-                                        .border(1.5.dp, Color(0xFFFFEDD5), CircleShape)
-                                )
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = name,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = TextPrimary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    text = role,
-                                    fontSize = 9.5.sp,
-                                    color = TextSecondary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                                Surface(
+                                    color = MahaOrange,
+                                    shape = CircleShape,
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(text = "🎬", fontSize = 14.sp)
+                                    }
+                                }
+                                Column {
+                                    Text(
+                                        text = event.director?.takeIf { it.isNotBlank() } ?: "चंद्रकांत कुलकर्णी",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = TextPrimary
+                                    )
+                                    Text(
+                                        text = "दिग्दर्शक (Director)",
+                                        fontSize = 10.5.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MahaOrangeDeep
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            Text(
+                                text = "प्रमुख कलाकार (Cast Members):",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextSecondary
+                            )
+
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            // Cast Badges
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                val castList = remember(event.cast) {
+                                    if (!event.cast.isNullOrBlank()) {
+                                        event.cast.split(",").map { it.trim() }.filter { it.isNotBlank() }.map { Pair(it, "कलाकार") }
+                                    } else {
+                                        listOf(
+                                            Pair("प्रसाद ओक", "मुख्य भूमिका"),
+                                            Pair("मुक्ता बर्वे", "मुख्य भूमिका"),
+                                            Pair("क्षिती जोग", "निर्माते व कलाकार"),
+                                            Pair("हर्षद परब", "सहकलाकार")
+                                        )
+                                    }
+                                }
+                                castList.forEach { (name, role) ->
+                                    Surface(
+                                        color = Color(0xFFF8FAFC),
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(20.dp)
+                                                    .background(Color(0xFFFFEDD5), CircleShape),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    text = name.first().toString(),
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MahaOrangeDeep
+                                                )
+                                            }
+                                            Column {
+                                                Text(
+                                                    text = name,
+                                                    fontSize = 11.5.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = TextPrimary
+                                                )
+                                                Text(
+                                                    text = role,
+                                                    fontSize = 9.sp,
+                                                    color = TextSecondary
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -617,30 +707,321 @@ private fun StitchEventDetailContent(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
-                            val synopsisText = event.description.ifBlank {
-                                "आजच्या वेगवान आधुनिक युगात नातेसंबंध टिकवताना आपण नकळत काही 'नियम व अटी' लादतो का? एका सुशिक्षित जोडप्याच्या संसारातील खुसखुशीत संवाद, विनोदी क्षण आणि विचार करायला लावणारी भावनिक वळणे या नाटकामध्ये उत्कृष्टपणे गुंफली आहेत. प्रसाद ओक आणि मुक्ता बर्वे यांच्यातील सहजसुंदर जुगलबंदी प्रेक्षकांना खिळवून ठेवते."
-                            }
+                            val synopsisText = (event.descriptionMr?.takeIf { it.isNotBlank() && it.trim() != "क्युए वर्णन" }
+                                ?: event.description.takeIf { it.isNotBlank() && it.trim() != "क्युए वर्णन" })
+                                ?: "आजच्या वेगवान आधुनिक युगात नातेसंबंध टिकवताना आपण नकळत काही 'नियम व अटी' लादतो का? एका सुशिक्षित जोडप्याच्या संसारातील खुसखुशीत संवाद, विनोदी क्षण आणि विचार करायला लावणारी भावनिक वळणे या नाटकामध्ये उत्कृष्टपणे गुंफली आहेत. प्रसाद ओक आणि मुक्ता बर्वे यांच्यातील सहजसुंदर जुगलबंदी प्रेक्षकांना खिळवून ठेवते."
 
                             Text(
                                 text = synopsisText,
                                 fontSize = 12.5.sp,
                                 color = TextPrimary.copy(alpha = 0.9f),
                                 lineHeight = 20.sp,
-                                maxLines = if (isSynopsisExpanded) Int.MAX_VALUE else 3,
+                                maxLines = if (isSynopsisExpanded || synopsisText.length <= 140) Int.MAX_VALUE else 3,
                                 overflow = TextOverflow.Ellipsis
                             )
 
-                            Spacer(modifier = Modifier.height(6.dp))
+                            if (synopsisText.length > 140) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = if (isSynopsisExpanded) "कमी करा ▴" else "अधिक वाचा... ▾",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MahaOrange,
+                                    modifier = Modifier
+                                        .clickable { isSynopsisExpanded = !isSynopsisExpanded }
+                                        .padding(vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
 
-                            Text(
-                                text = if (isSynopsisExpanded) "कमी करा ▴" else "अधिक वाचा... ▾",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MahaOrange,
+            // 4b. Ratings & Reviews Section (सविस्तर परीक्षण वाचा व मत नोंदवा)
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
                                 modifier = Modifier
-                                    .clickable { isSynopsisExpanded = !isSynopsisExpanded }
-                                    .padding(vertical = 2.dp)
+                                    .width(4.dp)
+                                    .height(16.dp)
+                                    .background(MahaOrange, RoundedCornerShape(2.dp))
                             )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "सविस्तर परीक्षण वाचा व मत नोंदवा",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                        }
+
+                        if (reviewsResponse?.hasUserReviewed == true) {
+                            Surface(
+                                color = Color(0xFFDCFCE7),
+                                shape = RoundedCornerShape(6.dp)
+                            ) {
+                                Text(
+                                    text = "✓ मत नोंदवले",
+                                    color = Color(0xFF16A34A),
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Surface(
+                        color = Color.White,
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, MahaBorder),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            // Top: Summary Rating & Action Button
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Surface(
+                                        color = Color(0xFFFFFBEB),
+                                        shape = RoundedCornerShape(10.dp),
+                                        border = BorderStroke(1.dp, Color(0xFFFDE68A))
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Star,
+                                                contentDescription = null,
+                                                tint = Color(0xFFF59E0B),
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            val count = reviewsResponse?.totalCount ?: 0
+                                            val avg = reviewsResponse?.averageRating ?: 0.0
+                                            Text(
+                                                text = if (count > 0) String.format("%.1f", avg) else "–",
+                                                fontSize = 16.sp,
+                                                fontWeight = FontWeight.Black,
+                                                color = TextPrimary
+                                            )
+                                            Text(
+                                                text = " / ५.०",
+                                                fontSize = 11.sp,
+                                                color = TextSecondary
+                                            )
+                                        }
+                                    }
+
+                                    Column {
+                                        val count = reviewsResponse?.totalCount ?: 0
+                                        Text(
+                                            text = if (count > 0) "एकूण $count परीक्षणे" else "अद्याप परीक्षणे नाहीत",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = TextPrimary
+                                        )
+                                        Text(
+                                            text = "प्रमाणित प्रेक्षक पुनरावलोकन",
+                                            fontSize = 10.sp,
+                                            color = TextSecondary
+                                        )
+                                    }
+                                }
+
+                                if (reviewsResponse?.hasUserReviewed != true) {
+                                    Button(
+                                        onClick = {
+                                            if (!isLoggedIn) {
+                                                showLoginRequiredDialog = true
+                                            } else {
+                                                showReviewDialog = true
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = MahaOrange),
+                                        shape = RoundedCornerShape(10.dp),
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                    ) {
+                                        Text(
+                                            text = "मत नोंदवा ✍️",
+                                            fontSize = 11.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Review Feedback Message
+                            if (reviewToast != null) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Surface(
+                                    color = Color(0xFFF0FDF4),
+                                    shape = RoundedCornerShape(8.dp),
+                                    border = BorderStroke(1.dp, Color(0xFFBBF7D0)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = reviewToast ?: "",
+                                        fontSize = 11.5.sp,
+                                        color = Color(0xFF15803D),
+                                        modifier = Modifier.padding(8.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            // Rating Breakdown Bars
+                            val breakdown = reviewsResponse?.breakdown
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                (5 downTo 1).forEach { stars ->
+                                    val pct = when (stars) {
+                                        5 -> breakdown?.five ?: 75
+                                        4 -> breakdown?.four ?: 18
+                                        3 -> breakdown?.three ?: 5
+                                        2 -> breakdown?.two ?: 1
+                                        else -> breakdown?.one ?: 1
+                                    }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "$stars ★",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = TextSecondary,
+                                            modifier = Modifier.width(24.dp)
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(6.dp)
+                                                .clip(RoundedCornerShape(3.dp))
+                                                .background(Color(0xFFF1F5F9))
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxHeight()
+                                                    .fillMaxWidth(pct.toFloat() / 100f)
+                                                    .background(if (stars >= 4) MahaOrange else Color(0xFFFBBF24))
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "$pct%",
+                                            fontSize = 10.sp,
+                                            color = TextSecondary,
+                                            modifier = Modifier.width(30.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            HorizontalDivider(
+                                color = MahaBorder,
+                                thickness = 1.dp,
+                                modifier = Modifier.padding(vertical = 12.dp)
+                            )
+
+                            // Reviews List
+                            val reviewsList = reviewsResponse?.reviews ?: emptyList()
+                            if (reviewsList.isEmpty()) {
+                                Text(
+                                    text = "या कार्यक्रमासाठी अद्याप परीक्षण नोंदवले गेलेले नाही. आपले मत नोंदवणारे पहिले प्रेक्षक व्हा!",
+                                    fontSize = 11.5.sp,
+                                    color = TextSecondary,
+                                    modifier = Modifier.padding(vertical = 6.dp)
+                                )
+                            } else {
+                                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    reviewsList.take(5).forEach { review ->
+                                        Surface(
+                                            color = Color(0xFFF8FAFC),
+                                            shape = RoundedCornerShape(10.dp),
+                                            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Column(modifier = Modifier.padding(10.dp)) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = review.author,
+                                                            fontSize = 12.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = TextPrimary
+                                                        )
+                                                        if (review.verified) {
+                                                            Surface(
+                                                                color = Color(0xFFDCFCE7),
+                                                                shape = RoundedCornerShape(4.dp)
+                                                            ) {
+                                                                Text(
+                                                                    text = "✓ प्रमाणित प्रेक्षक",
+                                                                    fontSize = 9.sp,
+                                                                    color = Color(0xFF16A34A),
+                                                                    fontWeight = FontWeight.Bold,
+                                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+
+                                                    Row {
+                                                        repeat(review.rating) {
+                                                            Text(text = "★", color = Color(0xFFF59E0B), fontSize = 11.sp)
+                                                        }
+                                                    }
+                                                }
+
+                                                if (review.comment.isNotBlank()) {
+                                                    Spacer(modifier = Modifier.height(4.dp))
+                                                    Text(
+                                                        text = review.comment,
+                                                        fontSize = 11.5.sp,
+                                                        color = TextPrimary.copy(alpha = 0.9f),
+                                                        lineHeight = 16.sp
+                                                    )
+                                                }
+
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text(
+                                                    text = (review.date ?: "").take(10),
+                                                    fontSize = 9.5.sp,
+                                                    color = TextSecondary
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -713,19 +1094,19 @@ private fun StitchEventDetailContent(
                             val isSelected = selectedDateIndex == idx
                             Surface(
                                 modifier = Modifier
-                                    .width(74.dp)
-                                    .clip(RoundedCornerShape(14.dp))
+                                    .width(62.dp)
+                                    .clip(RoundedCornerShape(12.dp))
                                     .clickable { selectedDateIndex = idx },
                                 color = if (isSelected) MahaOrange else Color.White,
-                                shape = RoundedCornerShape(14.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 border = BorderStroke(
                                     1.dp,
                                     if (isSelected) MahaOrange else MahaBorder
                                 ),
-                                shadowElevation = if (isSelected) 3.dp else 1.dp
+                                shadowElevation = if (isSelected) 2.dp else 0.5.dp
                             ) {
                                 Column(
-                                    modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp),
+                                    modifier = Modifier.padding(vertical = 6.dp, horizontal = 4.dp),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
                                     Text(
@@ -1427,5 +1808,246 @@ private fun StitchEventDetailContent(
                 }
             }
         }
+
+        // 10. Login Required Alert Dialog
+        if (showLoginRequiredDialog) {
+            AlertDialog(
+                onDismissRequest = { showLoginRequiredDialog = false },
+                title = {
+                    Text(
+                        text = "लॉगिन आवश्यक आहे",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        color = TextPrimary
+                    )
+                },
+                text = {
+                    Text(
+                        text = "परीक्षण आणि रेटिंग नोंदवण्यासाठी कृपया लॉगिन करा. एका लॉगिन वापरकर्त्यास एका कार्यक्रमासाठी १ मत नोंदवता येते.",
+                        fontSize = 13.sp,
+                        color = TextSecondary
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = { showLoginRequiredDialog = false }) {
+                        Text("समजले", color = MahaOrange, fontWeight = FontWeight.Bold)
+                    }
+                }
+            )
+        }
+
+        // 11. Rate Event & Write Review Modal
+        if (showReviewDialog) {
+            AlertDialog(
+                onDismissRequest = { if (!isSubmittingReview) showReviewDialog = false },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(text = "✍️ ", fontSize = 18.sp)
+                        Text(
+                            text = "आपले मत नोंदवा",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            color = TextPrimary
+                        )
+                    }
+                },
+                text = {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        // User info auto-fill preview
+                        Surface(
+                            color = Color(0xFFF8FAFC),
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Text(
+                                    text = "नाव: ${sessionManager.getName() ?: "प्रमाणित वापरकर्ता"}",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextPrimary
+                                )
+                                Text(
+                                    text = "ईमेल: ${sessionManager.getEmail() ?: ""}",
+                                    fontSize = 11.sp,
+                                    color = TextSecondary
+                                )
+                            }
+                        }
+
+                        // Star selector
+                        Column {
+                            Text(
+                                text = "रेटिंग निवडा (१ ते ५ स्टार):",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextSecondary
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                (1..5).forEach { starIndex ->
+                                    IconButton(
+                                        onClick = { reviewRating = starIndex },
+                                        modifier = Modifier.size(36.dp)
+                                    ) {
+                                        Text(
+                                            text = if (starIndex <= reviewRating) "★" else "☆",
+                                            fontSize = 26.sp,
+                                            color = if (starIndex <= reviewRating) Color(0xFFF59E0B) else Color(0xFFCBD5E1)
+                                        )
+                                    }
+                                }
+                                Text(
+                                    text = "$reviewRating/५",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextPrimary
+                                )
+                            }
+                        }
+
+                        // Comment field
+                        OutlinedTextField(
+                            value = reviewComment,
+                            onValueChange = { reviewComment = it },
+                            label = { Text("आपला सविस्तर अभिप्राय (कमेंट)") },
+                            placeholder = { Text("नाटकाचे कथानक, अभिनय आणि संगीत याबद्दल आपले मत नोंदवा...") },
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 3,
+                            maxLines = 5,
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            if (isSubmittingReview) return@Button
+                            isSubmittingReview = true
+                            eventViewModel.submitReview(
+                                eventId = event.id,
+                                rating = reviewRating,
+                                comment = reviewComment.trim(),
+                                userName = sessionManager.getName() ?: "प्रेक्षक",
+                                userEmail = sessionManager.getEmail() ?: "viewer@mahaticket.in",
+                                onSuccess = { msg ->
+                                    isSubmittingReview = false
+                                    showReviewDialog = false
+                                    reviewComment = ""
+                                    reviewToast = msg
+                                },
+                                onError = { err ->
+                                    isSubmittingReview = false
+                                    reviewToast = err
+                                }
+                            )
+                        },
+                        enabled = !isSubmittingReview,
+                        colors = ButtonDefaults.buttonColors(containerColor = MahaOrange),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        if (isSubmittingReview) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                color = Color.White,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Text("मत सादर करा", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { showReviewDialog = false },
+                        enabled = !isSubmittingReview
+                    ) {
+                        Text("रद्द करा", color = TextSecondary)
+                    }
+                }
+            )
+        }
     }
 }
+
+@Composable
+private fun EventDetailShimmerSkeleton() {
+    val transition = rememberInfiniteTransition(label = "detail_shimmer")
+    val translateAnim by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1000f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shimmer_detail"
+    )
+    val shimmerBrush = Brush.linearGradient(
+        colors = listOf(
+            Color(0xFFF1F5F9),
+            Color(0xFFE2E8F0),
+            Color(0xFFF1F5F9)
+        ),
+        start = Offset.Zero,
+        end = Offset(x = translateAnim, y = translateAnim)
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MahaBg)
+    ) {
+        // Hero poster skeleton
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(280.dp)
+                .background(shimmerBrush)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.7f)
+                    .height(26.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(shimmerBrush)
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.4f)
+                    .height(18.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(shimmerBrush)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(90.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(shimmerBrush)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(shimmerBrush)
+            )
+        }
+    }
+}
+

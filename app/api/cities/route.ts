@@ -6,7 +6,13 @@ import { eq, asc } from 'drizzle-orm';
 export async function GET() {
   try {
     const catalog = await db
-      .select({ name: cities.name, nameMr: cities.nameMr })
+      .select({
+        id: cities.id,
+        name: cities.name,
+        nameMr: cities.nameMr,
+        districtId: cities.districtId,
+        isPopular: cities.isPopular,
+      })
       .from(cities)
       .where(eq(cities.isActive, 1))
       .orderBy(asc(cities.sortOrder), asc(cities.name));

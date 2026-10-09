@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -34,10 +35,10 @@ import com.kalpkrutinfotech.mahaticket.ui.viewmodel.TicketsUiState
 @Composable
 fun MyTicketsScreen(
     viewModel: BookingViewModel,
-    onNavigateToHome: () -> Unit = {}
+    onNavigateToHome: () -> Unit = {},
+    onNavigateToLogin: () -> Unit = {}
 ) {
     val ticketsState by viewModel.ticketsState.collectAsState()
-    var lookupQuery by remember { mutableStateOf("") }
     val context = LocalContext.current
 
     LaunchedEffect(Unit) {
@@ -97,46 +98,6 @@ fun MyTicketsScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Phone or Booking ID Search Bar
-                    OutlinedTextField(
-                        value = lookupQuery,
-                        onValueChange = { lookupQuery = it },
-                        placeholder = {
-                            Text("मोबाईल नंबर किंवा बुकिंग क्रमांक टाका", fontSize = 13.sp, color = TextSecondary)
-                        },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Default.PhoneAndroid,
-                                contentDescription = null,
-                                tint = MahaOrange,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        },
-                        trailingIcon = {
-                            if (lookupQuery.isNotBlank()) {
-                                IconButton(onClick = { viewModel.loadMyTickets(lookupQuery.trim()) }) {
-                                    Icon(
-                                        Icons.Default.Search,
-                                        contentDescription = "Search",
-                                        tint = MahaOrange
-                                    )
-                                }
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary,
-                            focusedContainerColor = MahaWarmLight,
-                            unfocusedContainerColor = MahaWarmLight,
-                            focusedBorderColor = MahaOrange,
-                            unfocusedBorderColor = MahaBorder
-                        ),
-                        singleLine = true
-                    )
                 }
             }
 
@@ -146,58 +107,104 @@ fun MyTicketsScreen(
                     .fillMaxSize()
                     .weight(1f)
             ) {
-                when (val state = ticketsState) {
-                    is TicketsUiState.Loading -> {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            TheaterLoaderCard(message = "डिजिटल पास तपासत आहोत...")
-                        }
-                    }
-                    is TicketsUiState.Error -> {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
+                val sessionManager = remember { com.kalpkrutinfotech.mahaticket.util.UserSessionManager.getInstance(context) }
+                val isLoggedIn by sessionManager.isLoggedIn.collectAsState()
+
+                if (!isLoggedIn) {
+                    // Prompt user to login to view their tickets
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(24.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            color = Color.White,
+                            border = BorderStroke(1.dp, MahaBorder),
+                            shadowElevation = 2.dp
                         ) {
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 modifier = Modifier.padding(24.dp)
                             ) {
-                                Icon(
-                                    Icons.Default.ConfirmationNumber,
-                                    contentDescription = null,
-                                    tint = MahaOrange,
-                                    modifier = Modifier.size(52.dp)
-                                )
-                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(text = "🎫", fontSize = 48.sp)
+                                Spacer(modifier = Modifier.height(14.dp))
                                 Text(
-                                    text = "कोणतेही तिकीट सापडले नाही",
-                                    fontSize = 16.sp,
+                                    text = "माझी तिकिटे पाहण्यासाठी लॉगिन करा",
+                                    fontSize = 17.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = TextPrimary
                                 )
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(
-                                    text = "कृपया बुकिंग करताना दिलेला अचूक मोबाईल नंबर टाका.",
-                                    fontSize = 12.sp,
-                                    color = TextSecondary
+                                    text = "तुमची बुक केलेली सर्व डिजिटल तिकिटे व प्रवेश पास सुरक्षितपणे पाहण्यासाठी कृपया लॉगिन करा.",
+                                    fontSize = 12.5.sp,
+                                    color = TextSecondary,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                 )
-                                Spacer(modifier = Modifier.height(16.dp))
+                                Spacer(modifier = Modifier.height(20.dp))
                                 Button(
-                                    onClick = { viewModel.loadMyTickets() },
+                                    onClick = onNavigateToLogin,
                                     colors = ButtonDefaults.buttonColors(containerColor = MahaOrange),
-                                    shape = RoundedCornerShape(8.dp)
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(44.dp)
                                 ) {
-                                    Text("पुन्हा प्रयत्न करा", fontWeight = FontWeight.Bold, color = Color.White)
+                                    Icon(Icons.AutoMirrored.Filled.Login, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("लॉगिन करा / Sign In", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 14.sp)
                                 }
                             }
                         }
                     }
-                    is TicketsUiState.Success -> {
-                        val orders = state.tickets
-
-                        if (orders.isEmpty()) {
+                } else {
+                    when (val state = ticketsState) {
+                        is TicketsUiState.Loading -> {
+                            // Modern Ticket Skeleton Shimmer Animation
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                repeat(3) {
+                                    Surface(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(140.dp),
+                                        shape = RoundedCornerShape(14.dp),
+                                        color = MahaWarmLight,
+                                        border = BorderStroke(1.dp, MahaBorder)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                            ) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(20.dp),
+                                                    color = MahaOrange,
+                                                    strokeWidth = 2.dp
+                                                )
+                                                Text(
+                                                    text = "डिजिटल पास लोड होत आहेत...",
+                                                    fontSize = 12.sp,
+                                                    color = TextSecondary,
+                                                    fontWeight = FontWeight.Medium
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        is TicketsUiState.Error -> {
                             Box(
                                 modifier = Modifier.fillMaxSize(),
                                 contentAlignment = Alignment.Center
@@ -206,53 +213,92 @@ fun MyTicketsScreen(
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                     modifier = Modifier.padding(24.dp)
                                 ) {
-                                    Text(text = "🎭", fontSize = 48.sp)
-                                    Spacer(modifier = Modifier.height(14.dp))
+                                    Icon(
+                                        Icons.Default.ConfirmationNumber,
+                                        contentDescription = null,
+                                        tint = MahaOrange,
+                                        modifier = Modifier.size(52.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
                                     Text(
-                                        text = "अद्याप कोणतेही तिकीट बुक केलेले नाही",
+                                        text = "कोणतेही तिकीट सापडले नाही",
                                         fontSize = 16.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = TextPrimary
                                     )
                                     Spacer(modifier = Modifier.height(6.dp))
                                     Text(
-                                        text = "आजच लोकप्रिय नाटक किंवा संगीत कार्यक्रमाचे तिकीट बुक करा.",
+                                        text = "तुमच्या खात्यावर सध्या कोणतीही सक्रिय तिकिटे नाहीत.",
                                         fontSize = 12.sp,
-                                        color = TextSecondary,
-                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                        color = TextSecondary
                                     )
-                                    Spacer(modifier = Modifier.height(18.dp))
+                                    Spacer(modifier = Modifier.height(16.dp))
                                     Button(
-                                        onClick = onNavigateToHome,
+                                        onClick = { viewModel.loadMyTickets() },
                                         colors = ButtonDefaults.buttonColors(containerColor = MahaOrange),
                                         shape = RoundedCornerShape(8.dp)
                                     ) {
-                                        Text("कार्यक्रम शोधा", fontWeight = FontWeight.Bold, color = Color.White)
+                                        Text("पुन्हा लोड करा", fontWeight = FontWeight.Bold, color = Color.White)
                                     }
                                 }
                             }
-                        } else {
-                            LazyColumn(
-                                modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(16.dp, 16.dp, 16.dp, 90.dp),
-                                verticalArrangement = Arrangement.spacedBy(14.dp)
-                            ) {
-                                items(orders, key = { it.orderNumber }) { order ->
-                                    val booking = order.toBooking()
-                                    TicketPassCard(
-                                        booking = booking,
-                                        language = AppLanguage.MARATHI,
-                                        onShareClick = {
-                                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                                type = "text/plain"
-                                                putExtra(
-                                                    Intent.EXTRA_TEXT,
-                                                    "माझे महाटिकिट डिजिटल तिकीट: ${BuildConfig.API_BASE_URL}/tickets/${order.orderNumber}\n${order.eventTitle}"
-                                                )
-                                            }
-                                            context.startActivity(Intent.createChooser(shareIntent, "तिकीट शेअर करा"))
+                        }
+                        is TicketsUiState.Success -> {
+                            val orders = state.tickets
+
+                            if (orders.isEmpty()) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier.padding(24.dp)
+                                    ) {
+                                        Text(text = "🎭", fontSize = 48.sp)
+                                        Spacer(modifier = Modifier.height(14.dp))
+                                        Text(
+                                            text = "अद्याप कोणतीही तिकिटे बुक केलेली नाहीत",
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = TextPrimary
+                                        )
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Text(
+                                            text = "आपल्या आवडत्या मराठी नाटकांचे व कार्यक्रमांचे ई-पास येथे दिसतील.",
+                                            fontSize = 12.5.sp,
+                                            color = TextSecondary,
+                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                        )
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        Button(
+                                            onClick = onNavigateToHome,
+                                            colors = ButtonDefaults.buttonColors(containerColor = MahaOrange),
+                                            shape = RoundedCornerShape(8.dp)
+                                        ) {
+                                            Text("नवीन कार्यक्रम पहा", fontWeight = FontWeight.Bold, color = Color.White)
                                         }
-                                    )
+                                    }
+                                }
+                            } else {
+                                LazyColumn(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentPadding = PaddingValues(16.dp, 12.dp, 16.dp, 90.dp),
+                                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                                ) {
+                                    items(orders, key = { it.orderNumber }) { order ->
+                                        TicketPassCard(
+                                            booking = order.toBooking(),
+                                            onShareClick = {
+                                                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                                    type = "text/plain"
+                                                    putExtra(Intent.EXTRA_SUBJECT, "MahaTicket: ${order.eventTitle}")
+                                                    putExtra(Intent.EXTRA_TEXT, "मी महाटिकिटवर ${order.eventTitle} चे तिकीट बुक केले आहे! बुकिंग क्रमांक: ${order.orderNumber}")
+                                                }
+                                                context.startActivity(Intent.createChooser(shareIntent, "तिकीट शेअर करा"))
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         }

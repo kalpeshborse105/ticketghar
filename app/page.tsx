@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { translations } from '@/src/lib/i18n';
 import { Language, EventCategory, EventItem, EventSessionItem } from '@/src/lib/types';
 import { Header } from '@/src/components/Header';
@@ -33,6 +34,15 @@ import {
   ShieldCheck,
   MapPin,
   Ticket,
+  ChevronRight,
+  Sparkles,
+  QrCode,
+  Armchair,
+  Building2,
+  Landmark,
+  Headphones,
+  Clock,
+  ArrowRight,
 } from 'lucide-react';
 
 
@@ -48,6 +58,7 @@ const CATEGORIES: { id: EventCategory; labelEn: string; labelMr: string; icon: a
 ];
 
 export default function HomePage() {
+  const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [language, setLanguage] = useState<Language>('mr');
   const t = translations[language];
@@ -88,6 +99,23 @@ export default function HomePage() {
   const [confirmedBookingResult, setConfirmedBookingResult] = useState<any | null>(null);
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [sortBy, setSortBy] = useState<'date' | 'price_asc' | 'price_desc'>('date');
+  const [venuesList, setVenuesList] = useState<any[]>([]);
+
+  useEffect(() => {
+    const loadVenues = async () => {
+      try {
+        const url = `/api/venues${selectedCity && selectedCity !== 'महाराष्ट्र (All)' ? `?city=${encodeURIComponent(selectedCity)}` : ''}`;
+        const res = await fetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          setVenuesList(data.venues || []);
+        }
+      } catch (e) {
+        console.warn('Failed to load venues', e);
+      }
+    };
+    loadVenues();
+  }, [selectedCity]);
 
   useEffect(() => {
     setMounted(true);
@@ -271,13 +299,9 @@ export default function HomePage() {
     }
   };
 
-  // Initiate booking from event card
+  // Initiate booking from event card -> redirect to event details page for showtime selection
   const handleSelectEvent = (event: EventItem) => {
-    setSelectedEventForBooking(event);
-    if (event.sessions && event.sessions.length > 0) {
-      setSelectedSessionForBooking(event.sessions[0]);
-    }
-    setSeatMapOpen(true);
+    router.push(`/events/${event.id}`);
   };
 
   // From Seat Map to Checkout
@@ -285,7 +309,7 @@ export default function HomePage() {
     setCheckoutHoldData(holdData);
     setSeatMapOpen(false);
     setCheckoutOpen(true);
-    addToast('success', language === 'mr' ? 'जागा ८ मिनिटांसाठी आरक्षित केल्या आहेत' : 'Seats held for 8 minutes');
+    addToast('success', language === 'mr' ? 'जागा ५ मिनिटांसाठी आरक्षित केल्या आहेत' : 'Seats held for 5 minutes');
   };
 
   // From Checkout to Success Ticket Pass
@@ -474,8 +498,8 @@ export default function HomePage() {
                     </button>
                   )}
                 </div>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
-                  {CATEGORIES.filter((c) => c.id !== 'all').map((cat) => {
+                <div className="flex overflow-x-auto gap-2.5 pb-2 scrollbar-none sm:grid sm:grid-cols-4 lg:grid-cols-8">
+                  {CATEGORIES.map((cat) => {
                     const Icon = cat.icon;
                     const isSelected = selectedCategory === cat.id;
                     return (
@@ -483,18 +507,16 @@ export default function HomePage() {
                         key={cat.id}
                         type="button"
                         onClick={() => setSelectedCategory(cat.id)}
-                        className={`group flex flex-col items-center justify-center rounded-2xl p-3 text-center shadow-sm transition ${
-                          isSelected
-                            ? 'bg-[#ea580c] text-white'
-                            : 'bg-white text-[#141b2b] hover:bg-[#FFF7ED]'
-                        }`}
+                        className={`group flex flex-col items-center justify-center rounded-2xl p-3 text-center shadow-xs transition min-w-[85px] sm:min-w-0 shrink-0 sm:shrink cursor-pointer ${isSelected
+                          ? 'bg-[#ea580c] text-white'
+                          : 'bg-white text-[#141b2b] hover:bg-[#FFF7ED]'
+                          }`}
                       >
                         <div
-                          className={`mb-1.5 flex h-12 w-12 items-center justify-center rounded-2xl p-2.5 transition ${
-                            isSelected
-                              ? 'bg-white/20 text-white'
-                              : 'bg-[#FFF7ED] text-[#ea580c] group-hover:bg-[#ea580c] group-hover:text-white'
-                          }`}
+                          className={`mb-1.5 flex h-12 w-12 items-center justify-center rounded-2xl p-2.5 transition ${isSelected
+                            ? 'bg-white/20 text-white'
+                            : 'bg-[#FFF7ED] text-[#ea580c] group-hover:bg-[#ea580c] group-hover:text-white'
+                            }`}
                         >
                           <Icon className="h-7 w-7" />
                         </div>
@@ -512,7 +534,7 @@ export default function HomePage() {
                 <MiddleStripBanner announcements={announcements} language={language} />
               )}
 
-              {/* Featured events rail */}
+              {/* Featured events rail (आज काय पाहायचं?) */}
               {!searchQuery.trim() &&
                 selectedCategory === 'all' &&
                 sortedEvents.filter((e) => (e as any).featured).length > 0 && (
@@ -525,30 +547,310 @@ export default function HomePage() {
                         </h2>
                         <p className="text-sm text-[#64748b]">
                           {language === 'mr'
-                            ? 'सध्या हायलाइट केलेले कार्यक्रम'
-                            : 'Currently highlighted shows'}
+                            ? `${selectedCity}` + ' परिसरातील खास प्रयोग'
+                            : `${selectedCity}` + ' Popular Shows'}
                         </p>
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="flex overflow-x-auto gap-3.5 pb-2 scrollbar-none sm:grid sm:grid-cols-2 lg:grid-cols-4">
                       {sortedEvents
                         .filter((e) => (e as any).featured)
                         .slice(0, 4)
                         .map((evt) => (
-                          <EventCard
-                            key={`feat-${evt.id}`}
-                            event={evt}
-                            language={language}
-                            onSelect={handleSelectEvent}
-                          />
+                          <div key={`feat-${evt.id}`} className="min-w-[240px] sm:min-w-0 shrink-0 sm:shrink">
+                            <EventCard
+                              event={evt}
+                              language={language}
+                              onSelect={handleSelectEvent}
+                            />
+                          </div>
                         ))}
                     </div>
                   </section>
                 )}
 
+              {/* STITCH SECTION 1: मराठी रंगभूमी विशेष (Theatrical Poster Rail) */}
+              {!searchQuery.trim() && selectedCategory === 'all' && (
+                <section className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="h-8 w-1.5 rounded-full bg-[#ea580c]" />
+                      <div>
+                        <h2 className="text-xl font-bold text-[#141b2b]">
+                          {language === 'mr' ? 'मराठी रंगभूमी विशेष' : 'Marathi Theatre Specials'}
+                        </h2>
+                        <p className="text-sm text-[#64748b]">
+                          {language === 'mr' ? 'सध्याचे गाजलेले व प्रेक्षकप्रिय मराठी नाटके' : 'Acclaimed & blockbuster Marathi plays'}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCategory('plays')}
+                      className="text-xs font-bold text-[#ea580c] hover:text-[#c2410c] flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>{language === 'mr' ? 'सर्व पहा' : 'View all'}</span>
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <div className="flex overflow-x-auto gap-3.5 pb-2 scrollbar-none sm:grid sm:grid-cols-2 lg:grid-cols-4">
+                    {(sortedEvents.filter((e) => e.category === 'plays' || (e as any).categoryMr === 'नाटक').length > 0
+                      ? sortedEvents.filter((e) => e.category === 'plays' || (e as any).categoryMr === 'नाटक')
+                      : sortedEvents
+                    )
+                      .slice(0, 4)
+                      .map((evt) => (
+                        <div key={`theatre-${evt.id}`} className="min-w-[240px] sm:min-w-0 shrink-0 sm:shrink">
+                          <EventCard
+                            event={evt}
+                            language={language}
+                            onSelect={handleSelectEvent}
+                          />
+                        </div>
+                      ))}
+                  </div>
+                </section>
+              )}
+
+              {/* STITCH SECTION 2: महानाट्य महोत्सव २०२५ Festive Promotional Banner */}
+              {!searchQuery.trim() && selectedCategory === 'all' && (
+                <div className="rounded-2xl bg-gradient-to-r from-[#9A3412] via-[#C2410C] to-[#EA580C] p-5 sm:p-7 text-white shadow-lg relative overflow-hidden">
+                  <div className="relative z-10 max-w-2xl space-y-2.5">
+                    <div className="flex items-center gap-1.5 text-orange-200 text-xs font-bold">
+                      <Sparkles className="h-4 w-4 text-amber-300" />
+                      <span>{language === 'mr' ? 'मर्यादित काळासाठी विशेष ऑफर' : 'Limited Time Special Offer'}</span>
+                    </div>
+                    <h3 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+                      {language === 'mr' ? 'महानाट्य महोत्सव २०२५' : 'Mahanatya Mahotsav 2025'}
+                    </h3>
+                    <p className="text-xs sm:text-sm text-orange-100 font-medium leading-relaxed">
+                      {language === 'mr'
+                        ? 'सर्व नाटकांच्या आगाऊ बुकिंगवर २०% पर्यंत भरघोस सूट! आजच आपले आणि आपल्या कुटुंबीयांचे तिकीट आरक्षित करा.'
+                        : 'Get up to 20% discount on advance ticket bookings for all Marathi plays across Maharashtra.'}
+                    </p>
+                    <div className="pt-2 flex flex-wrap items-center gap-3">
+                      <span className="px-3 py-1.5 rounded-lg bg-black/30 border border-white/30 text-white font-mono font-bold text-xs tracking-wider">
+                        {language === 'mr' ? 'कोड: MAHA20' : 'CODE: MAHA20'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedCategory('plays')}
+                        className="px-4 py-1.5 rounded-lg bg-white text-[#C2410C] font-bold text-xs hover:bg-orange-50 transition shadow-xs cursor-pointer active:scale-95"
+                      >
+                        {language === 'mr' ? 'नाटके पहा व सवलत मिळवा' : 'Explore Theatre'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* STITCH SECTION 1: विकेंड प्लॅनर - या आठवड्याचे लोकप्रिय कार्यक्रम (Popular Shows of the Week) */}
+              {!searchQuery.trim() && selectedCategory === 'all' && (
+                <section className="space-y-3.5">
+                  <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-bold text-[#ea580c] tracking-wide mb-1">
+                        {language === 'mr' ? 'विकेंड प्लॅनर' : 'Weekend Planner'}
+                      </p>
+                      <h2 className="text-2xl sm:text-3xl font-extrabold text-[#141b2b] tracking-tight">
+                        {language === 'mr' ? 'या आठवड्याचे लोकप्रिय कार्यक्रम' : 'Trending Shows This Week'}
+                      </h2>
+                      <p className="text-xs sm:text-sm text-[#64748b] mt-0.5">
+                        {language === 'mr'
+                          ? 'प्रेक्षकांची पहिली पसंती आणि झपाट्याने भरणारे आगामी प्रयोग'
+                          : 'Top audience picks and rapidly filling upcoming shows'}
+                      </p>
+                    </div>
+
+                    {/* Status Legend on Right */}
+                    <div className="flex items-center gap-3.5 text-xs font-bold text-[#64748b] pt-1 sm:pt-0 shrink-0">
+                      <span className="flex items-center gap-1.5">
+                        <span className="h-2 w-2 rounded-full bg-[#16a34a]" />
+                        <span>{language === 'mr' ? 'उपलब्ध' : 'Available'}</span>
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="h-2 w-2 rounded-full bg-[#ea580c]" />
+                        <span>{language === 'mr' ? 'लवकर भरत आहे' : 'Filling Fast'}</span>
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="h-2 w-2 rounded-full bg-[#94a3b8]" />
+                        <span>{language === 'mr' ? 'हाउसफुल्ल' : 'Housefull'}</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 3 Horizontal Cards matching screenshot */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+                    {/* Card 1: लावणी बहार २०२५ */}
+                    <div
+                      onClick={() => {
+                        const target = sortedEvents.find(e => e.titleMr?.includes('लावणी') || e.title?.toLowerCase().includes('lavani')) || sortedEvents[0];
+                        if (target) handleSelectEvent(target);
+                      }}
+                      className="group bg-white rounded-2xl border border-[#E5E7EB] hover:border-orange-300 p-3 shadow-2xs hover:shadow-xs transition cursor-pointer flex gap-3 items-center justify-between"
+                    >
+                      <div className="flex gap-3 min-w-0 flex-1">
+                        <img
+                          src="https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=300&q=80"
+                          alt="लावणी बहार २०२५"
+                          className="w-24 h-24 rounded-xl object-cover shrink-0 bg-slate-100 group-hover:scale-[1.02] transition"
+                        />
+                        <div className="min-w-0 flex-1 flex flex-col justify-between py-0.5">
+                          <div>
+                            <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#FFF7ED] text-[#ea580c]">
+                                {language === 'mr' ? 'लोककला' : 'Folk Art'}
+                              </span>
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-orange-50 text-[#c2410c] flex items-center gap-0.5">
+                                <span>⚡</span>
+                                <span>{language === 'mr' ? 'लवकर भरत आहे' : 'Fast Filling'}</span>
+                              </span>
+                            </div>
+                            <h3 className="text-sm font-extrabold text-[#141b2b] truncate group-hover:text-[#ea580c] transition">
+                              {language === 'mr' ? 'लावणी बहार २०२५' : 'Lavani Bahar 2025'}
+                            </h3>
+                            <p className="text-xs text-[#64748b] truncate">
+                              {language === 'mr' ? 'सुरेखा पुणेकर व सहकारी' : 'Surekha Punekar & Troupe'}
+                            </p>
+                          </div>
+                          <div className="text-[11px] text-[#64748b] flex items-center gap-1 truncate pt-1">
+                            <Clock className="w-3 h-3 text-[#ea580c] shrink-0" />
+                            <span className="truncate">
+                              {language === 'mr' ? 'शनिवार, संध्याकाळी ८:०० • टिळक स्मारक' : 'Sat, 8:00 PM • Tilak Smarak'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col items-end justify-between self-stretch shrink-0 pl-1">
+                        <span className="text-[10px] text-[#64748b]">
+                          {language === 'mr' ? 'स्टॉल आसने शिल्लक' : 'Stall Seats Left'}
+                        </span>
+                        <button
+                          type="button"
+                          className="px-3 py-1.5 rounded-lg bg-[#FFF7ED] hover:bg-orange-100 text-[#ea580c] font-bold text-xs border border-orange-200 transition shadow-2xs whitespace-nowrap"
+                        >
+                          {language === 'mr' ? 'आरक्षण करा' : 'Book'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Card 2: सवाई गंधर्व स्मरण मैफल */}
+                    <div
+                      onClick={() => {
+                        const target = sortedEvents.find(e => e.category === 'music' || e.titleMr?.includes('संगीत') || e.title?.toLowerCase().includes('music')) || sortedEvents[1] || sortedEvents[0];
+                        if (target) handleSelectEvent(target);
+                      }}
+                      className="group bg-white rounded-2xl border border-[#E5E7EB] hover:border-orange-300 p-3 shadow-2xs hover:shadow-xs transition cursor-pointer flex gap-3 items-center justify-between"
+                    >
+                      <div className="flex gap-3 min-w-0 flex-1">
+                        <img
+                          src="https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=300&q=80"
+                          alt="सवाई गंधर्व स्मरण मैफल"
+                          className="w-24 h-24 rounded-xl object-cover shrink-0 bg-slate-100 group-hover:scale-[1.02] transition"
+                        />
+                        <div className="min-w-0 flex-1 flex flex-col justify-between py-0.5">
+                          <div>
+                            <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#FFF7ED] text-[#ea580c]">
+                                {language === 'mr' ? 'शास्त्रीय' : 'Classical'}
+                              </span>
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 flex items-center gap-0.5">
+                                <span>🟢</span>
+                                <span>{language === 'mr' ? 'तिकिटे उपलब्ध' : 'Tickets Open'}</span>
+                              </span>
+                            </div>
+                            <h3 className="text-sm font-extrabold text-[#141b2b] truncate group-hover:text-[#ea580c] transition">
+                              {language === 'mr' ? 'सवाई गंधर्व स्मरण मैफल' : 'Sawai Gandharva Smaran'}
+                            </h3>
+                            <p className="text-xs text-[#64748b] truncate">
+                              {language === 'mr' ? 'पंडित संजीव अभ्यंकर यांचे गायन' : 'Pt. Sanjeev Abhyankar Vocal'}
+                            </p>
+                          </div>
+                          <div className="text-[11px] text-[#64748b] flex items-center gap-1 truncate pt-1">
+                            <Clock className="w-3 h-3 text-[#ea580c] shrink-0" />
+                            <span className="truncate">
+                              {language === 'mr' ? 'रविवार, सकाळी ९:०० • बालगंधर्व' : 'Sun, 9:00 AM • Bal Gandharva'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col items-end justify-between self-stretch shrink-0 pl-1">
+                        <span className="text-[10px] text-[#64748b]">
+                          {language === 'mr' ? 'सकलनी खास बैठक' : 'Balcony Reserved'}
+                        </span>
+                        <button
+                          type="button"
+                          className="px-3 py-1.5 rounded-lg bg-[#FFF7ED] hover:bg-orange-100 text-[#ea580c] font-bold text-xs border border-orange-200 transition shadow-2xs whitespace-nowrap"
+                        >
+                          {language === 'mr' ? 'आरक्षण करा' : 'Book'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Card 3: पुरुषोत्तम करंडक विजेते एकांकिका */}
+                    <div
+                      onClick={() => {
+                        const target = sortedEvents.find(e => e.category === 'plays' || e.titleMr?.includes('नाटक')) || sortedEvents[2] || sortedEvents[0];
+                        if (target) handleSelectEvent(target);
+                      }}
+                      className="group bg-white rounded-2xl border border-[#E5E7EB] hover:border-orange-300 p-3 shadow-2xs hover:shadow-xs transition cursor-pointer flex gap-3 items-center justify-between"
+                    >
+                      <div className="flex gap-3 min-w-0 flex-1">
+                        <img
+                          src="https://images.unsplash.com/photo-1460723237483-7a6dc9d0b212?auto=format&fit=crop&w=300&q=80"
+                          alt="पुरुषोत्तम करंडक विजेते एकांकिका"
+                          className="w-24 h-24 rounded-xl object-cover shrink-0 bg-slate-100 group-hover:scale-[1.02] transition"
+                        />
+                        <div className="min-w-0 flex-1 flex flex-col justify-between py-0.5">
+                          <div>
+                            <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#FFF7ED] text-[#ea580c]">
+                                {language === 'mr' ? 'युवा नाट्य' : 'Youth Theatre'}
+                              </span>
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-orange-50 text-[#c2410c] flex items-center gap-0.5">
+                                <span>⚡</span>
+                                <span>{language === 'mr' ? '८५% भरले' : '85% Filled'}</span>
+                              </span>
+                            </div>
+                            <h3 className="text-sm font-extrabold text-[#141b2b] truncate group-hover:text-[#ea580c] transition">
+                              {language === 'mr' ? 'पुरुषोत्तम करंडक विजेते ए...' : 'Purushottam Karandak Winners'}
+                            </h3>
+                            <p className="text-xs text-[#64748b] truncate">
+                              {language === 'mr' ? 'संशोधक तीन युवा सादरीकरणे' : 'Three Award-Winning One Acts'}
+                            </p>
+                          </div>
+                          <div className="text-[11px] text-[#64748b] flex items-center gap-1 truncate pt-1">
+                            <Clock className="w-3 h-3 text-[#ea580c] shrink-0" />
+                            <span className="truncate">
+                              {language === 'mr' ? 'रविवार, दु. ३:०० • भरत नाट्य मंदिर' : 'Sun, 3:00 PM • Bharat Natya'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col items-end justify-between self-stretch shrink-0 pl-1">
+                        <span className="text-[10px] text-[#ea580c] font-bold">
+                          {language === 'mr' ? 'केवळ ४५ जागा बाकी' : 'Only 45 Seats Left'}
+                        </span>
+                        <button
+                          type="button"
+                          className="px-3 py-1.5 rounded-lg bg-[#FFF7ED] hover:bg-orange-100 text-[#ea580c] font-bold text-xs border border-orange-200 transition shadow-2xs whitespace-nowrap"
+                        >
+                          {language === 'mr' ? 'आरक्षण करा' : 'Book'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              )}
+
               {/* Main discovery grid */}
               <section>
-                <div className="mb-3 flex items-end justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-1.5 rounded-full bg-[#ea580c]" />
                   <div>
                     <h2 className="text-xl font-bold text-[#141b2b]">
                       {language === 'mr' ? 'ठळक कार्यक्रम' : 'All events'}
@@ -560,16 +862,6 @@ export default function HomePage() {
                         : ''}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={fetchEvents}
-                    className="inline-flex items-center gap-1 rounded-lg border border-[#e7e5e4] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#64748b] hover:border-orange-300 hover:text-[#ea580c]"
-                  >
-                    <RefreshCw className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">
-                      {language === 'mr' ? 'ताजे करा' : 'Refresh'}
-                    </span>
-                  </button>
                 </div>
 
                 {loading ? (
@@ -621,24 +913,345 @@ export default function HomePage() {
                 )}
               </section>
 
-              {/* Post Event CTA — compact */}
-              <section className="flex flex-col items-start justify-between gap-3 rounded-xl border border-[#e7e5e4] bg-white p-4 sm:flex-row sm:items-center">
-                <div>
-                  <h3 className="text-sm font-extrabold text-[#111827]">
-                    {language === 'mr' ? 'आपला कार्यक्रम पोस्ट करा' : 'Post your event'}
-                  </h3>
-                  <p className="mt-0.5 text-xs text-[#64748b]">
-                    {language === 'mr'
-                      ? 'आयोजकांसाठी सूचीबद्धता, बुकिंग आणि सेटलमेंट.'
-                      : 'Listing, bookings and settlements for organizers.'}
-                  </p>
+              {/* STITCH SECTION 2: नाट्यगृह दर्शन (Theatres in Selected City) */}
+              {!searchQuery.trim() && selectedCategory === 'all' && (
+                <section className="space-y-3.5">
+                  <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-bold text-[#ea580c] tracking-wide mb-1">
+                        {language === 'mr' ? 'नाट्यगृह दर्शन' : 'Theatres Directory'}
+                      </p>
+                      <h2 className="text-2xl sm:text-3xl font-extrabold text-[#141b2b] tracking-tight">
+                        {language === 'mr'
+                          ? selectedCity === 'महाराष्ट्र (All)'
+                            ? 'महाराष्ट्रातील प्रमुख नाट्यगृहे (Theatres in Maharashtra)'
+                            : `${selectedCity} मधील प्रमुख नाट्यगृहे (Theatres in ${selectedCity})`
+                          : `Iconic Theatres in ${selectedCity === 'महाराष्ट्र (All)' ? 'Maharashtra' : selectedCity}`}
+                      </h2>
+                      <p className="text-xs sm:text-sm text-[#64748b] mt-0.5">
+                        {language === 'mr'
+                          ? 'आपल्या पसंतीच्या नाट्यगृहातील सर्व चालू व आगामी प्रयोगांचे वेळापत्रक पहा'
+                          : 'Explore scheduled live performances and upcoming showtimes'}
+                      </p>
+                    </div>
+
+                    <div className="text-xs text-[#64748b] font-medium pt-1 sm:pt-0 shrink-0">
+                      {language === 'mr'
+                        ? `एकूण ${venuesList.length > 0 ? venuesList.length : 3} नाट्यगृहे सक्रिय`
+                        : `${venuesList.length > 0 ? venuesList.length : 3} Active Theatres`}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {venuesList.length > 0 ? (
+                      venuesList.map((v: any) => (
+                        <div
+                          key={v.id}
+                          className="bg-white rounded-2xl border border-[#E5E7EB] hover:border-orange-300 p-5 shadow-2xs hover:shadow-xs transition flex flex-col justify-between"
+                        >
+                          <div>
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="w-12 h-12 rounded-2xl bg-orange-50 border border-orange-100 text-[#ea580c] flex items-center justify-center shrink-0">
+                                <Theater className="h-6 w-6" />
+                              </div>
+                              <span className="text-xs font-bold px-3 py-1 rounded-full bg-orange-100 text-[#c2410c]">
+                                {language === 'mr' ? `आज ${v.showCount || 2} प्रयोग` : `${v.showCount || 2} Shows Today`}
+                              </span>
+                            </div>
+
+                            <h3 className="text-lg font-extrabold text-[#141b2b]">
+                              {language === 'mr' ? (v.nameMr || v.name) : v.name}
+                            </h3>
+                            <p className="text-xs text-[#64748b] flex items-center gap-1 mt-1">
+                              <MapPin className="w-3.5 h-3.5 text-[#ea580c] shrink-0" />
+                              <span className="truncate">{v.address || v.city}</span>
+                            </p>
+                            <p className="text-xs text-[#64748b] leading-relaxed mt-2.5 line-clamp-2">
+                              {language === 'mr'
+                                ? `${v.city} मधील प्रमुख सांस्कृतिक केंद्र. अत्याधुनिक ध्वनी यंत्रणा व आरामदायक वातानुकूलित सभागृह.`
+                                : `Premier cultural venue in ${v.city} featuring acoustics and climate control.`}
+                            </p>
+
+                            <div className="flex flex-wrap items-center gap-1.5 mt-3.5">
+                              <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-[#64748b]">
+                                {v.totalCapacity || 600} आसने
+                              </span>
+                              <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-[#64748b]">
+                                AC सभागृह
+                              </span>
+                              <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-[#64748b]">
+                                वाहनतळ
+                              </span>
+                            </div>
+                          </div>
+
+                          <Link
+                            href={`/venues/${v.id}`}
+                            className="mt-4 w-full py-2.5 rounded-xl bg-[#FFF7ED] hover:bg-orange-100 text-[#ea580c] font-bold text-xs sm:text-sm border border-orange-200 flex items-center justify-center gap-1.5 transition active:scale-95 text-center"
+                          >
+                            <span>{language === 'mr' ? 'येथील प्रयोग पहा' : 'View Shows Here'}</span>
+                            <ArrowRight className="w-4 h-4 inline" />
+                          </Link>
+                        </div>
+                      ))
+                    ) : (
+                      <>
+                        {/* Fallback Theatre Card 1: बालगंधर्व रंगमंदिर */}
+                        <div className="bg-white rounded-2xl border border-[#E5E7EB] hover:border-orange-300 p-5 shadow-2xs hover:shadow-xs transition flex flex-col justify-between">
+                          <div>
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="w-12 h-12 rounded-2xl bg-orange-50 border border-orange-100 text-[#ea580c] flex items-center justify-center shrink-0">
+                                <Theater className="h-6 w-6" />
+                              </div>
+                              <span className="text-xs font-bold px-3 py-1 rounded-full bg-orange-100 text-[#c2410c]">
+                                {language === 'mr' ? 'आज ६ प्रयोग' : '6 Shows Today'}
+                              </span>
+                            </div>
+
+                            <h3 className="text-lg font-extrabold text-[#141b2b]">
+                              {language === 'mr' ? 'बालगंधर्व रंगमंदिर' : 'Bal Gandharva Rangmandir'}
+                            </h3>
+                            <p className="text-xs text-[#64748b] flex items-center gap-1 mt-1">
+                              <MapPin className="w-3.5 h-3.5 text-[#ea580c] shrink-0" />
+                              <span className="truncate">
+                                {language === 'mr'
+                                  ? 'झांशीची राणी लक्ष्मीबाई चौक, JM रोड, शिवाजीनगर'
+                                  : 'Jangali Maharaj Rd, Shivajinagar, Pune'}
+                              </span>
+                            </p>
+                            <p className="text-xs text-[#64748b] leading-relaxed mt-2.5">
+                              {language === 'mr'
+                                ? 'महाराष्ट्राच्या नाट्यसंस्कृतीचे केंद्रस्थान. अत्याधुनिक ध्वनी यंत्रणा, प्रशस्त वातानुकूलित सभागृह आणि विस्तीर्ण वाहनतळ.'
+                                : 'The epicenter of Marathi theatre culture featuring acoustic hall, central AC and parking.'}
+                            </p>
+
+                            <div className="flex flex-wrap items-center gap-1.5 mt-3.5">
+                              <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-[#64748b]">
+                                ९५० आसने
+                              </span>
+                              <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-[#64748b]">
+                                AC सभागृह
+                              </span>
+                              <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-[#64748b]">
+                                कॅफेटेरिया
+                              </span>
+                            </div>
+                          </div>
+
+                          <Link
+                            href="/venues/1"
+                            className="mt-4 w-full py-2.5 rounded-xl bg-[#FFF7ED] hover:bg-orange-100 text-[#ea580c] font-bold text-xs sm:text-sm border border-orange-200 flex items-center justify-center gap-1.5 transition active:scale-95 text-center"
+                          >
+                            <span>{language === 'mr' ? 'येथील प्रयोग पहा' : 'View Shows Here'}</span>
+                            <ArrowRight className="w-4 h-4 inline" />
+                          </Link>
+                        </div>
+
+                        {/* Fallback Theatre Card 2: यशवंतराव चव्हाण नाट्यगृह */}
+                        <div className="bg-white rounded-2xl border border-[#E5E7EB] hover:border-orange-300 p-5 shadow-2xs hover:shadow-xs transition flex flex-col justify-between">
+                          <div>
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="w-12 h-12 rounded-2xl bg-orange-50 border border-orange-100 text-[#ea580c] flex items-center justify-center shrink-0">
+                                <Building2 className="h-6 w-6" />
+                              </div>
+                              <span className="text-xs font-bold px-3 py-1 rounded-full bg-orange-100 text-[#c2410c]">
+                                {language === 'mr' ? 'आज ४ प्रयोग' : '4 Shows Today'}
+                              </span>
+                            </div>
+
+                            <h3 className="text-lg font-extrabold text-[#141b2b]">
+                              {language === 'mr' ? 'यशवंतराव चव्हाण नाट्यगृह' : 'Yashwantrao Chavan Natyagruha'}
+                            </h3>
+                            <p className="text-xs text-[#64748b] flex items-center gap-1 mt-1">
+                              <MapPin className="w-3.5 h-3.5 text-[#ea580c] shrink-0" />
+                              <span className="truncate">
+                                {language === 'mr'
+                                  ? 'पौड रोड, कोथरूड, पुणे'
+                                  : 'Paud Road, Kothrud, Pune'}
+                              </span>
+                            </p>
+                            <p className="text-xs text-[#64748b] leading-relaxed mt-2.5">
+                              {language === 'mr'
+                                ? 'पश्चिम पुण्यातील रसिकांचे आवडते नाट्यगृह. आरामदायक सिटिंग, दर्जेदार अकौस्टिक्स आणि मेट्रो स्टेशनच्या अगदी लगत.'
+                                : 'Kothrud’s premium cultural hub with superb acoustics, pushback seating, adjacent to metro.'}
+                            </p>
+
+                            <div className="flex flex-wrap items-center gap-1.5 mt-3.5">
+                              <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-[#64748b]">
+                                ८०० आसने
+                              </span>
+                              <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-[#64748b]">
+                                मेट्रो थेट जोडणी
+                              </span>
+                              <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-[#64748b]">
+                                मोठे पार्किंग
+                              </span>
+                            </div>
+                          </div>
+
+                          <Link
+                            href="/venues/3"
+                            className="mt-4 w-full py-2.5 rounded-xl bg-[#FFF7ED] hover:bg-orange-100 text-[#ea580c] font-bold text-xs sm:text-sm border border-orange-200 flex items-center justify-center gap-1.5 transition active:scale-95 text-center"
+                          >
+                            <span>{language === 'mr' ? 'येथील प्रयोग पहा' : 'View Shows Here'}</span>
+                            <ArrowRight className="w-4 h-4 inline" />
+                          </Link>
+                        </div>
+
+                        {/* Fallback Theatre Card 3: टिळक स्मारक मंदिर */}
+                        <div className="bg-white rounded-2xl border border-[#E5E7EB] hover:border-orange-300 p-5 shadow-2xs hover:shadow-xs transition flex flex-col justify-between">
+                          <div>
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="w-12 h-12 rounded-2xl bg-orange-50 border border-orange-100 text-[#ea580c] flex items-center justify-center shrink-0">
+                                <Landmark className="h-6 w-6" />
+                              </div>
+                              <span className="text-xs font-bold px-3 py-1 rounded-full bg-orange-100 text-[#c2410c]">
+                                {language === 'mr' ? 'आज ५ प्रयोग' : '5 Shows Today'}
+                              </span>
+                            </div>
+
+                            <h3 className="text-lg font-extrabold text-[#141b2b]">
+                              {language === 'mr' ? 'टिळक स्मारक मंदिर' : 'Tilak Smarak Mandir'}
+                            </h3>
+                            <p className="text-xs text-[#64748b] flex items-center gap-1 mt-1">
+                              <MapPin className="w-3.5 h-3.5 text-[#ea580c] shrink-0" />
+                              <span className="truncate">
+                                {language === 'mr'
+                                  ? 'टिळक रोड, सदाशिव पेठ, पुणे'
+                                  : 'Tilak Road, Sadashiv Peth, Pune'}
+                              </span>
+                            </p>
+                            <p className="text-xs text-[#64748b] leading-relaxed mt-2.5">
+                              {language === 'mr'
+                                ? 'पुण्याच्या मध्यवस्तीतील ऐतिहासिक नाट्यगृह. संगीत नाटके, प्रायोगिक रंगभूमी व व्याख्यानांसाठी सुप्रसिद्ध ठिकाण.'
+                                : 'Historic institution in central Pune revered for sangeet natak, classical recitals and plays.'}
+                            </p>
+
+                            <div className="flex flex-wrap items-center gap-1.5 mt-3.5">
+                              <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-[#64748b]">
+                                ७२० आसने
+                              </span>
+                              <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-[#64748b]">
+                                पेठ परिसराच्या केंद्रस्थानी
+                              </span>
+                              <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-[#64748b]">
+                                पारंपरिक स्टेज
+                              </span>
+                            </div>
+                          </div>
+
+                          <Link
+                            href="/venues/tilak-smarak"
+                            className="mt-4 w-full py-2.5 rounded-xl bg-[#FFF7ED] hover:bg-orange-100 text-[#ea580c] font-bold text-xs sm:text-sm border border-orange-200 flex items-center justify-center gap-1.5 transition active:scale-95 text-center"
+                          >
+                            <span>{language === 'mr' ? 'येथील प्रयोग पहा' : 'View Shows Here'}</span>
+                            <ArrowRight className="w-4 h-4 inline" />
+                          </Link>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </section>
+              )}
+
+              {/* STITCH SECTION 3: Trust & Value Proposition Strip (Exact 4 Columns from Screenshot) */}
+              {!searchQuery.trim() && selectedCategory === 'all' && (
+                <section className="rounded-2xl border border-[#E5E7EB] bg-white p-5 sm:p-6 shadow-2xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                    {/* Item 1: झटपट एम-तिकीट */}
+                    <div className="flex items-start gap-3.5">
+                      <div className="w-11 h-11 rounded-2xl bg-orange-50 border border-orange-100 text-[#ea580c] flex items-center justify-center shrink-0">
+                        <QrCode className="w-5 h-5" />
+                      </div>
+                      <div className="space-y-0.5">
+                        <h4 className="text-sm font-bold text-[#141b2b]">
+                          {language === 'mr' ? 'झटपट एम-तिकीट' : 'Instant M-Ticket'}
+                        </h4>
+                        <p className="text-xs text-[#64748b] leading-relaxed">
+                          {language === 'mr'
+                            ? 'व्हॉट्सॲप आणि ई-मेल वर त्वरित डिजिटल पास. रांगेची कटकट नाही.'
+                            : 'Direct pass via WhatsApp and E-Mail. Skip all ticket counter queues.'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Item 2: थेट आसन निवड */}
+                    <div className="flex items-start gap-3.5">
+                      <div className="w-11 h-11 rounded-2xl bg-orange-50 border border-orange-100 text-[#ea580c] flex items-center justify-center shrink-0">
+                        <Armchair className="w-5 h-5" />
+                      </div>
+                      <div className="space-y-0.5">
+                        <h4 className="text-sm font-bold text-[#141b2b]">
+                          {language === 'mr' ? 'थेट आसन निवड' : 'Live Seat Selection'}
+                        </h4>
+                        <p className="text-xs text-[#64748b] leading-relaxed">
+                          {language === 'mr'
+                            ? 'रंगभूमीची प्रत्यक्ष रचना पाहून आवडते आसन स्वतः निवडा.'
+                            : 'Interactive real-time theatre map to handpick your favorite seats.'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Item 3: १००% सुरक्षित व्यवहार */}
+                    <div className="flex items-start gap-3.5">
+                      <div className="w-11 h-11 rounded-2xl bg-orange-50 border border-orange-100 text-[#ea580c] flex items-center justify-center shrink-0">
+                        <ShieldCheck className="w-5 h-5" />
+                      </div>
+                      <div className="space-y-0.5">
+                        <h4 className="text-sm font-bold text-[#141b2b]">
+                          {language === 'mr' ? '१००% सुरक्षित व्यवहार' : '100% Safe Payments'}
+                        </h4>
+                        <p className="text-xs text-[#64748b] leading-relaxed">
+                          {language === 'mr'
+                            ? 'UPI, नेटबँकिंग व कार्ड्ससह पूर्णतः अधिकृत आणि संरक्षित प्रणाली.'
+                            : 'Authorized multi-tier encrypted gateway supporting UPI and cards.'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Item 4: महाटिकिट ग्राहक सहाय्यता */}
+                    <div className="flex items-start gap-3.5">
+                      <div className="w-11 h-11 rounded-2xl bg-orange-50 border border-orange-100 text-[#ea580c] flex items-center justify-center shrink-0">
+                        <Headphones className="w-5 h-5" />
+                      </div>
+                      <div className="space-y-0.5">
+                        <h4 className="text-sm font-bold text-[#141b2b]">
+                          {language === 'mr' ? 'महाटिकिट ग्राहक सहाय्यता' : 'Marathi Customer Support'}
+                        </h4>
+                        <p className="text-xs text-[#64748b] leading-relaxed">
+                          {language === 'mr'
+                            ? 'सकाळी ८ ते रात्री ११ पर्यंत तुमच्या मदतीसाठी समर्पित महाटिकिट सपोर्ट टीम.'
+                            : 'Dedicated MahaTicket-speaking support team from 8 AM to 11 PM.'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              {/* STITCH SECTION 5: आयोजक आहात का? (Organizer CTA Card) */}
+              <section className="flex flex-col sm:flex-row items-center justify-between gap-4 rounded-2xl border border-orange-200/80 bg-gradient-to-r from-[#FFF7ED] via-white to-[#FFF7ED] p-5 sm:p-6 shadow-2xs">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-12 h-12 rounded-2xl bg-[#ea580c] text-white flex items-center justify-center shrink-0 shadow-md">
+                    <Ticket className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-extrabold text-[#141b2b]">
+                      {language === 'mr' ? 'आयोजक आहात का? महाटिकिटवर प्रयोग नोंदवा!' : 'Are you an Organizer? List with MahaTicket!'}
+                    </h3>
+                    <p className="text-xs text-[#64748b]">
+                      {language === 'mr'
+                        ? 'महाराष्ट्रातील हजारो नाट्यप्रेमींपर्यंत पोहोचा. शून्य सेटअप फी, थेट आसन आरक्षण व जलद सेटलमेंट.'
+                        : 'Reach thousands of theatregoers across Maharashtra. Zero setup fees & instant settlements.'}
+                    </p>
+                  </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setPartnerModalOpen(true)}
-                  className="mt-btn mt-btn-primary whitespace-nowrap"
+                  className="px-5 py-2.5 rounded-xl bg-[#ea580c] hover:bg-[#c2410c] text-white text-xs font-bold transition shadow-sm whitespace-nowrap cursor-pointer active:scale-95 shrink-0"
                 >
-                  {language === 'mr' ? 'कार्यक्रम पोस्ट करा' : 'Post Event'}
+                  {language === 'mr' ? 'कार्यक्रम नोंदवा (Post Event)' : 'Post Event'}
                 </button>
               </section>
             </div>
@@ -803,13 +1416,6 @@ export default function HomePage() {
                   className="block transition hover:text-orange-400"
                 >
                   Terms & Conditions
-                </Link>
-
-                <Link
-                  href="/admin"
-                  className="block transition hover:text-orange-400"
-                >
-                  Admin Login
                 </Link>
               </div>
             </div>

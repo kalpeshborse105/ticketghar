@@ -48,6 +48,8 @@ export interface VerifyResult {
 
 interface AdminScannerProps {
   scannerUserId?: number | string;
+  scannerOrganizerId?: number | string;
+  targetEventId?: number | string;
   initialGateName?: string;
   onTicketVerified?: (ticket: any) => void;
   onViewVerifiedList?: () => void;
@@ -117,11 +119,14 @@ function triggerVibration(pattern: number[]) {
 
 export const AdminScanner: React.FC<AdminScannerProps> = ({
   scannerUserId,
+  scannerOrganizerId,
+  targetEventId: initialTargetEventId,
   initialGateName = 'Main Entry Gate 1',
   onTicketVerified,
   onViewVerifiedList,
 }) => {
   const [gateName, setGateName] = useState(initialGateName);
+  const [targetEventId, setTargetEventId] = useState<string | number | undefined>(initialTargetEventId);
   const [cameraActive, setCameraActive] = useState(false);
   const [cameras, setCameras] = useState<CameraDevice[]>([]);
   const [selectedCameraId, setSelectedCameraId] = useState<string>('');
@@ -191,6 +196,8 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
           ticketCodeOrPayload: rawCode.trim(),
           gateName: gateName || 'Main Gate',
           scannerUserId: scannerUserId || 1,
+          scannerOrganizerId: scannerOrganizerId,
+          targetEventId: targetEventId,
           scannerDevice: typeof navigator !== 'undefined' ? `${navigator.userAgent.slice(0, 30)}` : 'Admin Terminal',
         }),
       });
@@ -248,7 +255,7 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
         isCooldownRef.current = false;
       }, 1500);
     }
-  }, [gateName, scannerUserId, soundEnabled, isVerifying, onTicketVerified]);
+  }, [gateName, scannerUserId, scannerOrganizerId, targetEventId, soundEnabled, isVerifying, onTicketVerified]);
 
   // Start Camera
   const startCamera = async (cameraId?: string) => {

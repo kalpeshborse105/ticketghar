@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter, Noto_Sans, Noto_Sans_Devanagari } from 'next/font/google';
 import './globals.css';
+import { TikitMitraFloatingBot } from '@/src/components/TikitMitraFloatingBot';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -63,7 +64,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
         />
       </head>
-      <body suppressHydrationWarning>{children}</body>
+      <body suppressHydrationWarning>
+        {children}
+        <TikitMitraFloatingBot />
+      </body>
     </html>
   );
 }

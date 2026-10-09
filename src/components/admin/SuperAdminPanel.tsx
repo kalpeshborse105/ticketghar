@@ -19,7 +19,13 @@ import {
   RotateCcw,
   Search,
   ExternalLink,
-  DollarSign
+  DollarSign,
+  UploadCloud,
+  Check,
+  Filter,
+  Trash2,
+  Edit3,
+  RefreshCw,
 } from 'lucide-react';
 import { Language } from '../../lib/i18n.ts';
 import { EventItem, VenueItem } from '../../lib/types.ts';
@@ -73,6 +79,22 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
   const [eventDescriptionMr, setEventDescriptionMr] = useState('');
   const [eventPosterUrl, setEventPosterUrl] = useState('');
 
+  // Venue Master Directory Filters & Import State
+  const [venueSearch, setVenueSearch] = useState('');
+  const [venueDistrictFilter, setVenueDistrictFilter] = useState('');
+  const [venueCityFilter, setVenueCityFilter] = useState('');
+  const [venueStatusFilter, setVenueStatusFilter] = useState('all');
+  const [venueLayoutFilter, setVenueLayoutFilter] = useState('all');
+  const [districtsCatalog, setDistrictsCatalog] = useState<any[]>([]);
+  const [citiesCatalog, setCitiesCatalog] = useState<any[]>([]);
+
+  // Bulk Venue Import State
+  const [showImportVenueModal, setShowImportVenueModal] = useState(false);
+  const [importJsonText, setImportJsonText] = useState('');
+  const [importPreviewData, setImportPreviewData] = useState<any>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+
   // Ad Banners
   const [adsList, setAdsList] = useState([
     {
@@ -105,10 +127,12 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
 
   const fetchAllData = async () => {
     try {
-      const [eventsRes, venuesRes, dashRes] = await Promise.all([
+      const [eventsRes, venuesRes, dashRes, distRes, cityRes] = await Promise.all([
         fetch('/api/admin/events'),
         fetch('/api/admin/venues'),
         fetch('/api/admin/dashboard'),
+        fetch('/api/locations/districts'),
+        fetch('/api/locations/cities'),
       ]);
 
       if (eventsRes.ok) {
@@ -122,8 +146,20 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
         const vnData = await venuesRes.json();
         if (Array.isArray(vnData.venues) && vnData.venues.length > 0) {
           setVenuesList(vnData.venues);
-          setVenueForDesigner(vnData.venues[0]);
+          if (!venueForDesigner) {
+            setVenueForDesigner(vnData.venues[0]);
+          }
         }
+      }
+
+      if (distRes.ok) {
+        const distData = await distRes.json();
+        if (Array.isArray(distData.districts)) setDistrictsCatalog(distData.districts);
+      }
+
+      if (cityRes.ok) {
+        const cityData = await cityRes.json();
+        if (Array.isArray(cityData.cities)) setCitiesCatalog(cityData.cities);
       }
 
       if (dashRes.ok) {
@@ -144,6 +180,91 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
       }
     } catch (err) {
       console.warn('Non-blocking admin data fetch error:', err);
+    }
+  };
+
+  const handleToggleVenueVerification = async (venueId: number, currentStatus: string) => {
+    const nextStatus = currentStatus === 'verified' ? 'unverified' : 'verified';
+    try {
+      const res = await fetch('/api/admin/venues', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: venueId, verificationStatus: nextStatus }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        triggerToast(`✓ स्थिती बदलून "${nextStatus === 'verified' ? 'प्रमाणित (Verified)' : 'अपुष्ट (Unverified)'}" केली!`);
+        fetchAllData();
+      } else {
+        triggerToast(data.error || 'स्थिती बदलताना त्रुटी आली.');
+      }
+    } catch {
+      triggerToast('नेटवर्क त्रुटी');
+    }
+  };
+
+  const handleDeleteVenue = async (venueId: number, venueName: string) => {
+    if (!window.confirm(`तुम्हाला नक्की "${venueName}" हे नाट्यगृह हटवायचे आहे का?`)) return;
+    try {
+      const res = await fetch(`/api/admin/venues?id=${venueId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (res.ok) {
+        triggerToast(`✓ "${venueName}" यशस्वीरीत्या हटवले.`);
+        fetchAllData();
+      } else {
+        triggerToast(data.error || 'नाट्यगृह हटवता आले नाही.');
+      }
+    } catch {
+      triggerToast('नेटवर्क त्रुटी');
+    }
+  };
+
+  const handlePreviewImport = async () => {
+    try {
+      setImportError(null);
+      setIsImporting(true);
+      const parsed = JSON.parse(importJsonText);
+      const venuesArr = Array.isArray(parsed) ? parsed : parsed.venues;
+      if (!Array.isArray(venuesArr) || venuesArr.length === 0) {
+        throw new Error('कृपया नाट्यगृहांची वैध JSON सूची (Array) प्रविष्ट करा.');
+      }
+      const res = await fetch('/api/admin/venues/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'preview', venues: venuesArr }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'पडताळणी अयशस्वी.');
+      setImportPreviewData(data);
+    } catch (err: any) {
+      setImportError(err.message || 'JSON स्वरूप अवैध आहे.');
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleConfirmImport = async () => {
+    try {
+      setImportError(null);
+      setIsImporting(true);
+      const parsed = JSON.parse(importJsonText);
+      const venuesArr = Array.isArray(parsed) ? parsed : parsed.venues;
+      const res = await fetch('/api/admin/venues/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'confirm', venues: venuesArr }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'आयात अयशस्वी.');
+      triggerToast(`✓ ${data.importedCount} नाट्यगृहे यशस्वीरीत्या आयात झाली (पुनरावलोकनासाठी अपुष्ट)!`);
+      setShowImportVenueModal(false);
+      setImportJsonText('');
+      setImportPreviewData(null);
+      fetchAllData();
+    } catch (err: any) {
+      setImportError(err.message || 'आयात करताना त्रुटी आली.');
+    } finally {
+      setIsImporting(false);
     }
   };
 
@@ -248,6 +369,7 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
         posterUrl: eventPosterUrl.trim() || 'https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?w=600',
         status: 'published',
         ticketPrice: eventBasePrice * 100,
+        tag: eventBadge || null,
         actorId: currentUser?.email || 'admin',
       };
 
@@ -279,6 +401,50 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
       setIsProcessing(false);
       setShowAddEventModal(false);
       setEditingEvent(null);
+    }
+  };
+
+  const handleDeleteEvent = async (eventId: number, titleMr: string) => {
+    if (!window.confirm(`खरोखर '${titleMr}' कार्यक्रम प्रणालीतून हटवायचा आहे का?`)) return;
+    try {
+      setIsProcessing(true);
+      const res = await fetch(`/api/admin/events?id=${eventId}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        triggerToast('कार्यक्रम यशस्वीरित्या हटवला गेला!');
+        fetchAllData();
+      } else {
+        triggerToast('कार्यक्रम हटवताना त्रुटी आली.');
+      }
+    } catch {
+      triggerToast('कार्यक्रम हटवताना त्रुटी आली.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleToggleEventStatus = async (ev: any) => {
+    const nextStatus = ev.status === 'published' ? 'unpublished' : 'published';
+    try {
+      setIsProcessing(true);
+      const res = await fetch('/api/admin/events', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventId: ev.id,
+          status: nextStatus,
+          actorId: currentUser?.email || 'admin',
+        }),
+      });
+      if (res.ok) {
+        triggerToast(nextStatus === 'published' ? 'कार्यक्रम प्रकाशित केला!' : 'कार्यक्रम अप्रकाशित केला!');
+        fetchAllData();
+      }
+    } catch {
+      triggerToast('स्थिती बदलताना त्रुटी आली.');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -809,17 +975,45 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#FFF7ED] text-[#A33900] font-bold">
                           {ev.category === 'plays' ? 'नाटक' : ev.category}
                         </span>
-                        <span className="text-[10px] text-[#16A34A] font-bold">✓ Live</span>
+                        <div className="flex items-center gap-1">
+                          {ev.tag && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-100 text-[#EA580C] font-bold border border-orange-200">
+                              {ev.tag}
+                            </span>
+                          )}
+                          <span
+                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                              ev.status === 'published'
+                                ? 'bg-emerald-50 text-[#16A34A]'
+                                : 'bg-slate-100 text-slate-600'
+                            }`}
+                          >
+                            {ev.status === 'published' ? '✓ Live' : 'अप्रकाशित'}
+                          </span>
+                        </div>
                       </div>
                       <h4 className="text-xs font-bold text-[#141B2B] mt-1 truncate">{ev.titleMr}</h4>
                       <p className="text-[11px] text-[#64748B] truncate">🏛️ {ev.venue?.nameMr || 'नाट्यगृह'}</p>
                       <p className="text-[11px] font-bold text-[#A33900] mt-0.5">
-                        किमान: ₹{(ev.minPrice || 30000) / 100} • {ev.tag || 'हाऊसफुल्ल'}
+                        किमान: ₹{(ev.minPrice || 30000) / 100} • बॅज: {ev.tag || 'सामान्य'}
                       </p>
                     </div>
 
                     <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E2E8F0]">
                       <button
+                        type="button"
+                        onClick={() => handleToggleEventStatus(ev)}
+                        className={`text-[11px] font-bold px-2 py-1 rounded-lg border transition ${
+                          ev.status === 'published'
+                            ? 'border-amber-200 text-amber-700 hover:bg-amber-50'
+                            : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
+                        }`}
+                      >
+                        {ev.status === 'published' ? 'अप्रकाशित करा' : 'प्रकाशित करा'}
+                      </button>
+
+                      <button
+                        type="button"
                         onClick={() => {
                           setEditingEvent(ev);
                           setEventTitleMr(ev.titleMr);
@@ -832,9 +1026,17 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                           setEventPosterUrl(ev.posterUrl || '');
                           setShowAddEventModal(true);
                         }}
-                        className="text-xs font-bold text-[#A33900] hover:underline"
+                        className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-[#FFF7ED] text-[#A33900] hover:bg-orange-100 border border-orange-200 transition"
                       >
                         संपादित करा
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteEvent(ev.id, ev.titleMr)}
+                        className="text-[11px] font-bold px-2 py-1 rounded-lg text-red-600 hover:bg-red-50 border border-red-200 transition"
+                      >
+                        हटवा
                       </button>
                     </div>
                   </div>
@@ -844,47 +1046,323 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
           </div>
         )}
 
-        {/* TAB 3: VENUES */}
+        {/* TAB 3: VENUES MASTER & SEATING TEMPLATES */}
         {activeTab === 'venues' && (
           <div className="space-y-4">
-            <div className="bg-white p-4 rounded-2xl border border-[#E2E8F0] shadow-sm">
-              <h3 className="text-base font-bold text-[#141B2B]">नाट्यगृहे व आसन व्यवस्था (Venues & Layouts)</h3>
-              <p className="text-xs text-[#64748B]">बालगंधर्व, यशवंतराव, प्रबोधनकार ठाकरे इत्यादींची आसन रचना बदला</p>
-            </div>
+            {/* Top Overview & Action Bar */}
+            <div className="bg-white p-4 rounded-2xl border border-[#E2E8F0] shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-bold text-[#141B2B] flex items-center gap-2">
+                  <Building2 className="w-5 h-5 text-[#A33900]" />
+                  <span>महाराष्ट्र नाट्यगृह सूची व आसन व्यवस्था (Venues & Seating Layout Master)</span>
+                </h3>
+                <p className="text-xs text-[#64748B] mt-0.5">
+                  सर्व ३६ जिल्हे, शहरे, तालुका नाट्यगृहे, आसन नकाशे व सत्यापन व्यवस्थापन
+                </p>
+              </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {venuesList.map(v => (
-                <div
-                  key={v.id}
-                  className="bg-white rounded-2xl p-4 border border-[#E2E8F0] shadow-sm flex flex-col justify-between"
+              <div className="flex items-center gap-2 w-full md:w-auto">
+                <button
+                  type="button"
+                  onClick={() => setShowImportVenueModal(true)}
+                  className="px-3.5 py-2 rounded-xl border border-slate-300 hover:bg-slate-50 text-[#141B2B] font-bold text-xs flex items-center gap-1.5 transition shadow-xs cursor-pointer"
                 >
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xl">🏛️</span>
-                      <div>
-                        <h4 className="text-xs font-bold text-[#141B2B]">{v.nameMr}</h4>
-                        <p className="text-[11px] text-[#64748B]">{v.city}</p>
-                      </div>
-                    </div>
-                    <p className="text-xs text-[#64748B] mt-2">{v.address}</p>
-                    <div className="mt-2 text-xs font-bold text-[#141B2B]">
-                      एकूण क्षमता: {v.totalCapacity} आसने
-                    </div>
-                  </div>
+                  <UploadCloud className="w-4 h-4 text-[#A33900]" />
+                  <span>📥 बल्क आयात (Import)</span>
+                </button>
 
-                  <button
-                    onClick={() => {
-                      setVenueForDesigner(v);
-                      setShowSeatDesigner(true);
-                    }}
-                    className="mt-3 w-full py-2 rounded-xl bg-[#A33900] hover:bg-[#832600] text-white font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-sm"
-                  >
-                    <Armchair className="w-3.5 h-3.5" />
-                    <span>सीट डिझायनर उघडा (Seat Builder)</span>
-                  </button>
-                </div>
-              ))}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setVenueForDesigner({
+                      id: undefined as any,
+                      name: '',
+                      nameMr: '',
+                      city: 'Pune',
+                      address: '',
+                      totalCapacity: 500,
+                      hasSeatLayout: 1,
+                      isTemplate: 1,
+                      verificationStatus: 'verified',
+                      sections: [],
+                    } as any);
+                    setShowSeatDesigner(true);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-[#A33900] hover:bg-[#832600] text-white font-bold text-xs flex items-center gap-1.5 transition shadow-sm cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>+ नवीन नाट्यगृह जोडा</span>
+                </button>
+              </div>
             </div>
+
+            {/* Metrics Breakdown Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div className="bg-white p-3.5 rounded-2xl border border-[#E2E8F0] shadow-2xs">
+                <span className="text-[11px] text-[#64748B] font-medium block">एकूण नाट्यगृहे</span>
+                <span className="text-lg font-black text-[#141B2B] font-mono mt-0.5 block">{venuesList.length}</span>
+              </div>
+              <div className="bg-white p-3.5 rounded-2xl border border-[#E2E8F0] shadow-2xs">
+                <span className="text-[11px] text-[#16A34A] font-medium block">✓ अधिकृत प्रमाणित</span>
+                <span className="text-lg font-black text-[#16A34A] font-mono mt-0.5 block">
+                  {venuesList.filter((v: any) => (v.verificationStatus || 'verified') === 'verified').length}
+                </span>
+              </div>
+              <div className="bg-white p-3.5 rounded-2xl border border-[#E2E8F0] shadow-2xs">
+                <span className="text-[11px] text-amber-600 font-medium block">⏳ पुनरावलोकन प्रलंबित</span>
+                <span className="text-lg font-black text-amber-600 font-mono mt-0.5 block">
+                  {venuesList.filter((v: any) => v.verificationStatus === 'unverified').length}
+                </span>
+              </div>
+              <div className="bg-white p-3.5 rounded-2xl border border-[#E2E8F0] shadow-2xs">
+                <span className="text-[11px] text-blue-600 font-medium block">🎭 आसन नकाशे उपलब्ध</span>
+                <span className="text-lg font-black text-blue-600 font-mono mt-0.5 block">
+                  {venuesList.filter((v: any) => v.hasSeatLayout === 1).length}
+                </span>
+              </div>
+            </div>
+
+            {/* Advanced Filters Toolbar */}
+            <div className="bg-white p-3.5 rounded-2xl border border-[#E2E8F0] shadow-2xs flex flex-wrap items-center gap-2 text-xs">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="नाट्यगृह, शहर किंवा पत्ता शोधा..."
+                  value={venueSearch}
+                  onChange={(e) => setVenueSearch(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 rounded-xl border border-slate-200 focus:outline-none focus:border-[#A33900]"
+                />
+              </div>
+
+              {/* District Filter */}
+              <select
+                value={venueDistrictFilter}
+                onChange={(e) => {
+                  setVenueDistrictFilter(e.target.value);
+                  setVenueCityFilter('');
+                }}
+                aria-label="जिल्हा निवडा"
+                className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white font-medium text-slate-700 outline-none hover:border-[#A33900]"
+              >
+                <option value="">सर्व जिल्हे (All Districts)</option>
+                {districtsCatalog.map((d: any) => (
+                  <option key={d.id} value={d.id}>
+                    {d.nameMr} ({d.name})
+                  </option>
+                ))}
+              </select>
+
+              {/* City Filter */}
+              <select
+                value={venueCityFilter}
+                onChange={(e) => setVenueCityFilter(e.target.value)}
+                aria-label="शहर निवडा"
+                className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white font-medium text-slate-700 outline-none hover:border-[#A33900]"
+              >
+                <option value="">सर्व शहरे (All Cities)</option>
+                {citiesCatalog
+                  .filter((c: any) => !venueDistrictFilter || String(c.districtId) === String(venueDistrictFilter))
+                  .map((c: any) => (
+                    <option key={c.id} value={c.name}>
+                      {c.nameMr} ({c.name})
+                    </option>
+                  ))}
+              </select>
+
+              {/* Status Filter */}
+              <select
+                value={venueStatusFilter}
+                onChange={(e) => setVenueStatusFilter(e.target.value)}
+                aria-label="सत्यापन स्थिती"
+                className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white font-medium text-slate-700 outline-none hover:border-[#A33900]"
+              >
+                <option value="all">सर्व स्थिती (All Status)</option>
+                <option value="verified">✓ प्रमाणित (Verified)</option>
+                <option value="unverified">⏳ अपुष्ट (Unverified)</option>
+                <option value="draft">📝 ड्राफ्ट (Draft)</option>
+              </select>
+
+              {/* Layout Capability Filter */}
+              <select
+                value={venueLayoutFilter}
+                onChange={(e) => setVenueLayoutFilter(e.target.value)}
+                aria-label="आसन रचना"
+                className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white font-medium text-slate-700 outline-none hover:border-[#A33900]"
+              >
+                <option value="all">सर्व आसन प्रकार</option>
+                <option value="seated">💺 बैठक व्यवस्था (Seated Layout)</option>
+                <option value="general">🎟️ सामान्य प्रवेश (General Admission)</option>
+              </select>
+
+              {(venueSearch || venueDistrictFilter || venueCityFilter || venueStatusFilter !== 'all' || venueLayoutFilter !== 'all') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setVenueSearch('');
+                    setVenueDistrictFilter('');
+                    setVenueCityFilter('');
+                    setVenueStatusFilter('all');
+                    setVenueLayoutFilter('all');
+                  }}
+                  className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold transition flex items-center gap-1 cursor-pointer"
+                  title="फिल्टर साफ करा"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-[#A33900]" />
+                  <span className="text-[11px]">रीसेट</span>
+                </button>
+              )}
+            </div>
+
+            {/* Venues Grid */}
+            {(() => {
+              const displayList = venuesList.filter((v: any) => {
+                const matchSearch =
+                  !venueSearch ||
+                  v.name?.toLowerCase().includes(venueSearch.toLowerCase()) ||
+                  v.nameMr?.toLowerCase().includes(venueSearch.toLowerCase()) ||
+                  v.city?.toLowerCase().includes(venueSearch.toLowerCase()) ||
+                  v.address?.toLowerCase().includes(venueSearch.toLowerCase());
+
+                const matchDistrict =
+                  !venueDistrictFilter ||
+                  String(v.districtId) === String(venueDistrictFilter);
+
+                const matchCity =
+                  !venueCityFilter ||
+                  v.city?.toLowerCase() === venueCityFilter.toLowerCase();
+
+                const matchStatus =
+                  venueStatusFilter === 'all' ||
+                  (v.verificationStatus || 'verified') === venueStatusFilter;
+
+                const matchLayout =
+                  venueLayoutFilter === 'all' ||
+                  (venueLayoutFilter === 'seated' && v.hasSeatLayout === 1) ||
+                  (venueLayoutFilter === 'general' && v.hasSeatLayout === 0);
+
+                return matchSearch && matchDistrict && matchCity && matchStatus && matchLayout;
+              });
+
+              if (displayList.length === 0) {
+                return (
+                  <div className="bg-white rounded-2xl p-8 border border-[#E2E8F0] text-center space-y-2">
+                    <span className="text-3xl">🏛️</span>
+                    <h4 className="text-sm font-bold text-[#141B2B]">कोणतेही नाट्यगृह सापडले नाही</h4>
+                    <p className="text-xs text-[#64748B]">
+                      निवडलेल्या निकषांनुसार कोणतेही नाट्यगृह उपलब्ध नाही. कृपया फिल्टर बदला किंवा नवीन नाट्यगृह जोडा.
+                    </p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                  {displayList.map((v: any) => {
+                    const isVerified = (v.verificationStatus || 'verified') === 'verified';
+                    const hasLayout = v.hasSeatLayout === 1;
+                    const sectionsCount = Array.isArray(v.sections) ? v.sections.length : 0;
+
+                    return (
+                      <div
+                        key={v.id}
+                        className="bg-white rounded-2xl p-4 border border-[#E2E8F0] shadow-sm hover:border-[#A33900]/40 transition flex flex-col justify-between"
+                      >
+                        <div>
+                          {/* Header: Badges and ID */}
+                          <div className="flex items-center justify-between gap-1 mb-2">
+                            <span className="text-[10px] font-mono text-slate-400">#VN-{v.id}</span>
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={`text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
+                                  isVerified
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                    : 'bg-amber-50 text-amber-700 border border-amber-200'
+                                }`}
+                              >
+                                {isVerified ? '✓ प्रमाणित' : '⏳ अपुष्ट (Pending)'}
+                              </span>
+                              {hasLayout ? (
+                                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                  {sectionsCount > 0 ? `${sectionsCount} विभाग` : 'आसन नकाशा'}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-slate-100 text-slate-600">
+                                  जनरल
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Venue Name & Location */}
+                          <div className="flex items-start gap-2.5">
+                            <span className="text-2xl shrink-0 mt-0.5">🏛️</span>
+                            <div className="min-w-0">
+                              <h4 className="text-sm font-bold text-[#141B2B] leading-snug font-serif truncate">
+                                {v.nameMr || v.name}
+                              </h4>
+                              {v.name && v.name !== v.nameMr && (
+                                <p className="text-[11px] text-slate-500 truncate">{v.name}</p>
+                              )}
+                              <p className="text-[11px] font-medium text-[#A33900] mt-0.5">
+                                📍 {v.city} {v.districtNameMr ? `(${v.districtNameMr} जिल्हा)` : ''}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Address & Capacity */}
+                          <p className="text-xs text-[#64748B] mt-2.5 line-clamp-2">{v.address}</p>
+
+                          <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-slate-700">
+                            <span>एकूण आसन क्षमता:</span>
+                            <span className="font-mono text-[#141B2B]">{v.totalCapacity || 500} आसने</span>
+                          </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="mt-4 pt-3 border-t border-slate-100 space-y-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setVenueForDesigner(v);
+                              setShowSeatDesigner(true);
+                            }}
+                            className="w-full py-2 rounded-xl bg-[#A33900] hover:bg-[#832600] text-white font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-xs cursor-pointer"
+                          >
+                            <Armchair className="w-3.5 h-3.5" />
+                            <span>सीट डिझायनर व नकाशा (Seat Builder)</span>
+                          </button>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleVenueVerification(v.id, v.verificationStatus || 'verified')}
+                              className={`py-1.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 border cursor-pointer ${
+                                isVerified
+                                  ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                                  : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                              }`}
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>{isVerified ? 'अपुष्ट करा' : 'प्रमाणित करा'}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteVenue(v.id, v.nameMr || v.name)}
+                              className="py-1.5 rounded-xl text-xs font-bold text-red-600 hover:bg-red-50 border border-red-200 transition flex items-center justify-center gap-1 cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>हटवा</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -1048,6 +1526,34 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
               </div>
 
               <div>
+                <label className="font-bold text-[#141B2B] block mb-1">इव्हेंट बॅज (Event Status Badge / Tag)</label>
+                <div className="flex gap-2">
+                  <select
+                    value={eventBadge}
+                    onChange={e => setEventBadge(e.target.value)}
+                    className="flex-1 px-3 py-2 rounded-xl border border-[#E2E8F0] bg-white font-medium"
+                  >
+                    <option value="लवकर भरत आहे">⚡ लवकर भरत आहे (Fast Filling)</option>
+                    <option value="तिकिटे उपलब्ध">🟢 तिकिटे उपलब्ध (Tickets Open)</option>
+                    <option value="हाऊसफुल्ल">🔴 हाऊसफुल्ल (Housefull)</option>
+                    <option value="सुपरहिट">⭐ सुपरहिट (Blockbuster)</option>
+                    <option value="नवीन प्रयोग">✨ नवीन प्रयोग (New Show)</option>
+                    <option value="विशेष ऑफर">🏷️ विशेष ऑफर (Special Offer)</option>
+                    <option value="प्रीमियर">🎭 प्रीमियर (Premiere)</option>
+                    <option value="मर्यादित जागा">⏳ मर्यादित जागा (Few Seats Left)</option>
+                    <option value="८५% भरले">🔥 ८५% भरले (85% Booked)</option>
+                  </select>
+                  <input
+                    type="text"
+                    value={eventBadge}
+                    onChange={e => setEventBadge(e.target.value)}
+                    placeholder="किंवा सानुकूल बॅज..."
+                    className="w-1/3 px-3 py-2 rounded-xl border border-[#E2E8F0] font-medium"
+                  />
+                </div>
+              </div>
+
+              <div>
                 <label className="font-bold text-[#141B2B] block mb-1">पोस्टर इमेज URL</label>
                 <input
                   type="text"
@@ -1077,6 +1583,170 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                 {isProcessing ? 'जतन करत आहे...' : 'जतन करा व प्रकाशित करा'}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Bulk Venue Import Modal */}
+      {showImportVenueModal && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 relative shadow-2xl max-h-[90vh] overflow-y-auto space-y-4">
+            <button
+              onClick={() => {
+                setShowImportVenueModal(false);
+                setImportPreviewData(null);
+                setImportError(null);
+              }}
+              className="absolute right-4 top-4 p-1.5 rounded-full hover:bg-slate-100 text-[#64748B] cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-[#A33900]">
+                <UploadCloud className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-[#141B2B]">नाट्यगृह डेटा आयात व पडताळणी (Venue Import Master)</h3>
+                <p className="text-xs text-[#64748B]">
+                  आयात केलेले सर्व नाट्यगृहे पुनरावलोकनासाठी 'अपुष्ट' (Unverified) म्हणून चिन्हांकित केली जातात
+                </p>
+              </div>
+            </div>
+
+            {importError && (
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                <span>{importError}</span>
+              </div>
+            )}
+
+            {!importPreviewData ? (
+              <div className="space-y-3 text-xs">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="font-bold text-[#141B2B]">नाट्यगृह JSON डेटा (Paste Venue Array)</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const sample = [
+                          {
+                            name: 'Acharya Atre Rangmandir',
+                            nameMr: 'आचार्य अत्रे रंगमंदिर',
+                            address: 'Subhash Road, Kalyan West',
+                            city: 'Kalyan-Dombivli',
+                            totalCapacity: 650,
+                            ownershipType: 'municipal'
+                          },
+                          {
+                            name: 'Kashinath Ghanekar Natyagruha',
+                            nameMr: 'डॉ. काशिनाथ घाणेकर नाट्यगृह',
+                            address: 'Ghodbunder Road, Thane West',
+                            city: 'Thane',
+                            totalCapacity: 1200,
+                            ownershipType: 'municipal'
+                          }
+                        ];
+                        setImportJsonText(JSON.stringify(sample, null, 2));
+                      }}
+                      className="text-[11px] font-bold text-[#A33900] hover:underline cursor-pointer"
+                    >
+                      + नमुना फॉरमॅट भरा (Sample)
+                    </button>
+                  </div>
+                  <textarea
+                    rows={8}
+                    value={importJsonText}
+                    onChange={(e) => setImportJsonText(e.target.value)}
+                    placeholder='[&#10;  {&#10;    "name": "Acharya Atre Rangmandir",&#10;    "nameMr": "आचार्य अत्रे रंगमंदिर",&#10;    "address": "Kalyan West",&#10;    "city": "Thane"&#10;  }&#10;]'
+                    className="w-full p-3 font-mono text-xs rounded-xl border border-slate-200 focus:outline-none focus:border-[#A33900] bg-slate-50"
+                  />
+                </div>
+
+                <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-900 space-y-1">
+                  <p className="font-bold">🛡️ डुप्लिकेट संरक्षण व पूर्वावलोकन नियम:</p>
+                  <p>१. आयात करण्यापूर्वी सिस्टीम विद्यमान नावांची व शहरांची तपासणी करते.</p>
+                  <p>२. सर्व आयात डेटा सुरुवातीला 'अपुष्ट' (Unverified) राहतो, जो ॲडमिनने प्रमाणित केल्यावरच लाइव्ह होतो.</p>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={isImporting || !importJsonText.trim()}
+                  onClick={handlePreviewImport}
+                  className="w-full py-2.5 rounded-xl bg-[#A33900] hover:bg-[#832600] text-white font-bold text-xs transition shadow-sm disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Search className="w-4 h-4" />
+                  <span>{isImporting ? 'तपासणी करत आहे...' : 'पूर्वावलोकन व डुप्लिकेट तपासणी करा (Preview & Validate)'}</span>
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4 text-xs">
+                {/* Summary Badges */}
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-center">
+                    <span className="text-slate-500 font-medium block text-[10px]">एकूण नोंदी</span>
+                    <span className="text-base font-bold text-slate-800 font-mono">{importPreviewData.summary?.total}</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-center">
+                    <span className="text-emerald-600 font-medium block text-[10px]">✓ वैध (Valid)</span>
+                    <span className="text-base font-bold text-emerald-700 font-mono">{importPreviewData.summary?.valid}</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-center">
+                    <span className="text-amber-600 font-medium block text-[10px]">⚠️ डुप्लिकेट (Duplicate)</span>
+                    <span className="text-base font-bold text-amber-700 font-mono">{importPreviewData.summary?.duplicates}</span>
+                  </div>
+                </div>
+
+                {/* Candidate Rows Breakdown */}
+                <div className="max-h-60 overflow-y-auto space-y-2 border border-slate-200 rounded-xl p-2 bg-slate-50">
+                  {importPreviewData.results?.map((res: any, idx: number) => (
+                    <div
+                      key={idx}
+                      className={`p-2.5 rounded-lg border text-xs flex items-center justify-between gap-2 ${
+                        res.status === 'valid'
+                          ? 'bg-white border-emerald-200'
+                          : 'bg-amber-50/70 border-amber-200'
+                      }`}
+                    >
+                      <div>
+                        <span className="font-bold text-[#141B2B]">{res.candidate?.nameMr || res.candidate?.name}</span>
+                        <span className="text-slate-500 text-[11px] ml-1">({res.candidate?.city})</span>
+                        <p className="text-[10px] text-slate-400 truncate">{res.candidate?.address}</p>
+                      </div>
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                          res.status === 'valid'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-amber-100 text-amber-800'
+                        }`}
+                      >
+                        {res.status === 'valid' ? '✓ आयात योग्य' : res.reason}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setImportPreviewData(null)}
+                    className="flex-1 py-2 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold transition cursor-pointer"
+                  >
+                    मागे जा व संपादित करा
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isImporting || importPreviewData.summary?.valid === 0}
+                    onClick={handleConfirmImport}
+                    className="flex-1 py-2 rounded-xl bg-[#A33900] hover:bg-[#832600] text-white font-bold transition shadow-sm disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>{isImporting ? 'आयात करत आहे...' : `आयात पुष्टी करा (${importPreviewData.summary?.valid} नाट्यगृहे)`}</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

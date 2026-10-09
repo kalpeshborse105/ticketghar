@@ -86,6 +86,7 @@ export async function POST(request: NextRequest) {
       sessionStartTime,
       ticketPrice,
       castCrew,
+      tag,
     } = body;
 
     let finalOrganizerId = organizerId ? parseInt(String(organizerId), 10) : 1;
@@ -133,6 +134,7 @@ export async function POST(request: NextRequest) {
         trailerUrl: trailerUrl || null,
         galleryUrls: typeof galleryUrls === 'string' ? galleryUrls : galleryUrls ? JSON.stringify(galleryUrls) : null,
         castCrew: typeof castCrew === 'string' ? castCrew : castCrew ? JSON.stringify(castCrew) : null,
+        tag: tag || null,
         convenienceFeeValue: convenienceFeeValue ? parseInt(convenienceFeeValue, 10) : 3000,
         status: initialStatus,
       })
@@ -264,6 +266,9 @@ export async function PATCH(request: NextRequest) {
 
     if (featured !== undefined && (!session.valid || session.role !== 'organizer')) {
       updatePayload.featured = featured;
+    }
+    if (body.tag !== undefined) {
+      updatePayload.tag = body.tag || null;
     }
 
     const [updated] = await db

@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.FavoriteBorder
@@ -131,8 +132,129 @@ fun HomeScreen(
             contentPadding = PaddingValues(bottom = 80.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            // Modern Search Bar (Stitch Exact: नाटक, संगीत, कार्यक्रम, कलाकार शोधा...)
             item {
-                Spacer(modifier = Modifier.height(2.dp))
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 2.dp)
+                        .testTag("home_search_bar"),
+                    shape = RoundedCornerShape(24.dp),
+                    color = Color.White,
+                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                    shadowElevation = 1.dp
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Search,
+                            contentDescription = "Search",
+                            tint = Color(0xFFC2410C),
+                            modifier = Modifier.size(19.dp)
+                        )
+                        BasicTextField(
+                            value = searchQuery,
+                            onValueChange = {
+                                searchQuery = it
+                                onSearch(it)
+                            },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f),
+                            textStyle = androidx.compose.ui.text.TextStyle(
+                                color = TextPrimary,
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.Medium
+                            ),
+                            decorationBox = { innerTextField ->
+                                if (searchQuery.isEmpty()) {
+                                    Text(
+                                        text = "नाटक, संगीत, कार्यक्रम, कलाकार शोधा...",
+                                        color = Color(0xFF94A3B8),
+                                        fontSize = 12.sp
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        )
+                        Icon(
+                            imageVector = Icons.Default.Mic,
+                            contentDescription = "Voice Search",
+                            tint = Color(0xFF64748B),
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Icon(
+                            imageVector = Icons.Default.Tune,
+                            contentDescription = "Filters",
+                            tint = Color(0xFFC2410C),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+
+            // City Filter Pills Row (Stitch Exact: संपूर्ण महाराष्ट्र, पुणे, मुंबई, नागपूर, नाशिक)
+            item {
+                val maharashtraPills = listOf(
+                    "संपूर्ण महाराष्ट्र" to "All",
+                    "पुणे" to "Pune",
+                    "मुंबई" to "Mumbai",
+                    "नागपूर" to "Nagpur",
+                    "नाशिक" to "Nashik",
+                    "संभाजीनगर" to "Sambhajinagar",
+                    "कोल्हापूर" to "Kolhapur"
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    maharashtraPills.forEach { (labelMr, cityKey) ->
+                        val isSelected = when {
+                            cityKey == "All" -> selectedCity.contains("All", ignoreCase = true) || selectedCity.contains("महाराष्ट्र")
+                            else -> selectedCity.equals(cityKey, ignoreCase = true) || selectedCity.contains(labelMr)
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = if (isSelected) Color(0xFFC2410C) else Color.White,
+                            border = BorderStroke(1.dp, if (isSelected) Color(0xFFC2410C) else Color(0xFFE2E8F0)),
+                            shadowElevation = if (isSelected) 1.dp else 0.dp,
+                            modifier = Modifier.clickable {
+                                onCitySelected(cityKey)
+                            }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                if (labelMr == "पुणे" && !isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Default.LocationOn,
+                                        contentDescription = null,
+                                        tint = Color(0xFFC2410C),
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                }
+                                Text(
+                                    text = labelMr,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isSelected) Color.White else TextPrimary
+                                )
+                            }
+                        }
+                    }
+                }
             }
 
             // Featured Hero Spotlight (Stitch Exact: "नियम व अटी लागू")
@@ -154,10 +276,10 @@ fun HomeScreen(
                         model = featured?.posterUrl?.takeIf { it.isNotBlank() }
                             ?: "https://lh3.googleusercontent.com/aida-public/AB6AXuCP_BzdA34e8II4J2ZcM6V_bk1jorCB0dqJ-yED0HtW3ncqCpgRvvbmrb1qvB1-XgNZOvZ8UjOlJ_NFiFJYqyixvq9ux2kB8YnA79OL6twW3Ywm_bbgfXevbzL_f_EMMG0EOdLLE5Wp-79Fq3YTag-2B2SVXakRChxVfAlH8mGiBeB6Qp9u561aT3Pug3yWCUvYNhuxBIhcZFDlh5cDbMgUoszlRBMBQuJgP0A-Ook",
                         contentDescription = featured?.titleEn ?: "Featured Play",
-                        contentScale = ContentScale.Crop,
+                        contentScale = ContentScale.Fit,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(210.dp)
+                            .height(220.dp)
                     )
 
                     // Top Badges (Stitch Exact: हाऊसफुल्ल, मराठी नाटक + Heart bookmark)
@@ -264,14 +386,33 @@ fun HomeScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(top = 8.dp),
-                            horizontalArrangement = Arrangement.End,
+                                .padding(top = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            // Left: Rating block (Matching Web EventCard.tsx)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(text = "★", color = Color(0xFFFBBF24), fontSize = 16.sp)
+                                Text(
+                                    text = "४.८",
+                                    color = Color.White,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "(१२४ पुनरावलोकने)",
+                                    color = Color(0xFF94A3B8),
+                                    fontSize = 10.sp
+                                )
+                            }
 
+                            // Right: Action buttons (Stitch Exact: अधिक माहिती, तिकीट बुक करा ➔)
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Surface(
-                                    color = Color.White.copy(alpha = 0.15f),
+                                    color = Color(0xFF2A3447),
                                     shape = RoundedCornerShape(8.dp),
                                     modifier = Modifier.clickable {
                                         val target = rawEvents.firstOrNull { it.id.toString() == featured?.id }
@@ -284,12 +425,12 @@ fun HomeScreen(
                                         fontSize = 11.5.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = Color.White,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
                                     )
                                 }
 
                                 Surface(
-                                    color = MahaOrange,
+                                    color = Color(0xFFC2410C),
                                     shape = RoundedCornerShape(8.dp),
                                     modifier = Modifier.clickable {
                                         val target = rawEvents.firstOrNull { it.id.toString() == featured?.id }
@@ -298,7 +439,7 @@ fun HomeScreen(
                                     }
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
@@ -471,7 +612,7 @@ fun HomeScreen(
                         TheatricalPosterCard(
                             posterUrl = "https://lh3.googleusercontent.com/aida-public/AB6AXuBhEXQlRdtokmftpgaQgTpAgzHn7uJPXapI2_Fu6QvOqJXFE1vZgqKDu2PxX9qxnPNFUgoXOo3RZDmYni6gmOKemuejqqHX_mDa8XpF84gB54D1ETrY5gco_u_00to1_t8KO4ELnxl-ipMy6UCAL8t1gTzaZhxdUYUZCS5DHSEVupys6dqxY7dGeIgMD37H_ngeTO2BvVGIaVenbyhKWFJRKzT430JwA0OhGlvMlIY",
                             badgeText = "भरत जाधव विशेष",
-                            badgeColor = MahaOrange,
+                            badgeColor = Color(0xFFC2410C),
                             subBadge = "हास्य प्रहसन",
                             title = "सही रे सही",
                             venue = "प्रबोधनकार ठाकरे नाट्यगृह, मुंबई",
@@ -496,6 +637,93 @@ fun HomeScreen(
                                 if (item != null) onSelectEvent(item)
                             }
                         )
+                    }
+                }
+            }
+
+            // Promotional Special Offer Banner (Stitch Exact: महानाट्य महोत्सव २०२५)
+            item {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    color = Color(0xFFC2410C),
+                    shadowElevation = 2.dp
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                Brush.horizontalGradient(
+                                    colors = listOf(Color(0xFFC2410C), MahaOrange)
+                                )
+                            )
+                            .padding(14.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(text = "✪", color = Color.White, fontSize = 12.sp)
+                            Text(
+                                text = "मर्यादित काळासाठी ऑफर",
+                                color = Color.White.copy(alpha = 0.95f),
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Text(
+                            text = "महानाट्य महोत्सव २०२५",
+                            color = Color.White,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+
+                        Text(
+                            text = "सर्व नाटकांच्या आगाऊ बुकिंगवर २०% पर्यंत भरघोस सूट!",
+                            color = Color(0xFFFFEDD5),
+                            fontSize = 11.5.sp,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                color = Color.Black.copy(alpha = 0.25f),
+                                shape = RoundedCornerShape(8.dp),
+                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.6f))
+                            ) {
+                                Text(
+                                    text = "कोड: MAHA20",
+                                    color = Color.White,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                )
+                            }
+
+                            Surface(
+                                color = Color.White,
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.clickable { onCategorySelected("plays") }
+                            ) {
+                                Text(
+                                    text = "अटी व शर्ती पहा",
+                                    color = Color(0xFFC2410C),
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -554,7 +782,7 @@ fun HomeScreen(
                         // Card 1: Rahul Deshpande
                         TheatricalHorizontalCard(
                             thumbnailUrl = "https://lh3.googleusercontent.com/aida-public/AB6AXuBPDUS0iDXeFV_yQ-m_iqlNn8nh_94QZbbDaaAA1KucO0fUFQzhXnYSqU6OAPGUIoWRYTAv8Gl6H6gMYkJM0Y6YGv2xqtuGf1i8RPSNwZJZ4tftyZk3tWXFSqxbeDcdSn4s0TmchxWu97rpVLVHtUxcnzA70bQC_3L-DATOukRVUvXj0QqRPJtJqn_XxGmAHFs4t1EvCGfxx10EfxTufYF_CRLdx-HhoJJ_nMqj260",
-                            tag = "कट्यार विशेष",
+                            tag = "कलाकार विशेष",
                             title = "राहुल देशपांडे लाईव्ह इन कॉन्सर्ट",
                             venue = "गणेश कला क्रीडा मंच, स्वारगेट, पुणे",
                             onTicketClick = {
@@ -568,7 +796,7 @@ fun HomeScreen(
                             thumbnailUrl = "https://lh3.googleusercontent.com/aida-public/AB6AXuAlv0c05OiPD6XgNJz-6U3M5-QV7pO4DDCQCexQJSukBm0zKutEZ2lgu2L3gw1aO5y8-cHYNTqythqmGqXncTT-6hqnh3XD65mq9VGFMlDVRrQxCaON_I0VKzGVYNBug4QM8pgIteeNGs-NPDL-RzcKipltfiGedkTBSJdxgGnMpJELQ6qGnksncsef6tySQii1AQisGBkwOmPYC_PzZFQM50hhfvDfw0glzWY4xec",
                             tag = "स्टँडअप आणि प्रहसन",
                             title = "हसवा फसवी",
-                            venue = "बाल गंधर्व रंगमंदिर, पुणे",
+                            venue = "बाळ गंधर्व रंगमंदिर, पुणे",
                             onTicketClick = {
                                 val item = rawEvents.firstOrNull { it.category == "comedy" } ?: rawEvents.firstOrNull()
                                 if (item != null) onSelectEvent(item)
@@ -816,6 +1044,7 @@ private fun TheatricalPosterCard(
     title: String,
     venue: String,
     time: String,
+    priceText: String = "",
     onBookClick: () -> Unit
 ) {
     Surface(
@@ -894,27 +1123,49 @@ private fun TheatricalPosterCard(
                 Text(
                     text = time,
                     fontSize = 9.5.sp,
-                    color = MahaOrange,
+                    color = Color(0xFFC2410C),
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.padding(top = 2.dp)
                 )
 
-                Surface(
-                    color = MahaOrange,
-                    shape = RoundedCornerShape(6.dp),
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 6.dp)
-                        .clickable { onBookClick() }
+                        .padding(top = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "जागा निवडा",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                        modifier = Modifier.padding(vertical = 5.dp)
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Text(text = "★", color = Color(0xFFF59E0B), fontSize = 12.sp)
+                        Text(
+                            text = "४.८",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "(१२४)",
+                            fontSize = 8.5.sp,
+                            color = TextSecondary
+                        )
+                    }
+
+                    Surface(
+                        color = Color(0xFFC2410C),
+                        shape = RoundedCornerShape(6.dp),
+                        modifier = Modifier.clickable { onBookClick() }
+                    ) {
+                        Text(
+                            text = "बुक करा",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)
+                        )
+                    }
                 }
             }
         }
@@ -927,6 +1178,7 @@ private fun TheatricalHorizontalCard(
     tag: String,
     title: String,
     venue: String,
+    priceText: String = "",
     onTicketClick: () -> Unit
 ) {
     Surface(
@@ -988,9 +1240,27 @@ private fun TheatricalHorizontalCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 4.dp),
-                    horizontalArrangement = Arrangement.End,
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Text(text = "★", color = Color(0xFFF59E0B), fontSize = 12.sp)
+                        Text(
+                            text = "४.८",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "(१२०)",
+                            fontSize = 9.sp,
+                            color = TextSecondary
+                        )
+                    }
+
                     Surface(
                         color = MahaOrange,
                         shape = RoundedCornerShape(6.dp),
@@ -1088,9 +1358,27 @@ private fun EventCardItem(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 6.dp),
-                    horizontalArrangement = Arrangement.End,
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Text(text = "★", color = Color(0xFFF59E0B), fontSize = 12.sp)
+                        Text(
+                            text = "४.८",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "(१२४)",
+                            fontSize = 9.sp,
+                            color = TextSecondary
+                        )
+                    }
+
                     Button(
                         onClick = onBookClick,
                         shape = RoundedCornerShape(6.dp),

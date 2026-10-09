@@ -20,6 +20,7 @@ import {
   Loader2,
   TrendingUp,
   ShieldCheck,
+  Check,
 } from 'lucide-react';
 
 export interface HeaderProps {
@@ -180,9 +181,11 @@ export const Header: React.FC<HeaderProps> = ({
 
   const [detectingCity, setDetectingCity] = useState(false);
   const [cityDetectedLive, setCityDetectedLive] = useState(false);
+  const [cityDropdownOpen, setCityDropdownOpen] = useState(false);
 
   const searchRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const cityDropdownRef = useRef<HTMLDivElement>(null);
   const searchAbortRef = useRef<AbortController | null>(null);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cityDetectionStartedRef = useRef(false);
@@ -461,6 +464,10 @@ export const Header: React.FC<HeaderProps> = ({
       if (userMenuRef.current && !userMenuRef.current.contains(target)) {
         setUserMenuOpen(false);
       }
+
+      if (cityDropdownRef.current && !cityDropdownRef.current.contains(target)) {
+        setCityDropdownOpen(false);
+      }
     };
 
     document.addEventListener('mousedown', handler);
@@ -591,28 +598,62 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
             </button>
 
-            {/* City Selector Pill */}
-            <div className="relative hidden sm:block">
-              <div className="flex items-center gap-1.5 rounded-lg bg-[#FFF7ED] px-3 py-1.5 font-semibold text-xs text-[#141B2B] transition-colors hover:bg-orange-100">
-                <MapPin className="h-4 w-4 text-[#EA580C]" />
-                <select
-                  value={selectedCity}
-                  onChange={(event) => handleCityChange(event.target.value)}
-                  className="cursor-pointer appearance-none bg-transparent pr-4 text-xs font-semibold text-[#141B2B] outline-none"
-                  aria-label="Select city"
-                >
-                  {cityList.map((city) => (
-                    <option key={city} value={city} className="bg-white text-slate-900">
-                      {city === 'महाराष्ट्र (All)' ? t.allMaharashtra : city}
-                    </option>
-                  ))}
-                </select>
+            {/* Modern City Selector Dropdown */}
+            <div ref={cityDropdownRef} className="relative hidden sm:block">
+              <button
+                type="button"
+                onClick={() => setCityDropdownOpen((prev) => !prev)}
+                className="flex items-center gap-2 rounded-xl bg-[#FFF7ED] hover:bg-orange-100 border border-orange-200/70 px-3 py-1.5 font-bold text-xs text-[#141B2B] shadow-xs transition-all active:scale-95 cursor-pointer"
+                aria-label="Select city"
+                aria-expanded={cityDropdownOpen}
+              >
+                <MapPin className="h-4 w-4 text-[#EA580C] shrink-0" />
+                <span className="truncate max-w-[130px]">
+                  {selectedCity === 'महाराष्ट्र (All)' ? t.allMaharashtra : selectedCity}
+                </span>
                 {detectingCity ? (
-                  <Loader2 className="pointer-events-none absolute right-2 h-3.5 w-3.5 animate-spin text-[#EA580C]" />
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-[#EA580C]" />
                 ) : (
-                  <ChevronDown className="pointer-events-none absolute right-2 h-3.5 w-3.5 text-[#64748B]" />
+                  <ChevronDown className={`h-3.5 w-3.5 text-[#64748B] transition-transform duration-200 ${cityDropdownOpen ? 'rotate-180 text-[#EA580C]' : ''}`} />
                 )}
-              </div>
+              </button>
+
+              {cityDropdownOpen && (
+                <div className="absolute left-0 top-full z-[70] mt-1.5 w-64 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+                  <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-slate-100 mb-1">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                      {language === 'mr' ? 'पसंतीचे शहर निवडा' : 'Select City'}
+                    </span>
+                    <span className="text-[10px] text-[#EA580C] font-semibold">
+                      {cityList.length} {language === 'mr' ? 'शहरे' : 'Cities'}
+                    </span>
+                  </div>
+                  <div className="max-h-60 overflow-y-auto no-scrollbar space-y-0.5">
+                    {cityList.map((city) => {
+                      const isSelected = selectedCity === city;
+                      const label = city === 'महाराष्ट्र (All)' ? t.allMaharashtra : city;
+                      return (
+                        <button
+                          key={city}
+                          type="button"
+                          onClick={() => {
+                            handleCityChange(city);
+                            setCityDropdownOpen(false);
+                          }}
+                          className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold transition cursor-pointer ${
+                            isSelected
+                              ? 'bg-[#EA580C] text-white shadow-xs font-bold'
+                              : 'text-slate-800 hover:bg-orange-50 hover:text-[#EA580C]'
+                          }`}
+                        >
+                          <span className="truncate">{label}</span>
+                          {isSelected && <Check className="h-4 w-4 shrink-0 stroke-[2.5]" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -819,88 +860,61 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Tier 2: Category Navigation Rail + Official badge */}
-        <div className="flex items-center justify-between border-t border-[#E5E7EB]/70 py-1.5 overflow-x-auto no-scrollbar text-xs">
-          <nav className="flex items-center gap-5 sm:gap-6 whitespace-nowrap">
-            <button
-              type="button"
-              onClick={() => onCategorySelect && onCategorySelect('plays')}
-              className="font-semibold text-[#64748B] hover:text-[#EA580C] transition-colors pb-0.5"
-            >
-              नाटक (Theatre)
-            </button>
-            <button
-              type="button"
-              onClick={() => onCategorySelect && onCategorySelect('music')}
-              className="font-semibold text-[#64748B] hover:text-[#EA580C] transition-colors pb-0.5"
-            >
-              संगीत (Music)
-            </button>
-            <button
-              type="button"
-              onClick={() => onCategorySelect && onCategorySelect('comedy')}
-              className="font-semibold text-[#64748B] hover:text-[#EA580C] transition-colors pb-0.5"
-            >
-              कॉमेडी (Comedy)
-            </button>
-            <button
-              type="button"
-              onClick={() => onCategorySelect && onCategorySelect('cultural')}
-              className="font-semibold text-[#64748B] hover:text-[#EA580C] transition-colors pb-0.5"
-            >
-              सांस्कृतिक (Cultural)
-            </button>
-            <button
-              type="button"
-              onClick={() => onCategorySelect && onCategorySelect('workshops')}
-              className="font-semibold text-[#64748B] hover:text-[#EA580C] transition-colors pb-0.5"
-            >
-              कार्यशाळा (Workshops)
-            </button>
-            <button
-              type="button"
-              onClick={() => onCategorySelect && onCategorySelect('sports')}
-              className="font-semibold text-[#64748B] hover:text-[#EA580C] transition-colors pb-0.5"
-            >
-              क्रीडा (Sports)
-            </button>
-          </nav>
-
-          <div className="hidden xl:flex items-center gap-1.5 text-[11px] text-[#64748B] shrink-0 font-medium">
-            <span className="w-2 h-2 rounded-full bg-[#16A34A]"></span>
-            <span>{language === 'mr' ? 'महाराष्ट्राचे हक्काचे नाट्य व्यासपीठ' : 'Maharashtra Cultural Platform'}</span>
-          </div>
-        </div>
-
         {/* ===================================================
             MOBILE CITY + LANGUAGE
             =================================================== */}
         <div className="flex items-center gap-2 pb-2 pt-1 sm:hidden">
-
           <div className="relative min-w-0 flex-1">
-            <MapPin className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#ea580c]" />
-
-            <select
-              value={selectedCity}
-              onChange={(event) => handleCityChange(event.target.value)}
-              className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-7 text-xs font-bold text-slate-800 outline-none focus:border-[#ea580c]"
-              aria-label="Select city"
+            <button
+              type="button"
+              onClick={() => setCityDropdownOpen((prev) => !prev)}
+              className="flex w-full items-center justify-between gap-1.5 rounded-xl border border-slate-200 bg-[#FFF7ED] py-1.5 px-3 text-xs font-bold text-slate-800 shadow-xs cursor-pointer active:scale-95"
             >
-              {cityList.map((city) => (
-                <option key={city} value={city}>
-                  {city === 'महाराष्ट्र (All)'
+              <div className="flex items-center gap-1.5 min-w-0">
+                <MapPin className="h-3.5 w-3.5 text-[#EA580C] shrink-0" />
+                <span className="truncate">
+                  {selectedCity === 'महाराष्ट्र (All)'
                     ? language === 'mr'
                       ? 'सर्व महाराष्ट्र'
                       : 'All Maharashtra'
-                    : city}
-                </option>
-              ))}
-            </select>
+                    : selectedCity}
+                </span>
+              </div>
+              <ChevronDown className={`h-3.5 w-3.5 text-slate-400 shrink-0 transition-transform ${cityDropdownOpen ? 'rotate-180 text-[#EA580C]' : ''}`} />
+            </button>
 
-            {detectingCity ? (
-              <Loader2 className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-[#ea580c]" />
-            ) : (
-              <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+            {cityDropdownOpen && (
+              <div className="absolute left-0 right-0 top-full z-[70] mt-1 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+                <div className="max-h-56 overflow-y-auto space-y-1 no-scrollbar">
+                  {cityList.map((city) => {
+                    const isSelected = selectedCity === city;
+                    const label =
+                      city === 'महाराष्ट्र (All)'
+                        ? language === 'mr'
+                          ? 'सर्व महाराष्ट्र'
+                          : 'All Maharashtra'
+                        : city;
+                    return (
+                      <button
+                        key={city}
+                        type="button"
+                        onClick={() => {
+                          handleCityChange(city);
+                          setCityDropdownOpen(false);
+                        }}
+                        className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold cursor-pointer ${
+                          isSelected
+                            ? 'bg-[#EA580C] text-white font-bold'
+                            : 'text-slate-800 hover:bg-orange-50'
+                        }`}
+                      >
+                        <span className="truncate">{label}</span>
+                        {isSelected && <Check className="h-4 w-4 shrink-0 stroke-[2.5]" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             )}
           </div>
 

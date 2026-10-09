@@ -28,6 +28,7 @@ interface SeatMapModalProps {
     heldSeats: any[];
     faceValueTotal: number;
     holdExpiresAt: string;
+    holdToken?: string;
   }) => void;
 }
 
@@ -59,7 +60,16 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
   const [selectedSeatIds, setSelectedSeatIds] = useState<number[]>([]);
   const [isHolding, setIsHolding] = useState(false);
   const [zoomLevel, setZoomLevel] = useState<number>(1);
-  const [countdownSeconds, setCountdownSeconds] = useState<number>(9 * 60 + 52); // 09:52 min
+  const [countdownSeconds, setCountdownSeconds] = useState<number>(5 * 60); // 5 min hold window
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+
+  const handleRequestClose = () => {
+    if (selectedSeatIds.length > 0) {
+      setShowDiscardConfirm(true);
+    } else {
+      onClose();
+    }
+  };
 
   const touchStartDistRef = React.useRef<number | null>(null);
 
@@ -159,7 +169,8 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
         seatIds: selectedSeatIds,
         heldSeats: data.hold?.heldSeats || selectedSeats,
         faceValueTotal: data.hold?.faceValueTotal || subtotalPaise,
-        holdExpiresAt: data.hold?.holdExpiresAt || new Date(Date.now() + 600000).toISOString(),
+        holdExpiresAt: data.hold?.holdExpiresAt || new Date(Date.now() + 300000).toISOString(),
+        holdToken: data.holdToken || data.hold?.holdToken,
       });
     } catch (err: any) {
       console.error(err);
@@ -172,33 +183,60 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
   };
 
   // Group seats by category / section
-  const balconySection = sections.find((s) => s.name?.toLowerCase().includes('balcony')) || sections[0];
-  const stallASection = sections.find((s) => s.name?.toLowerCase().includes('stall a') || s.name?.toLowerCase().includes('प्रथम वर्ग')) || sections[1] || sections[0];
-  const stallBSection = sections.find((s) => s.name?.toLowerCase().includes('stall b') || s.name?.toLowerCase().includes('द्वितीय वर्ग')) || sections[2] || sections[0];
+  const balconySection = sections.find(
+    (s) =>
+      s.name?.toLowerCase().includes('balcony') ||
+      s.nameMr?.toLowerCase().includes('बाल्कनी')
+  ) || sections[0];
+
+  const stallASection = sections.find(
+    (s) =>
+      (s.name?.toLowerCase().includes('stall a') ||
+        s.name?.toLowerCase().includes('orchestra') ||
+        s.nameMr?.toLowerCase().includes('प्रथम') ||
+        s.nameMr?.toLowerCase().includes('सुवर्ण')) &&
+      s.id !== balconySection?.id
+  ) || sections[1] || sections[0];
+
+  const stallBSection = sections.find(
+    (s) =>
+      (s.name?.toLowerCase().includes('stall b') ||
+        s.nameMr?.toLowerCase().includes('द्वितीय')) &&
+      s.id !== balconySection?.id &&
+      s.id !== stallASection?.id
+  ) || sections[2];
 
   const groupByRow = (seatList: any[]) => {
     const rows: { [key: string]: any[] } = {};
     seatList.forEach((s) => {
-      const row = s.rowLabel || 'A';
+      let row = s.rowLabel || 'A';
+      if (row.includes('-')) {
+        row = row.split('-').pop() || row;
+      }
       if (!rows[row]) rows[row] = [];
       rows[row].push(s);
     });
     Object.keys(rows).forEach((row) => {
-      rows[row].sort((a, b) => a.seatNumber - b.seatNumber);
+      rows[row].sort((a, b) => Number(a.seatNumber) - Number(b.seatNumber));
     });
     return rows;
   };
 
-  // Balcony rows: A, B, C
-  const balconySeats = seats.filter((s) => ['A', 'B', 'C'].includes(s.rowLabel?.toUpperCase()));
-  // Stall A rows: D, E, F, G
-  const stallASeats = seats.filter((s) => ['D', 'E', 'F', 'G'].includes(s.rowLabel?.toUpperCase()));
-  // Stall B rows: H, J, K or remaining
-  const stallBSeats = seats.filter((s) => !['A', 'B', 'C', 'D', 'E', 'F', 'G'].includes(s.rowLabel?.toUpperCase()));
+  const balconySeats = balconySection
+    ? seats.filter((s) => s.sectionId === balconySection.id)
+    : seats.filter((s) => ['A', 'B', 'C'].includes((s.rowLabel || '').toUpperCase().replace(/.*-/, '')));
+
+  const stallASeats = stallASection && stallASection.id !== balconySection?.id
+    ? seats.filter((s) => s.sectionId === stallASection.id)
+    : seats.filter((s) => ['D', 'E', 'F', 'G'].includes((s.rowLabel || '').toUpperCase().replace(/.*-/, '')));
+
+  const stallBSeats = stallBSection && stallBSection.id !== balconySection?.id && stallBSection.id !== stallASection?.id
+    ? seats.filter((s) => s.sectionId === stallBSection.id)
+    : seats.filter((s) => !['A', 'B', 'C', 'D', 'E', 'F', 'G'].includes((s.rowLabel || '').toUpperCase().replace(/.*-/, '')));
 
   const balconyRows = groupByRow(balconySeats.length > 0 ? balconySeats : seats.slice(0, 24));
-  const stallARows = groupByRow(stallASeats.length > 0 ? stallASeats : seats.slice(24, 64));
-  const stallBRows = groupByRow(stallBSeats.length > 0 ? stallBSeats : seats.slice(64));
+  const stallARows = groupByRow(stallASeats.length > 0 ? stallASeats : seats.slice(24, 56));
+  const stallBRows = groupByRow(stallBSeats.length > 0 ? stallBSeats : seats.slice(56));
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/75 backdrop-blur-xs flex items-center justify-center p-0 sm:p-4">
@@ -208,21 +246,21 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
         <header className="sticky top-0 z-30 bg-[#FFF7ED]/95 backdrop-blur-md border-b border-[#E5E7EB] px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0">
             <button
-              onClick={onClose}
+              onClick={handleRequestClose}
               aria-label="Back"
-              className="w-10 h-10 flex items-center justify-center rounded-full text-[#141B2B] hover:bg-orange-100 transition-colors shrink-0"
+              className="w-10 h-10 flex items-center justify-center rounded-full text-[#141B2B] hover:bg-orange-100 transition-colors shrink-0 cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
-            <div className="flex items-center gap-2">
-              <span className="font-extrabold text-lg text-[#EA580C] tracking-tight">महाटिकिट</span>
-              <span className="text-slate-300">|</span>
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="font-extrabold text-lg text-[#EA580C] tracking-tight shrink-0">महाटिकिट</span>
+              <span className="text-slate-300 shrink-0">|</span>
               <h1 className="font-bold text-sm sm:text-base text-[#141B2B] truncate">
                 {language === 'mr' ? 'आसन व्यवस्था' : 'Seat Selection'}
               </h1>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <span className="text-[11px] font-bold text-[#EA580C] bg-orange-100/90 border border-orange-200 px-2.5 py-1 rounded-full">
               {language === 'mr' ? 'थेट निवड' : 'Live'}
             </span>
@@ -232,7 +270,7 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
         {/* Show & Venue Context Card (Stitch) */}
         <div className="bg-[#FFF7ED] px-4 py-3 border-b border-orange-100">
           <div className="flex items-center gap-3">
-            <div className="relative w-14 h-18 rounded-lg overflow-hidden shrink-0 shadow-sm bg-slate-200">
+            <div className="relative w-14 h-20 rounded-lg overflow-hidden shrink-0 shadow-sm bg-slate-200 aspect-[2/3]">
               <img
                 src={event.posterUrl || 'https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?auto=format&fit=crop&w=400&q=80'}
                 alt={event.title}
@@ -541,6 +579,44 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
             </button>
           </div>
         </div>
+
+        {/* Discard Seat Selection Confirmation Modal */}
+        {showDiscardConfirm && (
+          <div className="fixed inset-0 z-60 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+              <div className="space-y-1.5 text-center">
+                <h3 className="text-base font-bold text-[#141B2B]">
+                  {language === 'mr' ? 'बुकिंग रद्द करायची आहे का?' : 'Cancel seat selection?'}
+                </h3>
+                <p className="text-xs text-[#64748B] leading-relaxed">
+                  {language === 'mr'
+                    ? 'तुम्ही मागे गेल्यास तुमची निवडलेली आसने मुक्त केली जातील आणि इतरांसाठी त्वरित उपलब्ध होतील.'
+                    : 'If you leave, your selected seats will be released and made available to other users.'}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowDiscardConfirm(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-[#141B2B] hover:bg-slate-50 transition cursor-pointer"
+                >
+                  {language === 'mr' ? 'नाही, सुरू ठेवा' : 'Stay'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDiscardConfirm(false);
+                    setSelectedSeatIds([]);
+                    onClose();
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-[#DC2626] text-white text-xs font-bold hover:bg-red-700 transition cursor-pointer"
+                >
+                  {language === 'mr' ? 'होय, रद्द करा' : 'Yes, discard'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -550,15 +626,16 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
     const isSelected = selectedSeatIds.includes(seat.seatId);
     const isBooked = seat.status === 'booked';
     const isHeld = seat.status === 'held' && !isSelected;
+    const numDisplay = toMarathiDigits(seat.seatNumber);
 
     if (isBooked || isHeld) {
       return (
         <button
           key={seat.seatId}
           disabled
-          className="w-6 h-6 rounded-t-xs rounded-b-sm bg-slate-200 text-[10px] text-slate-400 cursor-not-allowed flex items-center justify-center"
+          className="w-6 h-6 rounded-t-xs rounded-b-sm bg-slate-200 text-[10px] text-slate-400 cursor-not-allowed flex items-center justify-center font-mono"
         >
-          {seat.seatNumber}
+          {numDisplay}
         </button>
       );
     }
@@ -568,7 +645,7 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
         <button
           key={seat.seatId}
           onClick={() => toggleSeatSelection(seat)}
-          className="w-6 h-6 rounded-t-xs rounded-b-sm bg-[#EA580C] text-white text-[10px] font-bold shadow-md ring-2 ring-orange-300 ring-offset-1 flex items-center justify-center active:scale-95 transition-all"
+          className="w-6 h-6 rounded-t-xs rounded-b-sm bg-[#EA580C] text-white text-[10px] font-bold shadow-md ring-2 ring-orange-300 ring-offset-1 flex items-center justify-center active:scale-95 transition-all cursor-pointer"
         >
           <Check className="w-3.5 h-3.5 stroke-[3]" />
         </button>
@@ -579,9 +656,9 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
       <button
         key={seat.seatId}
         onClick={() => toggleSeatSelection(seat)}
-        className="w-6 h-6 rounded-t-xs rounded-b-sm bg-white border border-slate-200 text-[10px] text-slate-800 font-semibold shadow-2xs hover:border-[#EA580C] active:scale-95 transition-transform flex items-center justify-center"
+        className="w-6 h-6 rounded-t-xs rounded-b-sm bg-white border border-slate-200 text-[10px] text-slate-800 font-semibold shadow-2xs hover:border-[#EA580C] active:scale-95 transition-transform flex items-center justify-center font-mono cursor-pointer"
       >
-        {seat.seatNumber}
+        {numDisplay}
       </button>
     );
   }

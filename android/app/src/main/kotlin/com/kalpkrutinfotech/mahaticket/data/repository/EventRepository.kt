@@ -122,6 +122,52 @@ class EventRepository(
         CityCatalogItem("Thane", "ठाणे"),
         CityCatalogItem("Kolhapur", "कोल्हापूर")
     )
+
+    suspend fun getEventReviews(eventId: Int): Result<EventReviewsResponse> = withContext(Dispatchers.IO) {
+        try {
+            val response = apiService.getEventReviews(eventId)
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                Result.failure(Exception("परीक्षणे लोड करता आली नाहीत."))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun submitEventReview(
+        eventId: Int,
+        rating: Int,
+        comment: String,
+        userName: String,
+        userEmail: String
+    ): Result<SubmitReviewResponse> = withContext(Dispatchers.IO) {
+        try {
+            val response = apiService.submitEventReview(
+                eventId = eventId,
+                request = SubmitReviewRequest(
+                    rating = rating,
+                    comment = comment
+                )
+            )
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                val errorBody = response.errorBody()?.string() ?: ""
+                val msg = if (errorBody.contains("already reviewed", ignoreCase = true) || response.code() == 409) {
+                    "आपण या कार्यक्रमासाठी आधीच मत नोंदवले आहे."
+                } else if (response.code() == 401) {
+                    "मत नोंदवण्यासाठी कृपया आधी लॉगिन करा."
+                } else {
+                    "मत नोंदवण्यात त्रुटी आली. कृपया पुन्हा प्रयत्न करा."
+                }
+                Result.failure(Exception(msg))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }
 
 // Mapper extensions
@@ -150,6 +196,10 @@ fun EventResponse.toEventItem() = EventItem(
     language = language ?: "मराठी",
     durationMinutes = durationMinutes ?: 120,
     description = description ?: "",
+    descriptionMr = descriptionMr ?: description ?: "",
+    ageGuidance = ageGuidance ?: "U/A (सर्व वयोगटांसाठी)",
+    cast = cast ?: "प्रसाद ओक, मुक्ता बर्वे, क्षिती जोग",
+    director = director ?: "चंद्रकांत कुलकर्णी",
     posterUrl = posterUrl ?: "",
     minPrice = minPrice,
     venue = venue?.let {
