@@ -887,7 +887,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
         </div>
 
         {/* Bottom Sticky Action Bar */}
-        <div className="p-4 sm:p-5 border-t border-slate-200 bg-white space-y-3 safe-bottom">
+        <div className="p-4 sm:p-5 border-t border-slate-200 bg-white space-y-3">
           {errorMessage && (
             <div className="p-2.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />

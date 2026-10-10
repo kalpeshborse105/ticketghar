@@ -647,16 +647,16 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
 
             {/* Modern City Selector Dropdown */}
-            <div ref={cityDropdownRef} className="relative hidden sm:block">
+            <div ref={cityDropdownRef} className="relative flex items-center">
               <button
                 type="button"
                 onClick={() => setCityDropdownOpen((prev) => !prev)}
-                className="flex items-center gap-2 rounded-xl bg-[#FFF7ED] hover:bg-orange-100 border border-orange-200/70 px-3 py-1.5 font-bold text-xs text-[#141B2B] shadow-xs transition-all active:scale-95 cursor-pointer"
+                className="flex items-center gap-1.5 rounded-xl bg-[#FFF7ED] hover:bg-orange-100 border border-orange-200/70 px-2.5 sm:px-3 py-1.5 font-bold text-xs text-[#141B2B] shadow-xs transition-all active:scale-95 cursor-pointer"
                 aria-label="Select city"
                 aria-expanded={cityDropdownOpen}
               >
                 <MapPin className="h-4 w-4 text-[#EA580C] shrink-0" />
-                <span className="truncate max-w-[130px]">
+                <span className="truncate max-w-[90px] sm:max-w-[130px]">
                   {selectedCity === 'महाराष्ट्र (All)' ? t.allMaharashtra : selectedCity}
                 </span>
                 {detectingCity ? (
@@ -930,90 +930,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* ===================================================
-            MOBILE CITY + LANGUAGE
-            =================================================== */}
-        <div className="flex items-center gap-2 pb-2 pt-1 sm:hidden">
-          <div className="relative min-w-0 flex-1">
-            <button
-              type="button"
-              onClick={() => setCityDropdownOpen((prev) => !prev)}
-              className="flex w-full items-center justify-between gap-1.5 rounded-xl border border-slate-200 bg-[#FFF7ED] py-1.5 px-3 text-xs font-bold text-slate-800 shadow-xs cursor-pointer active:scale-95"
-            >
-              <div className="flex items-center gap-1.5 min-w-0">
-                <MapPin className="h-3.5 w-3.5 text-[#EA580C] shrink-0" />
-                <span className="truncate">
-                  {selectedCity === 'महाराष्ट्र (All)'
-                    ? language === 'mr'
-                      ? 'सर्व महाराष्ट्र'
-                      : 'All Maharashtra'
-                    : selectedCity}
-                </span>
-              </div>
-              <ChevronDown className={`h-3.5 w-3.5 text-slate-400 shrink-0 transition-transform ${cityDropdownOpen ? 'rotate-180 text-[#EA580C]' : ''}`} />
-            </button>
 
-            {cityDropdownOpen && (
-              <div className="absolute left-0 right-0 top-full z-[70] mt-1 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
-                <div className="max-h-56 overflow-y-auto space-y-1 no-scrollbar">
-                  {cityList.map((city) => {
-                    const isSelected = selectedCity === city;
-                    const label =
-                      city === 'महाराष्ट्र (All)'
-                        ? language === 'mr'
-                          ? 'सर्व महाराष्ट्र'
-                          : 'All Maharashtra'
-                        : city;
-                    return (
-                      <button
-                        key={city}
-                        type="button"
-                        onClick={() => {
-                          handleCityChange(city);
-                          setCityDropdownOpen(false);
-                        }}
-                        className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold cursor-pointer ${isSelected
-                            ? 'bg-[#EA580C] text-white font-bold'
-                            : 'text-slate-800 hover:bg-orange-50'
-                          }`}
-                      >
-                        <span className="truncate">{label}</span>
-                        {isSelected && <Check className="h-4 w-4 shrink-0 stroke-[2.5]" />}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Mobile En / म switch */}
-          <div className="flex shrink-0 items-center rounded-xl border border-slate-200 bg-slate-50 p-0.5">
-            <button
-              type="button"
-              onClick={() => handleLanguageChange('en')}
-              className={`rounded-lg px-2.5 py-1.5 text-[10px] font-black transition ${language === 'en'
-                ? 'bg-[#ea580c] text-white shadow-sm'
-                : 'text-slate-500'
-                }`}
-              aria-pressed={language === 'en'}
-            >
-              En
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleLanguageChange('mr')}
-              className={`rounded-lg px-2.5 py-1.5 text-[10px] font-black transition ${language === 'mr'
-                ? 'bg-[#ea580c] text-white shadow-sm'
-                : 'text-slate-500'
-                }`}
-              aria-pressed={language === 'mr'}
-            >
-              म
-            </button>
-          </div>
-        </div>
 
         {/* ===================================================
             MOBILE MENU

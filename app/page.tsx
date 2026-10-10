@@ -131,7 +131,10 @@ export default function HomePage() {
         try {
           const parsed = JSON.parse(cached);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            setEvents(parsed);
+            const unique = parsed.filter(
+              (ev: any, index: number, self: any[]) => index === self.findIndex((e: any) => e.id === ev.id)
+            );
+            setEvents(unique);
             setLoading(false);
           }
         } catch {}
@@ -243,11 +246,15 @@ export default function HomePage() {
       const res = await fetch(`/api/events?${params.toString()}`);
       if (!res.ok) throw new Error('Failed to load events');
       const data = await res.json();
-      setEvents(data.events || []);
+      const rawEvents = data.events || [];
+      const uniqueEvents = rawEvents.filter(
+        (ev: any, index: number, self: any[]) => index === self.findIndex((e: any) => e.id === ev.id)
+      );
+      setEvents(uniqueEvents);
 
       if (typeof window !== 'undefined') {
         try {
-          localStorage.setItem('mahaticket_cached_events', JSON.stringify(data.events || []));
+          localStorage.setItem('mahaticket_cached_events', JSON.stringify(uniqueEvents));
         } catch {
           // ignore cache error
         }
@@ -260,7 +267,10 @@ export default function HomePage() {
           try {
             const parsed = JSON.parse(cached);
             if (Array.isArray(parsed) && parsed.length > 0) {
-              setEvents(parsed);
+              const unique = parsed.filter(
+                (ev: any, index: number, self: any[]) => index === self.findIndex((e: any) => e.id === ev.id)
+              );
+              setEvents(unique);
               setError(null);
               setLoading(false);
               return;

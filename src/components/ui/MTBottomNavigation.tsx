@@ -30,7 +30,7 @@ export const MTBottomNavigation: React.FC<MTBottomNavigationProps> = ({
   ];
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-[#e5e7eb] px-2 safe-bottom shadow-lg">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-[#e5e7eb] px-2 shadow-lg">
       <div className="flex items-center justify-around max-w-lg mx-auto py-1">
         {items.map((item) => {
           const Icon = item.icon;
@@ -41,9 +41,8 @@ export const MTBottomNavigation: React.FC<MTBottomNavigationProps> = ({
               key={item.id}
               type="button"
               onClick={() => onTabChange(item.id)}
-              className={`relative flex flex-col items-center justify-center py-1.5 px-3 min-w-[56px] transition-colors focus:outline-none ${
-                isActive ? 'text-[#ea580c]' : 'text-[#9ca3af] hover:text-[#6b7280]'
-              }`}
+              className={`relative flex flex-col items-center justify-center py-1.5 px-3 min-w-[56px] transition-colors focus:outline-none ${isActive ? 'text-[#ea580c]' : 'text-[#9ca3af] hover:text-[#6b7280]'
+                }`}
             >
               <div className="relative">
                 <Icon className={`w-5 h-5 transition-transform ${isActive ? 'scale-110' : ''}`} />

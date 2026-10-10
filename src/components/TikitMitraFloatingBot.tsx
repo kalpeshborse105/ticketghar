@@ -135,7 +135,7 @@ export function TikitMitraFloatingBot() {
   return (
     <>
       {/* Floating Launcher Button - elevated cleanly above sticky bottom booking bar */}
-      <div className="fixed bottom-28 md:bottom-28 right-4 sm:right-6 z-40">
+      <div className="fixed bottom-20 md:bottom-20 right-4 sm:right-6 z-40">
         {!isOpen && (
           <div className="flex items-center gap-1">
             {isMinimized ? (
@@ -156,7 +156,7 @@ export function TikitMitraFloatingBot() {
                 </span>
               </button>
             ) : (
-              <div className="flex items-center gap-2 bg-gradient-to-r from-[#EA580C] via-[#C2410C] to-[#9A3412] p-1.5 pl-2.5 rounded-2xl shadow-[0_8px_25px_rgba(234,88,12,0.45)] border border-amber-400/40">
+              <div className="flex items-center gap-1 bg-gradient-to-r from-[#EA580C] via-[#C2410C] to-[#9A3412] p-0.5 pl-0.5 rounded-2xl shadow-[0_8px_25px_rgba(234,88,12,0.45)] border border-amber-400/40">
                 <button
                   type="button"
                   onClick={() => setIsOpen(true)}
