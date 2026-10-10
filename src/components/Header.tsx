@@ -254,7 +254,16 @@ export const Header: React.FC<HeaderProps> = ({
       }
 
       const data = await res.json();
-      setUser(data.user || null);
+      let u = data.user || null;
+      if (u && typeof window !== 'undefined') {
+        const localAvatar =
+          localStorage.getItem('mahaticket_user_avatar') ||
+          (u.email ? localStorage.getItem(`mahaticket_avatar_${u.email}`) : null);
+        if (localAvatar && !u.avatarUrl) {
+          u = { ...u, avatarUrl: localAvatar };
+        }
+      }
+      setUser(u);
     } catch {
       setUser(null);
     }
@@ -262,6 +271,30 @@ export const Header: React.FC<HeaderProps> = ({
 
   useEffect(() => {
     checkUserSession();
+
+    const handleProfileUpdate = (e: any) => {
+      if (e?.detail) {
+        setUser((prev: any) => ({
+          ...(prev || {}),
+          ...e.detail,
+          avatarUrl: e.detail.avatarUrl || prev?.avatarUrl,
+        }));
+      }
+      checkUserSession();
+    };
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'mahaticket_user_avatar' && e.newValue) {
+        setUser((prev: any) => (prev ? { ...prev, avatarUrl: e.newValue } : prev));
+      }
+    };
+
+    window.addEventListener('mahaticket_profile_updated', handleProfileUpdate);
+    window.addEventListener('storage', handleStorageChange);
+    return () => {
+      window.removeEventListener('mahaticket_profile_updated', handleProfileUpdate);
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, []);
 
   const handleCityChange = (city: string) => {
@@ -586,14 +619,29 @@ export const Header: React.FC<HeaderProps> = ({
               className="flex items-center gap-2.5 text-left group cursor-pointer"
               aria-label="MahaTicket Home"
             >
-              <TheatreMaskLogo className="w-10 h-8 shrink-0 group-hover:scale-105 transition-transform" />
+              <img
+                src="/logo.png"
+                alt="MahaTicket Logo"
+                className="w-14 h-14 object-contain rounded-xl shrink-0 group-hover:scale-105 transition-transform drop-shadow-xs"
+              />
 
               <div className="flex flex-col leading-none">
-                <span className="text-lg font-black tracking-tight text-[#EA580C]">
-                  {language === 'mr' ? 'महाटिकिट' : 'MahaTicket'}
+                <span className="text-xl font-black tracking-tight">
+                  {language === 'mr' ? (
+                    <>
+                      <span className="text-[#EA580C]">महा</span>
+                      <span className="text-[#141B2B]">टिकिट</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-[#EA580C]">MAHA</span>
+                      <span className="text-[#141B2B]">TICKET</span>
+                    </>
+                  )}
                 </span>
-                <span className="text-[10px] uppercase tracking-wider text-[#64748B] font-semibold">
-                  MahaTicket
+                <span className="text-[10px] uppercase tracking-wider font-extrabold mt-0.5 flex items-center">
+                  <span className="text-[#EA580C]">MAHA</span>
+                  <span className="text-[#141B2B]">TICKET</span>
                 </span>
               </div>
             </button>
@@ -640,11 +688,10 @@ export const Header: React.FC<HeaderProps> = ({
                             handleCityChange(city);
                             setCityDropdownOpen(false);
                           }}
-                          className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold transition cursor-pointer ${
-                            isSelected
+                          className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold transition cursor-pointer ${isSelected
                               ? 'bg-[#EA580C] text-white shadow-xs font-bold'
                               : 'text-slate-800 hover:bg-orange-50 hover:text-[#EA580C]'
-                          }`}
+                            }`}
                         >
                           <span className="truncate">{label}</span>
                           {isSelected && <Check className="h-4 w-4 shrink-0 stroke-[2.5]" />}
@@ -781,18 +828,16 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 type="button"
                 onClick={() => handleLanguageChange('en')}
-                className={`rounded px-1.5 py-0.5 text-[10px] font-bold transition ${
-                  language === 'en' ? 'bg-[#EA580C] text-white shadow-xs' : 'text-[#64748B]'
-                }`}
+                className={`rounded px-1.5 py-0.5 text-[10px] font-bold transition ${language === 'en' ? 'bg-[#EA580C] text-white shadow-xs' : 'text-[#64748B]'
+                  }`}
               >
                 EN
               </button>
               <button
                 type="button"
                 onClick={() => handleLanguageChange('mr')}
-                className={`rounded px-1.5 py-0.5 text-[10px] font-bold transition ${
-                  language === 'mr' ? 'bg-[#EA580C] text-white shadow-xs' : 'text-[#64748B]'
-                }`}
+                className={`rounded px-1.5 py-0.5 text-[10px] font-bold transition ${language === 'mr' ? 'bg-[#EA580C] text-white shadow-xs' : 'text-[#64748B]'
+                  }`}
               >
                 म
               </button>
@@ -804,13 +849,38 @@ export const Header: React.FC<HeaderProps> = ({
                 <button
                   type="button"
                   onClick={() => setUserMenuOpen((o) => !o)}
-                  className="w-8 h-8 rounded-full bg-[#A33900] flex items-center justify-center text-white shadow-sm hover:opacity-90 transition"
-                  title="माझे प्रोफाइल"
+                  className="w-8 h-8 rounded-full bg-[#A33900] overflow-hidden flex items-center justify-center text-white shadow-sm hover:opacity-90 transition border border-orange-200"
+                  title={user.fullName || (language === 'mr' ? 'माझे प्रोफाइल' : 'My Profile')}
                 >
-                  <User className="h-4 w-4" />
+                  {user.avatarUrl ? (
+                    <img
+                      src={user.avatarUrl}
+                      alt={user.fullName || 'User'}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <User className="h-4 w-4" />
+                  )}
                 </button>
                 {userMenuOpen && (
-                  <div className="absolute right-0 top-full z-[70] mt-2 w-48 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
+                  <div className="absolute right-0 top-full z-[70] mt-2 w-52 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
+                    <div className="px-3 py-2 border-b border-slate-100 flex items-center gap-2 mb-1">
+                      {user.avatarUrl ? (
+                        <img
+                          src={user.avatarUrl}
+                          alt={user.fullName || 'User'}
+                          className="w-7 h-7 rounded-full object-cover border border-orange-300 shrink-0"
+                        />
+                      ) : (
+                        <div className="w-7 h-7 rounded-full bg-orange-100 text-[#ea580c] flex items-center justify-center shrink-0">
+                          <User className="h-3.5 w-3.5" />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-bold text-slate-900 truncate">{user.fullName || 'User'}</p>
+                        <p className="text-[10px] text-slate-500 truncate">{user.email}</p>
+                      </div>
+                    </div>
                     <button
                       type="button"
                       onClick={handleMyTicketsClick}
@@ -902,11 +972,10 @@ export const Header: React.FC<HeaderProps> = ({
                           handleCityChange(city);
                           setCityDropdownOpen(false);
                         }}
-                        className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold cursor-pointer ${
-                          isSelected
+                        className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold cursor-pointer ${isSelected
                             ? 'bg-[#EA580C] text-white font-bold'
                             : 'text-slate-800 hover:bg-orange-50'
-                        }`}
+                          }`}
                       >
                         <span className="truncate">{label}</span>
                         {isSelected && <Check className="h-4 w-4 shrink-0 stroke-[2.5]" />}
@@ -979,12 +1048,18 @@ export const Header: React.FC<HeaderProps> = ({
               }}
               className="flex w-full items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-bold text-slate-800"
             >
-              <User className="h-4 w-4 text-[#ea580c]" />
+              {user?.avatarUrl ? (
+                <img
+                  src={user.avatarUrl}
+                  alt={user.fullName || 'User'}
+                  className="w-5 h-5 rounded-full object-cover border border-orange-300 shrink-0"
+                />
+              ) : (
+                <User className="h-4 w-4 text-[#ea580c] shrink-0" />
+              )}
 
-              <span>
-                {language === 'mr'
-                  ? 'माझे प्रोफाइल'
-                  : 'My Profile'}
+              <span className="truncate">
+                {user?.fullName || (language === 'mr' ? 'माझे प्रोफाइल' : 'My Profile')}
               </span>
             </button>
 

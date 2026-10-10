@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db, pool } from '@/src/db/index.ts';
 import { events, venues, organizers, eventSessions, ticketTypes } from '@/src/db/schema.ts';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, inArray } from 'drizzle-orm';
 
 export async function GET(request: Request) {
   try {
@@ -60,34 +60,51 @@ export async function GET(request: Request) {
       .orderBy(desc(events.featured), desc(events.createdAt));
 
     if (dbEvents.length > 0) {
-      const enrichedDbEvents = await Promise.all(
-        dbEvents.map(async (item) => {
-          const sessions = await db
-            .select()
-            .from(eventSessions)
-            .where(and(eq(eventSessions.eventId, item.event.id), eq(eventSessions.status, 'active')))
-            .orderBy(eventSessions.sessionStartTime);
+      const eventIds = dbEvents.map((item) => item.event.id);
 
-          const prices = await db
-            .select({ price: ticketTypes.price })
-            .from(ticketTypes)
-            .where(eq(ticketTypes.eventId, item.event.id));
+      // Batch fetch all active sessions for these event IDs in 1 query
+      const allSessions = await db
+        .select()
+        .from(eventSessions)
+        .where(and(inArray(eventSessions.eventId, eventIds), eq(eventSessions.status, 'active')))
+        .orderBy(eventSessions.sessionStartTime);
 
-          const minPrice = prices.length > 0 ? Math.min(...prices.map((p) => p.price)) : 30000;
-          const stats = reviewStatsMap[item.event.id];
+      // Batch fetch all ticket prices for these event IDs in 1 query
+      const allPrices = await db
+        .select({ eventId: ticketTypes.eventId, price: ticketTypes.price })
+        .from(ticketTypes)
+        .where(inArray(ticketTypes.eventId, eventIds));
 
-          return {
-            ...item.event,
-            venue: item.venue,
-            organizer: item.organizer,
-            sessions,
-            minPrice,
-            rating: stats ? stats.rating : 0,
-            ratingCount: stats ? stats.count : 0,
-          };
-        })
-      );
-      allEventsList = enrichedDbEvents;
+      // Group sessions and prices by eventId
+      const sessionsByEventId: Record<number, any[]> = {};
+      allSessions.forEach((s) => {
+        if (!sessionsByEventId[s.eventId]) sessionsByEventId[s.eventId] = [];
+        sessionsByEventId[s.eventId].push(s);
+      });
+
+      const pricesByEventId: Record<number, number[]> = {};
+      allPrices.forEach((p) => {
+        if (!pricesByEventId[p.eventId]) pricesByEventId[p.eventId] = [];
+        pricesByEventId[p.eventId].push(p.price);
+      });
+
+      allEventsList = dbEvents.map((item) => {
+        const evId = item.event.id;
+        const sessions = sessionsByEventId[evId] || [];
+        const prices = pricesByEventId[evId] || [];
+        const minPrice = prices.length > 0 ? Math.min(...prices) : 30000;
+        const stats = reviewStatsMap[evId];
+
+        return {
+          ...item.event,
+          venue: item.venue,
+          organizer: item.organizer,
+          sessions,
+          minPrice,
+          rating: stats ? stats.rating : 0,
+          ratingCount: stats ? stats.count : 0,
+        };
+      });
     }
 
     // Filter by category
@@ -158,7 +175,10 @@ export async function GET(request: Request) {
       });
     }
 
-    return NextResponse.json({ events: allEventsList });
+    return NextResponse.json(
+      { events: allEventsList },
+      { headers: { 'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=59' } }
+    );
   } catch (error: any) {
     console.error('Failed to fetch events from database:', error);
     return NextResponse.json({ error: 'Failed to fetch events', events: [] }, { status: 500 });

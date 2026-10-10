@@ -143,11 +143,25 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
     };
   }, []);
 
-  // Hold Countdown Timer
-  const [timeLeft, setTimeLeft] = useState<number>(300);
+  // Hold Countdown Timer (Synchronized with authoritative backend expiry)
+  const [activeHoldExpiresAt, setActiveHoldExpiresAt] = useState<string>(holdData.holdExpiresAt);
 
   useEffect(() => {
+    if (holdData.holdExpiresAt) {
+      setActiveHoldExpiresAt(holdData.holdExpiresAt);
+    }
+  }, [holdData.holdExpiresAt]);
+
+  const [timeLeft, setTimeLeft] = useState<number>(() => {
     const expireTime = new Date(holdData.holdExpiresAt).getTime();
+    return isNaN(expireTime) ? 300 : Math.max(0, Math.floor((expireTime - Date.now()) / 1000));
+  });
+
+  useEffect(() => {
+    if (!activeHoldExpiresAt) return;
+    const expireTime = new Date(activeHoldExpiresAt).getTime();
+    if (isNaN(expireTime)) return;
+
     const interval = setInterval(() => {
       const remaining = Math.max(0, Math.floor((expireTime - Date.now()) / 1000));
       setTimeLeft(remaining);
@@ -156,7 +170,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
       }
     }, 1000);
     return () => clearInterval(interval);
-  }, [holdData.holdExpiresAt]);
+  }, [activeHoldExpiresAt]);
 
   const formatCountdown = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -392,6 +406,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
           sessionId: session.id,
           seatIds: holdData.seatIds,
           couponCode: couponInput || null,
+          holdToken: holdData.holdToken,
         }),
       });
 
@@ -399,6 +414,15 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
 
       if (!createOrderRes.ok) {
         throw new Error(orderData.error || 'पेमेंट ऑर्डर तयार करता आली नाही.');
+      }
+
+      // Synchronize client countdown with server-authoritative 10-minute extended hold
+      if (orderData.holdExpiresAt) {
+        const parsed = new Date(orderData.holdExpiresAt).getTime();
+        if (!isNaN(parsed) && parsed > Date.now()) {
+          setActiveHoldExpiresAt(orderData.holdExpiresAt);
+          setTimeLeft(Math.max(0, Math.floor((parsed - Date.now()) / 1000)));
+        }
       }
 
       if (!window.Razorpay) {

@@ -17,9 +17,9 @@ export async function POST(request: Request) {
       );
     }
 
-    if (seatIds.length > 8) {
+    if (seatIds.length > 5) {
       return NextResponse.json(
-        { error: 'Maximum 8 tickets allowed per transaction to prevent bulk hoarding.' },
+        { error: 'Maximum 5 tickets allowed per transaction to prevent bulk hoarding.' },
         { status: 400 }
       );
     }

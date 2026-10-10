@@ -16,15 +16,22 @@ export async function POST(req: NextRequest) {
     const phoneNumber = body.phoneNumber !== undefined ? String(body.phoneNumber).trim() : session.phoneNumber;
     const avatarUrl = body.avatarUrl !== undefined ? String(body.avatarUrl) : session.avatarUrl;
 
-    if (db && users && session.id) {
+    if (db && users && (session.id || session.email)) {
       try {
-        await db
-          .update(users)
-          .set({
-            fullName: fullName || session.fullName,
-            phoneNumber: phoneNumber || session.phoneNumber,
-          })
-          .where(eq(users.id, session.id));
+        const updateData: any = {
+          fullName: fullName || session.fullName,
+          phoneNumber: phoneNumber || session.phoneNumber,
+          updatedAt: new Date(),
+        };
+        if (avatarUrl !== undefined) {
+          updateData.avatarUrl = avatarUrl;
+        }
+
+        if (session.id) {
+          await db.update(users).set(updateData).where(eq(users.id, session.id));
+        } else if (session.email) {
+          await db.update(users).set(updateData).where(eq(users.email, session.email));
+        }
       } catch (err) {
         console.warn('DB update user failed non-blocking:', err);
       }

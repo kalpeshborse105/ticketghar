@@ -45,9 +45,9 @@ export const metadata: Metadata = {
     description: 'महाराष्ट्रातील नाट्य, संगीत, लोककला आणि मनोरंजनाचे हक्काचे व्यासपीठ.',
   },
   icons: {
-    icon: '/icon.svg',
-    shortcut: '/icon.svg',
-    apple: '/icon.svg',
+    icon: '/icon.png',
+    shortcut: '/icon.png',
+    apple: '/icon.png',
   },
 };
 

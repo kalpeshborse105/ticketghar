@@ -120,8 +120,16 @@ export default function ProfilePage() {
       const dataUrl = event.target?.result as string;
       if (dataUrl) {
         setAvatarUrl(dataUrl);
-        if (user?.email && typeof window !== 'undefined') {
-          localStorage.setItem(`mahaticket_avatar_${user.email}`, dataUrl);
+        if (typeof window !== 'undefined') {
+          if (user?.email) {
+            localStorage.setItem(`mahaticket_avatar_${user.email}`, dataUrl);
+          }
+          localStorage.setItem('mahaticket_user_avatar', dataUrl);
+          window.dispatchEvent(
+            new CustomEvent('mahaticket_profile_updated', {
+              detail: { ...(user || {}), avatarUrl: dataUrl },
+            })
+          );
         }
         try {
           const res = await fetch('/api/auth/flow/profile', {
@@ -130,7 +138,16 @@ export default function ProfilePage() {
             body: JSON.stringify({ avatarUrl: dataUrl }),
           });
           const d = await res.json();
-          if (res.ok && d.user) setUser(d.user);
+          if (res.ok && d.user) {
+            setUser(d.user);
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(
+                new CustomEvent('mahaticket_profile_updated', {
+                  detail: d.user,
+                })
+              );
+            }
+          }
           setProfileSuccessMsg('प्रोफाइल फोटो यशस्वीरीत्या बदलला व जतन झाला!');
         } catch {
           setProfileSuccessMsg('प्रोफाइल फोटो बदलला!');
@@ -162,6 +179,16 @@ export default function ProfilePage() {
       const data = await res.json();
       if (res.ok && data.user) {
         setUser(data.user);
+        if (typeof window !== 'undefined') {
+          if (data.user.avatarUrl) {
+            localStorage.setItem('mahaticket_user_avatar', data.user.avatarUrl);
+          }
+          window.dispatchEvent(
+            new CustomEvent('mahaticket_profile_updated', {
+              detail: data.user,
+            })
+          );
+        }
         setProfileSuccessMsg('प्रोफाइल माहिती यशस्वीरीत्या जतन केली!');
       } else {
         setProfileSuccessMsg(data.error || 'माहिती जतन करता आली नाही.');

@@ -100,37 +100,85 @@ export async function POST(request: Request) {
 
     const pricing = await calculatePricing(eventRecord, seatIds.length, faceValueTotal, couponCode);
 
-    // Normalize payment details (supporting both mobile and web field names)
-    let resolvedPayment = paymentDetails ? {
-      gateway: paymentDetails.gateway || (paymentDetails.paymentId || paymentDetails.razorpayPaymentId ? 'razorpay' : 'direct_confirm'),
-      razorpayOrderId: paymentDetails.razorpayOrderId || paymentDetails.orderId || null,
-      razorpayPaymentId: paymentDetails.razorpayPaymentId || paymentDetails.paymentId || null,
-      razorpaySignature: paymentDetails.razorpaySignature || paymentDetails.signature || null,
-      idempotencyKey: paymentDetails.idempotencyKey || `idem_${Date.now()}_${targetUserId}`,
-    } : null;
+    const isProd = process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production';
+    const allowDirectConfirm = !isProd && process.env.ALLOW_DIRECT_CONFIRM === 'true';
 
-    if (!resolvedPayment) {
-      const isProd = process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production';
-      const allowDirectConfirm = !isProd && process.env.ALLOW_DIRECT_CONFIRM === 'true';
-      
+    // Normalize payment details (supporting both mobile and web field names)
+    const incomingGateway = paymentDetails?.gateway;
+    const incomingOrderId = paymentDetails?.razorpayOrderId || paymentDetails?.orderId || null;
+    const incomingPaymentId = paymentDetails?.razorpayPaymentId || paymentDetails?.paymentId || null;
+    const incomingSignature = paymentDetails?.razorpaySignature || paymentDetails?.signature || null;
+
+    let targetGateway: string;
+
+    if (incomingGateway === 'razorpay' || incomingOrderId || incomingPaymentId || incomingSignature) {
+      targetGateway = 'razorpay';
+    } else if (incomingGateway === 'direct_confirm' || !paymentDetails) {
       if (!allowDirectConfirm) {
         return NextResponse.json(
-          { error: 'Payment details required. Payment must be completed before confirmation.' },
+          { error: 'Direct confirmation is disabled. Valid Razorpay payment verification is required.' },
           { status: 402 }
         );
       }
-
-      console.warn('Direct confirm allowed by ALLOW_DIRECT_CONFIRM=true env variable');
-      resolvedPayment = {
-        gateway: 'direct_confirm',
-        razorpayOrderId: null,
-        razorpayPaymentId: null,
-        razorpaySignature: null,
-        idempotencyKey: `idem_${Date.now()}_${targetUserId}`,
-      };
+      targetGateway = 'direct_confirm';
+    } else {
+      return NextResponse.json(
+        { error: `Unsupported or invalid payment gateway: ${incomingGateway}` },
+        { status: 400 }
+      );
     }
 
-    // 1. Idempotency Check: if this payment was already confirmed, return the existing order safely
+    const resolvedPayment = {
+      gateway: targetGateway,
+      razorpayOrderId: incomingOrderId,
+      razorpayPaymentId: incomingPaymentId,
+      razorpaySignature: incomingSignature,
+      idempotencyKey: paymentDetails?.idempotencyKey || `idem_${Date.now()}_${targetUserId}`,
+    };
+
+    // 1. Mandatory server-side verification for Razorpay payments
+    if (resolvedPayment.gateway === 'razorpay') {
+      if (!resolvedPayment.razorpayOrderId || !resolvedPayment.razorpayPaymentId || !resolvedPayment.razorpaySignature) {
+        return NextResponse.json(
+          { error: 'Incomplete Razorpay payment details. Order ID, payment ID, and cryptographic signature are all required.' },
+          { status: 400 }
+        );
+      }
+
+      // Safe failure: missing, placeholder, or invalid credentials must NEVER bypass verification
+      if (!isRazorpayConfigured()) {
+        console.error('Razorpay verification requested but gateway is not configured on server.');
+        return NextResponse.json(
+          { error: 'Razorpay payment gateway is not configured on server. Cannot verify payment.' },
+          { status: 503 }
+        );
+      }
+
+      let isSignatureValid = false;
+      try {
+        isSignatureValid = verifyPaymentSignature(
+          resolvedPayment.razorpayOrderId,
+          resolvedPayment.razorpayPaymentId,
+          resolvedPayment.razorpaySignature
+        );
+      } catch (err: any) {
+        console.error('Signature verification error:', err);
+        return NextResponse.json(
+          { error: `Payment verification failed: ${err.message || 'Signature error'}` },
+          { status: 400 }
+        );
+      }
+
+      if (!isSignatureValid) {
+        console.error('Invalid Razorpay signature for payment:', resolvedPayment.razorpayPaymentId);
+        return NextResponse.json(
+          { error: 'Invalid payment signature. Payment verification failed on server.' },
+          { status: 400 }
+        );
+      }
+    }
+
+    // 2. Idempotency Check: only reachable after signature has been proven authentic (or in allowed dev direct confirm)
     if (resolvedPayment.razorpayPaymentId) {
       const existingOrderRows = await db
         .select()
@@ -140,6 +188,15 @@ export async function POST(request: Request) {
 
       if (existingOrderRows.length > 0) {
         const existingOrder = existingOrderRows[0];
+
+        // Authorization check: Verify user owns this booking
+        if (existingOrder.userId !== targetUserId && existingOrder.userEmail.toLowerCase() !== userEmail.trim().toLowerCase()) {
+          return NextResponse.json(
+            { error: 'Unauthorized: Booking order belongs to another customer.' },
+            { status: 403 }
+          );
+        }
+
         const existingTickets = await db
           .select()
           .from(tickets)
@@ -163,32 +220,6 @@ export async function POST(request: Request) {
           },
           message: 'Booking already confirmed (idempotent)',
         });
-      }
-    }
-
-    // 2. Server-Side Signature Verification for Razorpay
-    if (resolvedPayment.gateway === 'razorpay' && resolvedPayment.razorpayOrderId && resolvedPayment.razorpayPaymentId) {
-      if (!resolvedPayment.razorpaySignature) {
-        return NextResponse.json(
-          { error: 'Razorpay payment signature is missing. Unverified payments cannot be confirmed.' },
-          { status: 400 }
-        );
-      }
-
-      if (isRazorpayConfigured()) {
-        const isSignatureValid = verifyPaymentSignature(
-          resolvedPayment.razorpayOrderId,
-          resolvedPayment.razorpayPaymentId,
-          resolvedPayment.razorpaySignature
-        );
-
-        if (!isSignatureValid) {
-          console.error('Invalid Razorpay signature for payment:', resolvedPayment.razorpayPaymentId);
-          return NextResponse.json(
-            { error: 'Invalid payment signature. Payment verification failed on server.' },
-            { status: 400 }
-          );
-        }
       }
     }
 

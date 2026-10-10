@@ -324,6 +324,11 @@ export async function confirmBookingOrder(params: {
       .limit(1);
 
     if (existingOrders.length > 0) {
+      const existingOrder = existingOrders[0];
+      if (existingOrder.userId !== userId && existingOrder.userEmail.toLowerCase() !== userEmail.toLowerCase()) {
+        throw new Error('Unauthorized: Booking order belongs to another customer.');
+      }
+
       const existingTickets = await db
         .select()
         .from(tickets)

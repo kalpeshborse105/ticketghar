@@ -18,6 +18,13 @@ export async function POST(request: Request) {
       );
     }
 
+    if (seatIds.length > 5) {
+      return NextResponse.json(
+        { error: 'Maximum 5 tickets allowed per transaction to prevent bulk hoarding.' },
+        { status: 400 }
+      );
+    }
+
     // Check if Razorpay is configured
     if (!isRazorpayConfigured()) {
       return NextResponse.json(
@@ -79,21 +86,37 @@ export async function POST(request: Request) {
     // Verify seats or auto-hold them for payment checkout
     const now = new Date();
     const tenMinutes = new Date(Date.now() + 10 * 60 * 1000);
+    const userHoldToken = body.holdToken || body.userIdStr;
 
     for (const seat of holdSeats) {
       if (seat.status === 'booked') {
         return NextResponse.json({ error: 'One or more seats are already booked' }, { status: 409 });
       }
-      if (seat.status === 'available' || (seat.status === 'held' && seat.holdExpires && new Date(seat.holdExpires) < now)) {
+
+      const isExpired = seat.holdExpires && new Date(seat.holdExpires) < now;
+
+      // Reject if held by a different active customer
+      if (seat.status === 'held' && !isExpired) {
+        if (!userHoldToken || (seat.heldBy && seat.heldBy !== userHoldToken)) {
+          return NextResponse.json(
+            { error: 'One or more seats are currently held by another customer' },
+            { status: 409 }
+          );
+        }
+      }
+
+      // Extend or acquire hold for checkout
+      if (seat.status === 'available' || isExpired || (seat.status === 'held' && (!seat.heldBy || seat.heldBy === userHoldToken))) {
         await db
           .update(seatInventory)
           .set({
             status: 'held',
-            heldByUserId: 'checkout_user',
+            heldByUserId: userHoldToken || seat.heldBy || 'checkout_user',
             holdExpiresAt: tenMinutes,
           })
           .where(eq(seatInventory.id, seat.invId));
         seat.status = 'held';
+        seat.holdExpires = tenMinutes;
       }
     }
 
@@ -135,13 +158,14 @@ export async function POST(request: Request) {
 
     console.log('Razorpay order created:', razorpayOrder.id);
 
-    // Return order details including public key ID for frontend
+    // Return order details including public key ID and authoritative hold expiry for frontend
     return NextResponse.json({
       orderId: razorpayOrder.id,
       amount: amountInPaise,
       currency: 'INR',
       keyId: process.env.RAZORPAY_KEY_ID,
       receipt: receiptId,
+      holdExpiresAt: tenMinutes.toISOString(),
       pricing,
     });
   } catch (error: any) {

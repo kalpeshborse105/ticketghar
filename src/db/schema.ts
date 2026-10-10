@@ -379,6 +379,18 @@ export const eventReviews = pgTable('event_reviews', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+// 21. Event Images & Gallery Photos
+export const eventImages = pgTable('event_images', {
+  id: serial('id').primaryKey(),
+  eventId: integer('event_id').references(() => events.id).notNull(),
+  imageUrl: text('image_url').notNull(),
+  caption: text('caption'),
+  captionMr: text('caption_mr'),
+  sortOrder: integer('sort_order').notNull().default(0),
+  isCover: integer('is_cover').notNull().default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
 // Relational mappings
 export const eventsRelations = relations(events, ({ one, many }) => ({
   organizer: one(organizers, {
@@ -391,6 +403,7 @@ export const eventsRelations = relations(events, ({ one, many }) => ({
   }),
   sessions: many(eventSessions),
   ticketTypes: many(ticketTypes),
+  images: many(eventImages),
 }));
 
 export const eventSessionsRelations = relations(eventSessions, ({ one, many }) => ({

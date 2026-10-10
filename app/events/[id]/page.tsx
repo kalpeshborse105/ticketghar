@@ -44,6 +44,8 @@ interface EventDetail {
   descriptionMr?: string;
   posterUrl?: string;
   bannerUrl?: string;
+  trailerUrl?: string;
+  galleryUrls?: string;
   durationMinutes?: number;
   cast?: string;
   venue: {
@@ -126,6 +128,58 @@ export default function EventDetailPage() {
 
   // Accordion state for rules & advisory
   const [openRuleIndex, setOpenRuleIndex] = useState<number | null>(0);
+
+  // Database-backed gallery photos for this event
+  const eventPhotos = React.useMemo(() => {
+    if (!event) return [];
+    const list: string[] = [];
+    if (Array.isArray((event as any).images) && (event as any).images.length > 0) {
+      (event as any).images.forEach((img: any) => {
+        const url = typeof img === 'string' ? img : img?.url || img?.imageUrl;
+        if (url && !list.includes(url)) list.push(url);
+      });
+    }
+    if ((event as any).galleryUrls) {
+      try {
+        const parsed =
+          typeof (event as any).galleryUrls === 'string'
+            ? JSON.parse((event as any).galleryUrls)
+            : (event as any).galleryUrls;
+        if (Array.isArray(parsed)) {
+          parsed.forEach((url: string) => {
+            if (url && !list.includes(url)) list.push(url);
+          });
+        }
+      } catch {}
+    }
+    if (list.length === 0) {
+      if (event.bannerUrl) list.push(event.bannerUrl);
+      if (event.posterUrl && !list.includes(event.posterUrl)) list.push(event.posterUrl);
+    }
+    return list;
+  }, [event]);
+
+  // Dynamic minimum and maximum rates from session ticket types
+  const stickyPriceDisplay = React.useMemo(() => {
+    if (selectedSession?.ticketTypes && selectedSession.ticketTypes.length > 0) {
+      const prices = selectedSession.ticketTypes.map((t: any) => Math.round(t.price / 100));
+      const minP = Math.min(...prices);
+      const maxP = Math.max(...prices);
+      return minP === maxP ? `₹${minP}` : `₹${minP} - ₹${maxP}`;
+    }
+    if (event?.sessions && event.sessions.length > 0) {
+      const allPrices: number[] = [];
+      event.sessions.forEach((s: any) => {
+        (s.ticketTypes || []).forEach((t: any) => allPrices.push(Math.round(t.price / 100)));
+      });
+      if (allPrices.length > 0) {
+        const minP = Math.min(...allPrices);
+        const maxP = Math.max(...allPrices);
+        return minP === maxP ? `₹${minP}` : `₹${minP} - ₹${maxP}`;
+      }
+    }
+    return '₹३०० - ₹६००';
+  }, [selectedSession, event]);
 
   const fetchReviews = async () => {
     if (!eventId) return;
@@ -254,6 +308,35 @@ export default function EventDetailPage() {
 
     fetchEvent();
   }, [eventId]);
+
+  // Deep link or bot direct action: ?book=true or custom event opens seat map immediately
+  useEffect(() => {
+    if (!event || !event.sessions || event.sessions.length === 0) return;
+
+    const openBooking = () => {
+      const activeSession =
+        event.sessions.find((s: any) => s.status === 'active') || event.sessions[0];
+      if (activeSession) {
+        setSelectedSession(activeSession);
+        setSeatMapOpen(true);
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      const qs = new URLSearchParams(window.location.search);
+      if (qs.get('book') === 'true') {
+        openBooking();
+      }
+
+      const botListener = (e: any) => {
+        if (!e.detail?.eventId || String(e.detail.eventId) === String(eventId)) {
+          openBooking();
+        }
+      };
+      window.addEventListener('tikitmitra_open_seatmap', botListener);
+      return () => window.removeEventListener('tikitmitra_open_seatmap', botListener);
+    }
+  }, [event, eventId]);
 
   const handleBookSession = (session: any) => {
     setSelectedSession(session);
@@ -414,73 +497,105 @@ export default function EventDetailPage() {
                   </span>
                 </div>
                 <div className="absolute bottom-3 left-3 right-3 p-2.5 rounded-xl bg-[#141B2B]/90 backdrop-blur-md text-white flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                    <span className="text-sm font-bold">
-                      {reviewStats.totalCount > 0 ? `${reviewStats.averageRating.toFixed(1)} / ५` : 'नवीन'}
-                    </span>
-                    <span className="text-[10px] text-white/70">
-                      ({reviewStats.totalCount > 0 ? `${reviewStats.totalCount} मते` : 'अद्याप रेटिंग नाही'})
-                    </span>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1 bg-amber-500/25 border border-amber-400/50 px-2 py-0.5 rounded-lg shadow-xs">
+                      <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+                      <span className="text-sm font-black text-amber-300">
+                        {reviewStats.totalCount > 0 ? reviewStats.averageRating.toFixed(1) : '0.0'}
+                      </span>
+                    </div>
+                    <div className="flex flex-col leading-tight">
+                      <span className="text-[11px] font-bold text-white">
+                        {reviewStats.totalCount > 0 ? `${reviewStats.totalCount} प्रेक्षक मते` : 'नवीन प्रयोग'}
+                      </span>
+                      <span className="text-[9px] text-orange-200/90 font-medium">
+                        {reviewStats.totalCount > 0 ? 'प्रमाणित पुनरावलोकने' : 'पहिले मत नोंदवा'}
+                      </span>
+                    </div>
                   </div>
                   <button
                     type="button"
                     onClick={handleOpenReviewModal}
-                    className="px-2.5 py-1 rounded-lg bg-[#EA580C] text-white text-[10px] font-bold hover:bg-[#A33900] transition-colors cursor-pointer"
+                    className="px-3 py-1.5 rounded-lg bg-[#EA580C] hover:bg-[#A33900] text-white text-[11px] font-bold transition shadow-xs cursor-pointer flex items-center gap-1 active:scale-95"
                   >
-                    परीक्षण द्या
+                    <Star className="h-3 w-3 fill-white" />
+                    <span>परीक्षण द्या</span>
                   </button>
                 </div>
               </div>
 
-              {/* Video Trailer Preview & Image Gallery Strip */}
+              {/* Video Trailer Preview & Real Image Gallery Strip */}
               <div className="mt-3 grid grid-cols-3 gap-2">
-                <div
-                  onClick={() => setShowVideoModal(true)}
-                  className="relative aspect-video rounded-lg overflow-hidden cursor-pointer group/vid shadow-xs bg-slate-100"
-                >
-                  <img
-                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuDncKch8yhmaYapDOV6PPRolCn_3aitnTKD3iQ97CQZ23f5wQyvDvzDIRtBTzcfHLHCb5jxTvoSiKYZnNFFlCGSPZSqNVyuep_Xxh_k8l7VXze1PAu7cy2FMP6vlYRxu0W4f44v1HIGCLPNqRGATSVjO49tPT8qEu4gyEV3OsCUxh_Nh3VZBqxA1LVCy2UGn4Z0ovj7EmuTh0_34djgfHwu4UgceZ6XOaDnhZAI8yI"
-                    alt="Video thumbnail"
-                    className="w-full h-full object-cover group-hover/vid:opacity-90"
-                  />
-                  <div className="absolute inset-0 bg-black/35 flex items-center justify-center">
-                    <div className="w-6 h-6 rounded-full bg-[#EA580C] text-white flex items-center justify-center shadow-md">
-                      <Play className="h-3 w-3 fill-white" />
+                {event.trailerUrl ? (
+                  <div
+                    onClick={() => setShowVideoModal(true)}
+                    className="relative aspect-video rounded-lg overflow-hidden cursor-pointer group/vid shadow-xs bg-slate-100"
+                  >
+                    <img
+                      src={event.bannerUrl || event.posterUrl || 'https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?auto=format&fit=crop&w=400&q=80'}
+                      alt="Video trailer thumbnail"
+                      className="w-full h-full object-cover group-hover/vid:opacity-90"
+                    />
+                    <div className="absolute inset-0 bg-black/35 flex items-center justify-center">
+                      <div className="w-6 h-6 rounded-full bg-[#EA580C] text-white flex items-center justify-center shadow-md">
+                        <Play className="h-3 w-3 fill-white" />
+                      </div>
                     </div>
                   </div>
-                </div>
-
-                <div
-                  onClick={() => {
-                    setActivePhotoIndex(0);
-                    setShowPhotoModal(true);
-                  }}
-                  className="relative aspect-video rounded-lg overflow-hidden cursor-pointer shadow-xs bg-slate-100 group/img"
-                >
-                  <img
-                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuAi380G45imoiU_ykp9lqaSetPxGCs4JixChO1OysCiXvWZTjDdqWanVFvDqLKLDyak4apv7GVJQKDeUkzGge-S1o64M94T0voAk_TwYaUme8YerJFhJZ37rt2tD-S7cF-bhXk3Mz1JmfOSEHa5JDNRFEJygtOdNVvZFd0P99-ddy7c6u2JDPNAqAQpsA-ko9OaZkyglII5Md9cJnPxadW8ujcj6hZR6pkrLtXPBnY"
-                    alt="Play photo 1"
-                    className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-300"
-                  />
-                </div>
-
-                <div
-                  onClick={() => {
-                    setActivePhotoIndex(1);
-                    setShowPhotoModal(true);
-                  }}
-                  className="relative aspect-video rounded-lg overflow-hidden cursor-pointer shadow-xs bg-slate-100 group/img"
-                >
-                  <img
-                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuCVL9_Ox5vPd0mccgYaRBsJxQWJy_q_OZmBPboNnJGZcCJezx1kr90Ig5FaY7yWUAl-6CKqqJoxnjuK37wjPSLzSdMRgNBGw6xM4G8rtiZUXEa4brEdWAnqmjEv8-ZnwC5lYIfYsKNd_CvrgaBkWuQdbF02e-iiiPFo1QEntOepqM9LLs_6V_TTmxGlMpzuKAw4m5vYUVoLV1jxHT3yvHB_ce6g09mSZfHPvv99nBY"
-                    alt="Play photo 2"
-                    className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-300"
-                  />
-                  <div className="absolute inset-0 bg-[#141B2B]/60 group-hover/img:bg-[#141B2B]/75 transition-colors flex items-center justify-center text-white text-xs font-bold">
-                    +१२ फोटो
+                ) : (
+                  <div
+                    onClick={() => {
+                      if (eventPhotos.length > 0) {
+                        setActivePhotoIndex(0);
+                        setShowPhotoModal(true);
+                      }
+                    }}
+                    className="relative aspect-video rounded-lg overflow-hidden cursor-pointer shadow-xs bg-slate-100 group/img"
+                  >
+                    <img
+                      src={eventPhotos[0] || event.posterUrl}
+                      alt="Event photo preview"
+                      className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-300"
+                    />
                   </div>
-                </div>
+                )}
+
+                {eventPhotos.length > 1 && (
+                  <div
+                    onClick={() => {
+                      setActivePhotoIndex(1);
+                      setShowPhotoModal(true);
+                    }}
+                    className="relative aspect-video rounded-lg overflow-hidden cursor-pointer shadow-xs bg-slate-100 group/img"
+                  >
+                    <img
+                      src={eventPhotos[1]}
+                      alt="Event photo 2"
+                      className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-300"
+                    />
+                  </div>
+                )}
+
+                {eventPhotos.length > 2 && (
+                  <div
+                    onClick={() => {
+                      setActivePhotoIndex(2);
+                      setShowPhotoModal(true);
+                    }}
+                    className="relative aspect-video rounded-lg overflow-hidden cursor-pointer shadow-xs bg-slate-100 group/img"
+                  >
+                    <img
+                      src={eventPhotos[2]}
+                      alt="Event photo 3"
+                      className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-300"
+                    />
+                    {eventPhotos.length > 3 && (
+                      <div className="absolute inset-0 bg-[#141B2B]/60 group-hover/img:bg-[#141B2B]/75 transition-colors flex items-center justify-center text-white text-xs font-bold">
+                        +{eventPhotos.length - 2} फोटो
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -646,8 +761,8 @@ export default function EventDetailPage() {
                       type="button"
                       onClick={() => setSelectedDateIndex(idx)}
                       className={`flex-shrink-0 flex flex-col items-center justify-center w-20 py-2.5 rounded-xl transition-all shadow-xs cursor-pointer ${isSelected
-                          ? 'bg-[#EA580C] text-white'
-                          : 'bg-[#FFF7ED] hover:bg-orange-100 text-[#141B2B]'
+                        ? 'bg-[#EA580C] text-white'
+                        : 'bg-[#FFF7ED] hover:bg-orange-100 text-[#141B2B]'
                         }`}
                     >
                       <span className={`text-[10px] uppercase font-bold ${isSelected ? 'text-white/90' : 'text-[#64748B]'}`}>
@@ -713,8 +828,8 @@ export default function EventDetailPage() {
                               type="button"
                               onClick={() => handleBookSession(sess)}
                               className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 ${isSelected
-                                  ? 'bg-[#EA580C] text-white shadow-sm'
-                                  : 'bg-[#FFF7ED] hover:bg-[#EA580C] text-[#EA580C] hover:text-white'
+                                ? 'bg-[#EA580C] text-white shadow-sm'
+                                : 'bg-[#FFF7ED] hover:bg-[#EA580C] text-[#EA580C] hover:text-white'
                                 }`}
                             >
                               <span>{isSelected ? 'निवडले ✓' : 'निवडा'}</span>
@@ -885,8 +1000,8 @@ export default function EventDetailPage() {
               <div className="p-4 rounded-xl bg-[#FFF7ED] border border-orange-200/60 flex flex-col sm:flex-row items-center gap-6">
                 <div className="flex flex-col items-center sm:items-start text-center sm:text-left shrink-0">
                   <div className="flex items-baseline gap-1.5">
-                    <span className="text-4xl font-extrabold text-[#141B2B]">
-                      {reviewStats.totalCount > 0 ? reviewStats.averageRating.toFixed(1) : '–'}
+                    <span className="text-4xl font-extrabold text-[#EA580C]">
+                      {reviewStats.totalCount > 0 ? reviewStats.averageRating.toFixed(1) : '0.0'}
                     </span>
                     <span className="text-sm font-semibold text-[#64748B]">/ ५</span>
                   </div>
@@ -895,8 +1010,8 @@ export default function EventDetailPage() {
                       <Star
                         key={s}
                         className={`h-4 w-4 ${reviewStats.totalCount > 0 && s <= Math.round(reviewStats.averageRating)
-                            ? 'fill-amber-400 text-amber-400'
-                            : 'fill-slate-200 text-slate-200'
+                          ? 'fill-amber-400 text-amber-400'
+                          : 'fill-amber-100 text-amber-300'
                           }`}
                       />
                     ))}
@@ -904,7 +1019,7 @@ export default function EventDetailPage() {
                   <span className="text-xs text-[#64748B] font-medium">
                     {reviewStats.totalCount > 0
                       ? `एकूण ${reviewStats.totalCount} प्रेक्षक मते`
-                      : 'अद्याप रेटिंग नाही (पहिले मत द्या)'}
+                      : 'नवीन प्रयोग • पहिले मत नोंदवा'}
                   </span>
                 </div>
 
@@ -993,8 +1108,8 @@ export default function EventDetailPage() {
                             <Star
                               key={star}
                               className={`h-3.5 w-3.5 ${star <= rev.rating
-                                  ? 'fill-amber-400 text-amber-400'
-                                  : 'text-slate-200 fill-slate-200'
+                                ? 'fill-amber-400 text-amber-400'
+                                : 'text-slate-200 fill-slate-200'
                                 }`}
                             />
                           ))}
@@ -1044,7 +1159,7 @@ export default function EventDetailPage() {
               <div className="flex items-center gap-2 text-[10px] text-[#64748B]">
                 <span className="truncate">{venueName}</span>
                 <span>•</span>
-                <span className="text-[#A33900] font-bold">दर: ₹ २५० - ₹ ६००</span>
+                <span className="text-[#A33900] font-bold">दर: {stickyPriceDisplay}</span>
               </div>
             </div>
           </div>
@@ -1097,8 +1212,8 @@ export default function EventDetailPage() {
       )}
 
       {/* Photo Gallery Lightbox Modal */}
-      {showPhotoModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4">
+      {showPhotoModal && eventPhotos.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 animate-in fade-in duration-150">
           <div className="relative w-full max-w-4xl overflow-hidden rounded-2xl border border-stone-800 bg-stone-950 p-4">
             <div className="flex items-center justify-between border-b border-stone-800 pb-3 mb-3">
               <p className="truncate text-sm font-bold text-white">छायाचित्र दालन (Photo Gallery) — {title}</p>
@@ -1110,16 +1225,10 @@ export default function EventDetailPage() {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            
+
             <div className="relative aspect-video w-full rounded-xl overflow-hidden bg-black flex items-center justify-center">
               <img
-                src={
-                  [
-                    'https://lh3.googleusercontent.com/aida-public/AB6AXuAi380G45imoiU_ykp9lqaSetPxGCs4JixChO1OysCiXvWZTjDdqWanVFvDqLKLDyak4apv7GVJQKDeUkzGge-S1o64M94T0voAk_TwYaUme8YerJFhJZ37rt2tD-S7cF-bhXk3Mz1JmfOSEHa5JDNRFEJygtOdNVvZFd0P99-ddy7c6u2JDPNAqAQpsA-ko9OaZkyglII5Md9cJnPxadW8ujcj6hZR6pkrLtXPBnY',
-                    'https://lh3.googleusercontent.com/aida-public/AB6AXuCVL9_Ox5vPd0mccgYaRBsJxQWJy_q_OZmBPboNnJGZcCJezx1kr90Ig5FaY7yWUAl-6CKqqJoxnjuK37wjPSLzSdMRgNBGw6xM4G8rtiZUXEa4brEdWAnqmjEv8-ZnwC5lYIfYsKNd_CvrgaBkWuQdbF02e-iiiPFo1QEntOepqM9LLs_6V_TTmxGlMpzuKAw4m5vYUVoLV1jxHT3yvHB_ce6g09mSZfHPvv99nBY',
-                    event.posterUrl || 'https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?auto=format&fit=crop&w=1200&q=80',
-                  ][activePhotoIndex] || event.posterUrl
-                }
+                src={eventPhotos[activePhotoIndex] || event.posterUrl}
                 alt={`Photo ${activePhotoIndex + 1}`}
                 className="max-h-[70vh] w-full object-contain"
               />
@@ -1127,19 +1236,27 @@ export default function EventDetailPage() {
 
             <div className="flex items-center justify-between mt-4 px-2">
               <span className="text-xs text-stone-400 font-mono">
-                फोटो {activePhotoIndex + 1} / 3
+                फोटो {activePhotoIndex + 1} / {eventPhotos.length}
               </span>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setActivePhotoIndex((prev) => (prev > 0 ? prev - 1 : 2))}
+                  onClick={() =>
+                    setActivePhotoIndex((prev) =>
+                      prev > 0 ? prev - 1 : eventPhotos.length - 1
+                    )
+                  }
                   className="px-3 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-white text-xs font-bold transition cursor-pointer"
                 >
                   ◀ मागे
                 </button>
                 <button
                   type="button"
-                  onClick={() => setActivePhotoIndex((prev) => (prev < 2 ? prev + 1 : 0))}
+                  onClick={() =>
+                    setActivePhotoIndex((prev) =>
+                      prev < eventPhotos.length - 1 ? prev + 1 : 0
+                    )
+                  }
                   className="px-3 py-1.5 rounded-lg bg-[#EA580C] hover:bg-[#C2410C] text-white text-xs font-bold transition cursor-pointer"
                 >
                   पुढे ▶
@@ -1233,8 +1350,8 @@ export default function EventDetailPage() {
                         >
                           <Star
                             className={`h-7 w-7 ${star <= (hoverRating || userRating)
-                                ? 'fill-amber-400 text-amber-400'
-                                : 'text-slate-300 fill-slate-200'
+                              ? 'fill-amber-400 text-amber-400'
+                              : 'text-slate-300 fill-slate-200'
                               }`}
                           />
                         </button>

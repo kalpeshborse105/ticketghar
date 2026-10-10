@@ -45,7 +45,13 @@ export async function GET(
       .from(venueSections)
       .where(eq(venueSections.venueId, venue.id));
 
-    // 4. Fetch seat inventory with seat and ticket type details
+    // 4. Fetch ticket types for this session
+    let ticketTypeList = await db
+      .select()
+      .from(ticketTypes)
+      .where(eq(ticketTypes.sessionId, sessionId));
+
+    // 5. Fetch seat inventory with seat and ticket type details
     let inventoryRows = await db
       .select({
         inventoryId: seatInventory.id,
@@ -61,6 +67,8 @@ export async function GET(
         sectionId: seats.sectionId,
         ticketTypeId: ticketTypes.id,
         price: ticketTypes.price,
+        ticketTypeName: ticketTypes.name,
+        ticketTypeNameMr: ticketTypes.nameMr,
       })
       .from(seatInventory)
       .innerJoin(seats, eq(seatInventory.seatId, seats.id))
@@ -71,7 +79,12 @@ export async function GET(
     if (inventoryRows.length === 0 && venue.hasSeatLayout === 1) {
       await generateSessionInventory(sessionId, venue.id);
 
-      // Re-fetch
+      // Re-fetch ticket types and inventory
+      ticketTypeList = await db
+        .select()
+        .from(ticketTypes)
+        .where(eq(ticketTypes.sessionId, sessionId));
+
       inventoryRows = await db
         .select({
           inventoryId: seatInventory.id,
@@ -87,6 +100,8 @@ export async function GET(
           sectionId: seats.sectionId,
           ticketTypeId: ticketTypes.id,
           price: ticketTypes.price,
+          ticketTypeName: ticketTypes.name,
+          ticketTypeNameMr: ticketTypes.nameMr,
         })
         .from(seatInventory)
         .innerJoin(seats, eq(seatInventory.seatId, seats.id))
@@ -94,18 +109,26 @@ export async function GET(
         .where(eq(seatInventory.sessionId, sessionId));
     }
 
-    // If no individual seat rows (for general admission), return ticket types quotas
-    const ticketTypeList = await db
-      .select()
-      .from(ticketTypes)
-      .where(eq(ticketTypes.sessionId, sessionId));
+    // Combine venueSections with session ticketTypes for authoritative session pricing
+    const sectionsWithPricing = sections.map((sec) => {
+      const tt = ticketTypeList.find((t) => t.sectionId === sec.id);
+      const effectivePrice = tt ? tt.price : sec.basePrice;
+      return {
+        ...sec,
+        basePrice: effectivePrice,
+        price: effectivePrice,
+        ticketTypeId: tt?.id,
+        ticketTypeName: tt?.name,
+        ticketTypeNameMr: tt?.nameMr,
+      };
+    });
 
     return NextResponse.json({
       sessionId,
       session,
       event,
       venue,
-      sections,
+      sections: sectionsWithPricing,
       seats: inventoryRows,
       ticketTypes: ticketTypeList,
     });

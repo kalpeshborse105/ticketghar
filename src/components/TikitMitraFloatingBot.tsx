@@ -23,6 +23,11 @@ const DEFAULT_SUGGESTIONS = [
   '💡 महानाट्य महोत्सव ऑफर काय आहे?',
 ];
 
+// Authentic Theatre Face Masks logo icon
+const TheatreFaceMasksIcon = ({ className = 'w-7 h-7' }: { className?: string }) => (
+  <img src="/logo.png" alt="टिकिटमित्र" className={`${className} object-contain drop-shadow-sm`} />
+);
+
 export function TikitMitraFloatingBot() {
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
@@ -32,7 +37,7 @@ export function TikitMitraFloatingBot() {
     {
       id: 'welcome',
       sender: 'bot',
-      text: 'नमस्कार! 🙏 मी **टिकिटमित्र**, महाटिकिटचा अधिकृत AI सहाय्यक. मी आपल्याला आजचे नाटक शोधण्यात, वेळेची माहिती देण्यात किंवा तिकीट बुक करण्यात कशी मदत करू शकतो?',
+      text: 'नमस्कार! 🙏 मी **टिकिट मित्र**, मी आपल्याला नाटक शोधण्यात, वेळेची माहिती देण्यात किंवा तिकीट बुक करण्यात कशी मदत करू शकतो?',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
   ]);
@@ -115,7 +120,7 @@ export function TikitMitraFloatingBot() {
       {
         id: 'welcome',
         sender: 'bot',
-        text: 'नमस्कार! 🙏 मी **टिकिटमित्र**, महाटिकिटचा अधिकृत AI सहाय्यक. मी आपल्याला आजचे नाटक शोधण्यात किंवा तिकीट बुक करण्यात कशी मदत करू शकतो?',
+        text: 'नमस्कार! 🙏 मी **टिकिटमित्र**, मी आपल्याला नाटक शोधण्यात किंवा तिकीट बुक करण्यात कशी मदत करू शकतो?',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       },
     ]);
@@ -129,8 +134,8 @@ export function TikitMitraFloatingBot() {
 
   return (
     <>
-      {/* Floating Launcher Button - elevated above sticky bottom booking bar */}
-      <div className="fixed bottom-28 md:bottom-8 right-4 sm:right-6 z-40">
+      {/* Floating Launcher Button - elevated cleanly above sticky bottom booking bar */}
+      <div className="fixed bottom-28 md:bottom-28 right-4 sm:right-6 z-40">
         {!isOpen && (
           <div className="flex items-center gap-1">
             {isMinimized ? (
@@ -141,37 +146,33 @@ export function TikitMitraFloatingBot() {
                   setIsOpen(true);
                 }}
                 aria-label="टिकिटमित्र AI उघडा"
-                className="group relative flex items-center justify-center w-12 h-12 rounded-full bg-gradient-to-r from-[#EA580C] to-[#C2410C] hover:from-[#C2410C] text-white shadow-lg hover:shadow-xl transition-all transform hover:scale-105 active:scale-95 cursor-pointer border-2 border-amber-300/40"
-                title="टिकिटमित्र AI उघडा (>)"
+                className="group relative flex items-center justify-center w-14 h-14 rounded-full bg-gradient-to-r from-[#EA580C] to-[#C2410C] hover:from-[#C2410C] text-white shadow-xl hover:shadow-2xl transition-all transform hover:scale-105 active:scale-95 cursor-pointer border-2 border-amber-300/60 p-2"
+                title="टिकिटमित्र AI उघडा"
               >
-                <Theater className="h-6 w-6 text-amber-300" />
-                <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                <TheatreFaceMasksIcon className="h-8 w-8 transition-transform group-hover:scale-110 drop-shadow-sm" />
+                <span className="absolute -top-1 -right-1 flex h-3 w-3">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-300 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-400"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-green-400"></span>
                 </span>
               </button>
             ) : (
-              <div className="flex items-center gap-1.5 bg-gradient-to-r from-[#EA580C] via-[#C2410C] to-[#9A3412] p-1.5 rounded-2xl shadow-[0_8px_25px_rgba(234,88,12,0.45)] border border-amber-400/30">
+              <div className="flex items-center gap-2 bg-gradient-to-r from-[#EA580C] via-[#C2410C] to-[#9A3412] p-1.5 pl-2.5 rounded-2xl shadow-[0_8px_25px_rgba(234,88,12,0.45)] border border-amber-400/40">
                 <button
                   type="button"
                   onClick={() => setIsOpen(true)}
                   aria-label="टिकिटमित्र AI नाट्य मदतनीस उघडा"
-                  className="group relative flex items-center gap-2 px-2.5 py-1.5 text-white transition-all transform active:scale-95 cursor-pointer"
+                  className="group relative flex items-center gap-2 text-white transition-all transform active:scale-95 cursor-pointer"
                 >
-                  <div className="relative w-9 h-9 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center border border-amber-300/50 shrink-0">
-                    <Theater className="h-5 w-5 text-amber-300 transition-transform group-hover:scale-110" />
+                  <div className="relative w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center border border-amber-300/60 shrink-0 p-1">
+                    <TheatreFaceMasksIcon className="h-7 w-7 transition-transform group-hover:scale-110 drop-shadow-sm" />
                     <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-300 opacity-75"></span>
                       <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-400"></span>
                     </span>
                   </div>
-                  <div className="flex flex-col text-left leading-none">
-                    <span className="text-[11px] font-black text-amber-200 tracking-tight">
-                      टिकिट
-                    </span>
-                    <span className="text-xs font-black text-white tracking-wide mt-0.5 flex items-center gap-0.5">
-                      मित्र
-                      <Sparkles className="h-2.5 w-2.5 text-amber-300" />
+                  <div className="flex flex-col text-left leading-none pr-1">
+                    <span className="text-[11px] font-bold text-white-200 tracking-tight">
+                      टिकिट मित्र
                     </span>
                   </div>
                 </button>
@@ -199,7 +200,7 @@ export function TikitMitraFloatingBot() {
           <div className="bg-gradient-to-r from-[#EA580C] via-[#C2410C] to-[#9A3412] text-white px-4 py-3.5 flex items-center justify-between shrink-0 shadow-sm">
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-full bg-white/15 backdrop-blur-md flex items-center justify-center border border-amber-300/40">
-                <Theater className="h-5 w-5 text-amber-300" />
+                <TheatreFaceMasksIcon className="h-5 w-5 drop-shadow-sm" />
               </div>
               <div>
                 <div className="flex items-center gap-1.5">
@@ -239,16 +240,14 @@ export function TikitMitraFloatingBot() {
             {messages.map((msg) => (
               <div
                 key={msg.id}
-                className={`flex flex-col ${
-                  msg.sender === 'user' ? 'items-end' : 'items-start'
-                }`}
+                className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'
+                  }`}
               >
                 <div
-                  className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 shadow-xs leading-relaxed whitespace-pre-wrap ${
-                    msg.sender === 'user'
-                      ? 'bg-[#EA580C] text-white rounded-tr-xs'
-                      : 'bg-white text-slate-800 border border-slate-200/70 rounded-tl-xs'
-                  }`}
+                  className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 shadow-xs leading-relaxed whitespace-pre-wrap ${msg.sender === 'user'
+                    ? 'bg-[#EA580C] text-white rounded-tr-xs'
+                    : 'bg-white text-slate-800 border border-slate-200/70 rounded-tl-xs'
+                    }`}
                 >
                   {formatText(msg.text)}
 
@@ -257,8 +256,17 @@ export function TikitMitraFloatingBot() {
                     <div className="mt-2.5 pt-2 border-t border-slate-100/80">
                       {(msg.action.type === 'open_event' || msg.action.type === 'select_seats') && msg.action.payload?.eventId ? (
                         <Link
-                          href={`/events/${msg.action.payload.eventId}`}
-                          onClick={() => setIsOpen(false)}
+                          href={`/events/${msg.action.payload.eventId}?book=true`}
+                          onClick={() => {
+                            setIsOpen(false);
+                            if (typeof window !== 'undefined') {
+                              window.dispatchEvent(
+                                new CustomEvent('tikitmitra_open_seatmap', {
+                                  detail: { eventId: msg.action?.payload?.eventId },
+                                })
+                              );
+                            }
+                          }}
                           className="inline-flex items-center justify-between w-full gap-2 px-3 py-2 rounded-xl bg-gradient-to-r from-[#EA580C] to-[#C2410C] hover:from-[#C2410C] hover:to-[#9A3412] text-white font-bold text-xs transition shadow-md active:scale-95 cursor-pointer"
                         >
                           <span className="truncate">{msg.action.label || '🎟️ थेट आसन निवडा व बुक करा'}</span>

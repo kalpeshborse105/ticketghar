@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Sparkles,
   ExternalLink,
+  Star,
 } from 'lucide-react';
 
 export interface AnnouncementItem {
@@ -30,6 +31,7 @@ interface HeroBannerProps {
   announcements?: AnnouncementItem[];
   language: Language;
   onSelectEvent: (event: EventItem) => void;
+  loading?: boolean;
 }
 
 interface BannerSlide {
@@ -46,6 +48,8 @@ interface BannerSlide {
   ctaLabel?: string;
   ctaUrl?: string;
   rawEvent?: EventItem;
+  rating?: number | null;
+  ratingCount?: number | null;
 }
 
 export const HeroBanner: React.FC<HeroBannerProps> = ({
@@ -53,6 +57,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
   announcements = [],
   language,
   onSelectEvent,
+  loading = false,
 }) => {
   const t = translations[language];
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -63,12 +68,15 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
   const slides: BannerSlide[] = React.useMemo(() => {
     const list: BannerSlide[] = [];
 
-    // 1. Add featured events / plays
-    const featuredEvents = events.filter(
-      (e) => e.featured === 1 || e.category === 'plays' || e.category === 'music',
+    // 1. Add genuine database events (prioritizing featured events, but including active events)
+    let candidateEvents = events.filter(
+      (e) => (e.featured === 1 || e.category === 'plays' || e.category === 'music') && Boolean(e.bannerUrl || e.posterUrl),
     );
+    if (candidateEvents.length === 0) {
+      candidateEvents = events.filter((e) => Boolean(e.bannerUrl || e.posterUrl));
+    }
 
-    featuredEvents.forEach((ev) => {
+    candidateEvents.slice(0, 6).forEach((ev) => {
       const displayTitle = language === 'mr' ? ev.titleMr || ev.title : ev.title;
       const displayCat = language === 'mr' ? ev.categoryMr || ev.category : ev.category;
       const venue = language === 'mr' ? ev.venue?.nameMr || ev.venue?.name : ev.venue?.name;
@@ -79,7 +87,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
         id: `ev-${ev.id}`,
         title: displayTitle,
         category: displayCat,
-        imageUrl: ev.bannerUrl || ev.posterUrl,
+        imageUrl: ev.bannerUrl || ev.posterUrl || '',
         city: ev.venue?.city,
         venueName: venue,
         dateStr: session
@@ -96,12 +104,14 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
           : undefined,
         ctaLabel: t.bookNow,
         rawEvent: ev,
+        rating: ev.rating ?? null,
+        ratingCount: ev.ratingCount ?? null,
       });
     });
 
-    // 2. Admin hero_banner only (mid_banner goes to MiddleStripBanner)
+    // 2. Admin hero_banner only (with real image URL from admin)
     const promoBanners = announcements.filter(
-      (a) => a.active !== 0 && a.category === 'hero_banner' && a.imageUrl,
+      (a) => a.active !== 0 && a.category === 'hero_banner' && a.imageUrl && a.imageUrl.trim() !== '',
     );
 
     promoBanners.forEach((promo) => {
@@ -111,9 +121,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
         title: promo.title,
         subtitle: promo.message,
         category: promo.category === 'flash_sale' ? '⚡ महा ऑफर' : '📢 विशेष सूचना',
-        imageUrl:
-          promo.imageUrl ||
-          'https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?auto=format&fit=crop&w=1240&q=80',
+        imageUrl: promo.imageUrl || '',
         city: promo.city,
         ctaLabel: promo.ctaLabel || (language === 'mr' ? 'अधिक माहिती' : 'Explore'),
         ctaUrl: promo.ctaUrl,
@@ -144,7 +152,40 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
     };
   }, [total, isPaused, nextSlide]);
 
-  if (total === 0) return null;
+  if (loading || total === 0) {
+    return (
+      <div className="relative w-full overflow-hidden select-none">
+        <div className="relative w-full overflow-hidden rounded-2xl bg-[#141b2b] shadow-xl min-h-[280px] sm:min-h-[380px] md:min-h-[460px] flex flex-col justify-end p-6 sm:p-10 md:p-12 animate-pulse border border-white/10">
+          <div className="absolute inset-0 bg-gradient-to-t from-[#141b2b] via-[#141b2b]/80 to-transparent" />
+          <div className="relative z-10 space-y-4 max-w-2xl">
+            {/* Pulsing badge skeleton */}
+            <div className="flex items-center gap-2">
+              <div className="h-6 w-28 rounded-full bg-white/20" />
+              <div className="h-6 w-20 rounded-full bg-white/10" />
+            </div>
+            {/* Title Skeleton */}
+            <div className="space-y-2">
+              <div className="h-8 sm:h-10 md:h-12 w-3/4 rounded-xl bg-white/20" />
+              <div className="h-6 sm:h-8 w-1/2 rounded-xl bg-white/15" />
+            </div>
+            {/* Info Pills Skeleton */}
+            <div className="flex items-center gap-3 pt-2">
+              <div className="h-8 w-36 rounded-lg bg-white/15" />
+              <div className="h-8 w-44 rounded-lg bg-white/15" />
+            </div>
+            {/* Button Skeleton */}
+            <div className="pt-2">
+              <div className="h-12 w-40 rounded-xl bg-[#ea580c]/50" />
+            </div>
+          </div>
+          {/* Subtle logo watermark in corner */}
+          <div className="absolute right-6 top-6 opacity-25 pointer-events-none flex items-center gap-2">
+            <img src="/logo.png" alt="MahaTicket" className="w-10 h-10 object-contain" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleSlideClick = (slide: BannerSlide) => {
     if (slide.type === 'event' && slide.rawEvent) {
@@ -199,15 +240,34 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
                         ? language === 'mr'
                           ? 'विशेष ऑफर'
                           : 'Special offer'
-                        : language === 'mr'
-                          ? 'लवकर भरत आहे'
-                          : 'Fast filling'}
+                        : slide.rawEvent?.featured === 1
+                          ? language === 'mr'
+                            ? 'विशेष शिफारस'
+                            : 'Featured'
+                          : language === 'mr'
+                            ? 'थेट बुकिंग'
+                            : 'Live Booking'}
                     </span>
                     {slide.category ? (
                       <span className="rounded-full bg-white/20 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur-md">
                         {slide.category}
                       </span>
                     ) : null}
+
+                    {/* Authentic Star Rating Badge — rendered only when genuine rating exists in DB */}
+                    {slide.type === 'event' && typeof slide.rating === 'number' && slide.rating > 0 && (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-black/45 border border-amber-400/50 px-3 py-1 text-[11px] font-extrabold text-white backdrop-blur-md shadow-xs">
+                        <Star className="h-3.5 w-3.5 fill-[#F59E0B] text-[#F59E0B]" />
+                        <span className="text-amber-300">
+                          {slide.rating > 5 ? (slide.rating / 2).toFixed(1) : slide.rating.toFixed(1)}
+                        </span>
+                        {typeof slide.ratingCount === 'number' && slide.ratingCount > 0 && (
+                          <span className="text-white/70 font-medium text-[10px]">
+                            ({slide.ratingCount} {language === 'mr' ? 'मते' : 'votes'})
+                          </span>
+                        )}
+                      </span>
+                    )}
                   </div>
 
                   <h2 className="line-clamp-2 text-2xl font-extrabold tracking-tight text-white drop-shadow-md sm:text-4xl md:text-5xl">

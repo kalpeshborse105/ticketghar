@@ -138,7 +138,16 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
 
   // Selected seats details
   const selectedSeats = seats.filter((s) => selectedSeatIds.includes(s.seatId));
-  const subtotalPaise = selectedSeats.reduce((sum, s) => sum + (s.price || 40000), 0);
+
+  const getSeatPricePaise = (s: any) => {
+    if (s.price && typeof s.price === 'number') return s.price;
+    const sec = sections.find((sec) => sec.id === s.sectionId);
+    if (sec?.price && typeof sec.price === 'number') return sec.price;
+    if (sec?.basePrice && typeof sec.basePrice === 'number') return sec.basePrice;
+    return 40000;
+  };
+
+  const subtotalPaise = selectedSeats.reduce((sum: number, s: any) => sum + getSeatPricePaise(s), 0);
   const subtotalRupees = Math.round(subtotalPaise / 100);
 
   // Handle temporary hold and proceed to booking
@@ -167,7 +176,14 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
       onProceedToCheckout({
         sessionId: session.id,
         seatIds: selectedSeatIds,
-        heldSeats: data.hold?.heldSeats || selectedSeats,
+        heldSeats:
+          data.hold?.heldSeats ||
+          selectedSeats.map((s) => ({
+            seatId: s.seatId,
+            seatCode: s.seatCode,
+            price: getSeatPricePaise(s),
+            tier: s.tier,
+          })),
         faceValueTotal: data.hold?.faceValueTotal || subtotalPaise,
         holdExpiresAt: data.hold?.holdExpiresAt || new Date(Date.now() + 300000).toISOString(),
         holdToken: data.holdToken || data.hold?.holdToken,
@@ -181,30 +197,6 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
       setIsHolding(false);
     }
   };
-
-  // Group seats by category / section
-  const balconySection = sections.find(
-    (s) =>
-      s.name?.toLowerCase().includes('balcony') ||
-      s.nameMr?.toLowerCase().includes('बाल्कनी')
-  ) || sections[0];
-
-  const stallASection = sections.find(
-    (s) =>
-      (s.name?.toLowerCase().includes('stall a') ||
-        s.name?.toLowerCase().includes('orchestra') ||
-        s.nameMr?.toLowerCase().includes('प्रथम') ||
-        s.nameMr?.toLowerCase().includes('सुवर्ण')) &&
-      s.id !== balconySection?.id
-  ) || sections[1] || sections[0];
-
-  const stallBSection = sections.find(
-    (s) =>
-      (s.name?.toLowerCase().includes('stall b') ||
-        s.nameMr?.toLowerCase().includes('द्वितीय')) &&
-      s.id !== balconySection?.id &&
-      s.id !== stallASection?.id
-  ) || sections[2];
 
   const groupByRow = (seatList: any[]) => {
     const rows: { [key: string]: any[] } = {};
@@ -222,21 +214,65 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
     return rows;
   };
 
-  const balconySeats = balconySection
-    ? seats.filter((s) => s.sectionId === balconySection.id)
-    : seats.filter((s) => ['A', 'B', 'C'].includes((s.rowLabel || '').toUpperCase().replace(/.*-/, '')));
+  // Group seats by sections dynamically using authoritative DB sections and prices
+  const displaySections = React.useMemo(() => {
+    if (sections && sections.length > 0) {
+      return sections
+        .map((sec) => {
+          const secSeats = seats.filter((s) => s.sectionId === sec.id);
+          const effectivePricePaise =
+            secSeats.find((s) => s.price)?.price || sec.price || sec.basePrice || 40000;
+          return {
+            id: sec.id,
+            name: sec.name,
+            nameMr: sec.nameMr || sec.name,
+            pricePaise: effectivePricePaise,
+            priceRupees: Math.round(effectivePricePaise / 100),
+            seats: secSeats,
+            rows: groupByRow(secSeats),
+          };
+        })
+        .filter((sec) => sec.seats.length > 0);
+    }
 
-  const stallASeats = stallASection && stallASection.id !== balconySection?.id
-    ? seats.filter((s) => s.sectionId === stallASection.id)
-    : seats.filter((s) => ['D', 'E', 'F', 'G'].includes((s.rowLabel || '').toUpperCase().replace(/.*-/, '')));
+    // Logical fallback if sections array is not provided
+    const defaultSections = [
+      {
+        id: 1,
+        name: 'Balcony',
+        nameMr: language === 'mr' ? 'बालकनी (Balcony)' : 'Balcony',
+        pricePaise: 50000,
+        priceRupees: 500,
+        seats: seats.slice(0, 24),
+        rows: groupByRow(seats.slice(0, 24)),
+      },
+      {
+        id: 2,
+        name: 'Stall A',
+        nameMr: language === 'mr' ? 'प्रथम वर्ग (Stall A)' : 'Stall A',
+        pricePaise: 40000,
+        priceRupees: 400,
+        seats: seats.slice(24, 56),
+        rows: groupByRow(seats.slice(24, 56)),
+      },
+      {
+        id: 3,
+        name: 'Stall B',
+        nameMr: language === 'mr' ? 'द्वितीय वर्ग (Stall B)' : 'Stall B',
+        pricePaise: 30000,
+        priceRupees: 300,
+        seats: seats.slice(56),
+        rows: groupByRow(seats.slice(56)),
+      },
+    ].filter((sec) => sec.seats.length > 0);
 
-  const stallBSeats = stallBSection && stallBSection.id !== balconySection?.id && stallBSection.id !== stallASection?.id
-    ? seats.filter((s) => s.sectionId === stallBSection.id)
-    : seats.filter((s) => !['A', 'B', 'C', 'D', 'E', 'F', 'G'].includes((s.rowLabel || '').toUpperCase().replace(/.*-/, '')));
+    return defaultSections;
+  }, [sections, seats, language]);
 
-  const balconyRows = groupByRow(balconySeats.length > 0 ? balconySeats : seats.slice(0, 24));
-  const stallARows = groupByRow(stallASeats.length > 0 ? stallASeats : seats.slice(24, 56));
-  const stallBRows = groupByRow(stallBSeats.length > 0 ? stallBSeats : seats.slice(56));
+  // Compute dynamic min & max price across all available sections/seats
+  const pricesList = displaySections.map((s) => s.priceRupees);
+  const minPrice = pricesList.length > 0 ? Math.min(...pricesList) : 300;
+  const maxPrice = pricesList.length > 0 ? Math.max(...pricesList) : 500;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/75 backdrop-blur-xs flex items-center justify-center p-0 sm:p-4">
@@ -325,7 +361,15 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
         <div className="px-4 py-2 bg-white border-b border-slate-200 flex items-center justify-around text-xs text-slate-600">
           <div className="flex items-center gap-1.5">
             <span className="w-4 h-4 rounded-t-xs rounded-b-sm bg-white border border-slate-300 shadow-2xs inline-block"></span>
-            <span>{language === 'mr' ? 'उपलब्ध (₹३००/५००)' : 'Available'}</span>
+            <span>
+              {minPrice === maxPrice
+                ? language === 'mr'
+                  ? `उपलब्ध (₹${toMarathiDigits(minPrice)})`
+                  : `Available (₹${minPrice})`
+                : language === 'mr'
+                  ? `उपलब्ध (₹${toMarathiDigits(minPrice)} - ₹${toMarathiDigits(maxPrice)})`
+                  : `Available (₹${minPrice} - ₹${maxPrice})`}
+            </span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-4 h-4 rounded-t-xs rounded-b-sm bg-[#EA580C] text-white flex items-center justify-center font-bold text-[10px]">
@@ -426,106 +470,63 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
                 <span className="text-[11px] text-slate-500 mt-0.5">पडदा क्रमांक १ • प्रेक्षक समोर</span>
               </div>
 
-              {/* SECTION 1: बालकनी (Balcony) - ₹५०० */}
-              <div className="bg-[#FFF7ED] rounded-xl p-3 shadow-xs border border-orange-100">
-                <div className="flex items-center justify-between mb-3 px-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-bold text-xs sm:text-sm text-[#141B2B]">बालकनी (Balcony)</span>
-                  </div>
-                  <span className="bg-white text-[#EA580C] font-bold text-[11px] px-2 py-0.5 rounded-full shadow-2xs border border-orange-200">
-                    ₹५०० प्रति आसन
-                  </span>
-                </div>
-                <div className="space-y-2 text-center">
-                  {Object.entries(balconyRows).map(([rowLabel, rowSeats]) => {
-                    const half = Math.ceil(rowSeats.length / 2);
-                    const leftWing = rowSeats.slice(0, half);
-                    const rightWing = rowSeats.slice(half);
-
-                    return (
-                      <div key={rowLabel} className="flex items-center justify-between text-xs">
-                        <span className="w-4 font-bold text-slate-500 text-center">{rowLabel}</span>
-                        <div className="flex gap-1.5">
-                          {leftWing.map((seat) => renderSeatBtn(seat))}
-                        </div>
-                        <div className="w-3 text-slate-400 text-[10px] font-mono select-none">।</div>
-                        <div className="flex gap-1.5">
-                          {rightWing.map((seat) => renderSeatBtn(seat))}
-                        </div>
-                        <span className="w-4 font-bold text-slate-500 text-center">{rowLabel}</span>
+              {/* Dynamic Venue Sections — Authoritative Tier Prices from Database */}
+              {displaySections.map((sec, secIdx) => {
+                const isOrangeTheme = secIdx % 2 === 0;
+                return (
+                  <div
+                    key={sec.id}
+                    className={`rounded-xl p-3 shadow-xs border ${
+                      isOrangeTheme
+                        ? 'bg-[#FFF7ED] border-orange-100'
+                        : 'bg-[#F8FAFC] border-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-3 px-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-xs sm:text-sm text-[#141B2B]">
+                          {sec.nameMr}
+                        </span>
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* SECTION 2: प्रथम वर्ग (Stall A) - ₹४०० */}
-              <div className="bg-[#F8FAFC] rounded-xl p-3 shadow-xs border border-slate-200">
-                <div className="flex items-center justify-between mb-3 px-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-bold text-xs sm:text-sm text-[#141B2B]">प्रथम वर्ग (Stall A)</span>
-                  </div>
-                  <span className="bg-white text-[#EA580C] font-bold text-[11px] px-2 py-0.5 rounded-full shadow-2xs border border-slate-200">
-                    ₹४०० प्रति आसन
-                  </span>
-                </div>
-                <div className="space-y-2 text-center">
-                  {Object.entries(stallARows).map(([rowLabel, rowSeats]) => {
-                    const half = Math.ceil(rowSeats.length / 2);
-                    const leftWing = rowSeats.slice(0, half);
-                    const rightWing = rowSeats.slice(half);
-
-                    return (
-                      <div key={rowLabel} className="flex items-center justify-between text-xs">
-                        <span className="w-4 font-bold text-slate-500 text-center">{rowLabel}</span>
-                        <div className="flex gap-1.5">
-                          {leftWing.map((seat) => renderSeatBtn(seat))}
-                        </div>
-                        <div className="w-3 text-slate-400 text-[10px] font-mono select-none">।</div>
-                        <div className="flex gap-1.5">
-                          {rightWing.map((seat) => renderSeatBtn(seat))}
-                        </div>
-                        <span className="w-4 font-bold text-slate-500 text-center">{rowLabel}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* SECTION 3: द्वितीय वर्ग (Stall B) - ₹३०० */}
-              {Object.keys(stallBRows).length > 0 && (
-                <div className="bg-[#FFF7ED]/70 rounded-xl p-3 shadow-xs border border-orange-100">
-                  <div className="flex items-center justify-between mb-3 px-1">
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-bold text-xs sm:text-sm text-[#141B2B]">द्वितीय वर्ग (Stall B)</span>
+                      <span
+                        className={`bg-white font-bold text-[11px] px-2 py-0.5 rounded-full shadow-2xs border ${
+                          isOrangeTheme
+                            ? 'text-[#EA580C] border-orange-200'
+                            : 'text-slate-700 border-slate-200'
+                        }`}
+                      >
+                        {language === 'mr'
+                          ? `₹${toMarathiDigits(sec.priceRupees)} प्रति आसन`
+                          : `₹${sec.priceRupees} per seat`}
+                      </span>
                     </div>
-                    <span className="bg-white text-slate-600 font-bold text-[11px] px-2 py-0.5 rounded-full shadow-2xs border border-slate-200">
-                      ₹३०० प्रति आसन
-                    </span>
-                  </div>
-                  <div className="space-y-2 text-center">
-                    {Object.entries(stallBRows).map(([rowLabel, rowSeats]) => {
-                      const half = Math.ceil(rowSeats.length / 2);
-                      const leftWing = rowSeats.slice(0, half);
-                      const rightWing = rowSeats.slice(half);
 
-                      return (
-                        <div key={rowLabel} className="flex items-center justify-between text-xs">
-                          <span className="w-4 font-bold text-slate-500 text-center">{rowLabel}</span>
-                          <div className="flex gap-1.5">
-                            {leftWing.map((seat) => renderSeatBtn(seat))}
+                    <div className="space-y-2 text-center">
+                      {Object.entries(sec.rows).map(([rowLabel, rowSeats]) => {
+                        const half = Math.ceil(rowSeats.length / 2);
+                        const leftWing = rowSeats.slice(0, half);
+                        const rightWing = rowSeats.slice(half);
+
+                        return (
+                          <div key={rowLabel} className="flex items-center justify-between text-xs">
+                            <span className="w-4 font-bold text-slate-500 text-center">{rowLabel}</span>
+                            <div className="flex gap-1.5">
+                              {leftWing.map((seat) => renderSeatBtn(seat))}
+                            </div>
+                            {rightWing.length > 0 && (
+                              <div className="w-3 text-slate-400 text-[10px] font-mono select-none">।</div>
+                            )}
+                            <div className="flex gap-1.5">
+                              {rightWing.map((seat) => renderSeatBtn(seat))}
+                            </div>
+                            <span className="w-4 font-bold text-slate-500 text-center">{rowLabel}</span>
                           </div>
-                          <div className="w-3 text-slate-400 text-[10px] font-mono select-none">।</div>
-                          <div className="flex gap-1.5">
-                            {rightWing.map((seat) => renderSeatBtn(seat))}
-                          </div>
-                          <span className="w-4 font-bold text-slate-500 text-center">{rowLabel}</span>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })}
 
               {/* Cultural Assurance Pill */}
               <div className="pt-2 flex items-center justify-center gap-1.5 text-center text-slate-600 text-xs">

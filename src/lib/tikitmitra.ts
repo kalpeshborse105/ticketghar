@@ -29,8 +29,8 @@ export async function askTikitMitra(params: {
   if (!cleanMsg) {
     return {
       reply: language === 'mr'
-        ? 'नमस्कार! 🙏 मी टिकिटमित्र AI सहाय्यक आहे. नाटकाचे नाव किंवा "तिकीट बुक करा" टाईप करा.'
-        : 'Hello! I am TikitMitra AI assistant. Type an event name or "Book Ticket" to get started.',
+        ? 'नमस्कार! 🙏 मी टिकिटमित्र आहे. नाटकाचे नाव किंवा "तिकीट बुक करा" टाईप करा.'
+        : 'Hello! I am TikitMitra. Type an event name or "Book Ticket" to get started.',
       source: 'grounded_local_db',
     };
   }
@@ -110,8 +110,8 @@ export async function askTikitMitra(params: {
   if (matchedEvent) {
     action = {
       type: 'open_event',
-      label: language === 'mr' 
-        ? `🎟️ '${matchedEvent.titleMr}' - थेट आसन निवडा व तिकीट बुक करा` 
+      label: language === 'mr'
+        ? `🎟️ '${matchedEvent.titleMr}' - थेट आसन निवडा व तिकीट बुक करा`
         : `🎟️ '${matchedEvent.title}' - Select Seats & Book Ticket`,
       payload: { eventId: matchedEvent.id, action: 'select_seats' },
     };
@@ -201,14 +201,15 @@ Authoritative live events currently published on MahaTicket database:
 ${groundedContext || 'No live events currently published.'}
 
 Platform Knowledge:
-1. Direct Booking: Guide the user to select seats. Tell them: "खालील बटनावर क्लिक करा, आसन व्यवस्था उघडा, आवडती आसने निवडा आणि Razorpay द्वारे सुरक्षित पेमेंट करा (फक्त पेमेंट प्रक्रिया आपण स्वतः करायची आहे)."
+1. Direct Booking: You provide direct, instant seat booking assistance. Always provide the direct action button for the event so the user can open the seat map immediately: "होय! खालील बटनावर क्लिक करा आणि थेट आसन निवडून आपले तिकीट आरक्षित करा!" Never tell the user that you are restricted or unable to book seats.
 2. Seats: Interactive live seat map with real-time seat locks (up to 5 seats per booking).
 3. Fees: Ticket prices starting ₹250-500. Platform fee ₹30-35 with 18% GST.
 4. M-Tickets: Digital ticket pass with encrypted QR code generated instantly.
 
 Strictly adhere to:
+- When the user asks to book tickets, buy tickets, or select seats, enthusiastically provide the direct booking action.
 - Never hallucinate non-existent shows or prices outside the database context.
-- Never ask for credentials or PINs.
+- Never ask for confidential passwords, OTPs, or UPI PINs.
 - Always answer in Marathi if user asks in Marathi, or English if asked in English.
 - Keep responses short and formatted with clear emojis and bullet points for mobile screens.`;
 
@@ -244,37 +245,77 @@ Strictly adhere to:
     }
 
     // Google Gemini API support
-    const modelName = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+    const preferredModel = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
+    const candidateModels = Array.from(new Set([
+      preferredModel,
+      'gemini-3.5-flash-lite',
+      'gemini-3.5-flash',
+      'gemini-flash-latest',
+      'gemini-3.8-flash',
+    ]));
+
+    // Format chat history into Gemini format
+    const formattedHistory = (history || []).slice(-6).map((h) => ({
+      role: h.sender === 'user' ? 'user' : 'model',
+      parts: [{ text: h.text }],
+    }));
+
     const contents = [
+      ...formattedHistory,
       {
         role: 'user',
-        parts: [{ text: `${systemPrompt}\n\nUser Message: ${cleanMsg}` }],
+        parts: [{ text: cleanMsg }],
       },
     ];
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
+    const safetySettings = [
+      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_CIVIC_INTEGRITY', threshold: 'BLOCK_NONE' },
+    ];
 
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents }),
-        signal: controller.signal,
-      }
-    );
-    clearTimeout(timeout);
+    for (const model of candidateModels) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 9000);
 
-    if (res.ok) {
-      const data = await res.json();
-      const candidateText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (candidateText && candidateText.trim().length > 0) {
-        return {
-          reply: candidateText.trim(),
-          action,
-          source: 'gemini',
-        };
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              system_instruction: {
+                parts: [{ text: systemPrompt }],
+              },
+              contents,
+              safetySettings,
+              generationConfig: {
+                temperature: 0.7,
+                maxOutputTokens: 600,
+                topP: 0.95,
+              },
+            }),
+            signal: controller.signal,
+          }
+        );
+        clearTimeout(timeout);
+
+        if (res.ok) {
+          const data = await res.json();
+          const candidateText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (candidateText && candidateText.trim().length > 0) {
+            return {
+              reply: candidateText.trim(),
+              action,
+              source: 'gemini',
+            };
+          }
+        }
+      } catch (e: any) {
+        console.warn(`Gemini model ${model} attempt failed:`, e?.message);
       }
     }
   } catch (err: any) {
@@ -301,8 +342,8 @@ function getSmartGroundedDbAnswer(
   // 1. If a specific play was matched from DB
   if (matchedEvent) {
     return language === 'mr'
-      ? `🎭 **${matchedEvent.titleMr}**\n\n📍 **नाट्यगृह:** ${matchedEvent.venueNameMr || matchedEvent.venueName}, ${matchedEvent.city}\n🎟️ **तिकीट दर:** ₹२५० - ₹६०० पासून उपलब्ध\n⚡ **थेट आरक्षण:** खालील बटनावर क्लिक करून आपण आसन निवडू शकता. फक्त पेमेंट प्रक्रिया (Razorpay UPI/GPay) आपण स्वतः करायची आहे.`
-      : `🎭 **${matchedEvent.title}**\n\n📍 **Venue:** ${matchedEvent.venueName}, ${matchedEvent.city}\n🎟️ **Tickets:** Starting from ₹250 - ₹600\n⚡ **Direct Booking:** Click the button below to pick your seats directly. Only the final payment (Razorpay UPI/Card) is completed manually by you!`;
+      ? `🎭 **${matchedEvent.titleMr}**\n\n📍 **नाट्यगृह:** ${matchedEvent.venueNameMr || matchedEvent.venueName}, ${matchedEvent.city}\n🎟️ **तिकीट दर:** ₹२५० - ₹६०० पासून उपलब्ध\n⚡ **थेट आरक्षण:** खालील बटनावर क्लिक करून आपण थेट आपल्या आवडीचे आसन निवडून लगेच बुकिंग करू शकता!`
+      : `🎭 **${matchedEvent.title}**\n\n📍 **Venue:** ${matchedEvent.venueName}, ${matchedEvent.city}\n🎟️ **Tickets:** Starting from ₹250 - ₹600\n⚡ **Direct Booking:** Click the button below to pick your seats directly and book your tickets!`;
   }
 
   // 2. Popular Plays intent
@@ -356,10 +397,34 @@ function getSmartGroundedDbAnswer(
       : 'ℹ️ **Cancellation & Refund Policy:**\n• Tickets cancelled up to 4 hours before showtime get 70% refund to original payment source.\n• 100% refund if show is cancelled by organizers.';
   }
 
-  // 7. Default welcoming response
+  // 7. Greetings Intent
+  if (lower.includes('नमस्कार') || lower.includes('hi') || lower.includes('hello') || lower.includes('hey') || lower.includes('हाय') || lower.includes('हॅलो') || lower.includes('namaskar')) {
+    const titles = eventsList.slice(0, 3).map(e => e.titleMr).join(', ');
+    return language === 'mr'
+      ? `नमस्कार! 🙏 मी **टिकिटमित्र**, महाटिकिटचा डिजिटल साहाय्यक.\n\nआज आपण काय पाहणार आहात? मी आपल्याला:\n• सध्याची लोकप्रिय नाटके शोधण्यात\n• नाट्यगृह व प्रयोगाची वेळ समजून घेण्यात\n• थेट सीट निवडून तिकीट बुक करण्यात मदत करू शकतो.\n\nआपल्या आवडीचे नाटक किंवा शहराचे नाव सांगा!`
+      : `Hello! 🙏 I am **TikitMitra**, 
+\nI can help you browse top performances, check seat availability, find venues, and book tickets instantly.\n\nWhich play or city are you looking for today?`;
+  }
+
+  // 8. Payment & UPI Intent
+  if (lower.includes('payment') || lower.includes('पेमेंट') || lower.includes('पैसे') || lower.includes('upi') || lower.includes('gpay') || lower.includes('phonepe')) {
+    return language === 'mr'
+      ? '💳 **पेमेंट व सुरक्षा:**\n• महाटिकिटवर UPI (GPay, PhonePe, Paytm), NetBanking, Credit/Debit Cards द्वारे १००% सुरक्षित पेमेंट उपलब्ध आहे.\n• पेमेंट पूर्ण होताच WhatsApp आणि ई-मेलवर त्वरित डिजिटल एम-तिकीट प्राप्त होते.'
+      : '💳 **Payment & Security:**\n• We accept all UPI apps (GPay, PhonePe, Paytm), NetBanking, and Cards with multi-tier encryption.\n• Digital M-Ticket is sent instantly via WhatsApp & Email upon successful booking.';
+  }
+
+  // 9. Showtime & Timing Intent
+  if (lower.includes('वेळ') || lower.includes('तारीख') || lower.includes('कधी') || lower.includes('timing') || lower.includes('time') || lower.includes('date') || lower.includes('आज') || lower.includes('उद्या')) {
+    const primary = eventsList[0];
+    return language === 'mr'
+      ? `⏰ **नाट्य प्रयोगांचे वेळापत्रक:**\n• दुपारचा शो: सहसा १२:३० किंवा ४:३० वाजता\n• रात्रीचा शो: सहसा ८:०० किंवा ९:३० वाजता\n\n${primary ? `उदा. '${primary.titleMr}' नाटकाचे आजचे प्रयोग व जागा पाहण्यासाठी खालील बटनावर क्लिक करा.` : 'आपल्या पसंतीच्या नाटकावर क्लिक करून सर्व उपलब्ध वेळा पहा.'}`
+      : `⏰ **Showtimes & Schedules:**\n• Matinee Shows: 12:30 PM & 4:30 PM\n• Evening Shows: 8:00 PM & 9:30 PM\n\nClick on any event to see all available show timings and seat availability!`;
+  }
+
+  // 10. Default welcoming response
   const titles = eventsList.slice(0, 3).map(e => e.titleMr).join(', ');
 
   return language === 'mr'
-    ? `नमस्कार! 🙏 मी टिकिटमित्र, महाटिकिटचा AI सहाय्यक आहे.\n\nमी आपल्याला महाटिकिटवरील लोकप्रिय नाटकांची माहिती (उदा. ${titles || 'पुन्हा सही रे सही'}), वेळेचे नियोजन आणि आसन आरक्षणात मदत करतो.\n\nआपल्याला कोणत्या नाटकाचे तिकीट बुक करायचे आहे?`
-    : `Hello! 🙏 I am TikitMitra, your MahaTicket AI assistant.\n\nI can help you explore top Marathi plays (like ${titles || 'Punha Sahi Re Sahi'}), check showtimes, select seats, and book tickets instantly.\n\nWhich show would you like to book today?`;
+    ? `नमस्कार! 🙏 मी टिकिट मित्र, महाटिकिटचा आहे.\n\nमी आपल्याला महाटिकिटवरील लोकप्रिय नाटकांची माहिती (उदा. ${titles || 'पुन्हा सही रे सही'}), वेळेचे नियोजन आणि आसन आरक्षणात मदत करतो.\n\nआपल्याला कोणत्या नाटकाचे तिकीट बुक करायचे आहे?`
+    : `Hello! 🙏 I am TikitMitra.\n\nI can help you explore top Marathi plays (like ${titles || 'Punha Sahi Re Sahi'}), check showtimes, select seats, and book tickets instantly.\n\nWhich show would you like to book today?`;
 }

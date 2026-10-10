@@ -20,16 +20,22 @@ export const MTTicketLoader: React.FC<{
   submessage = 'महाटिकिट महाराष्ट्र',
   className = '',
 }) => (
-  <div className={`flex flex-col items-center justify-center p-8 text-center space-y-3 ${className}`}>
-    <div className="relative">
-      <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white shadow-lg shadow-orange-500/30">
-        <Ticket className="w-7 h-7 -rotate-12 animate-pulse" />
-      </div>
-      <div className="absolute -inset-1 rounded-2xl border-2 border-orange-500/30 animate-ping pointer-events-none" />
+  <div className={`flex flex-col items-center justify-center py-6 px-4 text-center space-y-2.5 ${className}`}>
+    <div className="relative flex items-center justify-center">
+      <img
+        src="/logo.png"
+        alt="MahaTicket"
+        className="w-14 h-14 sm:w-16 sm:h-16 object-contain drop-shadow-md animate-pulse"
+      />
     </div>
     <div className="space-y-0.5">
-      <p className="text-xs font-extrabold text-slate-800">{message}</p>
-      {submessage && <p className="text-[10px] text-slate-400 font-medium">{submessage}</p>}
+      <p className="text-xs sm:text-sm font-black text-slate-800">{message}</p>
+      {submessage && (
+        <p className="text-[10px] font-bold text-slate-500">
+          <span className="text-[#EA580C]">महा</span>
+          <span className="text-slate-800">टिकिट</span> महाराष्ट्र
+        </p>
+      )}
     </div>
   </div>
 );
@@ -43,15 +49,13 @@ export const MTSkeleton: React.FC<MTSkeletonProps> = ({
   if (variant === 'ticket') {
     return (
       <div
-        className={`bg-gradient-to-br from-orange-50 to-slate-50 border border-orange-100 rounded-2xl flex items-center justify-center ${className}`}
+        className={`bg-slate-50/90 rounded-2xl flex items-center justify-center relative overflow-hidden ${className}`}
         style={{
           width: width ? (typeof width === 'number' ? `${width}px` : width) : undefined,
           height: height ? (typeof height === 'number' ? `${height}px` : height) : '240px',
         }}
       >
-        <div className="w-10 h-10 rounded-xl bg-orange-100/70 text-orange-500 flex items-center justify-center animate-pulse">
-          <Ticket className="w-5 h-5 -rotate-12" />
-        </div>
+        <img src="/logo.png" alt="" className="w-10 h-10 object-contain opacity-40 animate-pulse" />
       </div>
     );
   }

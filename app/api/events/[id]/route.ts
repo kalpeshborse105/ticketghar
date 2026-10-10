@@ -91,6 +91,57 @@ export async function GET(
       // Ignore if table not created
     }
 
+    // Fetch real event photos from event_images table and galleryUrls
+    let fetchedImages: any[] = [];
+    try {
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS public.event_images (
+          id SERIAL PRIMARY KEY,
+          event_id INTEGER NOT NULL REFERENCES public.events(id) ON DELETE CASCADE,
+          image_url TEXT NOT NULL,
+          caption TEXT,
+          caption_mr TEXT,
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          is_cover INTEGER NOT NULL DEFAULT 0,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+
+      const imgRes = await db.execute(sql`
+        SELECT id, image_url, caption, caption_mr, sort_order, is_cover 
+        FROM public.event_images 
+        WHERE event_id = ${eventId}
+        ORDER BY sort_order ASC, id ASC
+      `);
+      if (imgRes.rows && imgRes.rows.length > 0) {
+        fetchedImages = imgRes.rows.map((r: any) => ({
+          id: r.id,
+          url: r.image_url,
+          caption: r.caption,
+          captionMr: r.caption_mr,
+        }));
+      }
+    } catch (e) {
+      console.warn('event_images fetch warning:', e);
+    }
+
+    let parsedGalleryUrls: string[] = [];
+    if (item.event.galleryUrls) {
+      try {
+        const parsed =
+          typeof item.event.galleryUrls === 'string'
+            ? JSON.parse(item.event.galleryUrls)
+            : item.event.galleryUrls;
+        if (Array.isArray(parsed)) {
+          parsedGalleryUrls = parsed.filter(Boolean);
+        }
+      } catch {}
+    }
+
+    const combinedImageUrls = Array.from(
+      new Set([...fetchedImages.map((img) => img.url), ...parsedGalleryUrls])
+    );
+
     return NextResponse.json({
       event: {
         ...item.event,
@@ -102,6 +153,8 @@ export async function GET(
         sessions: sessionDetails,
         rating,
         ratingCount,
+        images: combinedImageUrls,
+        galleryImages: fetchedImages,
       },
     });
   } catch (error: any) {

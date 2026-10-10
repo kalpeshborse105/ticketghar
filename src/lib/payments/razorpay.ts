@@ -75,6 +75,10 @@ export function verifyPaymentSignature(orderId: string, paymentId: string, signa
     throw new Error('Razorpay is not configured');
   }
 
+  if (!orderId || !paymentId || !signature) {
+    return false;
+  }
+
   const keySecret = process.env.RAZORPAY_KEY_SECRET!;
 
   // Generate expected signature: HMAC SHA256 of "order_id|payment_id"
