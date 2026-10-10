@@ -106,12 +106,14 @@ export default function ProfilePage() {
     };
   }, []);
 
+  const [profileNotice, setProfileNotice] = useState<string | null>(null);
+
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (file.size > 2 * 1024 * 1024) {
-      alert('कृपया २ MB पेक्षा लहान फोटो निवडा (Please choose an image under 2MB).');
+      setProfileNotice('कृपया २ MB पेक्षा लहान फोटो निवडा (Please choose an image under 2MB).');
       return;
     }
 
@@ -649,6 +651,24 @@ export default function ProfilePage() {
           language="mr"
           onClose={() => setSelectedPass(null)}
         />
+      )}
+
+      {profileNotice && (
+        <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full text-center shadow-2xl border border-slate-100 transform transition-all scale-100">
+            <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3 text-amber-600">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-bold text-slate-800 mb-2">माहिती / सूचना</h3>
+            <p className="text-slate-600 text-sm mb-6 leading-relaxed">{profileNotice}</p>
+            <button
+              onClick={() => setProfileNotice(null)}
+              className="w-full py-2.5 px-4 bg-[#EA580C] hover:bg-[#A33900] active:scale-95 text-white font-bold rounded-xl text-sm transition-all shadow-md cursor-pointer"
+            >
+              ठीक आहे (OK)
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

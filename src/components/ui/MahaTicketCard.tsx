@@ -192,16 +192,30 @@ export const MahaTicketCard: React.FC<MahaTicketCardProps> = ({
           />
         </div>
 
-        <div className="space-y-1">
+        <div className="space-y-1 w-full">
           <span className="text-xs font-black text-[#EA580C] tracking-wide block uppercase">
-            प्रवेशद्वारावर हा QR कोड दाखवा
+            प्रवेशद्वारावर हा QR कोड दाखवा (Entry Pass)
           </span>
           <p className="text-[11px] text-[#64748B]">
-            स्कॅन करण्यासाठी स्क्रीन ब्राईटनेस वाढवा • Scan at entry gate
+            स्कॅन करण्यासाठी स्क्रीन ब्राईटनेस वाढवा • Increase brightness for scan
           </p>
           <span className="text-[10px] font-mono font-bold text-slate-400 block pt-0.5">
             CODE: {ticketCode}
           </span>
+        </div>
+
+        {/* Security & Gate Verification Notice */}
+        <div className="w-full pt-2.5 mt-2 border-t border-slate-100 text-left space-y-1.5 bg-slate-50/80 p-3 rounded-xl border border-slate-200/60">
+          <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-800">
+            <ShieldCheck className="w-3.5 h-3.5 text-[#EA580C] shrink-0" />
+            <span>सुरक्षित डिजिटल तिकीट पडताळणी</span>
+          </div>
+          <p className="text-[10px] text-slate-500 leading-relaxed">
+            • हे तिकीट एनक्रिप्टेड (Encrypted MTSEC) असून केवळ अधिकृत आयोजक/गेट ऑपरेटरद्वारेच सुरक्षितपणे सत्यापित केले जाते.
+          </p>
+          <p className="text-[10px] text-slate-500 leading-relaxed">
+            • प्रयोगाच्या वेळेपूर्वी १५ मिनिटे आधी सभागृहात उपस्थित राहावे.
+          </p>
         </div>
       </div>
     </div>

@@ -82,8 +82,8 @@ export const MTSkeleton: React.FC<MTSkeletonProps> = ({
 // Compact Ticketalay/BookMyShow Event Card Skeleton (Portrait 2:3 aspect)
 export const MTEventCardSkeleton = () => (
   <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-xs">
-    {/* Poster area matching portrait aspect ratio */}
-    <MTSkeleton variant="ticket" className="w-full aspect-[2/3]" height="auto" />
+    {/* Poster area matching horizontal aspect ratio */}
+    <MTSkeleton variant="ticket" className="w-full aspect-[16/10]" height="auto" />
     <div className="p-3 space-y-2">
       <MTSkeleton variant="text" width="85%" />
       <MTSkeleton variant="text" width="55%" />

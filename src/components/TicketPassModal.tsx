@@ -23,6 +23,8 @@ import {
   getTicketShareUrl,
 } from '@/src/lib/public-url';
 import { MahaTicketCard } from '@/src/components/ui/MahaTicketCard';
+import { formatISTTime, formatISTDate } from '@/src/lib/dateUtils';
+import { generateSecureTicketQr } from '@/src/lib/ticket-crypto';
 
 interface TicketPassModalProps {
   bookingResult: any;
@@ -43,6 +45,7 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
   const [emailMessage, setEmailMessage] = useState('');
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
 
   // Save to offline cache (localStorage)
   useEffect(() => {
@@ -248,29 +251,22 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
               venueName={venueName || 'Venue'}
               venueCity={event?.venue?.city || 'महाराष्ट्र'}
               showTimeStr={
-                order.sessionStart
-                  ? new Date(order.sessionStart).toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })
+                order.sessionStart || bookingResult.session?.sessionStartTime
+                  ? formatISTTime(order.sessionStart || bookingResult.session?.sessionStartTime, language, true)
                   : undefined
               }
               showDateStr={
-                order.sessionStart
-                  ? new Date(order.sessionStart).toLocaleDateString(
-                    language === 'mr' ? 'mr-IN' : 'en-IN',
-                    { weekday: 'short', day: 'numeric', month: 'short' },
-                  )
-                  : order.createdAt
-                    ? new Date(order.createdAt).toLocaleDateString(
-                      language === 'mr' ? 'mr-IN' : 'en-IN',
-                      { weekday: 'short', day: 'numeric', month: 'short' },
-                    )
-                    : 'Today'
+                order.sessionStart || bookingResult.session?.sessionStartTime || order.createdAt
+                  ? formatISTDate(order.sessionStart || bookingResult.session?.sessionStartTime || order.createdAt, language, true)
+                  : 'Today'
               }
               orderNumber={order.orderNumber}
               grandTotal={order.grandTotal}
-              qrPayload={ticketUrl || primaryTicket || order.orderNumber}
+              qrPayload={
+                event?.id && primaryTicket
+                  ? generateSecureTicketQr(primaryTicket, event.id)
+                  : (ticketUrl || primaryTicket || order.orderNumber)
+              }
               totalTickets={tickets.length}
             />
           </div>
@@ -330,14 +326,20 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
                 }
                 if (typeof navigator !== 'undefined' && navigator.clipboard && ticketUrl) {
                   await navigator.clipboard.writeText(ticketUrl);
-                  alert(language === 'mr' ? 'तिकीट लिंक कॉपी झाली!' : 'Ticket link copied to clipboard!');
+                  setCopySuccess(true);
+                  setTimeout(() => setCopySuccess(false), 3000);
                 }
               }}
               title="शेअर करा (Share)"
               aria-label="Share"
-              className="w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 flex items-center justify-center shadow-xs transition active:scale-95 cursor-pointer"
+              className="relative w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 flex items-center justify-center shadow-xs transition active:scale-95 cursor-pointer"
             >
               <Share2 className="w-4 h-4" />
+              {copySuccess && (
+                <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[11px] font-semibold py-1 px-2.5 rounded-lg whitespace-nowrap shadow-md animate-fadeIn z-50">
+                  {language === 'mr' ? 'लिंक कॉपी झाली!' : 'Link copied!'}
+                </span>
+              )}
             </button>
 
             {/* Download PDF Icon Button */}

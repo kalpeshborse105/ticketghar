@@ -516,8 +516,21 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
                 {language === 'mr' ? event.titleMr || event.title : event.title}
               </h2>
             </div>
-            <p className="text-xs text-slate-300 mt-0.5">
-              {holdData.seatIds.length} {language === 'mr' ? 'जागा आरक्षित' : 'Seats Selected'}
+            <p className="text-xs text-orange-300 font-semibold mt-0.5 flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5 shrink-0 text-[#ea580c]" />
+              <span>
+                {session?.sessionStartTime
+                  ? `${new Date(session.sessionStartTime).toLocaleDateString(language === 'mr' ? 'mr-IN' : 'en-IN', {
+                      weekday: 'short',
+                      day: 'numeric',
+                      month: 'short',
+                    })} • ${new Date(session.sessionStartTime).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}`
+                  : (language === 'mr' ? 'तारीख व वेळ निश्चित' : 'Date & time confirmed')}
+              </span>
+              <span className="text-slate-400 font-normal">• {holdData.seatIds.length} {language === 'mr' ? 'जागा' : 'seats'}</span>
             </p>
           </div>
           <button

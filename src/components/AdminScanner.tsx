@@ -138,6 +138,7 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
 
   // Verification overlay state
   const [currentOverlay, setCurrentOverlay] = useState<VerifyResult | null>(null);
+  const [scannerPopup, setScannerPopup] = useState<{ title: string; message: string } | null>(null);
 
   // Scanning metrics for active session
   const [metrics, setMetrics] = useState({
@@ -358,7 +359,10 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
           });
           setTorchOn(nextTorch);
         } else {
-          alert('या डिव्हाइसवर फ्लॅशलाइट उपलब्ध नाही (Torch not supported on this lens)');
+          setScannerPopup({
+            title: 'फ्लॅशलाइट माहिती',
+            message: 'या डिव्हाइसवर फ्लॅशलाइट उपलब्ध नाही (Torch not supported on this lens)',
+          });
         }
       }
     } catch (err: any) {
@@ -379,7 +383,10 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
         void verifyCode(decodedText);
       }
     } catch (err: any) {
-      alert('चित्रातून QR कोड वाचता आला नाही: ' + (err || 'Invalid image'));
+      setScannerPopup({
+        title: 'QR कोड वाचन त्रुटी',
+        message: 'चित्रातून QR कोड वाचता आला नाही: ' + (err?.message || err || 'Invalid image'),
+      });
     } finally {
       e.target.value = '';
     }
@@ -643,7 +650,12 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
                       <span>Next Scan</span>
                     </button>
                     <button
-                      onClick={() => alert(`तिकीट तपशील:\nनाव: ${currentOverlay.ticket?.attendee || 'अनिकेत जोशी'}\nकोड: ${currentOverlay.ticketCode || 'MT-88492'}`)}
+                      onClick={() =>
+                        setScannerPopup({
+                          title: 'तिकीट तपशील (Ticket Details)',
+                          message: `नाव: ${currentOverlay.ticket?.attendee || 'अनिकेत जोशी'}\nकोड: ${currentOverlay.ticketCode || 'MT-88492'}`,
+                        })
+                      }
                       className="py-2.5 px-4 bg-[#EA580C] text-white hover:bg-[#C2410C] active:scale-95 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1 shadow-xs cursor-pointer"
                     >
                       <ShieldCheck className="w-3.5 h-3.5" />
@@ -782,6 +794,24 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
           </p>
         </div>
       </div>
+
+      {scannerPopup && (
+        <div className="fixed inset-0 z-[1300] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full text-center shadow-2xl border border-slate-100 transform transition-all scale-100">
+            <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3 text-amber-600">
+              <ShieldCheck className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-bold text-slate-900 mb-2">{scannerPopup.title}</h3>
+            <p className="text-slate-600 text-sm mb-6 leading-relaxed whitespace-pre-line">{scannerPopup.message}</p>
+            <button
+              onClick={() => setScannerPopup(null)}
+              className="w-full py-2.5 px-4 bg-[#EA580C] hover:bg-[#A33900] active:scale-95 text-white font-bold rounded-xl text-sm transition-all shadow-md cursor-pointer"
+            >
+              ठीक आहे (OK)
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

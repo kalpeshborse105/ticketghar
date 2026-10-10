@@ -4,6 +4,8 @@ import { tickets, orders, events, venues, eventSessions } from '@/src/db/schema'
 import { eq } from 'drizzle-orm';
 import { generateTicketPdfBuffer } from '@/src/lib/ticket-pdf';
 import { getTicketShareUrl } from '@/src/lib/public-url';
+import { formatISTDate, formatISTTime } from '@/src/lib/dateUtils';
+import { generateSecureTicketQr } from '@/src/lib/ticket-crypto';
 
 export async function GET(
   req: NextRequest,
@@ -44,18 +46,9 @@ export async function GET(
       .where(eq(events.id, ticketRecord.order.eventId))
       .limit(1);
 
-    const start = ticketRecord.session.sessionStartTime
-      ? new Date(ticketRecord.session.sessionStartTime)
-      : null;
-    const showtime = start
-      ? start.toLocaleString('en-IN', {
-          weekday: 'short',
-          day: 'numeric',
-          month: 'short',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-        })
+    const startTime = ticketRecord.session.sessionStartTime;
+    const showtime = startTime
+      ? `${formatISTDate(startTime, 'mr', false)} • ${formatISTTime(startTime, 'mr', true)}`
       : '—';
 
     const seatsSummary =
@@ -64,18 +57,21 @@ export async function GET(
         : ticketRecord.ticket.seatCode;
 
     const publicUrl = getTicketShareUrl(ticketRecord.ticket.ticketCode);
+    const securePayload = eventRecord?.event?.id
+      ? generateSecureTicketQr(ticketRecord.ticket.ticketCode, eventRecord.event.id)
+      : publicUrl;
 
     const pdfBuffer = await generateTicketPdfBuffer({
       ticketCode: ticketRecord.ticket.ticketCode,
       orderNumber: ticketRecord.order.orderNumber,
-      eventTitle: eventRecord?.event.title || eventRecord?.event.titleMr || 'Event',
-      venueName: eventRecord?.venue?.name || eventRecord?.venue?.nameMr || 'Venue',
+      eventTitle: eventRecord?.event.titleMr || eventRecord?.event.title || 'Event',
+      venueName: eventRecord?.venue?.nameMr || eventRecord?.venue?.name || 'Venue',
       showtime,
       seatCode: seatsSummary,
       attendeeName: ticketRecord.ticket.attendeeName || ticketRecord.order.userName,
       faceValuePaise: ticketRecord.order.grandTotal,
       status: ticketRecord.ticket.status,
-      qrPayload: publicUrl,
+      qrPayload: securePayload,
       securityHash: ticketRecord.ticket.securityHash,
     });
 

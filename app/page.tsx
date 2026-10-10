@@ -20,6 +20,7 @@ import { MTSkeleton, MTEventCardSkeleton } from '@/src/components/ui/MTSkeleton'
 import { MTEmptyState } from '@/src/components/ui/MTEmptyState';
 import { MTToastContainer, ToastMessage } from '@/src/components/ui/MTToast';
 import { useOnlineStatus } from '@/hooks/use-pwa';
+import { formatEventCardDateTime } from '@/src/lib/dateUtils';
 import {
   Theater,
   Music,
@@ -43,6 +44,7 @@ import {
   Headphones,
   Clock,
   ArrowRight,
+  Star,
 } from 'lucide-react';
 
 
@@ -113,7 +115,7 @@ export default function HomePage() {
               if (Array.isArray(parsed) && parsed.length > 0) {
                 setVenuesList(parsed);
               }
-            } catch {}
+            } catch { }
           }
         }
 
@@ -126,7 +128,7 @@ export default function HomePage() {
           if (typeof window !== 'undefined') {
             try {
               localStorage.setItem(cacheKey, JSON.stringify(venuesData));
-            } catch {}
+            } catch { }
           }
         }
       } catch (e) {
@@ -156,7 +158,7 @@ export default function HomePage() {
             setEvents(unique);
             setLoading(false);
           }
-        } catch {}
+        } catch { }
       }
     }
 
@@ -459,7 +461,7 @@ export default function HomePage() {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 pb-20 md:pb-6">
+      <main className="flex-1 pb-10 md:pb-3">
         {viewState === 'my_tickets' ? (
           <MyTicketsView
             language={language}
@@ -552,13 +554,13 @@ export default function HomePage() {
                     <button
                       type="button"
                       onClick={() => setSelectedCategory('all')}
-                      className="text-xs font-bold text-[#ea580c]"
+                      className="text-xs font-bold text-[#ea580c] hover:underline cursor-pointer"
                     >
                       {language === 'mr' ? 'सर्व दाखवा' : 'Show all'}
                     </button>
                   )}
                 </div>
-                <div className="flex overflow-x-auto gap-2.5 pb-2 scrollbar-none sm:grid sm:grid-cols-4 lg:grid-cols-8">
+                <div className="flex overflow-x-auto gap-2 sm:gap-2.5 pb-2 scrollbar-none no-scrollbar">
                   {CATEGORIES.map((cat) => {
                     const Icon = cat.icon;
                     const isSelected = selectedCategory === cat.id;
@@ -567,20 +569,22 @@ export default function HomePage() {
                         key={cat.id}
                         type="button"
                         onClick={() => setSelectedCategory(cat.id)}
-                        className={`group flex flex-col items-center justify-center rounded-2xl p-3 text-center shadow-xs transition min-w-[85px] sm:min-w-0 shrink-0 sm:shrink cursor-pointer ${isSelected
-                          ? 'bg-[#ea580c] text-white'
-                          : 'bg-white text-[#141b2b] hover:bg-[#FFF7ED]'
-                          }`}
+                        className={`group flex flex-col items-center justify-center rounded-2xl p-2 sm:p-2.5 text-center shadow-2xs transition min-w-[70px] sm:min-w-[85px] shrink-0 cursor-pointer ${
+                          isSelected
+                            ? 'bg-[#ea580c] text-white shadow-md'
+                            : 'bg-white text-[#141b2b] hover:bg-[#FFF7ED]'
+                        }`}
                       >
                         <div
-                          className={`mb-1.5 flex h-12 w-12 items-center justify-center rounded-2xl p-2.5 transition ${isSelected
-                            ? 'bg-white/20 text-white'
-                            : 'bg-[#FFF7ED] text-[#ea580c] group-hover:bg-[#ea580c] group-hover:text-white'
-                            }`}
+                          className={`mb-1 flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl sm:rounded-2xl p-2 transition ${
+                            isSelected
+                              ? 'bg-white/20 text-white'
+                              : 'bg-[#FFF7ED] text-[#ea580c] group-hover:bg-[#ea580c] group-hover:text-white'
+                          }`}
                         >
-                          <Icon className="h-7 w-7" />
+                          <Icon className="h-5 w-5 sm:h-6 sm:w-6" />
                         </div>
-                        <span className="text-xs font-semibold leading-tight">
+                        <span className="text-[10px] sm:text-xs font-bold leading-tight">
                           {language === 'mr' ? cat.labelMr : cat.labelEn}
                         </span>
                       </button>
@@ -631,14 +635,15 @@ export default function HomePage() {
                       </button>
                     </div>
                   ) : (
-                    <div className="mt-event-grid">
+                    <div className="flex overflow-x-auto gap-3.5 pb-2 scrollbar-none mt-2">
                       {categoryFilteredEvents.map((evt) => (
-                        <EventCard
-                          key={`cat-result-${evt.id}`}
-                          event={evt}
-                          language={language}
-                          onSelect={handleSelectEvent}
-                        />
+                        <div key={`cat-result-${evt.id}`} className="w-[170px] sm:w-[210px] shrink-0">
+                          <EventCard
+                            event={evt}
+                            language={language}
+                            onSelect={handleSelectEvent}
+                          />
+                        </div>
                       ))}
                     </div>
                   )}
@@ -667,12 +672,11 @@ export default function HomePage() {
                         </p>
                       </div>
                     </div>
-                    <div className="flex overflow-x-auto gap-3.5 pb-2 scrollbar-none sm:grid sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="flex overflow-x-auto gap-3.5 pb-2 scrollbar-none">
                       {sortedEvents
                         .filter((e) => (e as any).featured)
-                        .slice(0, 4)
                         .map((evt) => (
-                          <div key={`feat-${evt.id}`} className="min-w-[240px] sm:min-w-0 shrink-0 sm:shrink">
+                          <div key={`feat-${evt.id}`} className="w-[170px] sm:w-[210px] shrink-0">
                             <EventCard
                               event={evt}
                               language={language}
@@ -701,7 +705,10 @@ export default function HomePage() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => setSelectedCategory('plays')}
+                      onClick={() => {
+                        setSelectedCategory('plays');
+                        window.scrollTo({ top: 400, behavior: 'smooth' });
+                      }}
                       className="text-xs font-bold text-[#ea580c] hover:text-[#c2410c] flex items-center gap-1 cursor-pointer"
                     >
                       <span>{language === 'mr' ? 'सर्व पहा' : 'View all'}</span>
@@ -709,14 +716,13 @@ export default function HomePage() {
                     </button>
                   </div>
 
-                  <div className="flex overflow-x-auto gap-3.5 pb-2 scrollbar-none sm:grid sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="flex overflow-x-auto gap-3.5 pb-2 scrollbar-none">
                     {(sortedEvents.filter((e) => e.category === 'plays' || (e as any).categoryMr === 'नाटक').length > 0
                       ? sortedEvents.filter((e) => e.category === 'plays' || (e as any).categoryMr === 'नाटक')
                       : sortedEvents
                     )
-                      .slice(0, 4)
                       .map((evt) => (
-                        <div key={`theatre-${evt.id}`} className="min-w-[240px] sm:min-w-0 shrink-0 sm:shrink">
+                        <div key={`theatre-${evt.id}`} className="w-[170px] sm:w-[210px] shrink-0">
                           <EventCard
                             event={evt}
                             language={language}
@@ -778,193 +784,115 @@ export default function HomePage() {
                       </p>
                     </div>
 
-                    {/* Status Legend on Right */}
-                    <div className="flex items-center gap-3.5 text-xs font-bold text-[#64748b] pt-1 sm:pt-0 shrink-0">
-                      <span className="flex items-center gap-1.5">
-                        <span className="h-2 w-2 rounded-full bg-[#16a34a]" />
-                        <span>{language === 'mr' ? 'उपलब्ध' : 'Available'}</span>
-                      </span>
-                      <span className="flex items-center gap-1.5">
-                        <span className="h-2 w-2 rounded-full bg-[#ea580c]" />
-                        <span>{language === 'mr' ? 'लवकर भरत आहे' : 'Filling Fast'}</span>
-                      </span>
-                      <span className="flex items-center gap-1.5">
-                        <span className="h-2 w-2 rounded-full bg-[#94a3b8]" />
-                        <span>{language === 'mr' ? 'हाउसफुल्ल' : 'Housefull'}</span>
-                      </span>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedCategory('all');
+                        window.scrollTo({ top: 400, behavior: 'smooth' });
+                      }}
+                      className="text-xs sm:text-sm font-bold text-[#C2410C] hover:text-[#EA580C] flex items-center gap-1 cursor-pointer transition"
+                    >
+                      <span>{language === 'mr' ? 'सर्व पहा' : 'View all'}</span>
+                      <ArrowRight className="h-4 w-4" />
+                    </button>
                   </div>
 
-                  {/* 3 Horizontal Cards matching screenshot */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
-                    {/* Card 1: लावणी बहार २०२५ */}
-                    <div
-                      onClick={() => {
-                        const target = sortedEvents.find(e => e.titleMr?.includes('लावणी') || e.title?.toLowerCase().includes('lavani')) || sortedEvents[0];
-                        if (target) handleSelectEvent(target);
-                      }}
-                      className="group bg-white rounded-2xl border border-[#E5E7EB] hover:border-orange-300 p-3 shadow-2xs hover:shadow-xs transition cursor-pointer flex gap-3 items-center justify-between"
-                    >
-                      <div className="flex gap-3 min-w-0 flex-1">
-                        <img
-                          src="https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=300&q=80"
-                          alt="लावणी बहार २०२५"
-                          className="w-24 h-24 rounded-xl object-cover shrink-0 bg-slate-100 group-hover:scale-[1.02] transition"
-                        />
-                        <div className="min-w-0 flex-1 flex flex-col justify-between py-0.5">
-                          <div>
-                            <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#FFF7ED] text-[#ea580c]">
-                                {language === 'mr' ? 'लोककला' : 'Folk Art'}
-                              </span>
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-orange-50 text-[#c2410c] flex items-center gap-0.5">
-                                <span>⚡</span>
-                                <span>{language === 'mr' ? 'लवकर भरत आहे' : 'Fast Filling'}</span>
+                  {/* Dynamic Database Fetched High-Rating Events Statewide */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                    {(events.length > 0
+                      ? [...events]
+                        .sort((a, b) => (b.rating || 4.5) - (a.rating || 4.5))
+                        .slice(0, 4)
+                      : []
+                    ).map((evt, idx) => {
+                      const displayTitle = language === 'mr' ? evt.titleMr || evt.title : evt.title;
+                      const displayCategory = language === 'mr' ? evt.categoryMr || evt.category : evt.category;
+                      const venueName = language === 'mr' ? evt.venue?.nameMr || evt.venue?.name : evt.venue?.name;
+
+                      const badgeTextListMr = ['🔥 लोकप्रिय शो', '🎭 गाजलेले नाटक', '⭐ सुपरहिट प्रयोग', '🔥 हाउसफुल्ल'];
+                      const badgeTextListEn = ['🔥 Trending Show', '🎭 Acclaimed Play', '⭐ Superhit Show', '🔥 Housefull'];
+                      const badgeText = language === 'mr' ? badgeTextListMr[idx % badgeTextListMr.length] : badgeTextListEn[idx % badgeTextListEn.length];
+
+                      return (
+                        <div
+                          key={`popular-${evt.id}`}
+                          onClick={() => handleSelectEvent(evt)}
+                          className="group bg-white rounded-2xl border border-[#E5E7EB] hover:border-orange-300 p-3 sm:p-4 shadow-2xs hover:shadow-md transition cursor-pointer flex items-center gap-3 sm:gap-4"
+                        >
+                          {/* Image Box with Star Rating Badge at Bottom-Left Corner */}
+                          <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden shrink-0 bg-slate-900 border border-slate-100 flex items-center justify-center">
+                            {evt.posterUrl || evt.bannerUrl ? (
+                              <img
+                                src={evt.posterUrl || evt.bannerUrl || ''}
+                                alt={displayTitle}
+                                className="w-full h-full object-cover object-top transition duration-300 group-hover:scale-105"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <Ticket className="w-8 h-8 text-amber-500" />
+                            )}
+
+                            {/* Rating Star Badge Overlay on Poster */}
+                            <div className="absolute bottom-1 left-1 flex items-center gap-0.5 text-[10px] font-extrabold text-white bg-black/75 backdrop-blur-xs px-1.5 py-0.5 rounded-md border border-white/20 shadow-xs">
+                              <Star className="w-3 h-3 fill-[#F59E0B] text-[#F59E0B] shrink-0" />
+                              <span>
+                                {evt.rating && evt.rating > 0
+                                  ? (evt.rating > 5 ? (evt.rating / 2).toFixed(1) : evt.rating.toFixed(1))
+                                  : '4.8'}
                               </span>
                             </div>
-                            <h3 className="text-sm font-extrabold text-[#141b2b] truncate group-hover:text-[#ea580c] transition">
-                              {language === 'mr' ? 'लावणी बहार २०२५' : 'Lavani Bahar 2025'}
-                            </h3>
-                            <p className="text-xs text-[#64748b] truncate">
-                              {language === 'mr' ? 'सुरेखा पुणेकर व सहकारी' : 'Surekha Punekar & Troupe'}
-                            </p>
                           </div>
-                          <div className="text-[11px] text-[#64748b] flex items-center gap-1 truncate pt-1">
-                            <Clock className="w-3 h-3 text-[#ea580c] shrink-0" />
-                            <span className="truncate">
-                              {language === 'mr' ? 'शनिवार, संध्याकाळी ८:०० • टिळक स्मारक' : 'Sat, 8:00 PM • Tilak Smarak'}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
 
-                      <div className="flex flex-col items-end justify-between self-stretch shrink-0 pl-1">
-                        <span className="text-[10px] text-[#64748b]">
-                          {language === 'mr' ? 'स्टॉल आसने शिल्लक' : 'Stall Seats Left'}
-                        </span>
-                        <button
-                          type="button"
-                          className="px-3 py-1.5 rounded-lg bg-[#FFF7ED] hover:bg-orange-100 text-[#ea580c] font-bold text-xs border border-orange-200 transition shadow-2xs whitespace-nowrap"
-                        >
-                          {language === 'mr' ? 'आरक्षण करा' : 'Book'}
-                        </button>
-                      </div>
-                    </div>
+                          {/* Middle Info Column */}
+                          <div className="min-w-0 flex-1 flex flex-col justify-between self-stretch py-0.5">
+                            <div>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-[#FFF7ED] text-[#C2410C] border border-orange-200/60 inline-block">
+                                  {badgeText}
+                                </span>
+                                {displayCategory && (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 inline-block">
+                                    {displayCategory}
+                                  </span>
+                                )}
+                              </div>
+                              <h3 className="text-sm sm:text-base font-extrabold text-[#141B2B] truncate group-hover:text-[#EA580C] transition mt-1">
+                                {displayTitle}
+                              </h3>
+                              <p className="text-xs text-[#64748B] truncate mt-1 flex items-center gap-1">
+                                <MapPin className="w-3.5 h-3.5 text-[#EA580C] shrink-0" />
+                                <span className="truncate">
+                                  {venueName ? `${venueName}${evt.venue?.city ? `, ${evt.venue.city}` : ''}` : (evt.venue?.city || 'महाराष्ट्र')}
+                                </span>
+                              </p>
+                              <p className="text-[11px] text-[#EA580C] font-bold truncate mt-1 flex items-center gap-1">
+                                <Clock className="w-3 h-3 text-[#EA580C] shrink-0" />
+                                <span className="truncate">
+                                  {formatEventCardDateTime(evt, language, true).fullStr}
+                                </span>
+                              </p>
+                            </div>
 
-                    {/* Card 2: सवाई गंधर्व स्मरण मैफल */}
-                    <div
-                      onClick={() => {
-                        const target = sortedEvents.find(e => e.category === 'music' || e.titleMr?.includes('संगीत') || e.title?.toLowerCase().includes('music')) || sortedEvents[1] || sortedEvents[0];
-                        if (target) handleSelectEvent(target);
-                      }}
-                      className="group bg-white rounded-2xl border border-[#E5E7EB] hover:border-orange-300 p-3 shadow-2xs hover:shadow-xs transition cursor-pointer flex gap-3 items-center justify-between"
-                    >
-                      <div className="flex gap-3 min-w-0 flex-1">
-                        <img
-                          src="https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=300&q=80"
-                          alt="सवाई गंधर्व स्मरण मैफल"
-                          className="w-24 h-24 rounded-xl object-cover shrink-0 bg-slate-100 group-hover:scale-[1.02] transition"
-                        />
-                        <div className="min-w-0 flex-1 flex flex-col justify-between py-0.5">
-                          <div>
-                            <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#FFF7ED] text-[#ea580c]">
-                                {language === 'mr' ? 'शास्त्रीय' : 'Classical'}
+                            {/* Bottom Row */}
+                            <div className="flex items-center justify-between pt-2 border-t border-slate-100 mt-2">
+                              <span className="text-[10px] text-[#A33900] font-bold truncate">
+                                {evt.ratingCount && evt.ratingCount > 0 ? `(${evt.ratingCount} ${language === 'mr' ? 'मते' : 'votes'})` : (language === 'mr' ? 'प्रमाणित प्रयोग' : 'Verified Show')}
                               </span>
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 flex items-center gap-0.5">
-                                <span>🟢</span>
-                                <span>{language === 'mr' ? 'तिकिटे उपलब्ध' : 'Tickets Open'}</span>
+                              <span className="text-[11px] text-[#EA580C] font-extrabold group-hover:underline">
+                                {language === 'mr' ? 'माहिती पहा →' : 'View Details →'}
                               </span>
                             </div>
-                            <h3 className="text-sm font-extrabold text-[#141b2b] truncate group-hover:text-[#ea580c] transition">
-                              {language === 'mr' ? 'सवाई गंधर्व स्मरण मैफल' : 'Sawai Gandharva Smaran'}
-                            </h3>
-                            <p className="text-xs text-[#64748b] truncate">
-                              {language === 'mr' ? 'पंडित संजीव अभ्यंकर यांचे गायन' : 'Pt. Sanjeev Abhyankar Vocal'}
-                            </p>
-                          </div>
-                          <div className="text-[11px] text-[#64748b] flex items-center gap-1 truncate pt-1">
-                            <Clock className="w-3 h-3 text-[#ea580c] shrink-0" />
-                            <span className="truncate">
-                              {language === 'mr' ? 'रविवार, सकाळी ९:०० • बालगंधर्व' : 'Sun, 9:00 AM • Bal Gandharva'}
-                            </span>
                           </div>
                         </div>
-                      </div>
-
-                      <div className="flex flex-col items-end justify-between self-stretch shrink-0 pl-1">
-                        <span className="text-[10px] text-[#64748b]">
-                          {language === 'mr' ? 'सकलनी खास बैठक' : 'Balcony Reserved'}
-                        </span>
-                        <button
-                          type="button"
-                          className="px-3 py-1.5 rounded-lg bg-[#FFF7ED] hover:bg-orange-100 text-[#ea580c] font-bold text-xs border border-orange-200 transition shadow-2xs whitespace-nowrap"
-                        >
-                          {language === 'mr' ? 'आरक्षण करा' : 'Book'}
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Card 3: पुरुषोत्तम करंडक विजेते एकांकिका */}
-                    <div
-                      onClick={() => {
-                        const target = sortedEvents.find(e => e.category === 'plays' || e.titleMr?.includes('नाटक')) || sortedEvents[2] || sortedEvents[0];
-                        if (target) handleSelectEvent(target);
-                      }}
-                      className="group bg-white rounded-2xl border border-[#E5E7EB] hover:border-orange-300 p-3 shadow-2xs hover:shadow-xs transition cursor-pointer flex gap-3 items-center justify-between"
-                    >
-                      <div className="flex gap-3 min-w-0 flex-1">
-                        <img
-                          src="https://images.unsplash.com/photo-1460723237483-7a6dc9d0b212?auto=format&fit=crop&w=300&q=80"
-                          alt="पुरुषोत्तम करंडक विजेते एकांकिका"
-                          className="w-24 h-24 rounded-xl object-cover shrink-0 bg-slate-100 group-hover:scale-[1.02] transition"
-                        />
-                        <div className="min-w-0 flex-1 flex flex-col justify-between py-0.5">
-                          <div>
-                            <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#FFF7ED] text-[#ea580c]">
-                                {language === 'mr' ? 'युवा नाट्य' : 'Youth Theatre'}
-                              </span>
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-orange-50 text-[#c2410c] flex items-center gap-0.5">
-                                <span>⚡</span>
-                                <span>{language === 'mr' ? '८५% भरले' : '85% Filled'}</span>
-                              </span>
-                            </div>
-                            <h3 className="text-sm font-extrabold text-[#141b2b] truncate group-hover:text-[#ea580c] transition">
-                              {language === 'mr' ? 'पुरुषोत्तम करंडक विजेते ए...' : 'Purushottam Karandak Winners'}
-                            </h3>
-                            <p className="text-xs text-[#64748b] truncate">
-                              {language === 'mr' ? 'संशोधक तीन युवा सादरीकरणे' : 'Three Award-Winning One Acts'}
-                            </p>
-                          </div>
-                          <div className="text-[11px] text-[#64748b] flex items-center gap-1 truncate pt-1">
-                            <Clock className="w-3 h-3 text-[#ea580c] shrink-0" />
-                            <span className="truncate">
-                              {language === 'mr' ? 'रविवार, दु. ३:०० • भरत नाट्य मंदिर' : 'Sun, 3:00 PM • Bharat Natya'}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col items-end justify-between self-stretch shrink-0 pl-1">
-                        <span className="text-[10px] text-[#ea580c] font-bold">
-                          {language === 'mr' ? 'केवळ ४५ जागा बाकी' : 'Only 45 Seats Left'}
-                        </span>
-                        <button
-                          type="button"
-                          className="px-3 py-1.5 rounded-lg bg-[#FFF7ED] hover:bg-orange-100 text-[#ea580c] font-bold text-xs border border-orange-200 transition shadow-2xs whitespace-nowrap"
-                        >
-                          {language === 'mr' ? 'आरक्षण करा' : 'Book'}
-                        </button>
-                      </div>
-                    </div>
+                      );
+                    })}
                   </div>
                 </section>
               )}
 
               {/* Main discovery grid */}
               <section>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 mb-3">
                   <div className="h-8 w-1.5 rounded-full bg-[#ea580c]" />
                   <div>
                     <h2 className="text-xl font-bold text-[#141b2b]">
@@ -980,9 +908,11 @@ export default function HomePage() {
                 </div>
 
                 {loading ? (
-                  <div className="mt-event-grid py-2">
-                    {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
-                      <MTEventCardSkeleton key={n} />
+                  <div className="flex overflow-x-auto gap-3.5 pb-2 scrollbar-none py-2">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <div key={n} className="w-[185px] sm:w-[225px] shrink-0">
+                        <MTEventCardSkeleton />
+                      </div>
                     ))}
                   </div>
                 ) : error ? (
@@ -1015,14 +945,15 @@ export default function HomePage() {
                     }}
                   />
                 ) : (
-                  <div className="mt-event-grid">
+                  <div className="flex overflow-x-auto gap-3.5 pb-2 scrollbar-none">
                     {sortedEvents.map((evt) => (
-                      <EventCard
-                        key={evt.id}
-                        event={evt}
-                        language={language}
-                        onSelect={handleSelectEvent}
-                      />
+                      <div key={evt.id} className="w-[185px] sm:w-[225px] shrink-0">
+                        <EventCard
+                          event={evt}
+                          language={language}
+                          onSelect={handleSelectEvent}
+                        />
+                      </div>
                     ))}
                   </div>
                 )}
@@ -1050,11 +981,11 @@ export default function HomePage() {
                       </p>
                     </div>
 
-                    <div className="text-xs text-[#64748b] font-medium pt-1 sm:pt-0 shrink-0">
+                    {/* <div className="text-xs text-[#64748b] font-medium pt-1 sm:pt-0 shrink-0">
                       {language === 'mr'
                         ? `एकूण ${venuesList.length} नाट्यगृहे सक्रिय`
                         : `${venuesList.length} Active Theatres`}
-                    </div>
+                    </div> */}
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1256,45 +1187,6 @@ export default function HomePage() {
         </div>
 
         <div className="relative mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-
-          {/* Brand strip — compact with official Google Play Store app link */}
-          <div className="mb-8 rounded-2xl border border-white/10 bg-gradient-to-r from-[#c2410c] via-[#ea580c] to-[#f97316] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
-            <div>
-              <p className="text-base font-black tracking-tight sm:text-xl">
-                <span className="text-white">महा</span>
-                <span className="text-slate-950">टिकिट</span>
-                <span className="text-xs font-extrabold text-white/90 ml-2">MahaTicket</span>
-              </p>
-              <p className="mt-0.5 text-xs font-semibold text-white/95 sm:text-sm">
-                {language === 'mr' ? 'महाराष्ट्राचे हक्काचे तिकीट व्यासपीठ' : "Maharashtra's Official Ticketing Platform"}
-              </p>
-            </div>
-
-            {/* Official Google Play Store Badge */}
-            <a
-              href="https://play.google.com/store/apps/details?id=com.kalpkrutinfotech.mahaticket"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-3 bg-black hover:bg-slate-900 text-white px-4 py-2 rounded-xl shadow-lg border border-white/20 transition-all hover:scale-[1.03] active:scale-95 shrink-0 self-start sm:self-auto cursor-pointer group"
-              title="Google Play Store वरून ॲप डाउनलोड करा"
-            >
-              <svg className="w-6 h-6 shrink-0 transition-transform group-hover:scale-110" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M3.608 1.808C3.376 2.052 3.24 2.428 3.24 2.924V21.076C3.24 21.572 3.376 21.948 3.608 22.192L3.684 22.256L13.784 12.156V11.844L3.684 1.744L3.608 1.808Z" fill="#20C997"/>
-                <path d="M17.148 15.52L13.784 12.156V11.844L17.148 8.48L17.228 8.528L21.204 10.792C22.34 11.44 22.34 12.56 21.204 13.208L17.228 15.472L17.148 15.52Z" fill="#FFC107"/>
-                <path d="M17.228 15.472L13.784 12L3.608 22.192C3.992 22.596 4.636 22.648 5.376 22.228L17.228 15.472Z" fill="#FF3D00"/>
-                <path d="M17.228 8.528L5.376 1.772C4.636 1.352 3.992 1.404 3.608 1.808L13.784 12L17.228 8.528Z" fill="#4285F4"/>
-              </svg>
-              <div className="flex flex-col text-left leading-none">
-                <span className="text-[9px] uppercase font-bold text-slate-300 tracking-wider">
-                  {language === 'mr' ? 'गूगल प्ले वर उपलब्ध' : 'GET IT ON'}
-                </span>
-                <span className="text-xs font-black text-white tracking-wide mt-0.5 font-sans">
-                  Google Play
-                </span>
-              </div>
-            </a>
-          </div>
-
           {/* =====================================================
         BRAND + LINK COLUMNS
         ===================================================== */}
@@ -1326,7 +1218,30 @@ export default function HomePage() {
                 क्रीडा आणि इतर खास अनुभवांसाठी सोपे आणि सुरक्षित
                 ऑनलाइन तिकीट बुकिंग.
               </p>
-
+              <br></br>
+              {/* Official Google Play Store Badge */}
+              <a
+                href="https://play.google.com/store/apps/details?id=com.kalpkrutinfotech.mahaticket"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-3 bg-black hover:bg-slate-900 text-white px-4 py-2 rounded-xl shadow-lg border border-white/20 transition-all hover:scale-[1.03] active:scale-95 shrink-0 self-start sm:self-auto cursor-pointer group"
+                title="Google Play Store वरून ॲप डाउनलोड करा"
+              >
+                <svg className="w-6 h-6 shrink-0 transition-transform group-hover:scale-110" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M3.608 1.808C3.376 2.052 3.24 2.428 3.24 2.924V21.076C3.24 21.572 3.376 21.948 3.608 22.192L3.684 22.256L13.784 12.156V11.844L3.684 1.744L3.608 1.808Z" fill="#20C997" />
+                  <path d="M17.148 15.52L13.784 12.156V11.844L17.148 8.48L17.228 8.528L21.204 10.792C22.34 11.44 22.34 12.56 21.204 13.208L17.228 15.472L17.148 15.52Z" fill="#FFC107" />
+                  <path d="M17.228 15.472L13.784 12L3.608 22.192C3.992 22.596 4.636 22.648 5.376 22.228L17.228 15.472Z" fill="#FF3D00" />
+                  <path d="M17.228 8.528L5.376 1.772C4.636 1.352 3.992 1.404 3.608 1.808L13.784 12L17.228 8.528Z" fill="#4285F4" />
+                </svg>
+                <div className="flex flex-col text-left leading-none">
+                  <span className="text-[9px] uppercase font-bold text-slate-300 tracking-wider">
+                    {language === 'mr' ? 'गूगल प्ले स्टोअर वर उपलब्ध' : 'GET IT ON'}
+                  </span>
+                  <span className="text-xs font-black text-white tracking-wide mt-0.5 font-sans">
+                    Google Play Store
+                  </span>
+                </div>
+              </a>
               {/* Trust badges */}
               <div className="mt-5 flex flex-wrap gap-2">
                 <span className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-semibold text-slate-300">

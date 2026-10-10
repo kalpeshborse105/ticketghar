@@ -279,9 +279,11 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
     setActiveSectionIdx(sections.length);
   };
 
+  const [designerNotice, setDesignerNotice] = useState<string | null>(null);
+
   const handleDeleteSection = (idx: number) => {
     if (sections.length <= 1) {
-      alert('कमीत कमी एक विभाग आवश्यक आहे (At least one section is required).');
+      setDesignerNotice('कमीत कमी एक विभाग आवश्यक आहे (At least one section is required).');
       return;
     }
     const updated = sections.filter((_, i) => i !== idx);
@@ -332,7 +334,7 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
 
   const handleDeleteRow = (rowIdx: number) => {
     if (!currentSection || currentSection.rows.length <= 1) {
-      alert('विभागात किमान एक रांग असावी.');
+      setDesignerNotice('विभागात किमान एक रांग असावी (A section must have at least one row).');
       return;
     }
     const updatedRows = currentSection.rows.filter((_, i) => i !== rowIdx);
@@ -1187,6 +1189,24 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
           </div>
         </form>
       </div>
+
+      {designerNotice && (
+        <div className="fixed inset-0 z-[1300] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-sm w-full text-center shadow-2xl transform transition-all scale-100">
+            <div className="w-12 h-12 bg-amber-500/10 border border-amber-500/20 rounded-full flex items-center justify-center mx-auto mb-3 text-amber-400">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-bold text-white mb-2">माहिती / सूचना</h3>
+            <p className="text-slate-300 text-sm mb-6 leading-relaxed">{designerNotice}</p>
+            <button
+              onClick={() => setDesignerNotice(null)}
+              className="w-full py-2.5 px-4 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-black rounded-xl text-sm transition-all shadow-md cursor-pointer"
+            >
+              ठीक आहे (OK)
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

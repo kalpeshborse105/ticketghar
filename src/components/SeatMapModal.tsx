@@ -331,13 +331,16 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
               </p>
               <div className="flex items-center gap-2 text-slate-500 mt-1 text-[11px]">
                 <span className="text-[#EA580C] font-semibold">
-                  {session.sessionStartTime
-                    ? new Date(session.sessionStartTime).toLocaleDateString('mr-IN', {
+                  {session?.sessionStartTime
+                    ? `${new Date(session.sessionStartTime).toLocaleDateString(language === 'mr' ? 'mr-IN' : 'en-IN', {
                         weekday: 'short',
                         day: 'numeric',
                         month: 'short',
-                      }) + ' • संध्या. ०५:००'
-                    : 'शनि १२ ऑक्टो • संध्या. ०५:००'}
+                      })} • ${new Date(session.sessionStartTime).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}`
+                    : (language === 'mr' ? 'वेळापत्रक उपलब्ध' : 'Schedule available')}
                 </span>
                 <span>•</span>
                 <span className="truncate">{venueData?.nameMr || venueData?.name || event.venue?.name || 'बाळ गंधर्व रंगमंदिर, पुणे'}</span>

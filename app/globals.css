@@ -212,9 +212,10 @@ body {
 }
 
 .mt-poster {
-  aspect-ratio: 2 / 3;
+  aspect-ratio: 16 / 10;
   width: 100%;
   object-fit: cover;
+  object-position: top;
   background: #1c1917;
 }
 
@@ -264,15 +265,28 @@ body {
   padding-top: max(env(safe-area-inset-top, 0px), 12px);
 }
 
+/* Complete scrollbar hiding utility */
+.scrollbar-none::-webkit-scrollbar,
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+.scrollbar-none,
+.no-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
 ::-webkit-scrollbar {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #f5f5f4;
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #d6d3d1;
+  background: rgba(214, 211, 209, 0.6);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {

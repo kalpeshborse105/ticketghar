@@ -85,7 +85,16 @@ export async function POST(request: Request) {
 
     const { ticket, order, session, event } = ticketRows[0];
 
-    // 2. Strict Organizer & Event Isolation Check:
+    // 2. Cryptographic Token Cross-Verification:
+    if (embeddedEventId && Number(order.eventId) !== Number(embeddedEventId)) {
+      return NextResponse.json({
+        valid: false,
+        scanResult: 'INVALID_SIGNATURE',
+        message: 'अवैध किंवा हेरफेर केलेला क्युआर कोड! (Encrypted QR signature mismatch).',
+      });
+    }
+
+    // 3. Strict Organizer & Event Isolation Check:
     // Organizer can ONLY scan tickets for their own event or assigned show
     if (targetEventId && Number(order.eventId) !== Number(targetEventId)) {
       return NextResponse.json({
@@ -106,7 +115,7 @@ export async function POST(request: Request) {
       return NextResponse.json({
         valid: false,
         scanResult: 'WRONG_ORGANIZER',
-        message: `सावधान! हे तिकीट तुमच्या संस्थेच्या / आयोजकाच्या कार्यक्रमाचे नाही (Unauthorized Organizer Scan).`,
+        message: `सावधान! हे तिकीट तुमच्या संस्थेच्या / आयोजकाच्या कार्यक्रमाचे नाही. केवळ अधिकृत आयोजकांनाच हे तिकीट स्कॅन व पडताळणी करण्याचा अधिकार आहे (Unauthorized Organizer Scan).`,
         ticket: {
           code: 'PROTECTED',
           seat: ticket.seatCode,

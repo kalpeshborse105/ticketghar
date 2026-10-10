@@ -221,10 +221,10 @@ export async function generateTicketPdfBuffer(input: TicketPdfInput): Promise<Bu
     .text('IMPORTANT INSTRUCTIONS & ENTRY GUIDELINES', margin + 30, currentY + 10);
 
   const instructions = [
-    '• Please present this digital M-Ticket on your phone or a printed copy at the entry gate.',
-    '• Gates open 30 minutes prior to showtime. Please arrive at least 15 minutes before commencement.',
-    '• Outside food and beverages are strictly not allowed inside the auditorium / cinema hall.',
-    '• Handover this pass to the gate scanner operator for instant laser/camera validation.',
+    '• Present this digital M-Ticket on your phone or printed copy at the venue entrance.',
+    '• Encrypted Security (MTSEC): Ticket is verified strictly by authorized venue gate operators.',
+    '• Doors open 30 minutes before showtime. Please arrive at least 15 minutes prior to commencement.',
+    '• Outside food, beverages, and proscribed items are strictly prohibited inside the venue.',
   ];
 
   let instY = currentY + 25;

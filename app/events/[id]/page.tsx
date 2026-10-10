@@ -30,6 +30,7 @@ import { SeatMapModal } from '@/src/components/SeatMapModal';
 import { CheckoutDrawer } from '@/src/components/CheckoutDrawer';
 import { TicketPassModal } from '@/src/components/TicketPassModal';
 import { AuthModal } from '@/src/components/AuthModal';
+import { formatISTDate, formatISTTime } from '@/src/lib/dateUtils';
 
 
 interface EventDetail {
@@ -181,6 +182,39 @@ export default function EventDetailPage() {
     return '₹३०० - ₹६००';
   }, [selectedSession, event]);
 
+  // Dynamic Date grouping from database-backed event sessions
+  const datesList = React.useMemo(() => {
+    if (!event?.sessions || event.sessions.length === 0) return [];
+
+    const map = new Map<string, { label: string; day: string; month: string; full: string; sessions: any[] }>();
+
+    event.sessions.forEach((s: any) => {
+      const dateObj = new Date(s.sessionStartTime);
+      const dateKey = dateObj.toDateString();
+
+      if (!map.has(dateKey)) {
+        const isToday = new Date().toDateString() === dateKey;
+        const isTomorrow = new Date(Date.now() + 86400000).toDateString() === dateKey;
+
+        const label = isToday
+          ? (language === 'mr' ? 'आज' : 'Today')
+          : isTomorrow
+          ? (language === 'mr' ? 'उद्या' : 'Tomorrow')
+          : formatISTDate(s.sessionStartTime, language, true);
+
+        const day = dateObj.getDate().toString();
+        const month = formatISTDate(s.sessionStartTime, language, true);
+        const full = formatISTDate(s.sessionStartTime, language, false);
+
+        map.set(dateKey, { label, day, month, full, sessions: [] });
+      }
+
+      map.get(dateKey)!.sessions.push(s);
+    });
+
+    return Array.from(map.values());
+  }, [event?.sessions, language]);
+
   const fetchReviews = async () => {
     if (!eventId) return;
     try {
@@ -205,17 +239,21 @@ export default function EventDetailPage() {
     fetchReviews();
   }, [eventId]);
 
+  const [popupNotice, setPopupNotice] = useState<{ title: string; message: string } | null>(null);
+
   const handleOpenReviewModal = () => {
     if (!currentUser) {
       setAuthModalOpen(true);
       return;
     }
     if (hasUserReviewed) {
-      alert(
-        language === 'mr'
-          ? 'तुम्ही या कार्यक्रमाचे परीक्षण आधीच नोंदवले आहे (You have already reviewed this event).'
-          : 'You have already reviewed this event.'
-      );
+      setPopupNotice({
+        title: language === 'mr' ? 'परीक्षण नोंदवले आहे' : 'Review Already Submitted',
+        message:
+          language === 'mr'
+            ? 'तुम्ही या कार्यक्रमाचे परीक्षण आधीच नोंदवले आहे (You have already reviewed this event).'
+            : 'You have already reviewed this event.',
+      });
       return;
     }
     setReviewError(null);
@@ -294,7 +332,10 @@ export default function EventDetailPage() {
           const json = await res.json();
           if (json.event) {
             setEvent(json.event);
-            // User must explicitly pick a showtime session, do not auto-select
+            if (json.event.sessions && json.event.sessions.length > 0) {
+              const activeS = json.event.sessions.find((s: any) => s.status === 'active') || json.event.sessions[0];
+              setSelectedSession(activeS);
+            }
             return;
           }
         }
@@ -413,7 +454,6 @@ export default function EventDetailPage() {
     );
   }
 
-  const activeSessions = (event.sessions || []).filter((s) => s.status === 'active');
   const title = event.titleMr || event.title;
   const venueName = event.venue?.nameMr || event.venue?.name || 'बालगंधर्व रंगमंदिर, पुणे';
   const rawVideo =
@@ -423,16 +463,9 @@ export default function EventDetailPage() {
     'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
   const videoEmbedUrl = getYouTubeEmbedUrl(rawVideo);
 
-  // Dates strip for Bal Gandharva sessions
-  const datesList = [
-    { label: 'आज', day: '१२', month: 'शनिवार', full: 'आज, १२ ऑक्टोबर २०२५' },
-    { label: 'उद्या', day: '१३', month: 'रविवार', full: 'उद्या, १३ ऑक्टोबर २०२५' },
-    { label: 'सोम', day: '१४', month: 'ऑक्टो', full: 'सोमवार, १४ ऑक्टोबर २०२५' },
-    { label: 'मंगळ', day: '१५', month: 'ऑक्टो', full: 'मंगळवार, १५ ऑक्टोबर २०२५' },
-    { label: 'पुढील शनि', day: '१९', month: 'ऑक्टो', full: 'शनिवार, १९ ऑक्टोबर २०२५' },
-  ];
-
-  const currentShowSession = selectedSession || activeSessions[0] || null;
+  const activeSessions = (datesList[selectedDateIndex]?.sessions || event?.sessions || []).filter(
+    (s: any) => s.status === 'active' || s.status === 'published' || !s.status
+  );
 
   return (
     <div className="min-h-screen bg-[#FFF7ED] text-[#141B2B] selection:bg-[#EA580C] selection:text-white pb-28">
@@ -759,9 +792,14 @@ export default function EventDetailPage() {
                     <button
                       key={idx}
                       type="button"
-                      onClick={() => setSelectedDateIndex(idx)}
+                      onClick={() => {
+                        setSelectedDateIndex(idx);
+                        if (d.sessions && d.sessions.length > 0) {
+                          setSelectedSession(d.sessions[0]);
+                        }
+                      }}
                       className={`flex-shrink-0 flex flex-col items-center justify-center w-20 py-2.5 rounded-xl transition-all shadow-xs cursor-pointer ${isSelected
-                        ? 'bg-[#EA580C] text-white'
+                        ? 'bg-[#EA580C] text-white shadow-md'
                         : 'bg-[#FFF7ED] hover:bg-orange-100 text-[#141B2B]'
                         }`}
                     >
@@ -784,10 +822,12 @@ export default function EventDetailPage() {
                 <div className="flex items-center gap-2">
                   <Calendar className="h-4 w-4 text-[#EA580C]" />
                   <span className="text-xs font-bold text-[#141B2B]">
-                    {datesList[selectedDateIndex]?.full} चे प्रयोग
+                    {datesList[selectedDateIndex]?.full || 'निवडलेले प्रयोग'}
                   </span>
                 </div>
-                <span className="text-[10px] text-[#64748B] font-semibold">२ प्रयोग नियोजित</span>
+                <span className="text-[10px] text-[#64748B] font-semibold">
+                  {activeSessions.length} {language === 'mr' ? 'प्रयोग उपलब्ध' : 'shows available'}
+                </span>
               </div>
 
               {/* Showtime Cards for Venue */}
@@ -795,25 +835,31 @@ export default function EventDetailPage() {
                 {activeSessions.length > 0 ? (
                   activeSessions.map((sess, idx) => {
                     const isSelected = selectedSession?.id === sess.id;
-                    const startTime = new Date(sess.sessionStartTime).toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    });
-                    const isEvening = idx > 0;
+                    const startTime = formatISTTime(sess.sessionStartTime, language, true);
+                    const dateStr = formatISTDate(sess.sessionStartTime, language, true);
+                    const hour = new Date(sess.sessionStartTime).getHours();
+                    const isEvening = hour >= 16;
+                    const periodLabel = language === 'mr'
+                      ? (hour >= 20 ? 'रात्रीचा शो' : hour >= 16 ? 'संध्याकाळचा शो' : hour >= 12 ? 'दुपारचा शो' : 'सकाळचा शो')
+                      : (hour >= 16 ? 'Evening Show' : 'Matinee Show');
 
                     return (
                       <div
                         key={sess.id}
-                        className="p-4 rounded-xl bg-white border border-[#E5E7EB] shadow-xs hover:shadow-sm transition-all"
+                        className={`p-4 rounded-xl border transition-all ${
+                          isSelected
+                            ? 'bg-orange-50/70 border-[#EA580C] shadow-sm'
+                            : 'bg-white border-[#E5E7EB] hover:shadow-sm'
+                        }`}
                       >
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                           <div className="space-y-1">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-lg font-bold text-[#141B2B]">
                                 {startTime}
                               </span>
                               <span className="px-2 py-0.5 rounded-full bg-[#FFF7ED] text-[#A33900] text-[10px] font-bold">
-                                {isEvening ? 'संध्याकाळचा शो' : 'दुपारचा शो'}
+                                {dateStr} • {periodLabel}
                               </span>
                             </div>
                             <p className="text-xs text-[#64748B]">{venueName}</p>
@@ -827,12 +873,12 @@ export default function EventDetailPage() {
                             <button
                               type="button"
                               onClick={() => handleBookSession(sess)}
-                              className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 ${isSelected
+                              className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 ${isSelected
                                 ? 'bg-[#EA580C] text-white shadow-sm'
                                 : 'bg-[#FFF7ED] hover:bg-[#EA580C] text-[#EA580C] hover:text-white'
                                 }`}
                             >
-                              <span>{isSelected ? 'निवडले ✓' : 'निवडा'}</span>
+                              <span>{isSelected ? (language === 'mr' ? 'आसन निवडा ✓' : 'Select Seats ✓') : (language === 'mr' ? 'वेळ निवडा' : 'Select')}</span>
                               <ChevronRight className="h-4 w-4" />
                             </button>
                           </div>
@@ -842,7 +888,7 @@ export default function EventDetailPage() {
                   })
                 ) : (
                   <div className="p-4 rounded-xl bg-white border border-[#E5E7EB] text-center text-xs text-[#64748B]">
-                    सध्या कोणतेही शो उपलब्ध नाहीत.
+                    सध्या या तारखेला कोणतेही शो उपलब्ध नाहीत.
                   </div>
                 )}
               </div>
@@ -1154,7 +1200,11 @@ export default function EventDetailPage() {
             </div>
             <div className="min-w-0">
               <p className="text-xs font-bold text-[#141B2B] truncate">
-                {title} • <span className="text-[#EA580C]">{selectedSession ? new Date(selectedSession.sessionStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'शो वेळ निवडा'}</span>
+                {title} • <span className="text-[#EA580C]">
+                  {selectedSession
+                    ? `${new Date(selectedSession.sessionStartTime).toLocaleDateString(language === 'mr' ? 'mr-IN' : 'en-IN', { weekday: 'short', day: 'numeric', month: 'short' })} • ${new Date(selectedSession.sessionStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                    : (language === 'mr' ? 'शो वेळ निवडा' : 'Select Showtime')}
+                </span>
               </p>
               <div className="flex items-center gap-2 text-[10px] text-[#64748B]">
                 <span className="truncate">{venueName}</span>
@@ -1462,6 +1512,25 @@ export default function EventDetailPage() {
         }}
         initialMessage={language === 'mr' ? 'परीक्षण व रेटिंग नोंदवण्यासाठी कृपया लॉगिन करा' : 'Please login to rate and review this show'}
       />
+
+      {/* Notice Popup Modal (Replaces browser alert) */}
+      {popupNotice && (
+        <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full text-center shadow-2xl border border-slate-100 transform transition-all scale-100">
+            <div className="w-14 h-14 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4 text-amber-600 shadow-inner">
+              <Info className="w-7 h-7" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-900 mb-2">{popupNotice.title}</h3>
+            <p className="text-slate-600 text-sm mb-6 leading-relaxed">{popupNotice.message}</p>
+            <button
+              onClick={() => setPopupNotice(null)}
+              className="w-full py-3 px-4 bg-[#EA580C] hover:bg-[#A33900] active:scale-95 text-white font-bold rounded-xl text-sm transition-all shadow-md cursor-pointer"
+            >
+              {language === 'mr' ? 'ठीक आहे' : 'OK'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
