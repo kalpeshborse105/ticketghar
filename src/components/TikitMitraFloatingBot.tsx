@@ -156,36 +156,41 @@ export function TikitMitraFloatingBot() {
                 </span>
               </button>
             ) : (
-              <div className="flex items-center gap-1 bg-gradient-to-r from-[#EA580C] via-[#C2410C] to-[#9A3412] p-0.5 pl-0.5 rounded-2xl shadow-[0_8px_25px_rgba(234,88,12,0.45)] border border-amber-400/40">
+              <div className="flex flex-col items-center gap-1.5 bg-gradient-to-b from-[#EA580C] via-[#C2410C] to-[#9A3412] px-2 py-2 rounded-3xl shadow-[0_8px_25px_rgba(234,88,12,0.45)] border border-amber-400/40 text-center">
+                {/* Top: TikitMitra Text */}
+                <button
+                  type="button"
+                  onClick={() => setIsOpen(true)}
+                  className="text-[10px] font-extrabold text-white tracking-tight cursor-pointer hover:scale-105 transition-transform drop-shadow-xs"
+                >
+                  टिकिट मित्र
+                </button>
+
+                {/* Middle: Circle logo button */}
                 <button
                   type="button"
                   onClick={() => setIsOpen(true)}
                   aria-label="टिकिटमित्र AI नाट्य मदतनीस उघडा"
-                  className="group relative flex items-center gap-2 text-white transition-all transform active:scale-95 cursor-pointer"
+                  className="group relative flex items-center justify-center w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm border border-amber-300/60 p-1 transition-all transform active:scale-95 cursor-pointer shadow-inner"
                 >
-                  <div className="relative w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center border border-amber-300/60 shrink-0 p-1">
-                    <TheatreFaceMasksIcon className="h-7 w-7 transition-transform group-hover:scale-110 drop-shadow-sm" />
-                    <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-300 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-400"></span>
-                    </span>
-                  </div>
-                  <div className="flex flex-col text-left leading-none pr-1">
-                    <span className="text-[11px] font-bold text-white-200 tracking-tight">
-                      टिकिट मित्र
-                    </span>
-                  </div>
+                  <TheatreFaceMasksIcon className="h-7 w-7 transition-transform group-hover:scale-110 drop-shadow-sm" />
+                  <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-300 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-400"></span>
+                  </span>
                 </button>
+
+                {/* Bottom: Close button */}
                 <button
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     setIsMinimized(true);
                   }}
-                  title="लपवा / Minimize (>)"
-                  className="w-6 h-6 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition cursor-pointer text-xs font-bold mr-0.5"
+                  title="लपवा / Minimize"
+                  className="w-5 h-5 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition cursor-pointer text-xs font-bold"
                 >
-                  <ChevronRight className="w-3.5 h-3.5" />
+                  <X className="w-3 h-3" />
                 </button>
               </div>
             )}

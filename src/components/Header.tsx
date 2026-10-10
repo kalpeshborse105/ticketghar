@@ -845,11 +845,11 @@ export const Header: React.FC<HeaderProps> = ({
 
             {/* User Profile Avatar / Menu */}
             {user ? (
-              <div ref={userMenuRef} className="relative">
+              <div ref={userMenuRef} className="relative hidden md:block">
                 <button
                   type="button"
                   onClick={() => setUserMenuOpen((o) => !o)}
-                  className="w-8 h-8 rounded-full bg-[#A33900] overflow-hidden flex items-center justify-center text-white shadow-sm hover:opacity-90 transition border border-orange-200"
+                  className="w-8 h-8 rounded-full bg-[#A33900] overflow-hidden flex items-center justify-center text-white shadow-sm hover:opacity-90 transition border border-orange-200 cursor-pointer"
                   title={user.fullName || (language === 'mr' ? 'माझे प्रोफाइल' : 'My Profile')}
                 >
                   {user.avatarUrl ? (
@@ -911,32 +911,35 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 type="button"
                 onClick={handleLoginClick}
-                className="w-8 h-8 rounded-full bg-[#A33900] flex items-center justify-center text-white shadow-sm hover:opacity-90 transition"
+                className="hidden md:flex w-8 h-8 rounded-full bg-[#A33900] items-center justify-center text-white shadow-sm hover:opacity-90 transition cursor-pointer"
                 title={language === 'mr' ? 'लॉगिन करा' : 'Login'}
               >
                 <User className="h-4 w-4" />
               </button>
             )}
 
-            {/* Mobile menu button */}
+            {/* 3-Line Hamburger Menu Button (Desktop & Tablet Only — Hidden on mobile where bottom nav is active) */}
             <button
               type="button"
               onClick={() => setMobileMenuOpen((o) => !o)}
-              className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 md:hidden"
-              aria-label="Toggle menu"
+              className="hidden md:flex items-center justify-center p-1.5 sm:p-2 rounded-xl border border-slate-200 bg-white hover:bg-orange-50 text-[#141B2B] transition-all cursor-pointer shadow-2xs active:scale-95"
+              aria-label="Toggle Navigation Menu"
+              title={language === 'mr' ? 'मेनू उघडा' : 'Toggle Menu'}
             >
-              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              {mobileMenuOpen ? (
+                <X className="h-5 w-5 text-[#EA580C]" />
+              ) : (
+                <Menu className="h-5 w-5 text-[#141B2B]" />
+              )}
             </button>
           </div>
         </div>
 
-
-
         {/* ===================================================
-            MOBILE MENU
+            HEADER NAVIGATION MENU (Desktop, Tablet & Mobile)
             =================================================== */}
         {mobileMenuOpen && (
-          <div className="space-y-2 border-t border-slate-100 bg-white py-3 md:hidden">
+          <div className="space-y-2 border-t border-slate-100 bg-white py-3 shadow-lg animate-in fade-in slide-in-from-top-2 duration-150 rounded-b-2xl px-2">
 
             {/* My Tickets */}
             <button

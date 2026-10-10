@@ -15,7 +15,7 @@ import { TicketPassModal } from '@/src/components/TicketPassModal';
 import { MyTicketsView } from '@/src/components/MyTicketsView';
 import { PartnerWithUsModal } from '@/src/components/PartnerWithUsModal';
 import { AuthModal } from '@/src/components/AuthModal';
-import { MTBottomNavigation, NavTab } from '@/src/components/ui/MTBottomNavigation';
+import { NavTab } from '@/src/components/ui/MTBottomNavigation';
 import { MTSkeleton, MTEventCardSkeleton } from '@/src/components/ui/MTSkeleton';
 import { MTEmptyState } from '@/src/components/ui/MTEmptyState';
 import { MTToastContainer, ToastMessage } from '@/src/components/ui/MTToast';
@@ -104,11 +104,30 @@ export default function HomePage() {
   useEffect(() => {
     const loadVenues = async () => {
       try {
+        const cacheKey = `mahaticket_cached_venues_${selectedCity}`;
+        if (typeof window !== 'undefined') {
+          const cached = localStorage.getItem(cacheKey);
+          if (cached) {
+            try {
+              const parsed = JSON.parse(cached);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                setVenuesList(parsed);
+              }
+            } catch {}
+          }
+        }
+
         const url = `/api/venues${selectedCity && selectedCity !== 'महाराष्ट्र (All)' ? `?city=${encodeURIComponent(selectedCity)}` : ''}`;
         const res = await fetch(url);
         if (res.ok) {
           const data = await res.json();
-          setVenuesList(data.venues || []);
+          const venuesData = data.venues || [];
+          setVenuesList(venuesData);
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.setItem(cacheKey, JSON.stringify(venuesData));
+            } catch {}
+          }
         }
       } catch (e) {
         console.warn('Failed to load venues', e);
@@ -307,7 +326,7 @@ export default function HomePage() {
     window.history.replaceState({}, '', '/');
   }, [events]);
 
-  // Handle Bottom Nav Changes
+  // Handle Bottom Nav Changes — Instant 0ms response
   const handleNavTabChange = (tab: NavTab) => {
     setActiveNavTab(tab);
     if (tab === 'home') {
@@ -316,16 +335,7 @@ export default function HomePage() {
     } else if (tab === 'explore') {
       setViewState('home');
     } else if (tab === 'tickets') {
-      fetch('/api/auth/flow/session')
-        .then((r) => r.json())
-        .then((data) => {
-          if (!data.user) {
-            setAuthModalOpen(true);
-          } else {
-            setViewState('my_tickets');
-          }
-        })
-        .catch(() => setViewState('my_tickets'));
+      setViewState('my_tickets');
     } else if (tab === 'offers') {
       setViewState('offers');
     } else if (tab === 'profile') {
@@ -1049,9 +1059,9 @@ export default function HomePage() {
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {venuesList.length > 0 ? (
-                      venuesList.map((v: any) => (
+                      venuesList.map((v: any, index: number) => (
                         <div
-                          key={v.id}
+                          key={`venue-${v.id}-${index}`}
                           className="bg-white rounded-2xl border border-[#E5E7EB] hover:border-orange-300 p-5 shadow-2xs hover:shadow-xs transition flex flex-col justify-between"
                         >
                           <div>
@@ -1597,13 +1607,7 @@ export default function HomePage() {
         </div>
       </footer>
 
-      {/* Mobile Bottom Navigation (Home, Explore, Tickets, Offers, Profile) */}
 
-      <MTBottomNavigation
-        activeTab={activeNavTab}
-        onTabChange={handleNavTabChange}
-        language={language}
-      />
 
       {/* MODAL 1: Interactive Seat Map */}
       {seatMapOpen && selectedEventForBooking && selectedSessionForBooking && (

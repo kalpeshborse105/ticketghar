@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Inter, Noto_Sans, Noto_Sans_Devanagari } from 'next/font/google';
 import './globals.css';
 import { TikitMitraFloatingBot } from '@/src/components/TikitMitraFloatingBot';
+import { GlobalMobileNav } from '@/src/components/ui/GlobalMobileNav';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -67,6 +68,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body suppressHydrationWarning>
         {children}
         <TikitMitraFloatingBot />
+        <GlobalMobileNav />
       </body>
     </html>
   );

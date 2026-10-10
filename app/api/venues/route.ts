@@ -179,6 +179,78 @@ const CANONICAL_MAHARASHTRA_VENUES = [
     facilitiesList: ['मध्यवर्ती चौक', 'AC सभागृह', 'पार्किंग'],
     showCount: 3,
   },
+
+  // Sangli
+  {
+    id: 14,
+    name: 'Deval Club Natyagruha',
+    nameMr: 'गोविंदराव टेंबे रंगमंच (देवल क्लब)',
+    address: 'Rajwada Chowk, Sangli',
+    city: 'Sangli',
+    totalCapacity: 750,
+    facilitiesList: ['नाट्य परंपरा', 'AC सभागृह', 'वाहनतळ'],
+    showCount: 3,
+  },
+
+  // Satara
+  {
+    id: 15,
+    name: 'Chhatrapati Shahu Rangmandir',
+    nameMr: 'छत्रपती शाहू रंगमंदिर',
+    address: 'Powai Naka, Satara',
+    city: 'Satara',
+    totalCapacity: 850,
+    facilitiesList: ['मध्यवर्ती स्थान', 'AC सभागृह', 'अत्याधुनिक ध्वनी'],
+    showCount: 3,
+  },
+
+  // Amravati
+  {
+    id: 16,
+    name: 'Sant Gadge Baba Sabhagruh',
+    nameMr: 'संत गाडगे बाबा सभागृह',
+    address: 'Camp Area, Amravati',
+    city: 'Amravati',
+    totalCapacity: 900,
+    facilitiesList: ['AC सभागृह', 'प्रशस्त व्यासपीठ', 'कॅफेटेरिया'],
+    showCount: 2,
+  },
+
+  // Nanded
+  {
+    id: 17,
+    name: 'Kusumagraj Natyagruha',
+    nameMr: 'कुसुमाग्रज नाट्यगृह',
+    address: 'Vazirabad, Nanded',
+    city: 'Nanded',
+    totalCapacity: 800,
+    facilitiesList: ['AC सभागृह', 'ध्वनी यंत्रणा', 'पार्किंग'],
+    showCount: 2,
+  },
+
+  // Ratnagiri
+  {
+    id: 18,
+    name: 'Swatantryaveer Savarkar Natyagruha',
+    nameMr: 'स्वातंत्र्यवीर सावरकर नाट्यगृह',
+    address: 'Thiba Palace Road, Ratnagiri',
+    city: 'Ratnagiri',
+    totalCapacity: 700,
+    facilitiesList: ['कोकण नाट्यकेंद्र', 'AC सभागृह', 'समुद्रकिनारा परिसर'],
+    showCount: 3,
+  },
+
+  // Jalgaon
+  {
+    id: 19,
+    name: 'Chhatrapati Sambhaji Raje Natyagruha',
+    nameMr: 'छत्रपती संभाजी राजे नाट्यगृह',
+    address: 'Mehrun, Jalgaon',
+    city: 'Jalgaon',
+    totalCapacity: 850,
+    facilitiesList: ['AC सभागृह', 'आधुनिक सोयी', 'वाहनतळ'],
+    showCount: 2,
+  },
 ];
 
 export async function GET(request: NextRequest) {
@@ -207,39 +279,39 @@ export async function GET(request: NextRequest) {
 
     const now = new Date();
 
-    // Map DB venues
-    const mappedDbVenues = await Promise.all(
-      dbVenues.map(async (v) => {
-        let showCount = 2;
+    // Batch fetch active show counts per venue in 1 single GROUP BY query
+    const showCountMap: Record<number, number> = {};
+    try {
+      const showCounts = await db
+        .select({
+          venueId: events.venueId,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(eventSessions)
+        .innerJoin(events, eq(eventSessions.eventId, events.id))
+        .where(gte(eventSessions.sessionStartTime, now))
+        .groupBy(events.venueId);
+
+      showCounts.forEach((sc) => {
+        if (sc.venueId) showCountMap[sc.venueId] = Number(sc.count);
+      });
+    } catch { }
+
+    // Map DB venues with batch show counts
+    const mappedDbVenues = dbVenues.map((v) => {
+      let parsedFacilities: string[] = ['AC सभागृह', 'वाहनतळ', 'कॅफेटेरिया'];
+      if (v.facilities) {
         try {
-          const sessions = await db
-            .select({ count: sql<number>`count(*)` })
-            .from(eventSessions)
-            .innerJoin(events, eq(eventSessions.eventId, events.id))
-            .where(
-              and(
-                eq(events.venueId, v.id),
-                gte(eventSessions.sessionStartTime, now)
-              )
-            );
-          const c = Number(sessions[0]?.count || 0);
-          if (c > 0) showCount = c;
+          parsedFacilities = typeof v.facilities === 'string' ? JSON.parse(v.facilities) : v.facilities;
         } catch { }
+      }
 
-        let parsedFacilities: string[] = ['AC सभागृह', 'वाहनतळ', 'कॅफेटेरिया'];
-        if (v.facilities) {
-          try {
-            parsedFacilities = typeof v.facilities === 'string' ? JSON.parse(v.facilities) : v.facilities;
-          } catch { }
-        }
-
-        return {
-          ...v,
-          showCount,
-          facilitiesList: parsedFacilities,
-        };
-      })
-    );
+      return {
+        ...v,
+        showCount: showCountMap[v.id] || 2,
+        facilitiesList: parsedFacilities,
+      };
+    });
 
     // Combine DB venues with canonical catalog
     const combinedVenues = [...mappedDbVenues];
@@ -276,7 +348,12 @@ export async function GET(request: NextRequest) {
     };
 
     let filteredVenues: any[] = [];
-    if (selectedCity && selectedCity !== 'महाराष्ट्र (All)' && selectedCity !== 'Maharashtra') {
+    if (
+      selectedCity &&
+      selectedCity !== 'महाराष्ट्र (All)' &&
+      selectedCity !== 'Maharashtra' &&
+      selectedCity.toLowerCase() !== 'all'
+    ) {
       const normalizedTarget = (MARATHI_TO_ENG_CITY[selectedCity] || selectedCity).toLowerCase();
       filteredVenues = combinedVenues.filter((v) => {
         if (!v.city) return false;
@@ -288,22 +365,38 @@ export async function GET(request: NextRequest) {
         );
       });
     } else {
-      // All Maharashtra: showcase iconic theatres
-      filteredVenues = combinedVenues;
+      // All Maharashtra: showcase up to 6 iconic theatres, strictly 1 theatre per city!
+      const seenCities = new Set<string>();
+      filteredVenues = [];
+      for (const v of combinedVenues) {
+        if (!v.city) continue;
+        const normCity = v.city.toLowerCase();
+        if (!seenCities.has(normCity)) {
+          seenCities.add(normCity);
+          filteredVenues.push(v);
+          if (filteredVenues.length >= 6) break;
+        }
+      }
     }
 
-    return NextResponse.json({
-      success: true,
-      city: selectedCity,
-      totalCount: filteredVenues.length,
-      venues: filteredVenues,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        city: selectedCity,
+        totalCount: filteredVenues.length,
+        venues: filteredVenues,
+      },
+      { headers: { 'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=120' } }
+    );
   } catch (error: any) {
     console.error('Error fetching venues:', error);
-    return NextResponse.json({
-      success: false,
-      error: error?.message || 'Failed to fetch venues',
-      venues: [],
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        success: false,
+        error: error?.message || 'Failed to fetch venues',
+        venues: [],
+      },
+      { status: 500 }
+    );
   }
 }

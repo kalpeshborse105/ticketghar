@@ -7,7 +7,7 @@ import { Language, translations } from '@/src/lib/i18n';
 export type NavTab = 'home' | 'explore' | 'tickets' | 'offers' | 'profile';
 
 interface MTBottomNavigationProps {
-  activeTab: NavTab;
+  activeTab?: NavTab | null;
   onTabChange: (tab: NavTab) => void;
   ticketBadgeCount?: number;
   language: Language;
