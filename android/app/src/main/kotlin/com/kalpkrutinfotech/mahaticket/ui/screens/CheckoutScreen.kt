@@ -30,6 +30,8 @@ import com.kalpkrutinfotech.mahaticket.ui.components.TheaterLoaderCard
 import com.kalpkrutinfotech.mahaticket.ui.viewmodel.BookingViewModel
 import com.kalpkrutinfotech.mahaticket.util.RazorpayPaymentManager
 import com.kalpkrutinfotech.mahaticket.util.UserSessionManager
+import com.kalpkrutinfotech.mahaticket.util.CurrencyUtils
+import com.kalpkrutinfotech.mahaticket.util.DateTimeUtils
 
 import androidx.activity.compose.BackHandler
 import kotlinx.coroutines.delay
@@ -41,9 +43,11 @@ fun CheckoutScreen(
     sessionId: Int = 1,
     eventId: Int = 1,
     bookingViewModel: BookingViewModel,
+    language: AppLanguage = AppLanguage.MARATHI,
     onNavigateBack: () -> Unit,
     onBookingSuccess: (String) -> Unit
 ) {
+    val isMarathi = language == AppLanguage.MARATHI
     val context = LocalContext.current
     val activity = context as? Activity
     val sessionManager = remember { UserSessionManager.getInstance(context) }
@@ -51,6 +55,24 @@ fun CheckoutScreen(
     val selectedSeats by bookingViewModel.selectedSeats.collectAsState()
     val holdResponse by bookingViewModel.holdResponse.collectAsState()
     val serverPricing = holdResponse?.pricing
+
+    // Use selected seats or active preserved seats from ViewModel
+    val effectiveSeats = remember(selectedSeats, bookingViewModel.activeSeatIds) {
+        if (selectedSeats.isNotEmpty()) selectedSeats else {
+            bookingViewModel.activeSeatIds.map { id ->
+                com.kalpkrutinfotech.mahaticket.model.SeatItem(
+                    seatId = id,
+                    sectionId = 1,
+                    rowLabel = "",
+                    seatNumber = 0,
+                    seatCode = "Seat #$id",
+                    price = 0,
+                    status = "held",
+                    isAccessible = false
+                )
+            }
+        }
+    }
 
     var customerName by remember { mutableStateOf(sessionManager.getName() ?: "") }
     var customerEmail by remember { mutableStateOf(sessionManager.getEmail() ?: "") }
@@ -65,19 +87,33 @@ fun CheckoutScreen(
     var phoneError by remember { mutableStateOf<String?>(null) }
     var emailError by remember { mutableStateOf<String?>(null) }
 
-    // 5-Minute Seat Hold Timer & Discard State
-    var timeLeftSeconds by remember { mutableIntStateOf(300) }
-    var isExpired by remember { mutableStateOf(false) }
+    // Absolute Clock-Derived Seat Hold Timer
+    val holdExpiresAt by bookingViewModel.holdExpiresAtEpochMs.collectAsState()
+    var timeLeftSeconds by remember { mutableIntStateOf(bookingViewModel.getRemainingHoldSeconds()) }
+    var isExpired by remember { mutableStateOf(bookingViewModel.isHoldExpired()) }
     var showDiscardDialog by remember { mutableStateOf(false) }
 
-    // Timer countdown: 5 minutes (300 seconds)
-    LaunchedEffect(Unit) {
-        while (timeLeftSeconds > 0) {
-            delay(1000L)
-            timeLeftSeconds--
+    // Recalculate remaining seconds immediately whenever screen unlocks or app returns from background
+    androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+        val remaining = bookingViewModel.getRemainingHoldSeconds()
+        timeLeftSeconds = remaining
+        if (!isProcessing && !bookingViewModel.isProcessingPayment && remaining <= 0 && holdExpiresAt > 0L) {
+            isExpired = true
+            bookingViewModel.releaseHold(sessionId, holdToken, effectiveSeats.map { it.seatId })
         }
-        isExpired = true
-        bookingViewModel.releaseHold(sessionId, holdToken, selectedSeats.map { it.seatId })
+    }
+
+    LaunchedEffect(holdExpiresAt) {
+        while (true) {
+            val remaining = bookingViewModel.getRemainingHoldSeconds()
+            timeLeftSeconds = remaining
+            if (!isProcessing && !bookingViewModel.isProcessingPayment && remaining <= 0 && holdExpiresAt > 0L) {
+                isExpired = true
+                bookingViewModel.releaseHold(sessionId, holdToken, effectiveSeats.map { it.seatId })
+                break
+            }
+            delay(1000L)
+        }
     }
 
     // Intercept system back button
@@ -543,18 +579,18 @@ fun CheckoutScreen(
 
                             Spacer(modifier = Modifier.height(12.dp))
 
-                            FareRow(label = "मूळ तिकीट दर (Base Ticket Amount)", amount = "₹${basePrice / 100}")
+                            FareRow(label = "मूळ तिकीट दर (Base Ticket Amount)", amount = CurrencyUtils.formatPaiseToRupees(basePrice))
                             if (convenienceFee > 0) {
-                                FareRow(label = "सुविधा शुल्क (Platform Fee)", amount = "₹${convenienceFee / 100}")
+                                FareRow(label = "सुविधा शुल्क (Platform Fee)", amount = CurrencyUtils.formatPaiseToRupees(convenienceFee))
                             }
                             if (gstAmount > 0) {
-                                FareRow(label = "लागू कर (GST)", amount = "₹${gstAmount / 100}")
+                                FareRow(label = "लागू कर (GST)", amount = CurrencyUtils.formatPaiseToRupees(gstAmount))
                             }
 
                             if (totalDiscount > 0) {
                                 FareRow(
                                     label = "सूट (Discount Applied)",
-                                    amount = "-₹${totalDiscount / 100}",
+                                    amount = "-${CurrencyUtils.formatPaiseToRupees(totalDiscount)}",
                                     amountColor = Color(0xFF16A34A)
                                 )
                             }
@@ -577,7 +613,7 @@ fun CheckoutScreen(
                                     color = TextPrimary
                                 )
                                 Text(
-                                    text = "₹${grandTotal / 100}",
+                                    text = CurrencyUtils.formatPaiseToRupees(grandTotal),
                                     fontSize = 20.sp,
                                     fontWeight = FontWeight.Black,
                                     color = MahaOrangeDeep
@@ -660,7 +696,7 @@ fun CheckoutScreen(
                         color = TextSecondary
                     )
                     Text(
-                        text = "₹${grandTotal / 100}",
+                        text = CurrencyUtils.formatPaiseToRupees(grandTotal),
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Black,
                         color = MahaOrangeDeep
@@ -669,19 +705,19 @@ fun CheckoutScreen(
 
                 Button(
                     onClick = {
-                        if (selectedSeats.isEmpty()) {
-                            errorMessage = "कोणतेही आसन निवडलेले नाही. कृपया मागे जाऊन आसन निवडा."
+                        if (effectiveSeats.isEmpty()) {
+                            errorMessage = if (isMarathi) "कोणतेही आसन निवडलेले नाही. कृपया मागे जाऊन आसन निवडा." else "No seats selected. Please go back and select seats."
                             return@Button
                         }
 
                         val cleanPhone = customerPhone.filter { it.isDigit() }.takeLast(10)
                         var hasError = false
                         if (customerName.isBlank()) {
-                            nameError = "कृपया आपले पूर्ण नाव प्रविष्ट करा."
+                            nameError = if (isMarathi) "कृपया आपले पूर्ण नाव प्रविष्ट करा." else "Please enter your full name."
                             hasError = true
                         }
                         if (cleanPhone.length != 10 || (cleanPhone.isNotEmpty() && cleanPhone.first() !in '6'..'9')) {
-                            phoneError = "कृपया वैध १०-अंकी भारतीय मोबाईल नंबर प्रविष्ट करा."
+                            phoneError = if (isMarathi) "कृपया वैध १०-अंकी भारतीय मोबाईल नंबर प्रविष्ट करा." else "Please enter a valid 10-digit phone number."
                             hasError = true
                         }
                         if (hasError) {
@@ -698,11 +734,12 @@ fun CheckoutScreen(
                             phone = cleanPhone
                         )
 
-                        val seatIds = selectedSeats.map { it.seatId }
+                        val seatIds = effectiveSeats.map { it.seatId }
 
                         bookingViewModel.createPaymentOrder(
                             sessionId = sessionId,
                             seatIds = seatIds,
+                            holdToken = holdToken,
                             couponCode = appliedCoupon,
                             onSuccess = { orderId, amount, keyId ->
                                 if (activity != null) {
@@ -711,7 +748,7 @@ fun CheckoutScreen(
                                         keyId = keyId,
                                         orderId = orderId,
                                         amountInPaise = amount,
-                                        eventName = "महाटिकिट - तिकीट आरक्षण",
+                                        eventName = if (isMarathi) "महाटिकिट - तिकीट आरक्षण" else "MahaTicket - Ticket Booking",
                                         customerName = customerName.trim(),
                                         customerEmail = customerEmail.trim().ifBlank { "customer@mahaticket.in" },
                                         customerPhone = cleanPhone,
@@ -726,6 +763,7 @@ fun CheckoutScreen(
                                                 razorpayPaymentId = paymentId,
                                                 razorpayOrderId = returnedOrderId ?: orderId,
                                                 razorpaySignature = signature,
+                                                seatIds = seatIds,
                                                 onSuccess = { orderNumber ->
                                                     isProcessing = false
                                                     onBookingSuccess(orderNumber)
@@ -738,17 +776,20 @@ fun CheckoutScreen(
                                         },
                                         onError = { code, errorMsg ->
                                             isProcessing = false
-                                            errorMessage = errorMsg ?: "पेमेंट अयशस्वी किंवा रद्द केले गेले."
+                                            bookingViewModel.isProcessingPayment = false
+                                            errorMessage = errorMsg ?: if (isMarathi) "पेमेंट अयशस्वी किंवा रद्द केले गेले." else "Payment cancelled or failed."
                                         }
                                     )
                                 } else {
                                     isProcessing = false
-                                    errorMessage = "पेमेंट विंडो उघडण्यात अयशस्वी. कृपया पुन्हा प्रयत्न करा."
+                                    bookingViewModel.isProcessingPayment = false
+                                    errorMessage = if (isMarathi) "पेमेंट विंडो उघडण्यात अयशस्वी. कृपया पुन्हा प्रयत्न करा." else "Unable to open payment. Please try again."
                                 }
                             },
                             onError = { orderErr ->
                                 isProcessing = false
-                                errorMessage = orderErr.ifBlank { "पेमेंट ऑर्डर तयार करण्यात त्रुटी. कृपया पुन्हा प्रयत्न करा." }
+                                bookingViewModel.isProcessingPayment = false
+                                errorMessage = orderErr.ifBlank { if (isMarathi) "पेमेंट ऑर्डर तयार करण्यात त्रुटी. कृपया पुन्हा प्रयत्न करा." else "Failed to create payment order." }
                             }
                         )
                     },

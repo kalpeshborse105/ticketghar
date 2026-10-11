@@ -41,6 +41,8 @@ import com.kalpkrutinfotech.mahaticket.theme.*
 import com.kalpkrutinfotech.mahaticket.ui.viewmodel.BookingViewModel
 import com.kalpkrutinfotech.mahaticket.ui.viewmodel.EventViewModel
 import com.kalpkrutinfotech.mahaticket.ui.viewmodel.SeatsUiState
+import com.kalpkrutinfotech.mahaticket.util.CurrencyUtils
+import com.kalpkrutinfotech.mahaticket.util.DateTimeUtils
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.seconds
 
@@ -51,20 +53,15 @@ fun SeatSelectionScreen(
     eventId: Int = 1,
     bookingViewModel: BookingViewModel,
     eventViewModel: EventViewModel? = null,
+    language: AppLanguage = AppLanguage.MARATHI,
     onNavigateBack: () -> Unit,
     onContinueToCheckout: (String, Int, Int) -> Unit
 ) {
+    val isMarathi = language == AppLanguage.MARATHI
     val context = LocalContext.current
 
     LaunchedEffect(sessionId, eventId) {
-        bookingViewModel.clearSelectedSeats()
         bookingViewModel.loadSeats(sessionId, eventId)
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            bookingViewModel.clearSelectedSeats()
-        }
     }
 
     val seatsState by bookingViewModel.seatsState.collectAsState()
@@ -89,18 +86,25 @@ fun SeatSelectionScreen(
         currentEvent?.sessions?.firstOrNull { it.id == sessionId }
     }
 
-    val playTitle = (currentEvent?.titleMr?.ifBlank { null } ?: currentEvent?.title ?: "नियम व अटी लागू")
-    val venueName = (currentEvent?.venue?.nameMr?.ifBlank { null } ?: currentEvent?.venue?.name ?: "बाळ गंधर्व रंगमंदिर, JM Road, पुणे")
-    val sessionTimeFormatted = remember(currentSession) {
-        if (currentSession != null) {
-            try {
-                val dt = java.time.ZonedDateTime.parse(currentSession.sessionStartTime)
-                dt.format(java.time.format.DateTimeFormatter.ofPattern("EEE, d MMM • hh:mm a"))
-            } catch (_: Exception) {
-                currentSession.sessionStartTime
-            }
+    val playTitle = remember(currentEvent, isMarathi) {
+        if (isMarathi) {
+            currentEvent?.titleMr?.ifBlank { null } ?: currentEvent?.title ?: "नियम व अटी लागू"
         } else {
-            "शनि १२ ऑक्टो • संध्या. ०५:००"
+            currentEvent?.title?.ifBlank { null } ?: currentEvent?.titleMr ?: "Terms & Conditions Apply"
+        }
+    }
+    val venueName = remember(currentEvent, isMarathi) {
+        if (isMarathi) {
+            currentEvent?.venue?.nameMr?.ifBlank { null } ?: currentEvent?.venue?.name ?: "बाळ गंधर्व रंगमंदिर, JM Road, पुणे"
+        } else {
+            currentEvent?.venue?.name?.ifBlank { null } ?: currentEvent?.venue?.nameMr ?: "Bal Gandharva Rang Mandir, JM Road, Pune"
+        }
+    }
+    val sessionTimeFormatted = remember(currentSession, isMarathi) {
+        if (currentSession != null) {
+            DateTimeUtils.formatEventCardDateTime(currentSession.sessionStartTime, isMarathi = isMarathi)
+        } else {
+            if (isMarathi) "शनि १२ ऑक्टो • सं. ०५:०० वा." else "Sat 12 Oct • 05:00 PM"
         }
     }
     val posterUrl = currentEvent?.posterUrl?.ifBlank { null } ?: "https://lh3.googleusercontent.com/aida-public/AB6AXuC_TP1g6NzMub9BsPMiIYRGYew4HUCw64AcpDdQl4x2P1uO3blr9nVguLRycyJYIfm4f7b3WQEFkzQ3mAs9FcMmChwXC_IcB7DYXEBcv8x8n3vyv-NsIBHMHsFFkq7wWKSEcuf_U3tXW6Modxno3R18KWHAMzwBt2x_Wem6p4azDxl0ko_7U1MBxAOs0gE7afz3m9MVYtiwyEk9t6JJgiSB4QNK8NXdnz9xs2OzHwk"
@@ -178,17 +182,39 @@ fun SeatSelectionScreen(
         )
     }
 
-    LaunchedEffect(selectedSeats.isNotEmpty()) {
+    val holdExpiresAt by bookingViewModel.holdExpiresAtEpochMs.collectAsState()
+    var isHoldExpired by remember { mutableStateOf(false) }
+
+    // Recalculate remaining seconds immediately whenever screen unlocks or app resumes
+    androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
         if (selectedSeats.isNotEmpty()) {
+            val remaining = bookingViewModel.getRemainingHoldSeconds()
+            countdownSeconds = remaining
+            if (remaining <= 0 && holdExpiresAt > 0L) {
+                isHoldExpired = true
+                bookingViewModel.releaseHold(sessionId)
+                android.widget.Toast.makeText(context, "जागा आरक्षणाची मुदत संपली आहे. कृपया पुन्हा आसने निवडा.", android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    LaunchedEffect(selectedSeats.isNotEmpty(), holdExpiresAt) {
+        if (selectedSeats.isNotEmpty()) {
+            isHoldExpired = false
+            while (true) {
+                val remaining = bookingViewModel.getRemainingHoldSeconds()
+                countdownSeconds = remaining
+                if (remaining <= 0 && holdExpiresAt > 0L) {
+                    isHoldExpired = true
+                    bookingViewModel.releaseHold(sessionId)
+                    android.widget.Toast.makeText(context, "सत्र समाप्त झाले. कृपया पुन्हा आसने निवडा.", android.widget.Toast.LENGTH_LONG).show()
+                    break
+                }
+                delay(1000L)
+            }
+        } else {
             countdownSeconds = 300
-            while (countdownSeconds > 0) {
-                delay(1.seconds)
-                countdownSeconds -= 1
-            }
-            if (countdownSeconds == 0) {
-                bookingViewModel.releaseHold()
-                android.widget.Toast.makeText(context, "सत्र समाप्त झाले. कृपया पुन्हा आसने निवडा.", android.widget.Toast.LENGTH_LONG).show()
-            }
+            isHoldExpired = false
         }
     }
 
@@ -295,17 +321,27 @@ fun SeatSelectionScreen(
                 selectedSeats = selectedSeats,
                 isHoldingLoading = isHoldingLoading,
                 holdErrorMessage = holdErrorMessage,
+                isHoldExpired = isHoldExpired,
+                isMarathi = isMarathi,
+                holdPricing = holdResponse?.pricing,
                 onDismissError = { holdErrorMessage = null },
                 onProceed = {
                     holdErrorMessage = null
+                    if (isHoldExpired) {
+                        holdErrorMessage = if (isMarathi) "आरक्षणाची मुदत संपली आहे. कृपया पुन्हा आसने निवडा." else "Reservation expired. Please select seats again."
+                        return@TheatricalStitchSeatBottomBar
+                    }
                     val existingToken = (holdResponse?.holdToken ?: holdResponse?.hold?.holdToken)?.takeIf { it.isNotBlank() }
-                    if (existingToken != null) {
+                    if (existingToken != null && !bookingViewModel.isHoldExpired()) {
                         onContinueToCheckout(existingToken, sessionId, eventId)
                     } else {
+                        val sessionPhone = com.kalpkrutinfotech.mahaticket.util.UserSessionManager.getInstance(context).getPhone()
+                        val validPhone = sessionPhone?.filter { it.isDigit() }?.takeLast(10)?.takeIf { it.length == 10 } ?: "9822012345"
+
                         isHoldingLoading = true
                         bookingViewModel.holdSeats(
                             sessionId = sessionId,
-                            phoneNumber = "9876543210",
+                            phoneNumber = validPhone,
                             onSuccess = { genToken ->
                                 isHoldingLoading = false
                                 val safeToken = genToken.ifBlank { "hold_${sessionId}_${System.currentTimeMillis()}" }
@@ -595,6 +631,8 @@ fun SeatSelectionScreen(
                 StitchSeatingSectionCard(
                     title = "बालकनी (Balcony)",
                     priceTag = "₹५०० प्रति आसन",
+                    sectionId = 1,
+                    defaultPricePaise = 50000,
                     rows = listOf("A", "B", "C"),
                     seatsPerBlock = Pair(4, 4),
                     allSeats = displaySeats,
@@ -609,6 +647,8 @@ fun SeatSelectionScreen(
                 StitchSeatingSectionCard(
                     title = "प्रथम वर्ग (Stall A)",
                     priceTag = "₹४०० प्रति आसन",
+                    sectionId = 2,
+                    defaultPricePaise = 40000,
                     rows = listOf("D", "E", "F", "G"),
                     seatsPerBlock = Pair(5, 5),
                     allSeats = displaySeats,
@@ -623,6 +663,8 @@ fun SeatSelectionScreen(
                 StitchSeatingSectionCard(
                     title = "द्वितीय वर्ग (Stall B)",
                     priceTag = "₹३०० प्रति आसन",
+                    sectionId = 3,
+                    defaultPricePaise = 30000,
                     rows = listOf("H", "J", "K"),
                     seatsPerBlock = Pair(4, 4),
                     allSeats = displaySeats,
@@ -664,6 +706,8 @@ fun SeatSelectionScreen(
 private fun StitchSeatingSectionCard(
     title: String,
     priceTag: String,
+    sectionId: Int = 1,
+    defaultPricePaise: Int = 40000,
     rows: List<String>,
     seatsPerBlock: Pair<Int, Int>,
     allSeats: List<SeatItem>,
@@ -722,6 +766,13 @@ private fun StitchSeatingSectionCard(
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 rows.forEach { rowLetter ->
+                    val rowPrice = when (rowLetter.uppercase()) {
+                        "A", "B", "C" -> 50000
+                        "D", "E", "F", "G" -> 40000
+                        "H", "J", "K" -> 30000
+                        else -> defaultPricePaise
+                    }
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -741,21 +792,27 @@ private fun StitchSeatingSectionCard(
                             for (num in 1..seatsPerBlock.first) {
                                 val code = "$rowLetter$num"
                                 val formattedCode = String.format("%s%02d", rowLetter, num)
-                                val item = allSeats.firstOrNull { 
+                                val rawItem = allSeats.firstOrNull { 
                                     it.seatCode.equals(code, ignoreCase = true) ||
                                     it.seatCode.endsWith(code, ignoreCase = true) ||
                                     it.seatCode.endsWith(formattedCode, ignoreCase = true) ||
                                     (it.rowLabel.equals(rowLetter, ignoreCase = true) && it.seatNumber == num)
-                                } ?: SeatItem(
-                                    seatId = Math.abs(code.hashCode()) % 1000 + 1,
-                                    sectionId = 1,
-                                    rowLabel = rowLetter,
-                                    seatNumber = num,
-                                    seatCode = code,
-                                    price = 40000,
-                                    status = if (code in listOf("A3", "A6", "A7", "B1", "B7", "B8", "C3", "C4", "D1", "D2", "D8", "D9", "E3", "E4", "E6", "F4", "F5", "F6", "F7", "G1", "G2", "G3", "H4", "H5", "J1", "J8", "K3", "K4", "K7")) "booked" else "available",
-                                    isAccessible = false
-                                )
+                                }
+                                val item = if (rawItem != null) {
+                                    if (rawItem.price > 0) rawItem else rawItem.copy(price = rowPrice, sectionId = sectionId, sectionName = title)
+                                } else {
+                                    SeatItem(
+                                        seatId = Math.abs(code.hashCode()) % 1000 + 1,
+                                        sectionId = sectionId,
+                                        rowLabel = rowLetter,
+                                        seatNumber = num,
+                                        seatCode = code,
+                                        price = rowPrice,
+                                        status = if (code in listOf("A3", "A6", "A7", "B1", "B7", "B8", "C3", "C4", "D1", "D2", "D8", "D9", "E3", "E4", "E6", "F4", "F5", "F6", "F7", "G1", "G2", "G3", "H4", "H5", "J1", "J8", "K3", "K4", "K7")) "booked" else "available",
+                                        isAccessible = false,
+                                        sectionName = title
+                                    )
+                                }
                                 val isSelected = selectedSeats.any { it.seatCode == item.seatCode || it.seatId == item.seatId }
                                 StitchSeatButton(seat = item, isSelected = isSelected, onClick = { onSeatClick(item) })
                             }
@@ -776,21 +833,27 @@ private fun StitchSeatingSectionCard(
                             for (num in startNum..endNum) {
                                 val code = "$rowLetter$num"
                                 val formattedCode = String.format("%s%02d", rowLetter, num)
-                                val item = allSeats.firstOrNull { 
+                                val rawItem = allSeats.firstOrNull { 
                                     it.seatCode.equals(code, ignoreCase = true) ||
                                     it.seatCode.endsWith(code, ignoreCase = true) ||
                                     it.seatCode.endsWith(formattedCode, ignoreCase = true) ||
                                     (it.rowLabel.equals(rowLetter, ignoreCase = true) && it.seatNumber == num)
-                                } ?: SeatItem(
-                                    seatId = Math.abs(code.hashCode()) % 1000 + 1,
-                                    sectionId = 1,
-                                    rowLabel = rowLetter,
-                                    seatNumber = num,
-                                    seatCode = code,
-                                    price = 40000,
-                                    status = if (code in listOf("A3", "A6", "A7", "B1", "B7", "B8", "C3", "C4", "D1", "D2", "D8", "D9", "E3", "E4", "E6", "F4", "F5", "F6", "F7", "G1", "G2", "G3", "H4", "H5", "J1", "J8", "K3", "K4", "K7")) "booked" else "available",
-                                    isAccessible = false
-                                )
+                                }
+                                val item = if (rawItem != null) {
+                                    if (rawItem.price > 0) rawItem else rawItem.copy(price = rowPrice, sectionId = sectionId, sectionName = title)
+                                } else {
+                                    SeatItem(
+                                        seatId = Math.abs(code.hashCode()) % 1000 + 1,
+                                        sectionId = sectionId,
+                                        rowLabel = rowLetter,
+                                        seatNumber = num,
+                                        seatCode = code,
+                                        price = rowPrice,
+                                        status = if (code in listOf("A3", "A6", "A7", "B1", "B7", "B8", "C3", "C4", "D1", "D2", "D8", "D9", "E3", "E4", "E6", "F4", "F5", "F6", "F7", "G1", "G2", "G3", "H4", "H5", "J1", "J8", "K3", "K4", "K7")) "booked" else "available",
+                                        isAccessible = false,
+                                        sectionName = title
+                                    )
+                                }
                                 val isSelected = selectedSeats.any { it.seatCode == item.seatCode || it.seatId == item.seatId }
                                 StitchSeatButton(seat = item, isSelected = isSelected, onClick = { onSeatClick(item) })
                             }
@@ -873,6 +936,9 @@ private fun TheatricalStitchSeatBottomBar(
     selectedSeats: List<SeatItem>,
     isHoldingLoading: Boolean,
     holdErrorMessage: String?,
+    isHoldExpired: Boolean = false,
+    isMarathi: Boolean = true,
+    holdPricing: com.kalpkrutinfotech.mahaticket.data.api.PricingData? = null,
     onDismissError: () -> Unit,
     onProceed: () -> Unit
 ) {
@@ -923,8 +989,8 @@ private fun TheatricalStitchSeatBottomBar(
             ) {
                 val seatCount = selectedSeats.size
                 val seatCodes = selectedSeats.joinToString(", ") { it.seatCode }
-                val basePrice = selectedSeats.sumOf { it.price } / 100
-                val displayBase = if (basePrice > 0) basePrice else (seatCount * 400)
+                val basePricePaise = selectedSeats.sumOf { it.price }
+                val displayBase = if (basePricePaise > 0) CurrencyUtils.formatPaiseToRupees(basePricePaise) else "₹०"
 
                 Column {
                     Row(
@@ -938,15 +1004,25 @@ private fun TheatricalStitchSeatBottomBar(
                                 .background(MahaOrange)
                         )
                         Text(
-                            text = if (seatCount > 0) "$seatCount आसने निवडली ($seatCodes)" else "कृपया आसने निवडा",
+                            text = if (seatCount > 0) {
+                                if (isMarathi) "$seatCount आसने निवडली ($seatCodes)" else "$seatCount Seats Selected ($seatCodes)"
+                            } else {
+                                if (isMarathi) "कृपया आसने निवडा" else "Please select seats"
+                            },
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = TextPrimary
                         )
                     }
                     Text(
-                        text = if (seatCount > 0) "₹$displayBase + जीएसटी (GST)" else "किंमत आसन निवडीवर आधारित",
-                        fontSize = 14.5.sp,
+                        text = if (holdPricing != null && holdPricing.grandTotal > 0) {
+                            if (isMarathi) "एकूण: ${CurrencyUtils.formatPaiseToRupees(holdPricing.grandTotal)} (करांसह)" else "Total: ${CurrencyUtils.formatPaiseToRupees(holdPricing.grandTotal)} (incl. tax)"
+                        } else if (seatCount > 0) {
+                            if (isMarathi) "$displayBase + सुविधा शुल्क व GST" else "$displayBase + Fees & GST"
+                        } else {
+                            if (isMarathi) "किंमत आसन निवडीवर आधारित" else "Price based on seat tier"
+                        },
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         color = MahaOrangeDeep
                     )
@@ -954,7 +1030,7 @@ private fun TheatricalStitchSeatBottomBar(
 
                 Button(
                     onClick = onProceed,
-                    enabled = seatCount > 0 && !isHoldingLoading,
+                    enabled = seatCount > 0 && !isHoldingLoading && !isHoldExpired,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MahaOrange,
                         disabledContainerColor = Color(0xFFE2E8F0)
@@ -975,7 +1051,7 @@ private fun TheatricalStitchSeatBottomBar(
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Text(
-                                text = "पुढे जा",
+                                text = if (isMarathi) "पुढे जा" else "Continue",
                                 fontSize = 13.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White

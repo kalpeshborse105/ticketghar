@@ -11,7 +11,7 @@
     <!-- Splash Screen Theme (Android 12+) -->
     <style name="Theme.MahaTicket.Splash" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/maha_background</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_logo</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_icon</item>
         <item name="windowSplashScreenAnimationDuration">300</item>
         <item name="postSplashScreenTheme">@style/Theme.MahaTicket</item>
     </style>

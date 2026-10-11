@@ -38,6 +38,7 @@ class MahaTicketApp : Application() {
 
         // Initialize user session
         sessionManager = com.kalpkrutinfotech.mahaticket.util.UserSessionManager.getInstance(this)
+        RetrofitClient.init(sessionManager)
         
         // Initialize repositories
         val apiService = RetrofitClient.apiService

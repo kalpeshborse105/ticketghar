@@ -82,9 +82,14 @@ fun OrganizerScreen(
                                 }
                             }
 
+                            val context = androidx.compose.ui.platform.LocalContext.current
+                            val organizerName = remember(context) {
+                                val n = com.kalpkrutinfotech.mahaticket.util.UserSessionManager.getInstance(context).getName()
+                                if (!n.isNullOrBlank()) n else "महालक्ष्मी थिएटर्स"
+                            }
                             Column {
                                 Text(
-                                    text = "नमस्कार, महालक्ष्मी थिएटर्स",
+                                    text = "नमस्कार, $organizerName",
                                     fontSize = 17.sp,
                                     fontWeight = FontWeight.Black,
                                     color = TextPrimary
@@ -216,15 +221,16 @@ fun OrganizerScreen(
                                 }
                             }
                             Spacer(modifier = Modifier.height(6.dp))
+                            val localTotal = bookings.sumOf { it.totalAmount }
                             Text(
-                                text = "₹२,८४,५००",
+                                text = if (localTotal > 0) "₹$localTotal" else "₹० (नोंदणी बाकी)",
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Black,
                                 color = TextPrimary
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "+१४% या आठवड्यात",
+                                text = if (bookings.isNotEmpty()) "स्थानिक उपकरण नोंदी" else "नवीन बुकिंग सुरू आहे",
                                 fontSize = 10.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF16A34A)
@@ -262,15 +268,16 @@ fun OrganizerScreen(
                                 }
                             }
                             Spacer(modifier = Modifier.height(6.dp))
+                            val totalTickets = bookings.sumOf { it.ticketCount }
                             Text(
-                                text = "१,४२०",
+                                text = "$totalTickets",
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Black,
                                 color = TextPrimary
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "९२% सरासरी ऑक्युपन्सी",
+                                text = "स्थानिक यशस्वी नोंदी",
                                 fontSize = 10.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = TextSecondary
@@ -314,14 +321,14 @@ fun OrganizerScreen(
                             }
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = "०४ शोज",
+                                text = "${events.size} शोज",
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Black,
                                 color = TextPrimary
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "बालगंधर्व व यशवंतराव",
+                                text = "थेट उपलब्ध कार्यक्रम",
                                 fontSize = 10.5.sp,
                                 color = TextSecondary
                             )
@@ -359,14 +366,14 @@ fun OrganizerScreen(
                             }
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = "₹४,५०,०००",
+                                text = "वेब पोर्टल",
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Black,
                                 color = TextPrimary
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "पुढील पेआउट: मंगळवार",
+                                text = "तपशील वेब पोर्टल द्वारे उपलब्ध",
                                 fontSize = 10.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MahaOrange
@@ -501,7 +508,7 @@ fun OrganizerScreen(
                             }
                             Column {
                                 Text("शोज व्यवस्थापन", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                                Text("Manage Shows (४)", fontSize = 10.sp, color = TextSecondary)
+                                Text("Manage Shows (${events.size})", fontSize = 10.sp, color = TextSecondary)
                             }
                         }
                     }
@@ -542,8 +549,14 @@ fun OrganizerScreen(
             }
         }
 
-        // 4. Gate Scanner & Attendance Tracker Module (७८% दाखल)
+        // 4. Gate Scanner & Attendance Tracker Module
         item {
+            val totalBookedTickets = bookings.sumOf { it.ticketCount }
+            val checkedInCount = bookings.filter { it.isCheckedIn }.sumOf { it.ticketCount }
+            val attendancePct = if (totalBookedTickets > 0) (checkedInCount * 100 / totalBookedTickets) else 0
+            val pendingCount = (totalBookedTickets - checkedInCount).coerceAtLeast(0)
+            val activeEventTitle = events.firstOrNull()?.titleMr ?: "सक्रिय शो"
+
             Surface(
                 color = Color.White,
                 shape = RoundedCornerShape(20.dp),
@@ -565,7 +578,7 @@ fun OrganizerScreen(
                                 color = TextPrimary
                             )
                             Text(
-                                text = "रात्रीचा शो: 'नियम व अटी लागू'",
+                                text = "थेट शो: '$activeEventTitle'",
                                 fontSize = 11.5.sp,
                                 color = TextSecondary
                             )
@@ -593,7 +606,7 @@ fun OrganizerScreen(
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("७८%", fontSize = 18.sp, fontWeight = FontWeight.Black, color = TextPrimary)
+                                    Text("$attendancePct%", fontSize = 18.sp, fontWeight = FontWeight.Black, color = TextPrimary)
                                     Text("दाखल", fontSize = 9.sp, color = TextSecondary)
                                 }
                             }
@@ -601,13 +614,13 @@ fun OrganizerScreen(
 
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "४८४ / ६२० प्रेक्षक",
+                                text = "$checkedInCount / $totalBookedTickets प्रेक्षक",
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = TextPrimary
                             )
                             Text(
-                                text = "सभागृहात दाखल झाले आहेत",
+                                text = if (totalBookedTickets > 0) "सभागृहात दाखल झाले आहेत" else "नोंदणीकृत प्रेक्षक",
                                 fontSize = 11.5.sp,
                                 color = TextSecondary
                             )
@@ -617,7 +630,7 @@ fun OrganizerScreen(
                                 shape = RoundedCornerShape(8.dp)
                             ) {
                                 Text(
-                                    text = "१३६ अजून येणे बाकी",
+                                    text = "$pendingCount अजून येणे बाकी",
                                     fontSize = 10.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MahaOrange,
@@ -638,20 +651,20 @@ fun OrganizerScreen(
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("गेट १ (ऑडिटोरियम)", fontSize = 10.sp, color = TextSecondary)
-                            Text("३१२", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                            Text("६४% वाटा", fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFF16A34A))
+                            Text("गेट १ (मुख्य प्रवेश)", fontSize = 10.sp, color = TextSecondary)
+                            Text("$checkedInCount", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                            Text("दाखल", fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFF16A34A))
                         }
                         Box(modifier = Modifier.width(1.dp).height(30.dp).background(MahaBorder))
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("गेट २ (बाल्कनी)", fontSize = 10.sp, color = TextSecondary)
-                            Text("१७२", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                            Text("३६% वाटा", fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFF16A34A))
+                            Text("एकूण जागा", fontSize = 10.sp, color = TextSecondary)
+                            Text("$totalBookedTickets", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                            Text("बुकिंग", fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFF16A34A))
                         }
                         Box(modifier = Modifier.width(1.dp).height(30.dp).background(MahaBorder))
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text("बाकी प्रेक्षक", fontSize = 10.sp, color = TextSecondary)
-                            Text("१३६", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MahaOrangeDeep)
+                            Text("$pendingCount", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MahaOrangeDeep)
                             Text("प्रतिक्षित", fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = MahaOrange)
                         }
                     }

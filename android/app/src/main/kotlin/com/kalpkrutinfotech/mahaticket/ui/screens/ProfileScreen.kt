@@ -2,6 +2,9 @@ package com.kalpkrutinfotech.mahaticket.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -22,26 +25,67 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.kalpkrutinfotech.mahaticket.BuildConfig
+import com.kalpkrutinfotech.mahaticket.MahaTicketApp
 import com.kalpkrutinfotech.mahaticket.theme.*
+import kotlinx.coroutines.launch
 
 @Composable
 fun ProfileScreen(
+    language: AppLanguage = AppLanguage.MARATHI,
+    onLanguageToggle: (AppLanguage) -> Unit = {},
     onNavigateToLogin: () -> Unit = {},
     onNavigateToTickets: () -> Unit = {},
     onNavigateToLegal: (String) -> Unit = {}
 ) {
+    val isMarathi = language == AppLanguage.MARATHI
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val sessionManager = remember { com.kalpkrutinfotech.mahaticket.util.UserSessionManager.getInstance(context) }
     val isLoggedIn by sessionManager.isLoggedIn.collectAsState()
     val userName by sessionManager.userName.collectAsState()
     val userPhone by sessionManager.userPhone.collectAsState()
     val userEmail by sessionManager.userEmail.collectAsState()
+    val userAvatar by sessionManager.userAvatar.collectAsState()
+
+    var showEditProfileDialog by remember { mutableStateOf(false) }
+
+    // Image Picker Launcher for Profile Photo Upload
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                val inputStream = context.contentResolver.openInputStream(uri)
+                val avatarFile = java.io.File(context.filesDir, "avatar_${System.currentTimeMillis()}.jpg")
+                avatarFile.outputStream().use { output ->
+                    inputStream?.copyTo(output)
+                }
+                val localAvatarUri = avatarFile.toURI().toString()
+                sessionManager.saveAvatarUrl(localAvatarUri)
+
+                // Sync with Next.js profile API
+                coroutineScope.launch {
+                    val app = context.applicationContext as? MahaTicketApp
+                    val result = app?.authRepository?.updateProfile(
+                        fullName = userName,
+                        phoneNumber = userPhone,
+                        avatarUrl = localAvatarUri
+                    )
+                    Toast.makeText(context, "प्रोफाइल फोटो यशस्वीरीत्या बदलला", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                sessionManager.saveAvatarUrl(uri.toString())
+            }
+        }
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -66,25 +110,69 @@ fun ProfileScreen(
                         .padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    // Profile Avatar with Camera Upload Action
                     Box(
                         modifier = Modifier
-                            .size(72.dp)
-                            .clip(CircleShape)
-                            .background(MahaWarm)
-                            .border(2.dp, MahaOrange, CircleShape),
+                            .size(80.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = if (isLoggedIn) "🎭" else "👤",
-                            fontSize = 32.sp
-                        )
+                        Surface(
+                            modifier = Modifier
+                                .size(76.dp)
+                                .clip(CircleShape)
+                                .clickable { imagePickerLauncher.launch("image/*") },
+                            shape = CircleShape,
+                            color = MahaWarm,
+                            border = BorderStroke(2.dp, MahaOrange)
+                        ) {
+                            if (!userAvatar.isNullOrBlank()) {
+                                AsyncImage(
+                                    model = userAvatar,
+                                    contentDescription = "Profile Photo",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    Text(
+                                        text = if (isLoggedIn) "🎭" else "👤",
+                                        fontSize = 32.sp
+                                    )
+                                }
+                            }
+                        }
+
+                        // Camera Upload Icon Badge
+                        Surface(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .size(26.dp)
+                                .clip(CircleShape)
+                                .clickable { imagePickerLauncher.launch("image/*") },
+                            color = MahaOrange,
+                            shape = CircleShape,
+                            border = BorderStroke(1.5.dp, Color.White),
+                            shadowElevation = 2.dp
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.CameraAlt,
+                                    contentDescription = "Change Photo",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))
 
                     Text(
                         text = if (isLoggedIn) (userName?.ifBlank { null } ?: "महाटिकिट सदस्य") else "महाटिकिट वापरकर्ता",
-                        fontSize = 17.sp,
+                        fontSize = 17.5.sp,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary
                     )
@@ -146,14 +234,30 @@ fun ProfileScreen(
                             Text("लॉगिन करा", fontWeight = FontWeight.Bold, color = Color.White)
                         }
                     } else {
-                        OutlinedButton(
-                            onClick = { sessionManager.clearSession() },
-                            shape = RoundedCornerShape(8.dp),
-                            border = BorderStroke(1.dp, MahaOrange),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MahaOrange),
-                            modifier = Modifier.fillMaxWidth()
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Text("लॉगआउट करा", fontWeight = FontWeight.Bold, color = MahaOrange)
+                            OutlinedButton(
+                                onClick = { showEditProfileDialog = true },
+                                shape = RoundedCornerShape(8.dp),
+                                border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(15.dp), tint = TextPrimary)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("नाव बदला", fontWeight = FontWeight.SemiBold, color = TextPrimary, fontSize = 12.sp)
+                            }
+
+                            OutlinedButton(
+                                onClick = { sessionManager.clearSession() },
+                                shape = RoundedCornerShape(8.dp),
+                                border = BorderStroke(1.dp, MahaOrange),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MahaOrange),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("लॉगआउट करा", fontWeight = FontWeight.Bold, color = MahaOrange, fontSize = 12.sp)
+                            }
                         }
                     }
                 }
@@ -172,22 +276,25 @@ fun ProfileScreen(
                 Column {
                     CinemaProfileMenuItem(
                         icon = Icons.Default.ConfirmationNumber,
-                        title = "माझी तिकिटे",
-                        subtitle = "बुक केलेली सर्व तिकिटे व ई-पास पहा",
+                        title = if (isMarathi) "माझी तिकिटे" else "My Tickets",
+                        subtitle = if (isMarathi) "बुक केलेली सर्व तिकिटे व ई-पास पहा" else "View all booked tickets and e-passes",
                         onClick = onNavigateToTickets
                     )
                     HorizontalDivider(color = MahaBorder, thickness = 0.5.dp)
                     CinemaProfileMenuItem(
                         icon = Icons.Default.Translate,
-                        title = "अ‍ॅप भाषा",
-                        subtitle = "मराठी (प्राथमिक भाषा) / English",
-                        onClick = {}
+                        title = if (isMarathi) "अ‍ॅप भाषा (App Language)" else "App Language (अ‍ॅप भाषा)",
+                        subtitle = if (isMarathi) "मराठी (सक्रिय) • इंग्रजीसाठी येथे टॅप करा" else "English (Active) • Tap to switch to Marathi",
+                        onClick = {
+                            val next = if (isMarathi) AppLanguage.ENGLISH else AppLanguage.MARATHI
+                            onLanguageToggle(next)
+                        }
                     )
                     HorizontalDivider(color = MahaBorder, thickness = 0.5.dp)
                     CinemaProfileMenuItem(
                         icon = Icons.Default.Notifications,
-                        title = "सूचना व स्मरणपत्रे",
-                        subtitle = "नवीन कार्यक्रम आणि शो स्मरणपत्रे",
+                        title = if (isMarathi) "सूचना व स्मरणपत्रे" else "Notifications & Alerts",
+                        subtitle = if (isMarathi) "नवीन कार्यक्रम आणि शो स्मरणपत्रे" else "Show reminders and new event alerts",
                         onClick = {}
                     )
                 }
@@ -314,6 +421,90 @@ fun ProfileScreen(
                     color = TextSecondary,
                     modifier = Modifier.padding(top = 2.dp)
                 )
+            }
+        }
+    }
+
+    if (showEditProfileDialog) {
+        var editName by remember { mutableStateOf(userName ?: "") }
+        var editPhone by remember { mutableStateOf(userPhone ?: "") }
+        var isSaving by remember { mutableStateOf(false) }
+
+        androidx.compose.ui.window.Dialog(onDismissRequest = { if (!isSaving) showEditProfileDialog = false }) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = Color.White,
+                shadowElevation = 8.dp,
+                modifier = Modifier.fillMaxWidth().padding(8.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Text(
+                        text = "प्रोफाइल माहिती बदला",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+
+                    OutlinedTextField(
+                        value = editName,
+                        onValueChange = { editName = it },
+                        label = { Text("पूर्ण नाव (Full Name)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = editPhone,
+                        onValueChange = { editPhone = it },
+                        label = { Text("मोबाईल क्रमांक (Phone Number)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(
+                            onClick = { showEditProfileDialog = false },
+                            enabled = !isSaving
+                        ) {
+                            Text("रद्द करा", color = TextSecondary)
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        Button(
+                            onClick = {
+                                isSaving = true
+                                coroutineScope.launch {
+                                    val app = context.applicationContext as? MahaTicketApp
+                                    app?.authRepository?.updateProfile(
+                                        fullName = editName.trim(),
+                                        phoneNumber = editPhone.trim(),
+                                        avatarUrl = userAvatar
+                                    )
+                                    sessionManager.saveProfile(editName.trim(), editPhone.trim(), userAvatar)
+                                    isSaving = false
+                                    showEditProfileDialog = false
+                                    Toast.makeText(context, "माहिती यशस्वीरीत्या जतन केली", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = MahaOrange),
+                            enabled = !isSaving
+                        ) {
+                            if (isSaving) {
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
+                            } else {
+                                Text("जतन करा", color = Color.White, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
             }
         }
     }

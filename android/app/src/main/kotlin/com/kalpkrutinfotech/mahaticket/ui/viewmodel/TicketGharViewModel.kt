@@ -9,6 +9,7 @@ import com.kalpkrutinfotech.mahaticket.model.*
 import com.kalpkrutinfotech.mahaticket.theme.AppLanguage
 import com.kalpkrutinfotech.mahaticket.theme.UserRole
 import com.kalpkrutinfotech.mahaticket.util.NetworkMonitor
+import com.kalpkrutinfotech.mahaticket.util.UserSessionManager
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,11 +22,14 @@ class TicketGharViewModel(
     private val eventRepository: EventRepository? = null,
     private val bookingRepository: BookingRepository? = null,
     private val networkMonitor: NetworkMonitor? = null,
+    private val sessionManager: UserSessionManager? = null,
     val geminiService: GeminiChatService = GeminiChatService()
 ) : ViewModel() {
 
-    // Language setting (Marathi default as required by user)
-    private val _language = MutableStateFlow(AppLanguage.MARATHI)
+    // Language setting (persisted preference restored on launch)
+    private val _language = MutableStateFlow(
+        if (sessionManager?.getLanguage() == "en") AppLanguage.ENGLISH else AppLanguage.MARATHI
+    )
     val language: StateFlow<AppLanguage> = _language.asStateFlow()
 
     // Active Screen Tab
@@ -190,6 +194,7 @@ class TicketGharViewModel(
 
     fun setLanguage(lang: AppLanguage) {
         _language.value = lang
+        sessionManager?.saveLanguage(if (lang == AppLanguage.ENGLISH) "en" else "mr")
     }
 
     fun setTab(tab: AppTab) {
@@ -507,12 +512,22 @@ class TicketGharViewModel(
                         )
                     },
                     onFailure = { err ->
-                        performLocalValidation(qrString, scannedBy, err.localizedMessage)
+                        _scannerResult.value = QrValidationResult(
+                            isValid = false,
+                            isAlreadyCheckedIn = false,
+                            messageEn = err.localizedMessage ?: "Network connection error. Server verification failed.",
+                            messageMr = "नेटवर्क त्रुटी: सर्व्हरशी संपर्क होऊ शकला नाही. कृपया इंटरनेट तपासा."
+                        )
                     }
                 )
             }
         } else {
-            performLocalValidation(qrString, scannedBy, null)
+            _scannerResult.value = QrValidationResult(
+                isValid = false,
+                isAlreadyCheckedIn = false,
+                messageEn = "Scanner service unavailable. Please check connectivity.",
+                messageMr = "स्कॅनर सेवा उपलब्ध नाही. कृपया इंटरनेट कनेक्शन तपासा."
+            )
         }
     }
 

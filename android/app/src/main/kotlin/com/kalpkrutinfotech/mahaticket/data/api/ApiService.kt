@@ -36,6 +36,11 @@ interface MahaTicketApiService {
         @Body request: ConfirmBookingRequest
     ): Response<BookingConfirmationResponse>
 
+    @POST("/api/payments/verify")
+    suspend fun verifyPayment(
+        @Body request: VerifyPaymentRequest
+    ): Response<VerifyPaymentResponse>
+
     @POST("/api/scanner/verify")
     suspend fun verifyTicketScan(
         @Body request: VerifyScanRequest
@@ -50,6 +55,11 @@ interface MahaTicketApiService {
     suspend fun getOrderDetails(
         @Query("orderNumber") orderNumber: String
     ): Response<OrdersListResponse>
+
+    @GET("/api/tickets/{ticketCode}")
+    suspend fun getTicketDetails(
+        @Path("ticketCode") ticketCode: String
+    ): Response<SingleTicketDetailsResponse>
     
     @GET("/api/coupons")
     suspend fun getCoupons(): Response<CouponsResponse>
@@ -83,6 +93,11 @@ interface MahaTicketApiService {
     suspend fun loginWithPassword(
         @Body request: LoginPasswordRequest
     ): Response<AuthFlowResponse>
+
+    @POST("/api/auth/flow/profile")
+    suspend fun updateProfile(
+        @Body request: UpdateProfileRequest
+    ): Response<UpdateProfileResponse>
 
     @GET("/api/announcements")
     suspend fun getAnnouncements(
@@ -143,7 +158,9 @@ data class EventResponse(
     val cast: String? = null,
     val director: String? = null,
     val venue: VenueResponse? = null,
-    val sessions: List<SessionResponse>? = null
+    val sessions: List<SessionResponse>? = null,
+    val rating: Double? = null,
+    val ratingCount: Int? = null
 )
 
 data class VenueResponse(
@@ -234,11 +251,14 @@ data class HoldSeatsResponse(
 
 data class HoldResultData(
     val holdToken: String? = null,
-    val expiresAt: String? = null,
+    @SerializedName("holdExpiresAt", alternate = ["expiresAt"])
+    val holdExpiresAt: String? = null,
     val seatCount: Int = 0,
     @SerializedName("ticketFaceValueTotal", alternate = ["faceValueTotal"])
     val faceValueTotal: Int = 0
-)
+) {
+    val expiresAt: String? get() = holdExpiresAt
+}
 
 data class PricingData(
     @SerializedName("ticketFaceValueTotal", alternate = ["faceValueTotal"])
@@ -310,6 +330,42 @@ data class OrderResponse(
     val session: SessionResponse? = null,
     val tickets: List<TicketResponse>? = null,
     val createdAt: String? = null
+)
+
+data class SingleTicketDetailsResponse(
+    val valid: Boolean = false,
+    val ticket: TicketDetailsData? = null,
+    val order: OrderDetailsData? = null,
+    val event: EventResponse? = null,
+    val venue: VenueResponse? = null,
+    val session: SessionResponse? = null,
+    val downloadPdfUrl: String? = null,
+    val viewPdfUrl: String? = null,
+    val publicShareUrl: String? = null,
+    val error: String? = null
+)
+
+data class TicketDetailsData(
+    val ticketCode: String,
+    val seatCode: String,
+    val attendeeName: String? = null,
+    val status: String = "valid",
+    val faceValue: Int = 0,
+    val qrPayload: String? = null
+)
+
+data class OrderDetailsData(
+    val id: Int? = null,
+    val orderNumber: String,
+    val email: String? = null,
+    val phone: String? = null,
+    val userName: String? = null,
+    val paymentStatus: String = "captured",
+    val orderStatus: String = "confirmed",
+    val ticketCount: Int = 1,
+    val grandTotal: Int = 0,
+    val seats: List<String>? = null,
+    val seatsSummary: String? = null
 )
 
 data class CouponsResponse(
@@ -396,6 +452,8 @@ data class ScannedTicketDetails(
 data class CreatePaymentOrderRequest(
     val sessionId: Int,
     val seatIds: List<Int>,
+    @SerializedName("holdToken") val holdToken: String? = null,
+    @SerializedName("userIdStr") val userIdStr: String? = null,
     val couponCode: String? = null
 )
 
@@ -405,7 +463,29 @@ data class CreatePaymentOrderResponse(
     val currency: String = "INR",
     val keyId: String? = null,
     val receipt: String? = null,
+    @SerializedName("holdExpiresAt") val holdExpiresAt: String? = null,
     val pricing: PricingData? = null,
+    val error: String? = null
+)
+
+data class VerifyPaymentRequest(
+    @SerializedName("razorpay_order_id") val razorpayOrderId: String,
+    @SerializedName("razorpay_payment_id") val razorpayPaymentId: String,
+    @SerializedName("razorpay_signature") val razorpaySignature: String,
+    @SerializedName("sessionId") val sessionId: Int,
+    @SerializedName("eventId") val eventId: Int,
+    @SerializedName("seatIds") val seatIds: List<Int>,
+    @SerializedName("userName") val userName: String,
+    @SerializedName("userEmail") val userEmail: String,
+    @SerializedName("userPhone") val userPhone: String,
+    @SerializedName("couponCode") val couponCode: String? = null
+)
+
+data class VerifyPaymentResponse(
+    val success: Boolean = false,
+    val verified: Boolean = false,
+    val order: OrderDataResponse? = null,
+    val tickets: List<TicketResponse>? = null,
     val error: String? = null
 )
 
@@ -446,7 +526,21 @@ data class AuthUserData(
     val email: String? = null,
     val fullName: String? = null,
     val phoneNumber: String? = null,
-    val role: String? = null
+    val role: String? = null,
+    val avatarUrl: String? = null
+)
+
+data class UpdateProfileRequest(
+    val fullName: String? = null,
+    val phoneNumber: String? = null,
+    val avatarUrl: String? = null
+)
+
+data class UpdateProfileResponse(
+    val success: Boolean = false,
+    val message: String? = null,
+    val user: AuthUserData? = null,
+    val error: String? = null
 )
 
 data class TikitMitraChatRequest(

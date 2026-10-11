@@ -1,6 +1,7 @@
 package com.kalpkrutinfotech.mahaticket.ui.screens
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -8,6 +9,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,6 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -42,13 +46,17 @@ import com.kalpkrutinfotech.mahaticket.theme.*
 import com.kalpkrutinfotech.mahaticket.ui.components.TrailerPreviewDialog
 import com.kalpkrutinfotech.mahaticket.ui.viewmodel.EventViewModel
 import com.kalpkrutinfotech.mahaticket.ui.viewmodel.EventsUiState
+import com.kalpkrutinfotech.mahaticket.util.CurrencyUtils
+import com.kalpkrutinfotech.mahaticket.util.DateTimeUtils
 
 @Composable
 fun HomeScreenWithViewModel(
     viewModel: EventViewModel,
-    navController: NavHostController
+    navController: NavHostController,
+    language: AppLanguage = AppLanguage.MARATHI
 ) {
     val eventsState by viewModel.eventsState.collectAsState()
+    val bannerEvents by viewModel.bannerEvents.collectAsState()
     val selectedCategory by viewModel.selectedCategory.collectAsState()
     val selectedCity by viewModel.selectedCity.collectAsState()
     val cities by viewModel.cities.collectAsState()
@@ -56,10 +64,12 @@ fun HomeScreenWithViewModel(
 
     HomeScreen(
         eventsState = eventsState,
+        bannerEvents = bannerEvents,
         selectedCategory = selectedCategory,
         selectedCity = selectedCity,
         cities = cities.map { it.name },
         announcements = announcements,
+        language = language,
         onSelectEvent = { event ->
             navController.navigate(BookingRoutes.eventDetail(event.id))
         },
@@ -73,10 +83,12 @@ fun HomeScreenWithViewModel(
 @Composable
 fun HomeScreen(
     eventsState: EventsUiState,
+    bannerEvents: List<EventItem> = emptyList(),
     selectedCategory: String,
     selectedCity: String,
     cities: List<String> = emptyList(),
     announcements: List<AnnouncementResponse> = emptyList(),
+    language: AppLanguage = AppLanguage.MARATHI,
     onSelectEvent: (EventItem) -> Unit,
     onCategorySelected: (String) -> Unit,
     onCitySelected: (String) -> Unit = {},
@@ -84,6 +96,7 @@ fun HomeScreen(
     onRetry: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val isMarathi = language == AppLanguage.MARATHI
     var searchQuery by remember { mutableStateOf("") }
     var selectedTrailerEvent by remember { mutableStateOf<Event?>(null) }
 
@@ -119,7 +132,37 @@ fun HomeScreen(
         }
     }
 
-    val featured = mappedEvents.firstOrNull()
+    val isCategoryOrSearchActive = remember(selectedCategory, searchQuery) {
+        (selectedCategory != "all" && selectedCategory != "सर्व" && selectedCategory != "सर्व कार्यक्रम") ||
+        searchQuery.isNotBlank()
+    }
+
+    val heroEvents = remember(rawEvents) {
+        val list = rawEvents.filter {
+            (it.featured == 1 || it.category.equals("plays", true) || it.category.equals("music", true) || it.category.equals("natak", true)) &&
+            (!it.bannerUrl.isNullOrBlank() || !it.posterUrl.isNullOrBlank())
+        }
+        if (list.isNotEmpty()) list.take(6) else rawEvents.take(6)
+    }
+
+    val theatreEvents = remember(rawEvents) {
+        rawEvents.filter {
+            it.category.equals("natak", ignoreCase = true) ||
+            it.category.equals("plays", ignoreCase = true) ||
+            it.category.equals("theatre", ignoreCase = true) ||
+            it.categoryMr.contains("नाटक")
+        }
+    }
+
+    val musicalEvents = remember(rawEvents) {
+        rawEvents.filter {
+            it.category.equals("music", ignoreCase = true) ||
+            it.category.equals("concert", ignoreCase = true) ||
+            it.category.equals("comedy", ignoreCase = true) ||
+            it.categoryMr.contains("संगीत") ||
+            it.categoryMr.contains("कॉमेडी")
+        }
+    }
 
     Box(
         modifier = modifier
@@ -127,893 +170,671 @@ fun HomeScreen(
             .background(MahaBg)
             .testTag("home_screen_feed")
     ) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 80.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            // Modern Search Bar (Stitch Exact: नाटक, संगीत, कार्यक्रम, कलाकार शोधा...)
-            item {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 2.dp)
-                        .testTag("home_search_bar"),
-                    shape = RoundedCornerShape(24.dp),
-                    color = Color.White,
-                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
-                    shadowElevation = 1.dp
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Search,
-                            contentDescription = "Search",
-                            tint = Color(0xFFC2410C),
-                            modifier = Modifier.size(19.dp)
-                        )
-                        BasicTextField(
-                            value = searchQuery,
-                            onValueChange = {
-                                searchQuery = it
-                                onSearch(it)
-                            },
-                            singleLine = true,
-                            modifier = Modifier.weight(1f),
-                            textStyle = androidx.compose.ui.text.TextStyle(
-                                color = TextPrimary,
-                                fontSize = 12.5.sp,
-                                fontWeight = FontWeight.Medium
-                            ),
-                            decorationBox = { innerTextField ->
-                                if (searchQuery.isEmpty()) {
-                                    Text(
-                                        text = "नाटक, संगीत, कार्यक्रम, कलाकार शोधा...",
-                                        color = Color(0xFF94A3B8),
-                                        fontSize = 12.sp
-                                    )
-                                }
-                                innerTextField()
-                            }
-                        )
-                        Icon(
-                            imageVector = Icons.Default.Mic,
-                            contentDescription = "Voice Search",
-                            tint = Color(0xFF64748B),
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Icon(
-                            imageVector = Icons.Default.Tune,
-                            contentDescription = "Filters",
-                            tint = Color(0xFFC2410C),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
-            }
-
-            // City Filter Pills Row (Stitch Exact: संपूर्ण महाराष्ट्र, पुणे, मुंबई, नागपूर, नाशिक)
-            item {
-                val maharashtraPills = listOf(
-                    "संपूर्ण महाराष्ट्र" to "All",
-                    "पुणे" to "Pune",
-                    "मुंबई" to "Mumbai",
-                    "नागपूर" to "Nagpur",
-                    "नाशिक" to "Nashik",
-                    "संभाजीनगर" to "Sambhajinagar",
-                    "कोल्हापूर" to "Kolhapur"
-                )
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp, vertical = 2.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    maharashtraPills.forEach { (labelMr, cityKey) ->
-                        val isSelected = when {
-                            cityKey == "All" -> selectedCity.contains("All", ignoreCase = true) || selectedCity.contains("महाराष्ट्र")
-                            else -> selectedCity.equals(cityKey, ignoreCase = true) || selectedCity.contains(labelMr)
-                        }
-
-                        Surface(
-                            shape = RoundedCornerShape(20.dp),
-                            color = if (isSelected) Color(0xFFC2410C) else Color.White,
-                            border = BorderStroke(1.dp, if (isSelected) Color(0xFFC2410C) else Color(0xFFE2E8F0)),
-                            shadowElevation = if (isSelected) 1.dp else 0.dp,
-                            modifier = Modifier.clickable {
-                                onCitySelected(cityKey)
-                            }
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                if (labelMr == "पुणे" && !isSelected) {
-                                    Icon(
-                                        imageVector = Icons.Default.LocationOn,
-                                        contentDescription = null,
-                                        tint = Color(0xFFC2410C),
-                                        modifier = Modifier.size(13.dp)
-                                    )
-                                }
-                                Text(
-                                    text = labelMr,
-                                    fontSize = 12.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (isSelected) Color.White else TextPrimary
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Featured Hero Spotlight (Stitch Exact: "नियम व अटी लागू")
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color(0xFF141B2B))
-                        .clickable {
-                            val target = rawEvents.firstOrNull { it.id.toString() == featured?.id }
-                                ?: rawEvents.firstOrNull()
-                            if (target != null) onSelectEvent(target)
-                        }
-                        .testTag("hero_spotlight_banner")
-                ) {
-                    AsyncImage(
-                        model = featured?.posterUrl?.takeIf { it.isNotBlank() }
-                            ?: "https://lh3.googleusercontent.com/aida-public/AB6AXuCP_BzdA34e8II4J2ZcM6V_bk1jorCB0dqJ-yED0HtW3ncqCpgRvvbmrb1qvB1-XgNZOvZ8UjOlJ_NFiFJYqyixvq9ux2kB8YnA79OL6twW3Ywm_bbgfXevbzL_f_EMMG0EOdLLE5Wp-79Fq3YTag-2B2SVXakRChxVfAlH8mGiBeB6Qp9u561aT3Pug3yWCUvYNhuxBIhcZFDlh5cDbMgUoszlRBMBQuJgP0A-Ook",
-                        contentDescription = featured?.titleEn ?: "Featured Play",
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(220.dp)
+        if (eventsState is EventsUiState.Loading && rawEvents.isEmpty()) {
+            HomeShimmerLoading()
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 80.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // 1. Hero Banner Carousel (Always stable, first section after Header & City Selector)
+                item(key = "home_hero_banner") {
+                    HeroBannerCarousel(
+                        heroEvents = heroEvents,
+                        language = language,
+                        onSelectEvent = onSelectEvent
                     )
+                }
 
-                    // Top Badges (Stitch Exact: हाऊसफुल्ल, मराठी नाटक + Heart bookmark)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .align(Alignment.TopStart)
-                            .padding(12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Surface(
-                                color = MahaOrange,
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(2.dp)
-                                ) {
-                                    Text(text = "🔥", fontSize = 10.sp)
-                                    Text(
-                                        text = "हाऊसफुल्ल",
-                                        color = Color.White,
-                                        fontSize = 10.5.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                            Surface(
-                                color = Color.White.copy(alpha = 0.95f),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Text(
-                                    text = "मराठी नाटक",
-                                    color = MahaOrangeDeep,
-                                    fontSize = 10.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                )
-                            }
-                        }
-
-                        Surface(
-                            color = Color(0xFF141B2B).copy(alpha = 0.6f),
-                            shape = CircleShape,
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Outlined.FavoriteBorder,
-                                    contentDescription = "Save",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(17.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    // Content on Dark Gradient
-                    Column(
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .fillMaxWidth()
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(Color.Transparent, Color(0xFF141B2B).copy(alpha = 0.95f))
-                                )
-                            )
-                            .padding(14.dp)
-                    ) {
-                        Text(
-                            text = featured?.titleMr ?: "नियम व अटी लागू",
-                            color = Color.White,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.ExtraBold
-                        )
-                        Text(
-                            text = "कलाकार: प्रसाद ओक, मुक्ता बर्वे • दिग्दर्शन: चंद्रकांत कुलकर्णी",
-                            color = Color(0xFFE2E8F0),
-                            fontSize = 11.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(top = 2.dp)
-                        )
-
-                        Row(
-                            modifier = Modifier.padding(top = 4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Text(
-                                text = "📅 शनिवार, १२ ऑक्टोबर • संध्या. ०५:००",
-                                color = Color(0xFFFFDBCE),
-                                fontSize = 10.5.sp
-                            )
-                            Text(
-                                text = "🏛️ बाळ गंधर्व रंगमंदिर, पुणे",
-                                color = Color(0xFFFFDBCE),
-                                fontSize = 10.5.sp
-                            )
-                        }
-
+                // 2. Category Quick Discovery (मनोरंजन वर्ग - 8 Tiles matching Web & Stitch)
+                item {
+                    Column(modifier = Modifier.padding(vertical = 4.dp)) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(top = 10.dp),
+                                .padding(horizontal = 16.dp, vertical = 4.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Left: Rating block (Matching Web EventCard.tsx)
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Text(text = "★", color = Color(0xFFFBBF24), fontSize = 16.sp)
-                                Text(
-                                    text = "४.८",
-                                    color = Color.White,
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = "(१२४ पुनरावलोकने)",
-                                    color = Color(0xFF94A3B8),
-                                    fontSize = 10.sp
-                                )
-                            }
-
-                            // Right: Action buttons (Stitch Exact: अधिक माहिती, तिकीट बुक करा ➔)
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Surface(
-                                    color = Color(0xFF2A3447),
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.clickable {
-                                        val target = rawEvents.firstOrNull { it.id.toString() == featured?.id }
-                                            ?: rawEvents.firstOrNull()
-                                        if (target != null) onSelectEvent(target)
-                                    }
-                                ) {
-                                    Text(
-                                        text = "अधिक माहिती",
-                                        fontSize = 11.5.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = Color.White,
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
-                                    )
-                                }
-
-                                Surface(
-                                    color = Color(0xFFC2410C),
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.clickable {
-                                        val target = rawEvents.firstOrNull { it.id.toString() == featured?.id }
-                                            ?: rawEvents.firstOrNull()
-                                        if (target != null) onSelectEvent(target)
-                                    }
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                    ) {
-                                        Text(
-                                            text = "तिकीट बुक करा",
-                                            fontSize = 11.5.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.White
-                                        )
-                                        Icon(
-                                            imageVector = Icons.Default.ArrowForward,
-                                            contentDescription = "Book",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(13.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Category Quick Discovery (मनोरंजन वर्ग - Stitch 8 Tiles)
-            item {
-                Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "मनोरंजन वर्ग",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
-                        )
-                        Text(
-                            text = "सर्व श्रेणी",
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MahaOrange,
-                            modifier = Modifier.clickable { onCategorySelected("all") }
-                        )
-                    }
-
-                    val stitchCategories = listOf(
-                        Triple("all", "सर्व", "🎭"),
-                        Triple("plays", "नाटक", "🎭"),
-                        Triple("music", "संगीत मैफल", "🎵"),
-                        Triple("comedy", "स्टँडअप", "😄"),
-                        Triple("cultural", "सांस्कृतिक", "🎪"),
-                        Triple("workshops", "कार्यशाळा", "🎨"),
-                        Triple("movies", "चित्रपट", "🎬"),
-                        Triple("sports", "क्रीडा", "🏏")
-                    )
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState())
-                            .padding(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        stitchCategories.forEach { (catId, catLabel, emoji) ->
-                            val isSelected = selectedCategory == catId || (catId == "all" && (selectedCategory == "all" || selectedCategory == "सर्व"))
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier
-                                    .width(62.dp)
-                                    .clickable { onCategorySelected(catId) }
-                            ) {
-                                Surface(
-                                    modifier = Modifier.size(52.dp),
-                                    shape = RoundedCornerShape(14.dp),
-                                    color = if (isSelected) MahaOrange else MahaWarm,
-                                    border = BorderStroke(1.dp, if (isSelected) MahaOrange else Color(0xFFFFEDD5)),
-                                    shadowElevation = if (isSelected) 1.dp else 0.dp
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Text(text = emoji, fontSize = 21.sp)
-                                    }
-                                }
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = catLabel,
-                                    fontSize = 10.5.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (isSelected) MahaOrangeDeep else TextPrimary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Rail 1: मराठी रंगभूमी विशेष (Stitch BookMyShow Poster Rail)
-            item {
-                Column(modifier = Modifier.padding(top = 4.dp)) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 6.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Box(
-                                modifier = Modifier
-                                    .width(4.dp)
-                                    .height(18.dp)
-                                    .clip(RoundedCornerShape(2.dp))
-                                    .background(MahaOrange)
-                            )
                             Text(
-                                text = "मराठी रंगभूमी विशेष",
-                                fontSize = 14.5.sp,
+                                text = if (isMarathi) "मनोरंजन वर्ग" else "Entertainment Categories",
+                                fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = TextPrimary
                             )
-                        }
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(2.dp),
-                            modifier = Modifier.clickable { onCategorySelected("plays") }
-                        ) {
                             Text(
-                                text = "सर्व पहा",
+                                text = if (isMarathi) "सर्व श्रेणी" else "All Categories",
                                 fontSize = 11.5.sp,
+                                fontWeight = FontWeight.SemiBold,
                                 color = MahaOrange,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Icon(
-                                imageVector = Icons.Default.ArrowForward,
-                                contentDescription = null,
-                                tint = MahaOrange,
-                                modifier = Modifier.size(13.dp)
+                                modifier = Modifier.clickable { onCategorySelected("all") }
                             )
                         }
-                    }
 
-                    // Poster Rail Cards
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState())
-                            .padding(horizontal = 16.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        // Poster Card 1: अलबत्या गलबत्या
-                        TheatricalPosterCard(
-                            posterUrl = "https://lh3.googleusercontent.com/aida-public/AB6AXuCtuz94KtGOkBNKLrNOl7iZyQE4yO1W8ITKd0Pjx9QmRWS5wqyPiALT8xUGAupNQ8BrmGXv8oYnsxq_CXQcH0G2SvWcCQdGCTD7ifEclpgBkWh4IsypnpNlVL_a1kAZvcNRZwRl3RazKxN6mQEDBbUTE3n3N1UftuJHUsF5-MLExK609QnEimYt9zOV2G6lgrI9uDCtLPye2mA00b7KKlKkX0iVDR7E7xQDaYSHJns",
-                            badgeText = "Selling Fast",
-                            badgeColor = Color(0xFFDC2626),
-                            subBadge = "बालनाट्य",
-                            title = "अलबत्या गलबत्या",
-                            venue = "यशवंतराव चव्हाण नाट्यगृह, कोथरूड",
-                            time = "🕒 रविवार • दु. १२:३०",
-                            onBookClick = {
-                                val item = rawEvents.firstOrNull { it.titleMr.contains("अलबत्या") } ?: rawEvents.firstOrNull()
-                                if (item != null) onSelectEvent(item)
-                            }
+                        val stitchCategories = if (isMarathi) listOf(
+                            Triple("all", "सर्व", "🎭"),
+                            Triple("plays", "नाटक", "🎭"),
+                            Triple("music", "संगीत मैफल", "🎵"),
+                            Triple("comedy", "स्टँडअप", "😄"),
+                            Triple("cultural", "सांस्कृतिक", "🎪"),
+                            Triple("workshops", "कार्यशाळा", "🎨"),
+                            Triple("movies", "चित्रपट", "🎬"),
+                            Triple("sports", "क्रीडा", "🏏")
+                        ) else listOf(
+                            Triple("all", "All", "🎭"),
+                            Triple("plays", "Plays", "🎭"),
+                            Triple("music", "Concerts", "🎵"),
+                            Triple("comedy", "Standup", "😄"),
+                            Triple("cultural", "Cultural", "🎪"),
+                            Triple("workshops", "Workshops", "🎨"),
+                            Triple("movies", "Movies", "🎬"),
+                            Triple("sports", "Sports", "🏏")
                         )
 
-                        // Poster Card 2: सही रे सही
-                        TheatricalPosterCard(
-                            posterUrl = "https://lh3.googleusercontent.com/aida-public/AB6AXuBhEXQlRdtokmftpgaQgTpAgzHn7uJPXapI2_Fu6QvOqJXFE1vZgqKDu2PxX9qxnPNFUgoXOo3RZDmYni6gmOKemuejqqHX_mDa8XpF84gB54D1ETrY5gco_u_00to1_t8KO4ELnxl-ipMy6UCAL8t1gTzaZhxdUYUZCS5DHSEVupys6dqxY7dGeIgMD37H_ngeTO2BvVGIaVenbyhKWFJRKzT430JwA0OhGlvMlIY",
-                            badgeText = "भरत जाधव विशेष",
-                            badgeColor = Color(0xFFC2410C),
-                            subBadge = "हास्य प्रहसन",
-                            title = "सही रे सही",
-                            venue = "प्रबोधनकार ठाकरे नाट्यगृह, मुंबई",
-                            time = "🕒 शनिवार • रात्रौ ०८:३०",
-                            onBookClick = {
-                                val item = rawEvents.firstOrNull { it.titleMr.contains("सही") } ?: rawEvents.firstOrNull()
-                                if (item != null) onSelectEvent(item)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState())
+                                .padding(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            stitchCategories.forEach { (catId, catLabel, emoji) ->
+                                val isSelected = selectedCategory == catId || (catId == "all" && (selectedCategory == "all" || selectedCategory == "सर्व" || selectedCategory == "All"))
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier
+                                        .width(62.dp)
+                                        .clickable { onCategorySelected(catId) }
+                                ) {
+                                    Surface(
+                                        modifier = Modifier.size(52.dp),
+                                        shape = RoundedCornerShape(14.dp),
+                                        color = if (isSelected) MahaOrange else MahaWarm,
+                                        border = BorderStroke(1.dp, if (isSelected) MahaOrange else Color(0xFFFFEDD5)),
+                                        shadowElevation = if (isSelected) 1.dp else 0.dp
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Text(text = emoji, fontSize = 21.sp)
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = catLabel,
+                                        fontSize = 10.5.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (isSelected) MahaOrangeDeep else TextPrimary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             }
-                        )
-
-                        // Poster Card 3: वाडा चिरेबंदी
-                        TheatricalPosterCard(
-                            posterUrl = "https://lh3.googleusercontent.com/aida-public/AB6AXuC-KoOtnmU0lu7F27prt9v70OeCUTs5e3GE57yqmf7OULAXQRK_TjM1IfeUG-0_Cy_Ef06_-VltGCZHt0lY7ZcqD_3dmMQIiSIANl4rnK6nH83hUHNDtXK8K3HY8SjdiwP9U_CE-6C_WfV3skUcGAffMX0sotvwd-LRiag4P3UE3qvRXbcwAw6B1P-GGAfsaF1cAKw8UFcGwA1VK2e8tssskeJBl3VQNUmxfVBQzPI",
-                            badgeText = "क्लासिक नाटक",
-                            badgeColor = Color(0xFFC2410C),
-                            subBadge = "कौटुंबिक नाट्य",
-                            title = "वाडा चिरेबंदी",
-                            venue = "टिळक स्मारक मंदिर, पुणे",
-                            time = "🕒 रविवार • संध्या. ०५:००",
-                            onBookClick = {
-                                val item = rawEvents.firstOrNull { it.titleMr.contains("वाडा") } ?: rawEvents.firstOrNull()
-                                if (item != null) onSelectEvent(item)
-                            }
-                        )
+                        }
                     }
                 }
-            }
 
-            // Promotional Special Offer Banner (Stitch Exact: महानाट्य महोत्सव २०२५)
-            item {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    color = Color(0xFFC2410C),
-                    shadowElevation = 2.dp
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(
-                                Brush.horizontalGradient(
-                                    colors = listOf(Color(0xFFC2410C), MahaOrange)
-                                )
-                            )
-                            .padding(14.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Text(text = "✪", color = Color.White, fontSize = 12.sp)
-                            Text(
-                                text = "मर्यादित काळासाठी ऑफर",
-                                color = Color.White.copy(alpha = 0.95f),
-                                fontSize = 10.5.sp,
-                                fontWeight = FontWeight.Medium
-                            )
+                if (isCategoryOrSearchActive) {
+                    // CATEGORY / SEARCH ACTIVE VERTICAL NAVIGATION (Direct results header + event list)
+                    item {
+                        val categoryTitle = when {
+                            searchQuery.isNotBlank() -> if (isMarathi) "शोध: \"$searchQuery\"" else "Search: \"$searchQuery\""
+                            selectedCategory == "plays" -> if (isMarathi) "🎭 मराठी नाटक" else "🎭 Theatre & Plays"
+                            selectedCategory == "music" -> if (isMarathi) "🎵 संगीत मैफल" else "🎵 Music & Concerts"
+                            selectedCategory == "comedy" -> if (isMarathi) "😄 स्टँडअप कॉमेडी" else "😄 Standup Comedy"
+                            selectedCategory == "cultural" -> if (isMarathi) "🎪 सांस्कृतिक कार्यक्रम" else "🎪 Cultural Shows"
+                            selectedCategory == "workshops" -> if (isMarathi) "🎨 कार्यशाळा" else "🎨 Workshops"
+                            selectedCategory == "movies" -> if (isMarathi) "🎬 चित्रपट" else "🎬 Movies & Cinema"
+                            selectedCategory == "sports" -> if (isMarathi) "🏏 क्रीडा" else "🏏 Sports Events"
+                            else -> selectedCategory
                         }
 
-                        Spacer(modifier = Modifier.height(4.dp))
-
-                        Text(
-                            text = "महानाट्य महोत्सव २०२५",
-                            color = Color.White,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.ExtraBold
-                        )
-
-                        Text(
-                            text = "सर्व नाटकांच्या आगाऊ बुकिंगवर २०% पर्यंत भरघोस सूट!",
-                            color = Color(0xFFFFEDD5),
-                            fontSize = 11.5.sp,
-                            modifier = Modifier.padding(top = 2.dp)
-                        )
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Surface(
-                                color = Color.Black.copy(alpha = 0.25f),
-                                shape = RoundedCornerShape(8.dp),
-                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.6f))
-                            ) {
-                                Text(
-                                    text = "कोड: MAHA20",
-                                    color = Color.White,
-                                    fontSize = 11.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                                )
-                            }
-
-                            Surface(
-                                color = Color.White,
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.clickable { onCategorySelected("plays") }
-                            ) {
-                                Text(
-                                    text = "अटी व शर्ती पहा",
-                                    color = Color(0xFFC2410C),
-                                    fontSize = 11.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Rail 2: आजचे लोकप्रिय कार्यक्रम व मैफिली (Horizontal Cards)
-            item {
-                Column(modifier = Modifier.padding(top = 4.dp)) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 6.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Box(
-                                modifier = Modifier
-                                    .width(4.dp)
-                                    .height(18.dp)
-                                    .clip(RoundedCornerShape(2.dp))
-                                    .background(MahaOrange)
-                            )
-                            Text(
-                                text = "आजचे लोकप्रिय कार्यक्रम व मैफिली",
-                                fontSize = 14.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimary
-                            )
-                        }
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(2.dp),
-                            modifier = Modifier.clickable { onCategorySelected("music") }
-                        ) {
-                            Text(
-                                text = "सर्व पहा",
-                                fontSize = 11.5.sp,
-                                color = MahaOrange,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Icon(
-                                imageVector = Icons.Default.ArrowForward,
-                                contentDescription = null,
-                                tint = MahaOrange,
-                                modifier = Modifier.size(13.dp)
-                            )
-                        }
-                    }
-
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        // Card 1: Rahul Deshpande
-                        TheatricalHorizontalCard(
-                            thumbnailUrl = "https://lh3.googleusercontent.com/aida-public/AB6AXuBPDUS0iDXeFV_yQ-m_iqlNn8nh_94QZbbDaaAA1KucO0fUFQzhXnYSqU6OAPGUIoWRYTAv8Gl6H6gMYkJM0Y6YGv2xqtuGf1i8RPSNwZJZ4tftyZk3tWXFSqxbeDcdSn4s0TmchxWu97rpVLVHtUxcnzA70bQC_3L-DATOukRVUvXj0QqRPJtJqn_XxGmAHFs4t1EvCGfxx10EfxTufYF_CRLdx-HhoJJ_nMqj260",
-                            tag = "कलाकार विशेष",
-                            title = "राहुल देशपांडे लाईव्ह इन कॉन्सर्ट",
-                            venue = "गणेश कला क्रीडा मंच, स्वारगेट, पुणे",
-                            onTicketClick = {
-                                val item = rawEvents.firstOrNull { it.category == "music" } ?: rawEvents.firstOrNull()
-                                if (item != null) onSelectEvent(item)
-                            }
-                        )
-
-                        // Card 2: Haswa Faswi
-                        TheatricalHorizontalCard(
-                            thumbnailUrl = "https://lh3.googleusercontent.com/aida-public/AB6AXuAlv0c05OiPD6XgNJz-6U3M5-QV7pO4DDCQCexQJSukBm0zKutEZ2lgu2L3gw1aO5y8-cHYNTqythqmGqXncTT-6hqnh3XD65mq9VGFMlDVRrQxCaON_I0VKzGVYNBug4QM8pgIteeNGs-NPDL-RzcKipltfiGedkTBSJdxgGnMpJELQ6qGnksncsef6tySQii1AQisGBkwOmPYC_PzZFQM50hhfvDfw0glzWY4xec",
-                            tag = "स्टँडअप आणि प्रहसन",
-                            title = "हसवा फसवी",
-                            venue = "बाळ गंधर्व रंगमंदिर, पुणे",
-                            onTicketClick = {
-                                val item = rawEvents.firstOrNull { it.category == "comedy" } ?: rawEvents.firstOrNull()
-                                if (item != null) onSelectEvent(item)
-                            }
-                        )
-                    }
-                }
-            }
-
-            // Rail 3: पुण्यातले खास कार्यक्रम (Bal Gandharva / Pune Theatres Map Banner)
-            item {
-                Column(modifier = Modifier.padding(top = 4.dp)) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 6.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Box(
-                                modifier = Modifier
-                                    .width(4.dp)
-                                    .height(18.dp)
-                                    .clip(RoundedCornerShape(2.dp))
-                                    .background(MahaOrange)
-                            )
-                            Text(
-                                text = "पुण्यातील खास कार्यक्रम",
-                                fontSize = 14.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimary
-                            )
-                        }
-                        Text(
-                            text = "सर्व पहा →",
-                            fontSize = 11.5.sp,
-                            color = MahaOrange,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.clickable { onCitySelected("Pune") }
-                        )
-                    }
-
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
-                            .height(115.dp)
-                            .clip(RoundedCornerShape(14.dp)),
-                        color = Color(0xFF1E293B)
-                    ) {
-                        Box(modifier = Modifier.fillMaxSize()) {
-                            AsyncImage(
-                                model = "https://lh3.googleusercontent.com/aida-public/AB6AXuB6ztsm3IdTNOVG0EJCUZ1TmGjjsREouPDMQFIufbjUzDeWyS2C5rNsA9DMZXZf-k8jjf6aw5VKUcGcUpW2N2-WWDRrb51laDI9Mb3pa0Jyv47Ap9CzuatDR4fUMScfgfV3OgUNDlNcZWUfMu-YYtekHWsSG9GFa_WmSGlBorSN_b2wyj2AijXj6rSnVFKrFjyRguGJIypluC6FDGui5aeXyN5raEV8XNAe1NNJtpQ",
-                                contentDescription = "Pune Theatres Map",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(
-                                        Brush.verticalGradient(
-                                            colors = listOf(Color.Black.copy(alpha = 0.2f), Color.Black.copy(alpha = 0.75f))
-                                        )
-                                    )
-                            )
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .align(Alignment.BottomStart)
-                                    .padding(12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column {
-                                    Text(
-                                        text = "पुण्यातील प्रमुख नाट्यगृहे",
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = Color(0xFFFFDBCE)
-                                    )
-                                    Text(
-                                        text = "बाल गंधर्व, यशवंतराव, टिळक स्मारक",
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White
-                                    )
-                                }
-                                Icon(
-                                    imageVector = Icons.Default.PinDrop,
-                                    contentDescription = "Pin",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Organizer Quick Access Card (Stitch Exact: आयोजक आहात का?)
-            item {
-                Surface(
-                    color = MahaWarm,
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, Color(0xFFFFEDD5)),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 6.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Surface(
-                                shape = CircleShape,
-                                color = Color(0xFFFFDBCE),
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.QrCodeScanner,
-                                        contentDescription = "Scanner",
-                                        tint = MahaOrangeDeep,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
                             Column {
                                 Text(
-                                    text = "आयोजक आहात का?",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
+                                    text = categoryTitle,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.ExtraBold,
                                     color = TextPrimary
                                 )
                                 Text(
-                                    text = "येथे कार्यक्रम नोंदवा / तिकीट व्यवस्था",
-                                    fontSize = 10.5.sp,
-                                    color = TextSecondary
+                                    text = if (isMarathi) "${filteredEvents.size} कार्यक्रम उपलब्ध" else "${filteredEvents.size} events available",
+                                    fontSize = 12.sp,
+                                    color = MahaOrangeDeep,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+
+                            Surface(
+                                color = MahaWarm,
+                                shape = RoundedCornerShape(8.dp),
+                                border = BorderStroke(1.dp, MahaOrange.copy(alpha = 0.4f)),
+                                modifier = Modifier.clickable {
+                                    searchQuery = ""
+                                    onSearch("")
+                                    onCategorySelected("all")
+                                }
+                            ) {
+                                Text(
+                                    text = if (isMarathi) "✕ सर्व दाखवा" else "✕ View All",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MahaOrange,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                                 )
                             }
                         }
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = Color.White,
-                            border = BorderStroke(1.dp, MahaOrange.copy(alpha = 0.3f)),
-                            modifier = Modifier.clickable { /* Organizer access */ }
-                        ) {
-                            Text(
-                                text = "प्रवेश करा",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MahaOrange,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                            )
+                    }
+
+                    if (eventsState is EventsUiState.Loading) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(160.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(color = MahaOrange, modifier = Modifier.size(32.dp))
+                            }
                         }
-                    }
-                }
-            }
-
-            // Dynamic Events Section (when filtered or searching)
-            if (searchQuery.isNotBlank() || selectedCategory != "all") {
-                item {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "शोधलेले कार्यक्रम",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
-                        )
-                        Text(
-                            text = "${filteredEvents.size} सापडले",
-                            fontSize = 11.sp,
-                            color = MahaOrange,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-
-                if (filteredEvents.isEmpty()) {
-                    item {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(160.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "कोणतेही कार्यक्रम उपलब्ध नाहीत.",
-                                color = TextSecondary,
-                                fontSize = 13.sp
+                    } else if (eventsState is EventsUiState.Error) {
+                        item {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = (eventsState as EventsUiState.Error).message,
+                                    color = Color(0xFFDC2626),
+                                    fontSize = 12.5.sp,
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Button(
+                                    onClick = onRetry,
+                                    colors = ButtonDefaults.buttonColors(containerColor = MahaOrange),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text(if (isMarathi) "पुन्हा प्रयत्न करा" else "Retry", color = Color.White, fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    } else if (filteredEvents.isEmpty()) {
+                        item {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                shape = RoundedCornerShape(14.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                border = BorderStroke(1.dp, MahaBorder)
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(24.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(text = "🎭", fontSize = 32.sp)
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = if (isMarathi) "कोणतेही कार्यक्रम उपलब्ध नाहीत" else "No Events Available",
+                                        color = TextPrimary,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = if (isMarathi) "निवडलेल्या श्रेणीत किंवा शहरात सध्या कार्यक्रम उपलब्ध नाहीत." else "No events available for selected category or city right now.",
+                                        color = TextSecondary,
+                                        fontSize = 11.5.sp,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.padding(top = 4.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Button(
+                                        onClick = {
+                                            searchQuery = ""
+                                            onSearch("")
+                                            onCategorySelected("all")
+                                            onCitySelected("All")
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = MahaOrange),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text(if (isMarathi) "सर्व कार्यक्रम पहा" else "Explore All Events", color = Color.White, fontSize = 12.sp)
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        items(filteredEvents) { event ->
+                            val rawItem = rawEvents.firstOrNull { it.id.toString() == event.id }
+                            EventCardItem(
+                                event = event,
+                                rawItem = rawItem,
+                                language = language,
+                                onCardClick = { if (rawItem != null) onSelectEvent(rawItem) },
+                                onBookClick = { if (rawItem != null) onSelectEvent(rawItem) }
                             )
                         }
                     }
                 } else {
-                    items(filteredEvents) { event ->
-                        val rawItem = rawEvents.firstOrNull { it.id.toString() == event.id }
-                        EventCardItem(
-                            event = event,
-                            onCardClick = { if (rawItem != null) onSelectEvent(rawItem) },
-                            onBookClick = { if (rawItem != null) onSelectEvent(rawItem) }
+                    // NORMAL HOME SCREEN
+                    // 3. Rail 1: मराठी रंगभूमी विशेष (TheatricalPosterCard)
+                    if (theatreEvents.isNotEmpty()) {
+                        item {
+                            Column(modifier = Modifier.padding(top = 4.dp)) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Box(
+                                            modifier = Modifier
+                                                .width(4.dp)
+                                                .height(18.dp)
+                                                .clip(RoundedCornerShape(2.dp))
+                                                .background(MahaOrange)
+                                        )
+                                        Text(
+                                            text = if (isMarathi) "मराठी रंगभूमी विशेष" else "Marathi Theatre Specials",
+                                            fontSize = 14.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = TextPrimary
+                                        )
+                                    }
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                        modifier = Modifier.clickable { onCategorySelected("plays") }
+                                    ) {
+                                        Text(
+                                            text = if (isMarathi) "सर्व पहा" else "View All",
+                                            fontSize = 11.5.sp,
+                                            color = MahaOrange,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Icon(
+                                            imageVector = Icons.Default.ArrowForward,
+                                            contentDescription = null,
+                                            tint = MahaOrange,
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                    }
+                                }
+
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .horizontalScroll(rememberScrollState())
+                                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    theatreEvents.forEach { evItem ->
+                                        val evTime = evItem.sessions?.firstOrNull()?.sessionStartTime?.let {
+                                            DateTimeUtils.formatEventCardDateTime(it)
+                                        } ?: ""
+                                        val evPrice = evItem.minPrice?.let {
+                                            CurrencyUtils.formatPaiseToRupees(it)
+                                        } ?: ""
+                                        TheatricalPosterCard(
+                                            posterUrl = evItem.posterUrl ?: "",
+                                            badgeText = if (evItem.rating != null && evItem.rating >= 4.5) (if (isMarathi) "लोकप्रिय" else "Trending") else (if (isMarathi) "विशेष" else "Special"),
+                                            badgeColor = Color(0xFFC2410C),
+                                            subBadge = if (isMarathi) evItem.categoryMr.ifBlank { "मराठी नाटक" } else evItem.category.replaceFirstChar { it.uppercase() },
+                                            title = if (isMarathi) evItem.titleMr.ifBlank { evItem.title } else evItem.title.ifBlank { evItem.titleMr },
+                                            venue = if (isMarathi) evItem.venue?.nameMr ?: evItem.venue?.name ?: "" else evItem.venue?.name ?: evItem.venue?.nameMr ?: "",
+                                            time = evTime,
+                                            priceText = evPrice,
+                                            rating = evItem.rating,
+                                            ratingCount = evItem.ratingCount,
+                                            language = language,
+                                            onBookClick = { onSelectEvent(evItem) }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 4. Promotional Special Offer Banner: महानाट्य महोत्सव २०२६
+                    item {
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            color = Color(0xFFC2410C),
+                            shadowElevation = 2.dp
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(
+                                        Brush.horizontalGradient(
+                                            colors = listOf(Color(0xFFC2410C), MahaOrange)
+                                        )
+                                    )
+                                    .padding(14.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(text = "✪", color = Color.White, fontSize = 12.sp)
+                                    Text(
+                                        text = if (isMarathi) "मर्यादित काळासाठी ऑफर" else "Limited Period Offer",
+                                        color = Color.White.copy(alpha = 0.95f),
+                                        fontSize = 10.5.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(4.dp))
+
+                                Text(
+                                    text = if (isMarathi) "महानाट्य महोत्सव २०२६" else "MahaNatya Festival 2026",
+                                    color = Color.White,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+
+                                Text(
+                                    text = if (isMarathi) "सर्व नाटकांच्या आगाऊ बुकिंगवर २०% पर्यंत भरघोस सूट!" else "Up to 20% off on all theatre advance bookings!",
+                                    color = Color(0xFFFFEDD5),
+                                    fontSize = 11.5.sp,
+                                    modifier = Modifier.padding(top = 2.dp)
+                                )
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Surface(
+                                        color = Color.Black.copy(alpha = 0.25f),
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.6f))
+                                    ) {
+                                        Text(
+                                            text = "CODE: MAHA20",
+                                            color = Color.White,
+                                            fontSize = 11.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                        )
+                                    }
+
+                                    Surface(
+                                        color = Color.White,
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.clickable { onCategorySelected("plays") }
+                                    ) {
+                                        Text(
+                                            text = if (isMarathi) "अटी व शर्ती पहा" else "Terms & Conditions",
+                                            color = Color(0xFFC2410C),
+                                            fontSize = 11.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 5. Rail 2: आजचे लोकप्रिय कार्यक्रम व मैफिली (TheatricalHorizontalCard)
+                    if (musicalEvents.isNotEmpty()) {
+                        item {
+                            Column(modifier = Modifier.padding(top = 4.dp)) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Box(
+                                            modifier = Modifier
+                                                .width(4.dp)
+                                                .height(18.dp)
+                                                .clip(RoundedCornerShape(2.dp))
+                                                .background(MahaOrange)
+                                        )
+                                        Text(
+                                            text = if (isMarathi) "आजचे लोकप्रिय कार्यक्रम व मैफिली" else "Trending Shows & Concerts",
+                                            fontSize = 14.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = TextPrimary
+                                        )
+                                    }
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                        modifier = Modifier.clickable { onCategorySelected("music") }
+                                    ) {
+                                        Text(
+                                            text = if (isMarathi) "सर्व पहा" else "View All",
+                                            fontSize = 11.5.sp,
+                                            color = MahaOrange,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Icon(
+                                            imageVector = Icons.Default.ArrowForward,
+                                            contentDescription = null,
+                                            tint = MahaOrange,
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                    }
+                                }
+
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    musicalEvents.take(4).forEach { evItem ->
+                                        val evPrice = evItem.minPrice?.let { CurrencyUtils.formatPaiseToRupees(it) } ?: ""
+                                        TheatricalHorizontalCard(
+                                            thumbnailUrl = evItem.posterUrl ?: "",
+                                            tag = if (isMarathi) evItem.categoryMr.ifBlank { "विशेष कार्यक्रम" } else evItem.category.replaceFirstChar { it.uppercase() },
+                                            title = if (isMarathi) evItem.titleMr.ifBlank { evItem.title } else evItem.title.ifBlank { evItem.titleMr },
+                                            venue = if (isMarathi) evItem.venue?.nameMr ?: evItem.venue?.name ?: "" else evItem.venue?.name ?: evItem.venue?.nameMr ?: "",
+                                            priceText = evPrice,
+                                            rating = evItem.rating,
+                                            ratingCount = evItem.ratingCount,
+                                            language = language,
+                                            onTicketClick = { onSelectEvent(evItem) }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 6. Rail 3: सर्व आगामी कार्यक्रम Section Header & Event Cards (Placed BEFORE Theatres directory rail!)
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = if (isMarathi) "सर्व आगामी कार्यक्रम" else "All Upcoming Events",
+                                fontSize = 14.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                            Text(
+                                text = if (isMarathi) "${filteredEvents.size} कार्यक्रम उपलब्ध" else "${filteredEvents.size} events available",
+                                fontSize = 11.5.sp,
+                                color = MahaOrange,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+
+                    if (eventsState is EventsUiState.Loading) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(160.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(color = MahaOrange, modifier = Modifier.size(32.dp))
+                            }
+                        }
+                    } else if (eventsState is EventsUiState.Error) {
+                        item {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = (eventsState as EventsUiState.Error).message,
+                                    color = Color(0xFFDC2626),
+                                    fontSize = 12.5.sp,
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Button(
+                                    onClick = onRetry,
+                                    colors = ButtonDefaults.buttonColors(containerColor = MahaOrange),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text(if (isMarathi) "पुन्हा प्रयत्न करा" else "Retry", color = Color.White, fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    } else if (filteredEvents.isEmpty()) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(140.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (isMarathi) "कोणतेही कार्यक्रम उपलब्ध नाहीत." else "No events available.",
+                                    color = TextSecondary,
+                                    fontSize = 13.sp
+                                )
+                            }
+                        }
+                    } else {
+                        items(filteredEvents) { event ->
+                            val rawItem = rawEvents.firstOrNull { it.id.toString() == event.id }
+                            EventCardItem(
+                                event = event,
+                                rawItem = rawItem,
+                                language = language,
+                                onCardClick = { if (rawItem != null) onSelectEvent(rawItem) },
+                                onBookClick = { if (rawItem != null) onSelectEvent(rawItem) }
+                            )
+                        }
+                    }
+
+                    // 7. Rail 4: नाट्यगृह दर्शन (Theatres Directory - Placed BEFORE bottom trust proposition!)
+                    item {
+                        TheatresDirectorySection(
+                            selectedCity = selectedCity,
+                            language = language,
+                            onTheatreClick = { theatreName, theatreCity ->
+                                onCitySelected(theatreCity)
+                                onSearch(theatreName)
+                            }
                         )
+                    }
+
+                    // 8. Rail 5: विश्वसनीयता आणि हमी (Trust Proposition matching web - Placed at bottom)
+                    item {
+                        TrustPropositionSection(language = language)
+                    }
+
+                    // 9. Organizer Quick Access Card
+                    item {
+                        Surface(
+                            color = MahaWarm,
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, Color(0xFFFFEDD5)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 6.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = Color(0xFFFFDBCE),
+                                        modifier = Modifier.size(36.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = Icons.Default.QrCodeScanner,
+                                                contentDescription = "Scanner",
+                                                tint = MahaOrangeDeep,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
+                                    Column {
+                                        Text(
+                                            text = if (isMarathi) "आयोजक आहात का?" else "Are you an Organizer?",
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = TextPrimary
+                                        )
+                                        Text(
+                                            text = if (isMarathi) "येथे कार्यक्रम नोंदवा / तिकीट व्यवस्था" else "List events / manage ticketing here",
+                                            fontSize = 10.5.sp,
+                                            color = TextSecondary
+                                        )
+                                    }
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = Color.White,
+                                    border = BorderStroke(1.dp, MahaOrange.copy(alpha = 0.3f)),
+                                    modifier = Modifier.clickable { /* Organizer access */ }
+                                ) {
+                                    Text(
+                                        text = if (isMarathi) "प्रवेश करा" else "Enter",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MahaOrange,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -1035,6 +856,552 @@ fun HomeScreen(
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+private fun HeroBannerCarousel(
+    heroEvents: List<EventItem>,
+    language: AppLanguage = AppLanguage.MARATHI,
+    onSelectEvent: (EventItem) -> Unit
+) {
+    if (heroEvents.isEmpty()) return
+    val isMarathi = language == AppLanguage.MARATHI
+
+    val pagerState = androidx.compose.foundation.pager.rememberPagerState(pageCount = { heroEvents.size })
+
+    // Auto-advance every 5 seconds
+    LaunchedEffect(pagerState.pageCount) {
+        if (pagerState.pageCount > 1) {
+            while (true) {
+                kotlinx.coroutines.delay(5000)
+                val nextPage = (pagerState.currentPage + 1) % pagerState.pageCount
+                pagerState.animateScrollToPage(nextPage)
+            }
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(235.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color(0xFF141B2B))
+        ) {
+            androidx.compose.foundation.pager.HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize()
+            ) { page ->
+                val ev = heroEvents[page]
+                val imageUrl = if (!ev.bannerUrl.isNullOrBlank()) ev.bannerUrl else ev.posterUrl
+                val title = if (isMarathi) (ev.titleMr.takeIf { !it.isNullOrBlank() } ?: ev.title) else (ev.title.takeIf { !it.isNullOrBlank() } ?: ev.titleMr)
+                val categoryText = if (isMarathi) (ev.categoryMr.takeIf { !it.isNullOrBlank() } ?: ev.category) else (ev.category.takeIf { !it.isNullOrBlank() } ?: ev.categoryMr)
+                val venueText = if (isMarathi) (ev.venue?.nameMr?.takeIf { !it.isNullOrBlank() } ?: ev.venue?.name ?: "") else (ev.venue?.name?.takeIf { !it.isNullOrBlank() } ?: ev.venue?.nameMr ?: "")
+                val sessionTime = ev.sessions?.firstOrNull()?.sessionStartTime?.let {
+                    DateTimeUtils.formatEventCardDateTime(it)
+                } ?: ""
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clickable { onSelectEvent(ev) }
+                ) {
+                    // Background Image
+                    AsyncImage(
+                        model = imageUrl,
+                        contentDescription = title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+
+                    // Dual Gradient Overlay for web parity and high contrast
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color(0xFF141B2B).copy(alpha = 0.35f),
+                                        Color(0xFF141B2B).copy(alpha = 0.95f)
+                                    )
+                                )
+                            )
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.horizontalGradient(
+                                    colors = listOf(
+                                        Color(0xFF141B2B).copy(alpha = 0.85f),
+                                        Color.Transparent
+                                    )
+                                )
+                            )
+                    )
+
+                    // Badges Top Row
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .align(Alignment.TopStart)
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                color = MahaOrange,
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                ) {
+                                    Text(text = "🔥", fontSize = 10.sp)
+                                    Text(
+                                        text = if (isMarathi) (if (ev.featured == 1) "विशेष शिफारस" else "थेट बुकिंग") else (if (ev.featured == 1) "Featured" else "Fast Booking"),
+                                        color = Color.White,
+                                        fontSize = 10.5.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            if (categoryText.isNotBlank()) {
+                                Surface(
+                                    color = Color.White.copy(alpha = 0.92f),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text(
+                                        text = categoryText,
+                                        color = MahaOrangeDeep,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        // Rating badge (Render ONLY when genuine rating exists)
+                        val rating = ev.rating
+                        if (rating != null && rating > 0.0) {
+                            val ratingStr = if (rating > 5.0) String.format(java.util.Locale.US, "%.1f", rating / 2.0) else String.format(java.util.Locale.US, "%.1f", rating)
+                            Surface(
+                                color = Color(0xFF141B2B).copy(alpha = 0.75f),
+                                shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(0.5.dp, Color(0xFFF59E0B).copy(alpha = 0.6f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                ) {
+                                    Text(text = "★", color = Color(0xFFF59E0B), fontSize = 11.sp)
+                                    Text(
+                                        text = ratingStr,
+                                        color = Color.White,
+                                        fontSize = 10.5.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    if (ev.ratingCount != null && ev.ratingCount > 0) {
+                                        Text(
+                                            text = "(${ev.ratingCount})",
+                                            color = Color.White.copy(alpha = 0.7f),
+                                            fontSize = 9.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Content on Gradient (Bottom)
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .fillMaxWidth()
+                            .padding(14.dp)
+                    ) {
+                        Text(
+                            text = title,
+                            color = Color.White,
+                            fontSize = 17.5.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
+                        // Date and Venue pills
+                        if (sessionTime.isNotBlank() || venueText.isNotBlank()) {
+                            Row(
+                                modifier = Modifier.padding(top = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                if (sessionTime.isNotBlank()) {
+                                    Surface(
+                                        color = Color.White.copy(alpha = 0.15f),
+                                        shape = RoundedCornerShape(6.dp)
+                                    ) {
+                                        Text(
+                                            text = "📅 $sessionTime",
+                                            color = Color.White,
+                                            fontSize = 10.5.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+                                if (venueText.isNotBlank()) {
+                                    Surface(
+                                        color = Color.White.copy(alpha = 0.15f),
+                                        shape = RoundedCornerShape(6.dp)
+                                    ) {
+                                        Text(
+                                            text = "🏛️ $venueText",
+                                            color = Color(0xFFFFDBCE),
+                                            fontSize = 10.5.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // Bottom Actions Row: Price tag + Details indicator (NO duplicate book button inside hero)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val minPrice = ev.minPrice?.let { CurrencyUtils.formatPaiseToRupees(it) } ?: "₹२५०"
+                            Surface(
+                                color = Color.Black.copy(alpha = 0.45f),
+                                shape = RoundedCornerShape(8.dp),
+                                border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.25f))
+                            ) {
+                                Text(
+                                    text = if (isMarathi) "$minPrice पासून" else "From $minPrice",
+                                    color = Color(0xFFFFEDD5),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+
+                            Surface(
+                                color = Color.White.copy(alpha = 0.2f),
+                                shape = RoundedCornerShape(8.dp),
+                                border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.4f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(
+                                        text = if (isMarathi) "तपशील पहा" else "View Show",
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowForward,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Dot indicators in bottom right if > 1 page
+            if (pagerState.pageCount > 1) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    repeat(pagerState.pageCount) { index ->
+                        val isSelected = pagerState.currentPage == index
+                        Box(
+                            modifier = Modifier
+                                .width(if (isSelected) 14.dp else 5.dp)
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(if (isSelected) MahaOrange else Color.White.copy(alpha = 0.5f))
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TheatresDirectorySection(
+    selectedCity: String,
+    language: AppLanguage = AppLanguage.MARATHI,
+    onTheatreClick: (theatreName: String, theatreCity: String) -> Unit
+) {
+    val isMarathi = language == AppLanguage.MARATHI
+    val theatres = if (isMarathi) listOf(
+        Triple("बालगंधर्व रंगमंदिर", "जे. एम. रोड, शिवाजीनगर, पुणे", "पुणे"),
+        Triple("श्री छत्रपती शिवाजी मंदिर", "दादर पश्चिम, मुंबई", "मुंबई"),
+        Triple("यशवंतराव चव्हाण नाट्यगृह", "कोथरूड, पुणे", "पुणे"),
+        Triple("दीनानाथ मंगेशकर नाट्यगृह", "विलेपार्ले पूर्व, मुंबई", "मुंबई")
+    ) else listOf(
+        Triple("Bal Gandharva Ranga Mandir", "J.M. Road, Shivajinagar, Pune", "Pune"),
+        Triple("Shree Chhatrapati Shivaji Mandir", "Dadar West, Mumbai", "Mumbai"),
+        Triple("Yashwantrao Chavan Natyagruha", "Kothrud, Pune", "Pune"),
+        Triple("Dinanath Mangeshkar Natyagruha", "Vile Parle East, Mumbai", "Mumbai")
+    )
+
+    Column(modifier = Modifier.padding(top = 8.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Box(
+                    modifier = Modifier
+                        .width(4.dp)
+                        .height(18.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(MahaOrange)
+                )
+                Column {
+                    Text(
+                        text = if (isMarathi) "नाट्यगृह दर्शन" else "Theatres Directory",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MahaOrange
+                    )
+                    Text(
+                        text = if (isMarathi) "महाराष्ट्रातील प्रमुख नाट्यगृहे" else "Prominent Theatres in Maharashtra",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                }
+            }
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            theatres.forEach { (name, address, city) ->
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = Color.White,
+                    border = BorderStroke(1.dp, MahaBorder),
+                    shadowElevation = 1.dp,
+                    modifier = Modifier
+                        .width(240.dp)
+                        .clickable { onTheatreClick(name, city) }
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = MahaWarm,
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(text = "🏛️", fontSize = 18.sp)
+                                }
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color(0xFFDCFCE7)
+                            ) {
+                                Text(
+                                    text = if (isMarathi) "आज २ प्रयोग" else "2 Shows Today",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF16A34A),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Text(
+                            text = name,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = TextPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(3.dp),
+                            modifier = Modifier.padding(top = 2.dp)
+                        ) {
+                            Icon(Icons.Default.LocationOn, contentDescription = null, tint = MahaOrange, modifier = Modifier.size(12.dp))
+                            Text(
+                                text = address,
+                                fontSize = 11.sp,
+                                color = TextSecondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Surface(color = Color(0xFFF1F5F9), shape = RoundedCornerShape(4.dp)) {
+                                Text(text = if (isMarathi) "AC सभागृह" else "AC Hall", fontSize = 9.5.sp, color = Color(0xFF475569), modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
+                            }
+                            Surface(color = Color(0xFFF1F5F9), shape = RoundedCornerShape(4.dp)) {
+                                Text(text = if (isMarathi) "वाहनतळ" else "Parking", fontSize = 9.5.sp, color = Color(0xFF475569), modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MahaWarm,
+                            border = BorderStroke(1.dp, MahaOrange.copy(alpha = 0.3f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onTheatreClick(name, city) }
+                        ) {
+                            Text(
+                                text = if (isMarathi) "येथील प्रयोग पहा →" else "View Shows Here →",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MahaOrange,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(vertical = 7.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TrustPropositionSection(language: AppLanguage = AppLanguage.MARATHI) {
+    val isMarathi = language == AppLanguage.MARATHI
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = Color.White,
+        border = BorderStroke(1.dp, MahaBorder),
+        shadowElevation = 1.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = if (isMarathi) "विश्वसनीयता आणि हमी" else "Trust & Guarantees",
+                fontSize = 13.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Item 1
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(text = "🎟️", fontSize = 20.sp)
+                    Column {
+                        Text(text = if (isMarathi) "झटपट एम-तिकीट" else "Instant M-Ticket", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        Text(text = if (isMarathi) "त्वरित व्हॉट्सॲप पास" else "WhatsApp Digital Pass", fontSize = 9.5.sp, color = TextSecondary)
+                    }
+                }
+
+                // Item 2
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(text = "💺", fontSize = 20.sp)
+                    Column {
+                        Text(text = if (isMarathi) "थेट आसन निवड" else "Live Seat Selection", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        Text(text = if (isMarathi) "रिअल-टाइम लेआउट" else "Real-time Seat Layout", fontSize = 9.5.sp, color = TextSecondary)
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Item 3
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(text = "🔒", fontSize = 20.sp)
+                    Column {
+                        Text(text = if (isMarathi) "१००% सुरक्षित पेमेंट" else "100% Safe Payments", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        Text(text = if (isMarathi) "UPI व कार्ड व्यवहार" else "UPI & Card Checkout", fontSize = 9.5.sp, color = TextSecondary)
+                    }
+                }
+
+                // Item 4
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(text = "📞", fontSize = 20.sp)
+                    Column {
+                        Text(text = if (isMarathi) "२४x७ मराठी सपोर्ट" else "24x7 Support", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        Text(text = if (isMarathi) "मराठीत ग्राहक सेवा" else "Marathi & English Support", fontSize = 9.5.sp, color = TextSecondary)
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun TheatricalPosterCard(
     posterUrl: String,
@@ -1045,23 +1412,27 @@ private fun TheatricalPosterCard(
     venue: String,
     time: String,
     priceText: String = "",
+    rating: Double? = null,
+    ratingCount: Int? = null,
+    language: AppLanguage = AppLanguage.MARATHI,
     onBookClick: () -> Unit
 ) {
     Surface(
         modifier = Modifier
-            .width(160.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .width(200.dp)
+            .clip(RoundedCornerShape(14.dp))
             .clickable { onBookClick() },
         color = Color.White,
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(14.dp),
         border = BorderStroke(1.dp, MahaBorder),
-        shadowElevation = 1.dp
+        shadowElevation = 1.5.dp
     ) {
         Column {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(200.dp)
+                    .height(245.dp)
+                    .background(Color(0xFF141B2B))
             ) {
                 AsyncImage(
                     model = posterUrl,
@@ -1072,94 +1443,144 @@ private fun TheatricalPosterCard(
                 // Top Tag
                 Surface(
                     color = badgeColor,
-                    shape = RoundedCornerShape(4.dp),
+                    shape = RoundedCornerShape(6.dp),
                     modifier = Modifier
                         .align(Alignment.TopStart)
-                        .padding(6.dp)
+                        .padding(8.dp)
                 ) {
                     Text(
                         text = badgeText,
                         color = Color.White,
-                        fontSize = 9.sp,
+                        fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp)
                     )
                 }
-                // Bottom Genre Tag
-                Surface(
-                    color = Color.White.copy(alpha = 0.9f),
-                    shape = RoundedCornerShape(4.dp),
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(6.dp)
-                ) {
-                    Text(
-                        text = subBadge,
-                        color = TextPrimary,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                    )
+                // Genre Sub-badge
+                if (subBadge.isNotBlank()) {
+                    Surface(
+                        color = Color.Black.copy(alpha = 0.7f),
+                        shape = RoundedCornerShape(6.dp),
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp)
+                    ) {
+                        Text(
+                            text = subBadge,
+                            color = Color.White,
+                            fontSize = 9.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.5.dp)
+                        )
+                    }
+                }
+                // Rating Star Badge Overlay (Web EventCard.tsx exact match: only render if genuine rating exists)
+                if (rating != null && rating > 0.0) {
+                    val ratingStr = if (rating > 5.0) String.format(java.util.Locale.US, "%.1f", rating / 2.0) else String.format(java.util.Locale.US, "%.1f", rating)
+                    Surface(
+                        color = Color.White.copy(alpha = 0.95f),
+                        shape = RoundedCornerShape(6.dp),
+                        border = BorderStroke(0.5.dp, Color.White),
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Text(text = "★", color = Color(0xFFF59E0B), fontSize = 11.5.sp)
+                            Text(
+                                text = ratingStr,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color(0xFF141B2B)
+                            )
+                            if (ratingCount != null && ratingCount > 0) {
+                                Text(
+                                    text = "($ratingCount)",
+                                    fontSize = 9.sp,
+                                    color = TextSecondary
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
-            Column(modifier = Modifier.padding(8.dp)) {
+            Column(modifier = Modifier.padding(10.dp)) {
                 Text(
                     text = title,
-                    fontSize = 12.5.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.ExtraBold,
                     color = TextPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Text(
-                    text = venue,
-                    fontSize = 9.5.sp,
-                    color = TextSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 1.dp)
-                )
-                Text(
-                    text = time,
-                    fontSize = 9.5.sp,
-                    color = Color(0xFFC2410C),
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.padding(top = 2.dp)
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                    modifier = Modifier.padding(top = 3.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.LocationOn,
+                        contentDescription = null,
+                        tint = MahaOrange,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Text(
+                        text = venue,
+                        fontSize = 11.sp,
+                        color = TextSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (time.isNotBlank()) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                        modifier = Modifier.padding(top = 2.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Schedule,
+                            contentDescription = null,
+                            tint = Color(0xFFC2410C),
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Text(
+                            text = time,
+                            fontSize = 11.sp,
+                            color = Color(0xFFC2410C),
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
 
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 6.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(3.dp)
-                    ) {
-                        Text(text = "★", color = Color(0xFFF59E0B), fontSize = 12.sp)
-                        Text(
-                            text = "४.८",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
-                        )
-                        Text(
-                            text = "(१२४)",
-                            fontSize = 8.5.sp,
-                            color = TextSecondary
-                        )
-                    }
+                    Text(
+                        text = priceText.ifBlank { if (language == AppLanguage.MARATHI) "₹२५० पासून" else "From ₹250" },
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MahaOrangeDeep
+                    )
 
                     Surface(
-                        color = Color(0xFFC2410C),
-                        shape = RoundedCornerShape(6.dp),
+                        color = MahaOrange,
+                        shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.clickable { onBookClick() }
                     ) {
                         Text(
-                            text = "बुक करा",
+                            text = if (language == AppLanguage.MARATHI) "जागा निवडा" else "Book Seats",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
@@ -1179,33 +1600,60 @@ private fun TheatricalHorizontalCard(
     title: String,
     venue: String,
     priceText: String = "",
+    rating: Double? = null,
+    ratingCount: Int? = null,
+    language: AppLanguage = AppLanguage.MARATHI,
     onTicketClick: () -> Unit
 ) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(14.dp))
             .clickable { onTicketClick() },
         color = Color.White,
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(14.dp),
         border = BorderStroke(1.dp, MahaBorder),
         shadowElevation = 1.dp
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(10.dp),
+                .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            AsyncImage(
-                model = thumbnailUrl,
-                contentDescription = title,
-                contentScale = ContentScale.Crop,
+            Box(
                 modifier = Modifier
-                    .size(72.dp)
-                    .clip(RoundedCornerShape(8.dp))
-            )
+                    .size(86.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFF141B2B))
+            ) {
+                AsyncImage(
+                    model = thumbnailUrl,
+                    contentDescription = title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                if (rating != null && rating > 0.0) {
+                    val ratingStr = if (rating > 5.0) String.format(java.util.Locale.US, "%.1f", rating / 2.0) else String.format(java.util.Locale.US, "%.1f", rating)
+                    Surface(
+                        color = Color.Black.copy(alpha = 0.75f),
+                        shape = RoundedCornerShape(4.dp),
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(3.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Text(text = "★", color = Color(0xFFF59E0B), fontSize = 9.sp)
+                            Text(text = ratingStr, color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
             Column(modifier = Modifier.weight(1f)) {
                 Surface(
                     color = MahaWarm,
@@ -1213,53 +1661,53 @@ private fun TheatricalHorizontalCard(
                 ) {
                     Text(
                         text = tag,
-                        fontSize = 9.sp,
+                        fontSize = 9.5.sp,
                         fontWeight = FontWeight.Bold,
                         color = MahaOrangeDeep,
-                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
                 Text(
                     text = title,
-                    fontSize = 12.5.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 3.dp)
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
                     modifier = Modifier.padding(top = 2.dp)
-                )
-                Text(
-                    text = venue,
-                    fontSize = 10.sp,
-                    color = TextSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 1.dp)
-                )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.LocationOn,
+                        contentDescription = null,
+                        tint = MahaOrange,
+                        modifier = Modifier.size(11.dp)
+                    )
+                    Text(
+                        text = venue,
+                        fontSize = 11.sp,
+                        color = TextSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 4.dp),
+                        .padding(top = 6.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(3.dp)
-                    ) {
-                        Text(text = "★", color = Color(0xFFF59E0B), fontSize = 12.sp)
-                        Text(
-                            text = "४.८",
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
-                        )
-                        Text(
-                            text = "(१२०)",
-                            fontSize = 9.sp,
-                            color = TextSecondary
-                        )
-                    }
+                    Text(
+                        text = priceText.ifBlank { if (language == AppLanguage.MARATHI) "₹२५० पासून" else "From ₹250" },
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MahaOrangeDeep
+                    )
 
                     Surface(
                         color = MahaOrange,
@@ -1267,8 +1715,8 @@ private fun TheatricalHorizontalCard(
                         modifier = Modifier.clickable { onTicketClick() }
                     ) {
                         Text(
-                            text = "तिकीट घ्या",
-                            fontSize = 10.5.sp,
+                            text = if (language == AppLanguage.MARATHI) "तिकीट घ्या" else "Book Seats",
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
@@ -1283,16 +1731,18 @@ private fun TheatricalHorizontalCard(
 @Composable
 private fun EventCardItem(
     event: Event,
+    rawItem: EventItem?,
+    language: AppLanguage = AppLanguage.MARATHI,
     onCardClick: () -> Unit,
     onBookClick: () -> Unit
 ) {
     Card(
+        onClick = onCardClick,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-            .clickable { onCardClick() }
+            .padding(horizontal = 16.dp, vertical = 6.dp)
             .testTag("event_card_${event.id}"),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         border = BorderStroke(1.dp, MahaBorder)
@@ -1300,15 +1750,15 @@ private fun EventCardItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(10.dp),
+                .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
-                    .width(72.dp)
-                    .height(96.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xFFF1F5F9))
+                    .width(104.dp)
+                    .height(138.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFF141B2B))
             ) {
                 AsyncImage(
                     model = event.posterUrl,
@@ -1316,9 +1766,29 @@ private fun EventCardItem(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
+                val rating = rawItem?.rating
+                if (rating != null && rating > 0.0) {
+                    val ratingStr = if (rating > 5.0) String.format(java.util.Locale.US, "%.1f", rating / 2.0) else String.format(java.util.Locale.US, "%.1f", rating)
+                    Surface(
+                        color = Color.Black.copy(alpha = 0.75f),
+                        shape = RoundedCornerShape(4.dp),
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Text(text = "★", color = Color(0xFFF59E0B), fontSize = 10.sp)
+                            Text(text = ratingStr, color = Color.White, fontSize = 9.5.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
             }
 
-            Spacer(modifier = Modifier.width(10.dp))
+            Spacer(modifier = Modifier.width(12.dp))
 
             Column(modifier = Modifier.weight(1f)) {
                 Surface(
@@ -1326,69 +1796,99 @@ private fun EventCardItem(
                     shape = RoundedCornerShape(4.dp)
                 ) {
                     Text(
-                        text = event.category.displayMr,
-                        fontSize = 9.sp,
+                        text = if (language == AppLanguage.MARATHI) (rawItem?.categoryMr?.takeIf { it.isNotBlank() } ?: event.category.displayMr) else (rawItem?.category?.takeIf { it.isNotBlank() } ?: event.category.name),
+                        fontSize = 9.5.sp,
                         color = MahaOrangeDeep,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.height(3.dp))
+                Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
-                    text = event.titleMr,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
+                    text = if (language == AppLanguage.MARATHI) event.titleMr else event.titleEn.ifBlank { event.titleMr },
+                    fontSize = 14.5.sp,
+                    fontWeight = FontWeight.ExtraBold,
                     color = TextPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
 
-                Text(
-                    text = "📍 ${event.venue.nameMr}",
-                    fontSize = 10.sp,
-                    color = TextSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 2.dp)
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                    modifier = Modifier.padding(top = 3.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.LocationOn,
+                        contentDescription = null,
+                        tint = MahaOrange,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Text(
+                        text = if (language == AppLanguage.MARATHI) event.venue.nameMr else event.venue.nameEn.ifBlank { event.venue.nameMr },
+                        fontSize = 11.5.sp,
+                        color = TextSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                val showTimeStr = rawItem?.sessions?.firstOrNull()?.sessionStartTime?.let {
+                    DateTimeUtils.formatEventCardDateTime(it)
+                }
+                if (!showTimeStr.isNullOrBlank()) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                        modifier = Modifier.padding(top = 2.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Schedule,
+                            contentDescription = null,
+                            tint = Color(0xFFC2410C),
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Text(
+                            text = showTimeStr,
+                            fontSize = 11.sp,
+                            color = Color(0xFFC2410C),
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
 
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 6.dp),
+                        .padding(top = 8.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(3.dp)
-                    ) {
-                        Text(text = "★", color = Color(0xFFF59E0B), fontSize = 12.sp)
-                        Text(
-                            text = "४.८",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
-                        )
-                        Text(
-                            text = "(१२४)",
-                            fontSize = 9.sp,
-                            color = TextSecondary
-                        )
-                    }
+                    val priceStr = rawItem?.minPrice?.let {
+                        if (it > 0) CurrencyUtils.formatPaiseToRupees(it) else null
+                    } ?: if (language == AppLanguage.MARATHI) "₹२५० पासून" else "From ₹250"
+
+                    Text(
+                        text = priceStr,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MahaOrangeDeep
+                    )
 
                     Button(
                         onClick = onBookClick,
-                        shape = RoundedCornerShape(6.dp),
+                        shape = RoundedCornerShape(8.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = MahaOrange),
                         modifier = Modifier.testTag("book_now_btn_${event.id}"),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                     ) {
                         Text(
-                            text = "जागा निवडा",
-                            fontSize = 11.sp,
+                            text = if (language == AppLanguage.MARATHI) "जागा निवडा" else "Book Seats",
+                            fontSize = 11.5.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
@@ -1398,3 +1898,93 @@ private fun EventCardItem(
         }
     }
 }
+
+@Composable
+fun HomeShimmerLoading(modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "home_shimmer")
+    val translateAnim by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1200f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1100, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shimmer_anim"
+    )
+    val shimmerBrush = Brush.linearGradient(
+        colors = listOf(
+            Color(0xFFE2E8F0),
+            Color(0xFFF1F5F9),
+            Color(0xFFE2E8F0)
+        ),
+        start = androidx.compose.ui.geometry.Offset(translateAnim - 450f, translateAnim - 450f),
+        end = androidx.compose.ui.geometry.Offset(translateAnim, translateAnim)
+    )
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Shimmer Hero Banner (adaptive 235dp height)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(235.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(shimmerBrush)
+        )
+
+        // Shimmer Category Quick Discovery Row
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            repeat(5) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(
+                        modifier = Modifier
+                            .size(54.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(shimmerBrush)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Box(
+                        modifier = Modifier
+                            .width(42.dp)
+                            .height(10.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(shimmerBrush)
+                    )
+                }
+            }
+        }
+
+        // Shimmer Section Header
+        Box(
+            modifier = Modifier
+                .width(190.dp)
+                .height(20.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(shimmerBrush)
+        )
+
+        // Shimmer Theatrical Poster Cards Row
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            repeat(2) {
+                Box(
+                    modifier = Modifier
+                        .width(200.dp)
+                        .height(245.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(shimmerBrush)
+                )
+            }
+        }
+    }
+}
+

@@ -177,12 +177,12 @@ fun AdminControlCenterScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("आजची एकूण विक्री", fontSize = 11.sp, color = TextSecondary)
+                                Text("स्थानिक तिकीट नोंदी", fontSize = 11.sp, color = TextSecondary)
                                 Text("🎫", fontSize = 14.sp)
                             }
                             Spacer(modifier = Modifier.height(6.dp))
-                            Text("८,४५०", fontSize = 20.sp, fontWeight = FontWeight.Black, color = TextPrimary)
-                            Text("+१५.२% कालच्या तुलनेत", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF16A34A))
+                            Text("${bookings.size}", fontSize = 20.sp, fontWeight = FontWeight.Black, color = TextPrimary)
+                            Text(if (bookings.isNotEmpty()) "थेट उपकरण नोंदी" else "कोणतीही नोंद नाही", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF16A34A))
                         }
                     }
 
@@ -200,12 +200,12 @@ fun AdminControlCenterScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("सक्रिय नाट्यगृहे", fontSize = 11.sp, color = TextSecondary)
+                                Text("सक्रिय कार्यक्रम", fontSize = 11.sp, color = TextSecondary)
                                 Text("🎭", fontSize = 14.sp)
                             }
                             Spacer(modifier = Modifier.height(6.dp))
-                            Text("६४", fontSize = 20.sp, fontWeight = FontWeight.Black, color = TextPrimary)
-                            Text("२८ शहरे व तालुके", fontSize = 10.sp, color = TextSecondary)
+                            Text("${events.size}", fontSize = 20.sp, fontWeight = FontWeight.Black, color = TextPrimary)
+                            Text("थेट सर्व्हर सूची", fontSize = 10.sp, color = TextSecondary)
                         }
                     }
                 }
@@ -228,12 +228,13 @@ fun AdminControlCenterScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("नोंदणीकृत आयोजक", fontSize = 11.sp, color = TextSecondary)
+                                Text("संबद्ध नाट्यगृहे", fontSize = 11.sp, color = TextSecondary)
                                 Text("👥", fontSize = 14.sp)
                             }
                             Spacer(modifier = Modifier.height(6.dp))
-                            Text("१२०", fontSize = 20.sp, fontWeight = FontWeight.Black, color = TextPrimary)
-                            Text("+६ नवीन नोंदणी", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF16A34A))
+                            val venueCount = events.map { it.venue.nameMr }.distinct().size
+                            Text("$venueCount", fontSize = 20.sp, fontWeight = FontWeight.Black, color = TextPrimary)
+                            Text("सक्रिय ठिकाणे", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF16A34A))
                         }
                     }
 
@@ -251,12 +252,12 @@ fun AdminControlCenterScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("तपासणी बाकी", fontSize = 11.sp, color = TextSecondary)
+                                Text("सिस्टीम स्थिती", fontSize = 11.sp, color = TextSecondary)
                                 Text("📋", fontSize = 14.sp)
                             }
                             Spacer(modifier = Modifier.height(6.dp))
-                            Text("०३", fontSize = 20.sp, fontWeight = FontWeight.Black, color = Color(0xFFDC2626))
-                            Text("तातडीची तपासणी आवश्यक", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFDC2626))
+                            Text("सक्रिय", fontSize = 18.sp, fontWeight = FontWeight.Black, color = Color(0xFF16A34A))
+                            Text("सर्व्हर ऑनलाइन", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF16A34A))
                         }
                     }
                 }
@@ -277,30 +278,31 @@ fun AdminControlCenterScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text("₹", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MahaOrange)
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("एकूण दैनिक महसूल प्रवाह", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                Text("स्थानिक महसूल सारांश", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
                             }
                             Surface(
                                 color = Color(0xFFFFF7ED),
                                 shape = RoundedCornerShape(10.dp)
                             ) {
-                                Text("थेट जमा", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MahaOrange, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                                Text("थेट आकडेवारी", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MahaOrange, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
                             }
                         }
 
                         Spacer(modifier = Modifier.height(8.dp))
 
+                        val localTotal = bookings.sumOf { it.totalAmount }
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.Bottom
                         ) {
                             Column {
-                                Text("₹३८,२०,०००", fontSize = 22.sp, fontWeight = FontWeight.Black, color = TextPrimary)
-                                Text("सकल व्यवहार मूल्य (Gross GMV)", fontSize = 10.5.sp, color = TextSecondary)
+                                Text("₹$localTotal", fontSize = 22.sp, fontWeight = FontWeight.Black, color = TextPrimary)
+                                Text("उपकरण बुकिंग मूल्य (Device GMV)", fontSize = 10.5.sp, color = TextSecondary)
                             }
                             Column(horizontalAlignment = Alignment.End) {
-                                Text("₹१,९१,०००", fontSize = 17.sp, fontWeight = FontWeight.Black, color = Color(0xFF16A34A))
-                                Text("प्लॅटफॉर्म कमिशन (५%)", fontSize = 10.5.sp, color = TextSecondary)
+                                Text("अधिकृत पोर्टल", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                Text("तपशीलवार अहवाल वेब ॲडमिनवर", fontSize = 10.sp, color = TextSecondary)
                             }
                         }
                     }

@@ -10,3 +10,7 @@ android/local.properties
 android/app/build/
 android/.gradle/
 android/**/build/
+android/.kotlin/
+.kotlin/
+mobile
+build_out

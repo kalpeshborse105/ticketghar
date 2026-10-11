@@ -16,13 +16,15 @@ data class EventItem(
     val cast: String? = null,
     val director: String? = null,
     val posterUrl: String,
+    val bannerUrl: String? = null,
     val minPrice: Int?,
+    val featured: Int? = null,
     val venue: VenueItem?,
     val sessions: List<SessionItem>?,
     val trailerUrl: String? = null,
     val galleryUrls: List<String>? = null,
-    val rating: Double? = 4.8,
-    val ratingCount: Int? = 124
+    val rating: Double? = null,
+    val ratingCount: Int? = null
 )
 
 data class VenueItem(

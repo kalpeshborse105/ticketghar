@@ -38,22 +38,26 @@ import com.kalpkrutinfotech.mahaticket.ui.viewmodel.EventsUiState
 @Composable
 fun ExploreScreen(
     viewModel: EventViewModel,
+    language: AppLanguage = AppLanguage.MARATHI,
     onSelectEvent: (EventItem) -> Unit
 ) {
+    val isMarathi = language == AppLanguage.MARATHI
     val eventsState by viewModel.eventsState.collectAsState()
     val selectedCategory by viewModel.selectedCategory.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
 
-    val categories = listOf(
-        Triple("all", "सर्व कार्यक्रम", "🎭"),
-        Triple("plays", "नाटक", "🎭"),
-        Triple("music", "संगीत मैफल", "🎵"),
-        Triple("comedy", "स्टँडअप", "😄"),
-        Triple("cultural", "सांस्कृतिक", "🎪"),
-        Triple("workshops", "कार्यशाळा", "🎨"),
-        Triple("movies", "चित्रपट", "🎬"),
-        Triple("sports", "क्रीडा", "🏏")
-    )
+    val categories = remember(isMarathi) {
+        listOf(
+            Triple("all", if (isMarathi) "सर्व कार्यक्रम" else "All Shows", "🎭"),
+            Triple("plays", if (isMarathi) "नाटक" else "Plays", "🎭"),
+            Triple("music", if (isMarathi) "संगीत मैफल" else "Music Concerts", "🎵"),
+            Triple("comedy", if (isMarathi) "स्टँडअप" else "Stand-up Comedy", "😄"),
+            Triple("cultural", if (isMarathi) "सांस्कृतिक" else "Cultural Events", "🎪"),
+            Triple("workshops", if (isMarathi) "कार्यशाळा" else "Workshops", "🎨"),
+            Triple("movies", if (isMarathi) "चित्रपट" else "Cinema", "🎬"),
+            Triple("sports", if (isMarathi) "क्रीडा" else "Sports", "🏏")
+        )
+    }
 
     Box(
         modifier = Modifier
@@ -75,13 +79,13 @@ fun ExploreScreen(
                         .padding(horizontal = 16.dp, vertical = 12.dp)
                 ) {
                     Text(
-                        text = "शोधा आणि एक्सप्लोर करा",
+                        text = if (isMarathi) "शोधा आणि एक्सप्लोर करा" else "Search & Explore",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary
                     )
                     Text(
-                        text = "नाट्य, संगीत व सांस्कृतिक कार्यक्रमांचा शोध घ्या",
+                        text = if (isMarathi) "नाट्य, संगीत व सांस्कृतिक कार्यक्रमांचा शोध घ्या" else "Discover theater plays, concerts & live events",
                         fontSize = 11.5.sp,
                         color = TextSecondary,
                         modifier = Modifier.padding(top = 2.dp)
@@ -99,7 +103,7 @@ fun ExploreScreen(
                         },
                         placeholder = {
                             Text(
-                                "नाटक, कलाकार किंवा नाट्यगृह शोधा...",
+                                if (isMarathi) "नाटक, कलाकार किंवा नाट्यगृह शोधा..." else "Search plays, artists or theatres...",
                                 fontSize = 13.sp,
                                 color = TextSecondary
                             )
@@ -385,27 +389,30 @@ private fun CinemaExploreEventCard(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Rating block
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(3.dp)
-                    ) {
-                        Text(text = "★", color = Color(0xFFF59E0B), fontSize = 13.sp)
-                        val ratingVal = if (event.rating != null && event.rating > 0) {
-                            if (event.rating > 5) String.format("%.1f", event.rating / 2) else String.format("%.1f", event.rating)
-                        } else "4.8"
-                        Text(
-                            text = ratingVal,
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
-                        )
-                        val ratingCount = if (event.ratingCount != null && event.ratingCount > 0) event.ratingCount else 120
-                        Text(
-                            text = "($ratingCount)",
-                            fontSize = 10.sp,
-                            color = TextSecondary
-                        )
+                    // Rating block (Only render if genuine rating exists)
+                    if (event.rating != null && event.rating > 0.0) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            Text(text = "★", color = Color(0xFFF59E0B), fontSize = 13.sp)
+                            val ratingVal = if (event.rating > 5) String.format("%.1f", event.rating / 2) else String.format("%.1f", event.rating)
+                            Text(
+                                text = ratingVal,
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                            if (event.ratingCount != null && event.ratingCount > 0) {
+                                Text(
+                                    text = "(${event.ratingCount})",
+                                    fontSize = 10.sp,
+                                    color = TextSecondary
+                                )
+                            }
+                        }
+                    } else {
+                        Box(modifier = Modifier.width(1.dp))
                     }
 
                     // Book CTA

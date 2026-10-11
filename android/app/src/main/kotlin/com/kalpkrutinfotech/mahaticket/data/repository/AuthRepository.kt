@@ -49,7 +49,8 @@ class AuthRepository(
                         email = body.user.email ?: cleanEmail,
                         name = body.user.fullName,
                         phone = body.user.phoneNumber,
-                        role = body.user.role ?: "customer"
+                        role = body.user.role ?: "customer",
+                        avatarUrl = body.user.avatarUrl
                     )
                     Result.success(body)
                 } else {
@@ -84,7 +85,8 @@ class AuthRepository(
                         email = body.user.email ?: cleanEmail,
                         name = body.user.fullName,
                         phone = body.user.phoneNumber,
-                        role = body.user.role ?: "customer"
+                        role = body.user.role ?: "customer",
+                        avatarUrl = body.user.avatarUrl
                     )
                     Result.success(body)
                 } else {
@@ -102,6 +104,38 @@ class AuthRepository(
             }
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    suspend fun updateProfile(fullName: String?, phoneNumber: String?, avatarUrl: String?): Result<UpdateProfileResponse> = withContext(Dispatchers.IO) {
+        try {
+            val response = apiService.updateProfile(
+                UpdateProfileRequest(
+                    fullName = fullName,
+                    phoneNumber = phoneNumber,
+                    avatarUrl = avatarUrl
+                )
+            )
+            if (response.isSuccessful && response.body() != null) {
+                val body = response.body()!!
+                if (body.success) {
+                    sessionManager.saveProfile(
+                        name = body.user?.fullName ?: fullName,
+                        phone = body.user?.phoneNumber ?: phoneNumber,
+                        avatarUrl = body.user?.avatarUrl ?: avatarUrl
+                    )
+                    Result.success(body)
+                } else {
+                    sessionManager.saveProfile(name = fullName, phone = phoneNumber, avatarUrl = avatarUrl)
+                    Result.success(UpdateProfileResponse(success = true, message = body.message ?: "स्थानिक पातळीवर जतन केले"))
+                }
+            } else {
+                sessionManager.saveProfile(name = fullName, phone = phoneNumber, avatarUrl = avatarUrl)
+                Result.success(UpdateProfileResponse(success = true, message = "स्थानिक पातळीवर जतन केले"))
+            }
+        } catch (e: Exception) {
+            sessionManager.saveProfile(name = fullName, phone = phoneNumber, avatarUrl = avatarUrl)
+            Result.success(UpdateProfileResponse(success = true, message = "स्थानिक पातळीवर जतन केले"))
         }
     }
 

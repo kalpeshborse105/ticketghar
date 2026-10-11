@@ -54,7 +54,8 @@ import java.time.format.DateTimeFormatter
 fun EventDetailScreen(
     eventId: Int,
     onNavigateBack: () -> Unit,
-    onBookSession: (Int, Int) -> Unit
+    onBookSession: (Int, Int) -> Unit,
+    language: AppLanguage = AppLanguage.MARATHI
 ) {
     val app = LocalContext.current.applicationContext as MahaTicketApp
     val eventViewModel: EventViewModel = viewModel(
@@ -84,6 +85,7 @@ fun EventDetailScreen(
                 StitchEventDetailContent(
                     event = event,
                     eventViewModel = eventViewModel,
+                    language = language,
                     onNavigateBack = onNavigateBack,
                     onBookSession = onBookSession,
                     onWatchTrailer = { showTrailerModal = true },
@@ -103,7 +105,7 @@ fun EventDetailScreen(
                     val trailerEvent = event.toEvent()
                     TrailerPreviewDialog(
                         event = trailerEvent,
-                        language = AppLanguage.MARATHI,
+                        language = language,
                         onDismiss = { showTrailerModal = false },
                         onBookNow = {
                             showTrailerModal = false
@@ -174,11 +176,13 @@ fun EventDetailScreen(
 private fun StitchEventDetailContent(
     event: EventItem,
     eventViewModel: EventViewModel,
+    language: AppLanguage = AppLanguage.MARATHI,
     onNavigateBack: () -> Unit,
     onBookSession: (Int, Int) -> Unit,
     onWatchTrailer: () -> Unit,
     onShareEvent: () -> Unit
 ) {
+    val isMarathi = language == AppLanguage.MARATHI
     val context = LocalContext.current
     val sessionManager = remember { UserSessionManager.getInstance(context) }
     val reviewsResponse by eventViewModel.reviewsResponse.collectAsState()
@@ -214,8 +218,16 @@ private fun StitchEventDetailContent(
         if (price > 0) price / 100 else 250
     }
 
-    val displayTitle = if (event.titleMr.isNotBlank()) event.titleMr else event.title
-    val venueName = event.venue?.nameMr?.ifBlank { event.venue.name } ?: "बालगंधर्व रंगमंदिर"
+    val displayTitle = if (isMarathi) {
+        if (event.titleMr.isNotBlank()) event.titleMr else event.title
+    } else {
+        if (event.title.isNotBlank()) event.title else event.titleMr
+    }
+    val venueName = if (isMarathi) {
+        event.venue?.nameMr?.ifBlank { event.venue.name } ?: "बालगंधर्व रंगमंदिर"
+    } else {
+        event.venue?.name?.ifBlank { event.venue.nameMr } ?: "Bal Gandharva Rang Mandir"
+    }
     val venueAddress = event.venue?.let {
         listOf(it.address, it.city).filter { s -> s.isNotBlank() }.joinToString(", ")
     } ?: "झाशीची राणी लक्ष्मीबाई चौक, JM Road, पुणे - ४११००५"
@@ -1793,7 +1805,7 @@ private fun StitchEventDetailContent(
                         .testTag("select_seats_cta_button")
                 ) {
                     Text(
-                        text = "आसन निवडा",
+                        text = if (isMarathi) "आसन निवडा" else "Select Seats",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White

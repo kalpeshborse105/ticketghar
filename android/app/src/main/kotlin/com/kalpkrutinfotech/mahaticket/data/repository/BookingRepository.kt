@@ -85,12 +85,15 @@ class BookingRepository(
     suspend fun createPaymentOrder(
         sessionId: Int,
         seatIds: List<Int>,
+        holdToken: String? = null,
         couponCode: String? = null
     ): Result<CreatePaymentOrderResponse> = withContext(Dispatchers.IO) {
         try {
             val request = CreatePaymentOrderRequest(
                 sessionId = sessionId,
                 seatIds = seatIds,
+                holdToken = holdToken,
+                userIdStr = holdToken,
                 couponCode = couponCode
             )
             val response = apiService.createPaymentOrder(request)
@@ -158,57 +161,94 @@ class BookingRepository(
         signature: String? = null
     ): Result<BookingConfirmationResponse> = withContext(Dispatchers.IO) {
         try {
-            val request = ConfirmBookingRequest(
-                sessionId = sessionId,
-                eventId = eventId,
-                seatIds = seatIds,
-                userName = userName,
-                userEmail = userEmail,
-                userPhone = userPhone,
-                couponCode = couponCode,
-                paymentDetails = PaymentDetailsRequest(
-                    gateway = if (paymentId != null) "razorpay" else "direct_confirm",
-                    paymentId = paymentId,
-                    orderId = orderId,
-                    signature = signature
+            val (body, isSuccess, errorMsg) = if (!paymentId.isNullOrBlank() && !orderId.isNullOrBlank() && !signature.isNullOrBlank()) {
+                val verifyReq = VerifyPaymentRequest(
+                    razorpayOrderId = orderId,
+                    razorpayPaymentId = paymentId,
+                    razorpaySignature = signature,
+                    sessionId = sessionId,
+                    eventId = eventId,
+                    seatIds = seatIds,
+                    userName = userName,
+                    userEmail = userEmail,
+                    userPhone = userPhone,
+                    couponCode = couponCode
                 )
-            )
-            val response = apiService.confirmBooking(request)
-            if (response.isSuccessful && response.body() != null) {
-                val body = response.body()!!
-                if (body.success && body.order != null) {
-                    // Cache confirmed tickets
-                    try {
-                        val cachedTickets = body.tickets?.map { tk ->
-                            CachedTicket(
-                                ticketCode = tk.ticketCode,
-                                orderNumber = body.order?.orderNumber ?: "ORD",
-                                eventTitle = "Confirmed Booking",
-                                venueName = "Maharashtra Venue",
-                                showtime = "",
-                                seatCode = tk.seatCode,
-                                qrPayload = tk.qrPayload ?: tk.ticketCode,
-                                attendeeName = tk.attendeeName ?: userName,
-                                status = tk.status,
-                                grandTotal = body.order?.grandTotal ?: 0
-                            )
-                        } ?: emptyList()
-                        database.ticketDao().insertTickets(cachedTickets)
-                    } catch (e: Exception) {}
-                    
-                    Result.success(body)
+                val verifyRes = apiService.verifyPayment(verifyReq)
+                if (verifyRes.isSuccessful && verifyRes.body() != null) {
+                    val vBody = verifyRes.body()!!
+                    val conf = BookingConfirmationResponse(
+                        success = vBody.success && vBody.verified,
+                        order = vBody.order,
+                        tickets = vBody.tickets,
+                        error = vBody.error
+                    )
+                    Triple(conf, conf.success && conf.order != null, conf.error)
                 } else {
-                    Result.failure(Exception(body.error ?: "बुकिंग निश्चित करण्यात अयशस्वी"))
+                    val rawErr = try { verifyRes.errorBody()?.string() } catch (e: Exception) { null }
+                    val parsedMsg = if (!rawErr.isNullOrBlank()) {
+                        try {
+                            val json = org.json.JSONObject(rawErr)
+                            json.optString("error", json.optString("message", rawErr))
+                        } catch (e: Exception) { rawErr }
+                    } else "पेमेंट पडताळणी अयशस्वी (HTTP ${verifyRes.code()})"
+                    Triple(null, false, parsedMsg)
                 }
             } else {
-                val rawErr = try { response.errorBody()?.string() } catch (e: Exception) { null }
-                val parsedMsg = if (!rawErr.isNullOrBlank()) {
-                    try {
-                        val json = org.json.JSONObject(rawErr)
-                        json.optString("error", json.optString("message", rawErr))
-                    } catch (e: Exception) { rawErr }
-                } else "बुकिंग विनंती अयशस्वी (HTTP ${response.code()})"
-                Result.failure(Exception(parsedMsg))
+                val request = ConfirmBookingRequest(
+                    sessionId = sessionId,
+                    eventId = eventId,
+                    seatIds = seatIds,
+                    userName = userName,
+                    userEmail = userEmail,
+                    userPhone = userPhone,
+                    couponCode = couponCode,
+                    paymentDetails = PaymentDetailsRequest(
+                        gateway = "direct_confirm",
+                        paymentId = paymentId,
+                        orderId = orderId,
+                        signature = signature
+                    )
+                )
+                val response = apiService.confirmBooking(request)
+                if (response.isSuccessful && response.body() != null) {
+                    val conf = response.body()!!
+                    Triple(conf, conf.success && conf.order != null, conf.error)
+                } else {
+                    val rawErr = try { response.errorBody()?.string() } catch (e: Exception) { null }
+                    val parsedMsg = if (!rawErr.isNullOrBlank()) {
+                        try {
+                            val json = org.json.JSONObject(rawErr)
+                            json.optString("error", json.optString("message", rawErr))
+                        } catch (e: Exception) { rawErr }
+                    } else "बुकिंग विनंती अयशस्वी (HTTP ${response.code()})"
+                    Triple(null, false, parsedMsg)
+                }
+            }
+
+            if (isSuccess && body != null && body.order != null) {
+                // Cache confirmed tickets
+                try {
+                    val cachedTickets = body.tickets?.map { tk ->
+                        CachedTicket(
+                            ticketCode = tk.ticketCode,
+                            orderNumber = body.order.orderNumber,
+                            eventTitle = "Confirmed Booking",
+                            venueName = "Maharashtra Venue",
+                            showtime = "",
+                            seatCode = tk.seatCode,
+                            qrPayload = tk.qrPayload ?: tk.ticketCode,
+                            attendeeName = tk.attendeeName ?: userName,
+                            status = tk.status,
+                            grandTotal = body.order.grandTotal
+                        )
+                    } ?: emptyList()
+                    database.ticketDao().insertTickets(cachedTickets)
+                } catch (e: Exception) {}
+
+                Result.success(body)
+            } else {
+                Result.failure(Exception(errorMsg ?: "बुकिंग निश्चित करण्यात अयशस्वी"))
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -307,6 +347,26 @@ class BookingRepository(
                 Result.success(response.body()?.releasedCount ?: 0)
             } else {
                 Result.failure(Exception(response.body()?.error ?: "Failed to release seats"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getTicketDetails(ticketCode: String): Result<SingleTicketDetailsResponse> = withContext(Dispatchers.IO) {
+        try {
+            val response = apiService.getTicketDetails(ticketCode.trim())
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                val rawErr = try { response.errorBody()?.string() } catch (e: Exception) { null }
+                val parsedMsg = if (!rawErr.isNullOrBlank()) {
+                    try {
+                        val json = org.json.JSONObject(rawErr)
+                        json.optString("error", json.optString("message", rawErr))
+                    } catch (e: Exception) { rawErr }
+                } else "तिकीट माहिती सापडली नाही (HTTP ${response.code()})"
+                Result.failure(Exception(parsedMsg))
             }
         } catch (e: Exception) {
             Result.failure(e)

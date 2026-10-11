@@ -24,7 +24,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.kalpkrutinfotech.mahaticket.model.AppTab
 import com.kalpkrutinfotech.mahaticket.ui.viewmodel.TicketGharViewModel
 import com.kalpkrutinfotech.mahaticket.theme.*
 import kotlinx.coroutines.launch
@@ -35,13 +34,19 @@ data class ChatMessage(
     val text: String,
     val timestamp: Long = System.currentTimeMillis(),
     val actionLabel: String? = null,
-    val actionTab: AppTab? = null
+    val actionType: String? = null,
+    val eventId: Int? = null,
+    val sessionId: Int? = null
 )
 
 @Composable
 fun ChatbotScreen(
     viewModel: TicketGharViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onNavigateToExplore: () -> Unit = {},
+    onNavigateToTickets: () -> Unit = {},
+    onNavigateToEvent: (Int) -> Unit = { _ -> },
+    onNavigateToSeats: (sessionId: Int, eventId: Int) -> Unit = { _, _ -> }
 ) {
     val language by viewModel.language.collectAsState()
     val scope = rememberCoroutineScope()
@@ -60,7 +65,7 @@ fun ChatbotScreen(
                 else
                     "Hello! I am TikitMitra, your MahaTicket AI assistant.\n(MahaTicket is a product of Kalpkrut Infotech)\n\nI can help you discover plays, choose seats, and book tickets instantly across Maharashtra. How may I help you?",
                 actionLabel = if (language == AppLanguage.MARATHI) "नाटके शोधा" else "Explore Plays",
-                actionTab = AppTab.EXPLORE
+                actionType = "explore_category"
             )
         )
     }
@@ -68,17 +73,19 @@ fun ChatbotScreen(
     val quickQuestions = remember(language) {
         if (language == AppLanguage.MARATHI) {
             listOf(
+                "आजचे नाटक कोणते?",
+                "तिकीट कसे बुक करावे?",
                 "पुण्यात आज कोणते नाटक आहे?",
-                "नियम व अटी लागू चे तिकीट",
                 "आसने कशी निवडायची?",
                 "कूपन कोड कसा वापरायचा?",
                 "माझी तिकिटे कुठे मिळतील?"
             )
         } else {
             listOf(
+                "Which plays are showing today?",
+                "How to book a ticket?",
                 "Popular plays in Pune today",
-                "Book Niyam Va Ati Laagu",
-                "How to select 6 seats?",
+                "How to select seats?",
                 "Apply promo coupon",
                 "Where is my ticket QR pass?"
             )
@@ -99,28 +106,55 @@ fun ChatbotScreen(
 
             val systemContext = "You are the smart AI assistant for MahaTicket, Maharashtra's official Marathi theatre and cultural booking platform. Help users with real play suggestions, booking guidance, and venue details. Keep responses warm, helpful, and concise in Marathi or English. Emphasize that users can book up to 6 seats per transaction with 100% secure Razorpay checkout."
 
-            val reply = viewModel.geminiService.sendMessage(
+            val result = viewModel.geminiService.sendMessageWithAction(
                 history = history,
                 newMessage = textToSend,
                 systemContext = systemContext
             )
 
+            val serverAction = result.action
+            val reply = result.reply
+
             val lower = textToSend.lowercase()
-            val action = when {
-                lower.contains("seat") || lower.contains("जागा") || lower.contains("बुक") || lower.contains("book") ->
-                    (if (language == AppLanguage.MARATHI) "थेट जागा निवडा" else "Select Seats") to AppTab.LIVE_BOOKING
-                lower.contains("ticket") || lower.contains("तिकीट") || lower.contains("पास") ->
-                    (if (language == AppLanguage.MARATHI) "माझी तिकिटे पहा" else "My Tickets") to AppTab.MY_TICKETS
-                else ->
-                    (if (language == AppLanguage.MARATHI) "नाटके एक्सप्लोर करा" else "Explore Events") to AppTab.EXPLORE
+            val actionLabel: String
+            val actionType: String
+            var targetEventId: Int? = null
+            var targetSessionId: Int? = null
+
+            if (serverAction != null) {
+                actionLabel = serverAction.label
+                actionType = serverAction.type
+                targetEventId = (serverAction.payload?.get("eventId") as? Number)?.toInt()
+                    ?: (serverAction.payload?.get("eventId") as? String)?.toIntOrNull()
+                targetSessionId = (serverAction.payload?.get("sessionId") as? Number)?.toInt()
+                    ?: (serverAction.payload?.get("sessionId") as? String)?.toIntOrNull()
+            } else {
+                when {
+                    lower.contains("seat") || lower.contains("जागा") || lower.contains("बुक") || lower.contains("book") -> {
+                        actionLabel = if (language == AppLanguage.MARATHI) "थेट जागा निवडा" else "Select Seats"
+                        actionType = "select_seats"
+                        targetSessionId = 1
+                        targetEventId = 1
+                    }
+                    lower.contains("ticket") || lower.contains("तिकीट") || lower.contains("पास") -> {
+                        actionLabel = if (language == AppLanguage.MARATHI) "माझी तिकिटे पहा" else "My Tickets"
+                        actionType = "my_tickets"
+                    }
+                    else -> {
+                        actionLabel = if (language == AppLanguage.MARATHI) "नाटके एक्सप्लोर करा" else "Explore Events"
+                        actionType = "explore_category"
+                    }
+                }
             }
 
             chatMessages.add(
                 ChatMessage(
                     sender = "agent",
                     text = reply,
-                    actionLabel = action.first,
-                    actionTab = action.second
+                    actionLabel = actionLabel,
+                    actionType = actionType,
+                    eventId = targetEventId,
+                    sessionId = targetSessionId
                 )
             )
             isThinking = false
@@ -196,7 +230,9 @@ fun ChatbotScreen(
                                 text = if (language == AppLanguage.MARATHI)
                                     "संभाषण रीसेट केले आहे. तुम्हाला नवीन तिकीट किंवा नाटकांबद्दल कशी मदत हवी आहे? 🎭"
                                 else
-                                    "Conversation reset. How can I assist with your next booking? 🎭"
+                                    "Conversation reset. How can I assist with your next booking? 🎭",
+                                actionLabel = if (language == AppLanguage.MARATHI) "नाटके शोधा" else "Explore Plays",
+                                actionType = "explore_category"
                             )
                         )
                     }
@@ -246,11 +282,26 @@ fun ChatbotScreen(
                                 lineHeight = 19.sp
                             )
 
-                            // Contextual Action Shortcut
-                            if (msg.actionLabel != null && msg.actionTab != null) {
+                            // Contextual Action Shortcut leading to real booking / exploration flow
+                            if (msg.actionLabel != null && msg.actionType != null) {
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Button(
-                                    onClick = { viewModel.setTab(msg.actionTab) },
+                                    onClick = {
+                                        when (msg.actionType) {
+                                            "open_event" -> {
+                                                onNavigateToEvent(msg.eventId ?: 1)
+                                            }
+                                            "select_seats" -> {
+                                                onNavigateToSeats(msg.sessionId ?: 1, msg.eventId ?: 1)
+                                            }
+                                            "my_tickets" -> {
+                                                onNavigateToTickets()
+                                            }
+                                            else -> {
+                                                onNavigateToExplore()
+                                            }
+                                        }
+                                    },
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = if (isUser) Color.White else MahaOrange
                                     ),

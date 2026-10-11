@@ -35,9 +35,11 @@ import com.kalpkrutinfotech.mahaticket.ui.viewmodel.TicketsUiState
 @Composable
 fun MyTicketsScreen(
     viewModel: BookingViewModel,
+    language: AppLanguage = AppLanguage.MARATHI,
     onNavigateToHome: () -> Unit = {},
     onNavigateToLogin: () -> Unit = {}
 ) {
+    val isMarathi = language == AppLanguage.MARATHI
     val ticketsState by viewModel.ticketsState.collectAsState()
     val context = LocalContext.current
 
@@ -71,13 +73,13 @@ fun MyTicketsScreen(
                     ) {
                         Column {
                             Text(
-                                text = "माझी डिजिटल तिकिटे",
+                                text = if (isMarathi) "माझी डिजिटल तिकिटे" else "My Digital Tickets",
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = TextPrimary
                             )
                             Text(
-                                text = "आपली सर्व वैध तिकिटे व प्रवेश पास येथे उपलब्ध आहेत",
+                                text = if (isMarathi) "आपली सर्व वैध तिकिटे व प्रवेश पास येथे उपलब्ध आहेत" else "All your active tickets and event passes are available here",
                                 fontSize = 11.5.sp,
                                 color = TextSecondary,
                                 modifier = Modifier.padding(top = 2.dp)

@@ -33,8 +33,10 @@ import com.kalpkrutinfotech.mahaticket.ui.components.SimulatedQrGraphic
 fun BookingSuccessScreen(
     orderNumber: String,
     onViewTicket: (String) -> Unit,
-    onGoHome: () -> Unit
+    onGoHome: () -> Unit,
+    language: AppLanguage = AppLanguage.MARATHI
 ) {
+    val isMarathi = language == AppLanguage.MARATHI
     var isAnimatedIn by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         isAnimatedIn = true
@@ -83,14 +85,14 @@ fun BookingSuccessScreen(
             item {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        text = "बुकिंग यशस्वी झाली!",
+                        text = if (isMarathi) "बुकिंग यशस्वी झाली!" else "Booking Confirmed!",
                         fontSize = 22.sp,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "आपले तिकीट निश्चित झाले आहे व डिजिटल पास तयार आहे.",
+                        text = if (isMarathi) "आपले तिकीट निश्चित झाले आहे व डिजिटल पास तयार आहे." else "Your tickets are confirmed and your digital pass is ready.",
                         fontSize = 13.sp,
                         color = TextSecondary,
                         textAlign = TextAlign.Center
@@ -127,7 +129,7 @@ fun BookingSuccessScreen(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(text = "🎭 ", fontSize = 16.sp)
                                     Text(
-                                        text = "महाटिकिट • डिजिटल पास",
+                                        text = if (isMarathi) "महाटिकिट • डिजिटल पास" else "MahaTicket • Digital Pass",
                                         color = Color.White,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 13.sp
@@ -248,7 +250,7 @@ fun BookingSuccessScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "ई-तिकीट व पास पहा",
+                            text = if (isMarathi) "ई-तिकीट व पास पहा" else "View E-Ticket & Pass",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
@@ -266,7 +268,7 @@ fun BookingSuccessScreen(
                             .testTag("back_to_home_btn")
                     ) {
                         Text(
-                            text = "मुखपृष्ठावर परत जा",
+                            text = if (isMarathi) "मुखपृष्ठावर परत जा" else "Back to Home",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = TextPrimary

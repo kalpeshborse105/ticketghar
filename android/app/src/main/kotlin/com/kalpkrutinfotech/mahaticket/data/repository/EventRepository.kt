@@ -201,7 +201,9 @@ fun EventResponse.toEventItem() = EventItem(
     cast = cast ?: "प्रसाद ओक, मुक्ता बर्वे, क्षिती जोग",
     director = director ?: "चंद्रकांत कुलकर्णी",
     posterUrl = posterUrl ?: "",
+    bannerUrl = bannerUrl,
     minPrice = minPrice,
+    featured = featured,
     venue = venue?.let {
         VenueItem(it.id, it.name, it.nameMr ?: it.name, it.address ?: "", it.city ?: "महाराष्ट्र")
     },
@@ -209,7 +211,9 @@ fun EventResponse.toEventItem() = EventItem(
         SessionItem(it.id, it.eventId, it.sessionStartTime, it.sessionEndTime ?: "", it.status)
     },
     trailerUrl = trailerUrl,
-    galleryUrls = galleryUrls
+    galleryUrls = galleryUrls,
+    rating = rating,
+    ratingCount = ratingCount
 )
 
 fun CachedEvent.toEventItem() = EventItem(

@@ -40,6 +40,10 @@ class EventViewModel(
     
     private val _eventsState = MutableStateFlow<EventsUiState>(EventsUiState.Loading)
     val eventsState: StateFlow<EventsUiState> = _eventsState.asStateFlow()
+
+    // Dedicated stable banner state separated from filter/category state
+    private val _bannerEvents = MutableStateFlow<List<EventItem>>(emptyList())
+    val bannerEvents: StateFlow<List<EventItem>> = _bannerEvents.asStateFlow()
     
     private val _eventDetailState = MutableStateFlow<EventDetailUiState>(EventDetailUiState.Loading)
     val eventDetailState: StateFlow<EventDetailUiState> = _eventDetailState.asStateFlow()
@@ -112,6 +116,13 @@ class EventViewModel(
             
             _eventsState.value = result.fold(
                 onSuccess = { events ->
+                    if (_bannerEvents.value.isEmpty() && events.isNotEmpty()) {
+                        val featuredList = events.filter {
+                            (it.featured == 1 || it.category.equals("plays", true) || it.category.equals("natak", true) || it.category.equals("theatre", true)) &&
+                            (!it.bannerUrl.isNullOrBlank() || !it.posterUrl.isNullOrBlank())
+                        }
+                        _bannerEvents.value = if (featuredList.isNotEmpty()) featuredList.take(6) else events.take(6)
+                    }
                     EventsUiState.Success(events, isOfflineData = !isCurrentlyOnline)
                 },
                 onFailure = { error ->

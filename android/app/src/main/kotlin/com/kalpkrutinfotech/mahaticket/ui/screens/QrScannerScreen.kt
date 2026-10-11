@@ -25,7 +25,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -47,10 +49,20 @@ fun QrScannerScreen(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val haptic = LocalHapticFeedback.current
 
     val language by viewModel.language.collectAsState()
     val scannerResult by viewModel.scannerResult.collectAsState()
-    val bookings by viewModel.bookings.collectAsState()
+
+    LaunchedEffect(scannerResult) {
+        scannerResult?.let { res ->
+            if (res.isValid) {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            } else {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            }
+        }
+    }
 
     var hasCameraPermission by remember {
         mutableStateOf(
@@ -321,9 +333,9 @@ fun QrScannerScreen(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // Quick Simulated Scan of Active Bookings for fast contactless testing
+        // Manual Input Fallback
         Text(
-            text = if (language == AppLanguage.MARATHI) "चाचणीसाठी तिकीट निवडा (Quick Contactless Test Scan):" else "Quick Test Scan from Active Passes:",
+            text = if (language == AppLanguage.MARATHI) "किंवा तिकीट कोड मॅन्युअली टाका (Manual Entry):" else "Or Enter Ticket Code Manually:",
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
             color = Color(0xFF94A3B8),
@@ -331,31 +343,6 @@ fun QrScannerScreen(
         )
 
         Spacer(modifier = Modifier.height(6.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            bookings.take(2).forEach { b ->
-                Button(
-                    onClick = {
-                        manualCodeInput = b.bookingId
-                        viewModel.validateGateQr(b.bookingId)
-                    },
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E293B)),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(
-                        text = "Scan #${b.bookingId}",
-                        fontSize = 11.sp,
-                        color = GoldAccent
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
 
         // Manual Input Fallback
         Row(

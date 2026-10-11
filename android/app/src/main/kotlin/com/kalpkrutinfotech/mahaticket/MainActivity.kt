@@ -10,6 +10,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -21,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -38,6 +40,7 @@ import com.kalpkrutinfotech.mahaticket.ui.components.BilingualTopBar
 import com.kalpkrutinfotech.mahaticket.ui.screens.*
 import com.kalpkrutinfotech.mahaticket.ui.viewmodel.*
 import com.kalpkrutinfotech.mahaticket.util.RazorpayPaymentManager
+import com.kalpkrutinfotech.mahaticket.util.UserSessionManager
 import com.razorpay.Checkout
 import com.razorpay.PaymentData
 import com.razorpay.PaymentResultWithDataListener
@@ -112,10 +115,12 @@ fun MahaTicketRoot() {
         factory = object : androidx.lifecycle.ViewModelProvider.Factory {
             override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
                 @Suppress("UNCHECKED_CAST")
+                val sessionManager = UserSessionManager.getInstance(app)
                 return TicketGharViewModel(
                     eventRepository = app.eventRepository,
                     bookingRepository = app.bookingRepository,
-                    networkMonitor = app.networkMonitor
+                    networkMonitor = app.networkMonitor,
+                    sessionManager = sessionManager
                 ) as T
             }
         }
@@ -235,7 +240,8 @@ fun MahaTicketRoot() {
             if (isTopLevelRoute) {
                 TheatricalBottomNavigationBar(
                     navController = navController,
-                    currentRole = currentUser?.role ?: UserRole.PUBLIC_USER
+                    currentRole = currentUser?.role ?: UserRole.PUBLIC_USER,
+                    currentLanguage = currentLanguage
                 )
             }
         }
@@ -293,11 +299,12 @@ fun MahaTicketRoot() {
                 }
             ) {
                 composable(Screen.Home.route) {
-                    HomeScreenWithViewModel(eventViewModel, navController)
+                    HomeScreenWithViewModel(eventViewModel, navController, language = currentLanguage)
                 }
                 composable(Screen.Explore.route) {
                     ExploreScreen(
                         viewModel = eventViewModel,
+                        language = currentLanguage,
                         onSelectEvent = { event ->
                             navController.navigate(BookingRoutes.eventDetail(event.id))
                         }
@@ -306,6 +313,7 @@ fun MahaTicketRoot() {
                 composable(Screen.Tickets.route) {
                     MyTicketsScreen(
                         viewModel = bookingViewModel,
+                        language = currentLanguage,
                         onNavigateToHome = {
                             navController.navigate(Screen.Home.route)
                         },
@@ -319,6 +327,8 @@ fun MahaTicketRoot() {
                 }
                 composable(Screen.Profile.route) {
                     ProfileScreen(
+                        language = currentLanguage,
+                        onLanguageToggle = { mainViewModel.setLanguage(it) },
                         onNavigateToLogin = {
                             navController.navigate(BookingRoutes.LOGIN)
                         },
@@ -331,24 +341,71 @@ fun MahaTicketRoot() {
                     )
                 }
                 composable(Screen.Admin.route) {
-                    AdminControlCenterScreen(viewModel = mainViewModel)
+                    val sessionManager = remember { UserSessionManager.getInstance(app) }
+                    if (sessionManager.isAdmin()) {
+                        AdminControlCenterScreen(viewModel = mainViewModel)
+                    } else {
+                        UnauthorizedAccessScreen(
+                            title = "प्रशासकीय नियंत्रण कक्ष (Admin Only)",
+                            message = "हे पृष्ठ केवळ महाटिकिट अधिकृत प्रशासक (Super Admin) खात्यांसाठी उपलब्ध आहे.",
+                            onNavigateBack = { navController.popBackStack() }
+                        )
+                    }
                 }
                 composable(Screen.Organizer.route) {
-                    OrganizerScreen(
-                        viewModel = mainViewModel,
-                        onLaunchScannerClick = { navController.navigate(Screen.QrScanner.route) },
-                        onViewShowSeatsClick = { event ->
-                            val firstSession = event.availableShowtimes.firstOrNull()?.id?.toIntOrNull() ?: 1
-                            val evId = event.id.toIntOrNull() ?: 1
-                            navController.navigate(BookingRoutes.seatSelection(firstSession, evId))
-                        }
-                    )
+                    val sessionManager = remember { UserSessionManager.getInstance(app) }
+                    if (sessionManager.isOrganizer() || sessionManager.isAdmin()) {
+                        OrganizerScreen(
+                            viewModel = mainViewModel,
+                            onLaunchScannerClick = { navController.navigate(Screen.QrScanner.route) },
+                            onViewShowSeatsClick = { event ->
+                                val firstSession = event.availableShowtimes.firstOrNull()?.id?.toIntOrNull() ?: 1
+                                val evId = event.id.toIntOrNull() ?: 1
+                                navController.navigate(BookingRoutes.seatSelection(firstSession, evId))
+                            }
+                        )
+                    } else {
+                        UnauthorizedAccessScreen(
+                            title = "आयोजक डॅशबोर्ड (Organizer Only)",
+                            message = "हे पृष्ठ केवळ पडताळणी झालेल्या कार्यक्रम आयोजक (Event Organizer) खात्यांसाठी राखीव आहे.",
+                            onNavigateBack = { navController.popBackStack() }
+                        )
+                    }
                 }
                 composable(Screen.QrScanner.route) {
-                    QrScannerScreen(viewModel = mainViewModel)
+                    val sessionManager = remember { UserSessionManager.getInstance(app) }
+                    if (sessionManager.isOrganizer() || sessionManager.isAdmin()) {
+                        QrScannerScreen(viewModel = mainViewModel)
+                    } else {
+                        UnauthorizedAccessScreen(
+                            title = "प्रवेश गेट स्कॅनर (Gate Staff / Organizer)",
+                            message = "तिकीट पडताळणी स्कॅनर वापरण्यासाठी अधिकृत आयोजक किंवा गेट स्टाफ म्हणून लॉगिन आवश्यक आहे.",
+                            onNavigateBack = { navController.popBackStack() }
+                        )
+                    }
                 }
                 composable(Screen.Chatbot.route) {
-                    ChatbotScreen(viewModel = mainViewModel)
+                    ChatbotScreen(
+                        viewModel = mainViewModel,
+                        onNavigateToExplore = {
+                            navController.navigate(Screen.Explore.route) {
+                                popUpTo(Screen.Home.route) { saveState = true }
+                                launchSingleTop = true
+                            }
+                        },
+                        onNavigateToTickets = {
+                            navController.navigate(Screen.Tickets.route) {
+                                popUpTo(Screen.Home.route) { saveState = true }
+                                launchSingleTop = true
+                            }
+                        },
+                        onNavigateToEvent = { eventId ->
+                            navController.navigate(BookingRoutes.eventDetail(eventId))
+                        },
+                        onNavigateToSeats = { sessionId, eventId ->
+                            navController.navigate(BookingRoutes.seatSelection(sessionId, eventId))
+                        }
+                    )
                 }
                 composable(Screen.Notifications.route) {
                     NotificationsScreen(viewModel = mainViewModel)
@@ -367,6 +424,7 @@ fun MahaTicketRoot() {
                     val eventId = backStackEntry.arguments?.getInt("eventId") ?: 0
                     EventDetailScreen(
                         eventId = eventId,
+                        language = currentLanguage,
                         onNavigateBack = { navController.popBackStack() },
                         onBookSession = { sessionId, evId ->
                             navController.navigate(BookingRoutes.seatSelection(sessionId, evId))
@@ -388,6 +446,7 @@ fun MahaTicketRoot() {
                         eventId = eventId,
                         bookingViewModel = bookingViewModel,
                         eventViewModel = eventViewModel,
+                        language = currentLanguage,
                         onNavigateBack = { navController.popBackStack() },
                         onContinueToCheckout = { holdToken, sessId, evId ->
                             navController.navigate(BookingRoutes.checkout(holdToken, sessId, evId))
@@ -411,6 +470,7 @@ fun MahaTicketRoot() {
                         sessionId = sessionId,
                         eventId = eventId,
                         bookingViewModel = bookingViewModel,
+                        language = currentLanguage,
                         onNavigateBack = { navController.popBackStack() },
                         onBookingSuccess = { orderNumber ->
                             navController.navigate(BookingRoutes.bookingSuccess(orderNumber)) {
@@ -438,6 +498,7 @@ fun MahaTicketRoot() {
                     val orderNumber = backStackEntry.arguments?.getString("orderNumber") ?: ""
                     BookingSuccessScreen(
                         orderNumber = orderNumber,
+                        language = currentLanguage,
                         onViewTicket = { ticketCode ->
                             navController.navigate(BookingRoutes.ticketDetail(ticketCode))
                         },
@@ -456,6 +517,7 @@ fun MahaTicketRoot() {
                     val ticketCode = backStackEntry.arguments?.getString("ticketCode") ?: ""
                     TicketDetailScreen(
                         ticketCode = ticketCode,
+                        language = currentLanguage,
                         onNavigateBack = { navController.popBackStack() }
                     )
                 }
@@ -477,8 +539,10 @@ fun MahaTicketRoot() {
 @Composable
 fun TheatricalBottomNavigationBar(
     navController: NavHostController,
-    currentRole: UserRole
+    currentRole: UserRole,
+    currentLanguage: AppLanguage = AppLanguage.MARATHI
 ) {
+    val isMarathi = currentLanguage == AppLanguage.MARATHI
     val screens = when (currentRole) {
         UserRole.ADMIN -> listOf(
             Screen.Home,
@@ -519,11 +583,14 @@ fun TheatricalBottomNavigationBar(
             screens.forEach { screen ->
                 val isSelected = currentRoute == screen.route
                 val labelText = when (screen) {
-                    Screen.Home -> "मुख्यपृष्ठ"
-                    Screen.Explore -> "शोधा"
-                    Screen.Tickets -> "माझी तिकिटे"
-                    Screen.Offers -> "ऑफर्स"
-                    Screen.Profile -> "प्रोफाईल"
+                    Screen.Home -> if (isMarathi) "मुख्यपृष्ठ" else "Home"
+                    Screen.Explore -> if (isMarathi) "शोधा" else "Explore"
+                    Screen.Tickets -> if (isMarathi) "माझी तिकिटे" else "Tickets"
+                    Screen.Offers -> if (isMarathi) "ऑफर्स" else "Offers"
+                    Screen.Profile -> if (isMarathi) "प्रोफाईल" else "Profile"
+                    Screen.Admin -> if (isMarathi) "प्रशासक" else "Admin"
+                    Screen.Organizer -> if (isMarathi) "आयोजक" else "Organizer"
+                    Screen.QrScanner -> if (isMarathi) "स्कॅनर" else "Scanner"
                     else -> screen.title
                 }
 
@@ -627,6 +694,52 @@ fun OnlineRestoredBanner() {
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold
             )
+        }
+    }
+}
+
+@Composable
+fun UnauthorizedAccessScreen(
+    title: String,
+    message: String,
+    onNavigateBack: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MahaBg)
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            imageVector = Icons.Default.Lock,
+            contentDescription = "Access Restricted",
+            tint = TheatricalCrimson,
+            modifier = Modifier.size(56.dp)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = title,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextPrimary,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = message,
+            fontSize = 13.sp,
+            color = TextSecondary,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(20.dp))
+        Button(
+            onClick = onNavigateBack,
+            colors = ButtonDefaults.buttonColors(containerColor = MahaOrange),
+            shape = RoundedCornerShape(8.dp)
+        ) {
+            Text(text = "मागे जा (Go Back)", color = Color.White)
         }
     }
 }

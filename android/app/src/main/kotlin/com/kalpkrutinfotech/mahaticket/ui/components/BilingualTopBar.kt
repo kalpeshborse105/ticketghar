@@ -1,16 +1,21 @@
 package com.kalpkrutinfotech.mahaticket.ui.components
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,13 +23,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
+import com.kalpkrutinfotech.mahaticket.R
 import com.kalpkrutinfotech.mahaticket.theme.*
+import com.kalpkrutinfotech.mahaticket.util.UserSessionManager
 
 data class SupportedCity(
     val id: String,
@@ -37,10 +46,40 @@ val MAHARASHTRA_CITIES = listOf(
     SupportedCity("All", "संपूर्ण महाराष्ट्र", "All Maharashtra", "🏛️"),
     SupportedCity("Pune", "पुणे", "Pune", "🎭"),
     SupportedCity("Mumbai", "मुंबई", "Mumbai", "🌊"),
+    SupportedCity("Thane", "ठाणे", "Thane", "🌳"),
     SupportedCity("Nagpur", "नागपूर", "Nagpur", "🍊"),
     SupportedCity("Nashik", "नाशिक", "Nashik", "🍇"),
     SupportedCity("Chh. Sambhajinagar", "छ. संभाजीनगर", "Chh. Sambhajinagar", "🏰"),
-    SupportedCity("Kolhapur", "कोल्हापूर", "Kolhapur", "🚩")
+    SupportedCity("Kolhapur", "कोल्हापूर", "Kolhapur", "🚩"),
+    SupportedCity("Ahilyanagar", "अहिल्यानगर (अहमदनगर)", "Ahilyanagar (Ahmednagar)", "🌾"),
+    SupportedCity("Akola", "अकोला", "Akola", "🏛️"),
+    SupportedCity("Amravati", "अमरावती", "Amravati", "🌸"),
+    SupportedCity("Beed", "बीड", "Beed", "🌾"),
+    SupportedCity("Bhandara", "भंडारा", "Bhandara", "💧"),
+    SupportedCity("Buldhana", "बुलढाणा", "Buldhana", "☄️"),
+    SupportedCity("Chandrapur", "चंद्रपूर", "Chandrapur", "🐅"),
+    SupportedCity("Dharashiv", "धाराशिव (उस्मानाबाद)", "Dharashiv (Osmanabad)", "🛕"),
+    SupportedCity("Dhule", "धुळे", "Dhule", "🌾"),
+    SupportedCity("Gadchiroli", "गडचिरोली", "Gadchiroli", "🌲"),
+    SupportedCity("Gondia", "गोंदिया", "Gondia", "🌾"),
+    SupportedCity("Hingoli", "हिंगोली", "Hingoli", "🌿"),
+    SupportedCity("Jalgaon", "जळगाव", "Jalgaon", "🍌"),
+    SupportedCity("Jalna", "जालना", "Jalna", "🏭"),
+    SupportedCity("Latur", "लातूर", "Latur", "📚"),
+    SupportedCity("Mumbai Suburban", "मुंबई उपनगर", "Mumbai Suburban", "🏙️"),
+    SupportedCity("Nanded", "नांदेड", "Nanded", "🛕"),
+    SupportedCity("Nandurbar", "नंदुरबार", "Nandurbar", "🏹"),
+    SupportedCity("Palghar", "पालघर", "Palghar", "🏖️"),
+    SupportedCity("Parbhani", "परभणी", "Parbhani", "🌾"),
+    SupportedCity("Raigad", "रायगड", "Raigad", "🏰"),
+    SupportedCity("Ratnagiri", "रत्नागिरी", "Ratnagiri", "🥭"),
+    SupportedCity("Sangli", "सांगली", "Sangli", "🌾"),
+    SupportedCity("Satara", "सातारा", "Satara", "⛰️"),
+    SupportedCity("Sindhudurg", "सिंधुदुर्ग", "Sindhudurg", "🏖️"),
+    SupportedCity("Solapur", "सोलापूर", "Solapur", "🧵"),
+    SupportedCity("Wardha", "वर्धा", "Wardha", "🕊️"),
+    SupportedCity("Washim", "वाशीम", "Washim", "🌿"),
+    SupportedCity("Yavatmal", "यवतमाळ", "Yavatmal", "🌾")
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -59,18 +98,23 @@ fun BilingualTopBar(
     onProfileClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val sessionManager = remember { UserSessionManager.getInstance(context) }
+    val userAvatar by sessionManager.userAvatar.collectAsState()
+    val userName by sessionManager.userName.collectAsState()
+
     var showRoleMenu by remember { mutableStateOf(false) }
     var showCityModal by remember { mutableStateOf(false) }
 
     val displayCityMr = remember(selectedCity) {
+        val matched = MAHARASHTRA_CITIES.firstOrNull {
+            it.id.equals(selectedCity, ignoreCase = true) ||
+            it.nameMr.contains(selectedCity, ignoreCase = true) ||
+            it.nameEn.equals(selectedCity, ignoreCase = true)
+        }
         when {
+            matched != null -> matched.nameMr.substringBefore(" (")
             selectedCity.contains("All", ignoreCase = true) || selectedCity.contains("महाराष्ट्र") -> "महाराष्ट्र"
-            selectedCity.equals("Pune", ignoreCase = true) -> "पुणे"
-            selectedCity.equals("Mumbai", ignoreCase = true) -> "मुंबई"
-            selectedCity.equals("Nagpur", ignoreCase = true) -> "नागपूर"
-            selectedCity.equals("Nashik", ignoreCase = true) -> "नाशिक"
-            selectedCity.contains("Sambhajinagar", ignoreCase = true) -> "संभाजीनगर"
-            selectedCity.equals("Kolhapur", ignoreCase = true) -> "कोल्हापूर"
             else -> selectedCity
         }
     }
@@ -88,22 +132,20 @@ fun BilingualTopBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Brand Logo & City Indicator (Stitch Exact)
+            // Brand Logo & City Indicator (Stitch & Web App Parity)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.weight(1f)
             ) {
-                // Theatre Mask Icon in warm gradient
-                Box(
+                // Official MahaTicket Web App Icon
+                Image(
+                    painter = painterResource(id = R.drawable.ic_web_icon),
+                    contentDescription = "MahaTicket",
                     modifier = Modifier
                         .size(36.dp)
                         .clip(RoundedCornerShape(10.dp))
-                        .background(MahaOrange),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(text = "🎭", fontSize = 20.sp)
-                }
+                )
 
                 Column(modifier = Modifier.weight(1f, fill = false)) {
                     Row(
@@ -187,7 +229,7 @@ fun BilingualTopBar(
                     )
                 }
 
-                // Profile Avatar (Circular with user initial or photo)
+                // Profile Avatar (Circular with user photo or initial)
                 Box {
                     Surface(
                         modifier = Modifier
@@ -199,16 +241,26 @@ fun BilingualTopBar(
                         shape = CircleShape,
                         border = BorderStroke(1.5.dp, MahaOrange.copy(alpha = 0.4f))
                     ) {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            Text(
-                                text = "क",
-                                color = Color.White,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold
+                        if (!userAvatar.isNullOrBlank()) {
+                            AsyncImage(
+                                model = userAvatar,
+                                contentDescription = "User Avatar",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
                             )
+                        } else {
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                val initial = userName?.firstOrNull()?.toString() ?: "क"
+                                Text(
+                                    text = initial,
+                                    color = Color.White,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
 
@@ -247,8 +299,22 @@ fun BilingualTopBar(
         }
     }
 
-    // Modern City Selection Modal Dialog
+    // Modern 36 Maharashtra Districts Search & Selection Modal Dialog
     if (showCityModal) {
+        var districtSearchQuery by remember { mutableStateOf("") }
+        val filteredDistricts = remember(districtSearchQuery) {
+            if (districtSearchQuery.isBlank()) {
+                MAHARASHTRA_CITIES
+            } else {
+                val q = districtSearchQuery.trim()
+                MAHARASHTRA_CITIES.filter {
+                    it.nameMr.contains(q, ignoreCase = true) ||
+                    it.nameEn.contains(q, ignoreCase = true) ||
+                    it.id.contains(q, ignoreCase = true)
+                }
+            }
+        }
+
         Dialog(onDismissRequest = { showCityModal = false }) {
             Surface(
                 shape = RoundedCornerShape(20.dp),
@@ -257,7 +323,7 @@ fun BilingualTopBar(
                 shadowElevation = 16.dp,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(8.dp)
+                    .padding(vertical = 16.dp)
             ) {
                 Column(
                     modifier = Modifier
@@ -271,13 +337,13 @@ fun BilingualTopBar(
                     ) {
                         Column {
                             Text(
-                                text = "आपले शहर निवडा",
-                                fontSize = 17.sp,
+                                text = "आपला जिल्हा किंवा शहर निवडा",
+                                fontSize = 16.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = TextPrimary
                             )
                             Text(
-                                text = "तुमच्या शहरात सुरू असलेले नाट्यप्रयोग व कार्यक्रम",
+                                text = "महाराष्ट्रातील सर्व ३६ जिल्ह्यांतील कार्यक्रम",
                                 fontSize = 11.5.sp,
                                 color = TextSecondary
                             )
@@ -290,16 +356,75 @@ fun BilingualTopBar(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
+                    // District search box
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFFF8FAFC),
+                        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 9.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Search,
+                                contentDescription = "Search",
+                                tint = Color(0xFFC2410C),
+                                modifier = Modifier.size(18.dp)
+                            )
+                            BasicTextField(
+                                value = districtSearchQuery,
+                                onValueChange = { districtSearchQuery = it },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f),
+                                textStyle = androidx.compose.ui.text.TextStyle(
+                                    color = TextPrimary,
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.Medium
+                                ),
+                                decorationBox = { innerTextField ->
+                                    if (districtSearchQuery.isEmpty()) {
+                                        Text(
+                                            text = "जिल्हा किंवा शहर शोधा (उदा. पुणे, नाशिक)...",
+                                            color = Color(0xFF94A3B8),
+                                            fontSize = 12.sp
+                                        )
+                                    }
+                                    innerTextField()
+                                }
+                            )
+                            if (districtSearchQuery.isNotEmpty()) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Clear",
+                                    tint = TextSecondary,
+                                    modifier = Modifier
+                                        .size(16.dp)
+                                        .clickable { districtSearchQuery = "" }
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 380.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        MAHARASHTRA_CITIES.forEach { city ->
+                        items(filteredDistricts, key = { it.id }) { city ->
                             val isSelected = (city.id == "All" && (selectedCity.contains("All", ignoreCase = true) || selectedCity.contains("महाराष्ट्र"))) ||
                                     selectedCity.equals(city.id, ignoreCase = true) ||
-                                    selectedCity.equals(city.nameMr, ignoreCase = true)
+                                    selectedCity.equals(city.nameMr, ignoreCase = true) ||
+                                    (city.id != "All" && selectedCity.contains(city.nameMr.substringBefore(" (")))
 
                             Surface(
                                 modifier = Modifier

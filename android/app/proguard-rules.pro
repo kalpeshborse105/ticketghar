@@ -54,3 +54,7 @@
 # Jetpack Compose
 -keep class androidx.compose.** { *; }
 -dontwarn androidx.compose.**
+
+# ZXing
+-keep class com.google.zxing.** { *; }
+-dontwarn com.google.zxing.**
