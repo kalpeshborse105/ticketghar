@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
 import { orders, events, venues, eventSessions, tickets, ticketTypes, users } from '@/src/db/schema.ts';
-import { eq, desc, and } from 'drizzle-orm';
+import { eq, desc, and, or, sql } from 'drizzle-orm';
 import QRCode from 'qrcode';
 import { createClient } from '@/src/lib/supabase/server.ts';
 import { getCustomerSession } from '@/src/lib/auth-service';
@@ -185,7 +185,11 @@ export async function GET(request: Request) {
       .innerJoin(events, eq(orders.eventId, events.id))
       .innerJoin(venues, eq(events.venueId, venues.id))
       .innerJoin(eventSessions, eq(orders.sessionId, eventSessions.id))
-      .where(eq(orders.userEmail, cleanUserEmail))
+      .where(
+        authUser.id && typeof authUser.id === 'number'
+          ? or(sql`lower(${orders.userEmail}) = ${cleanUserEmail}`, eq(orders.userId, authUser.id))
+          : sql`lower(${orders.userEmail}) = ${cleanUserEmail}`
+      )
       .orderBy(desc(orders.createdAt))
       .limit(50);
 

@@ -12,6 +12,15 @@ export default function MyTicketsPage() {
   const [language, setLanguage] = useState<Language>('mr');
   const [selectedPass, setSelectedPass] = useState<any | null>(null);
 
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('mahaticket_lang');
+      if (saved === 'en' || saved === 'mr') {
+        setLanguage(saved);
+      }
+    }
+  }, []);
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-[#141B2B]">
       <Header
