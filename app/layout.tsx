@@ -1,19 +1,12 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter, Noto_Sans, Noto_Sans_Devanagari } from 'next/font/google';
+import { Manrope, Noto_Sans_Devanagari } from 'next/font/google';
 import './globals.css';
 import { TikitMitraFloatingBot } from '@/src/components/TikitMitraFloatingBot';
 import { GlobalMobileNav } from '@/src/components/ui/GlobalMobileNav';
 
-const inter = Inter({
+const manrope = Manrope({
   subsets: ['latin'],
-  variable: '--font-inter',
-  weight: ['400', '500', '600', '700'],
-  display: 'swap',
-});
-
-const notoSans = Noto_Sans({
-  subsets: ['latin'],
-  variable: '--font-noto-sans',
+  variable: '--font-manrope',
   weight: ['400', '500', '600', '700', '800'],
   display: 'swap',
 });
@@ -56,7 +49,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="mr"
-      className={`${inter.variable} ${notoSans.variable} ${notoSansDevanagari.variable}`}
+      className={`${manrope.variable} ${notoSansDevanagari.variable}`}
       suppressHydrationWarning
     >
       <head>

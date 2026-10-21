@@ -136,17 +136,29 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid event ID' }, { status: 400 });
     }
 
-    // 1. Mandatory Login Check
+    const body = await request.json();
+    const { rating, comment, city, userEmail: bodyEmail, userName: bodyName } = body;
+
+    // 1. User identification (Web session or Mobile payload)
     const customerUser = await getCustomerSession();
-    if (!customerUser) {
+    const effectiveEmail = customerUser?.email || bodyEmail;
+    const effectiveName = customerUser?.fullName || bodyName || (effectiveEmail ? effectiveEmail.split('@')[0] : 'प्रेक्षक');
+    let effectiveUserId = customerUser?.id || null;
+
+    if (!effectiveEmail) {
       return NextResponse.json(
         { error: 'परीक्षण नोंदवण्यासाठी कृपया लॉगिन करा (Login required to rate this show)' },
         { status: 401 }
       );
     }
 
-    const body = await request.json();
-    const { rating, comment, city } = body;
+    if (!effectiveUserId) {
+      // Look up user in db by email if present
+      const uRes = await pool.query('SELECT id, full_name FROM users WHERE email = $1 LIMIT 1', [effectiveEmail.toLowerCase()]);
+      if (uRes.rows.length > 0) {
+        effectiveUserId = uRes.rows[0].id;
+      }
+    }
 
     const numRating = Number(rating);
     if (!numRating || numRating < 1 || numRating > 5) {
@@ -164,18 +176,15 @@ export async function POST(
     }
 
     // 2. Prevent duplicate rating for the same event by the same user
-    const existing = await db
-      .select({ id: eventReviews.id })
-      .from(eventReviews)
-      .where(
-        and(
-          eq(eventReviews.eventId, eventId),
-          sql`(${eventReviews.userId} = ${customerUser.id} OR ${eventReviews.userEmail} = ${customerUser.email})`
-        )
-      )
-      .limit(1);
+    const existing = await pool.query(
+      `SELECT id FROM event_reviews 
+       WHERE event_id = $1 
+         AND (LOWER(user_email) = LOWER($2) ${effectiveUserId ? 'OR user_id = ' + effectiveUserId : ''}) 
+       LIMIT 1`,
+      [eventId, effectiveEmail]
+    );
 
-    if (existing.length > 0) {
+    if (existing.rows.length > 0) {
       return NextResponse.json(
         { error: 'तुम्ही या कार्यक्रमाचे परीक्षण आधीच नोंदवले आहे (You have already reviewed this event)' },
         { status: 409 }
@@ -185,43 +194,47 @@ export async function POST(
     // Check if user has an actual confirmed order for this event (verified attendance)
     let verifiedAttendance = 0;
     try {
-      const userOrders = await db
-        .select({ id: orders.id })
-        .from(orders)
-        .where(
-          and(
-            eq(orders.eventId, eventId),
-            eq(orders.userId, customerUser.id),
-            eq(orders.orderStatus, 'confirmed')
+      if (effectiveUserId) {
+        const userOrders = await db
+          .select({ id: orders.id })
+          .from(orders)
+          .where(
+            and(
+              eq(orders.eventId, eventId),
+              eq(orders.userId, effectiveUserId),
+              eq(orders.orderStatus, 'confirmed')
+            )
           )
-        )
-        .limit(1);
-      if (userOrders.length > 0) {
-        verifiedAttendance = 1;
+          .limit(1);
+        if (userOrders.length > 0) {
+          verifiedAttendance = 1;
+        }
       }
     } catch {
       // Non-blocking
     }
 
     // 3. Insert review into database
-    const inserted = await db
-      .insert(eventReviews)
-      .values({
+    const insertRes = await pool.query(
+      `INSERT INTO event_reviews (event_id, user_id, user_email, user_name, city, rating, comment, verified_attendance, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+       RETURNING *`,
+      [
         eventId,
-        userId: customerUser.id,
-        userEmail: customerUser.email,
-        userName: customerUser.fullName || customerUser.email.split('@')[0],
-        city: city?.trim() || 'महाराष्ट्र',
-        rating: numRating,
-        comment: comment.trim(),
+        effectiveUserId || 1,
+        effectiveEmail.toLowerCase(),
+        effectiveName,
+        city?.trim() || 'पुणे',
+        numRating,
+        comment.trim(),
         verifiedAttendance,
-      })
-      .returning();
+      ]
+    );
 
     return NextResponse.json({
       success: true,
       message: 'आपले परीक्षण यशस्वीरीत्या नोंदवले गेले आहे (Review submitted successfully)',
-      review: inserted[0],
+      review: insertRes.rows[0],
     });
   } catch (error: any) {
     console.error('Error submitting review:', error);

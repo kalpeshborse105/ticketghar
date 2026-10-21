@@ -5,11 +5,14 @@ import { relations } from 'drizzle-orm';
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
   uid: text('uid').notNull().unique(), // Firebase UID, Auth token, or user identifier
-  email: text('email').notNull(),
+  email: text('email').notNull().unique(),
   fullName: text('full_name').notNull().default('Guest User'),
   phoneNumber: text('phone_number'),
   avatarUrl: text('avatar_url'),
-  role: text('role').notNull().default('customer'), // 'customer' | 'super_admin' | 'organizer' | 'manager' | 'operations' | 'finance' | 'scanner'
+  // Roles (keep only these — easy to audit in admin):
+  // customer = book tickets | organizer = own events/venues/sales | scanner = gate scan
+  // super_admin = full platform | manager/operations/finance = staff (optional)
+  role: text('role').notNull().default('customer'),
   preferredLanguage: text('preferred_language').notNull().default('mr'), // 'mr' | 'en'
   city: text('city').notNull().default('Pune'),
   passwordHash: text('password_hash'),
@@ -460,3 +463,19 @@ export const ticketsRelations = relations(tickets, ({ one, many }) => ({
   }),
   scans: many(ticketScans),
 }));
+
+// Home & Mobile UI Section Customizations
+export const homeSections = pgTable('home_sections', {
+  id: serial('id').primaryKey(),
+  sectionKey: text('section_key').notNull().unique(),
+  titleEn: text('title_en').notNull(),
+  titleMr: text('title_mr').notNull(),
+  subtitleEn: text('subtitle_en').default(''),
+  subtitleMr: text('subtitle_mr').default(''),
+  badgeEn: text('badge_en').default(''),
+  badgeMr: text('badge_mr').default(''),
+  sortOrder: integer('sort_order').default(0),
+  isVisible: integer('is_visible').default(1),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});

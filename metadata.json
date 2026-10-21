@@ -1,5 +1,5 @@
 {
-  "name": "TicketGhar - तिकीटघर",
+  "name": "MahaTicket - महाटिकिट",
   "description": "Maharashtra-first digital ticket marketplace for plays, movies, concerts, and cultural events with database-authoritative seat reservation, instant QR passes, and organizer settlement engine.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

@@ -129,6 +129,7 @@ export default function EventDetailPage() {
 
   // Accordion state for rules & advisory
   const [openRuleIndex, setOpenRuleIndex] = useState<number | null>(0);
+  const [notifyMeRegistered, setNotifyMeRegistered] = useState(false);
 
   // Database-backed gallery photos for this event
   const eventPhotos = React.useMemo(() => {
@@ -698,12 +699,21 @@ export default function EventDetailPage() {
             {/* Title & Badges Bar */}
             <div className="bg-white p-6 rounded-2xl shadow-xs border border-[#E5E7EB] space-y-3">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded-full bg-orange-100 text-[#A33900] text-xs font-bold">
-                  सुपरहिट १००+ प्रयोग
-                </span>
-                <span className="px-2.5 py-0.5 rounded-full bg-[#FFF7ED] text-[#EA580C] text-xs font-semibold flex items-center gap-1">
-                  ✓ महाटिकिट प्रमाणित नाटक
-                </span>
+                {(!event.sessions || event.sessions.length === 0 || (event as any).isInformational) ? (
+                  <span className="px-3 py-1 rounded-full bg-amber-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs">
+                    <span>ℹ️</span>
+                    <span>माहितीपर शो • लवकरच बुकिंग सुरू</span>
+                  </span>
+                ) : (
+                  <>
+                    <span className="px-2.5 py-0.5 rounded-full bg-orange-100 text-[#A33900] text-xs font-bold">
+                      सुपरहिट १००+ प्रयोग
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-full bg-[#FFF7ED] text-[#EA580C] text-xs font-semibold flex items-center gap-1">
+                      ✓ महाटिकिट प्रमाणित नाटक
+                    </span>
+                  </>
+                )}
               </div>
 
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-[#141B2B] tracking-tight">
@@ -711,188 +721,242 @@ export default function EventDetailPage() {
               </h1>
 
               <p className="text-sm font-semibold text-[#64748B]">
-                {event.title} • <span className="font-normal">दिग्दर्शन: चंद्रकांत कुलकर्णी</span>
+                {event.title} {event.categoryMr ? `• ${event.categoryMr}` : ''}
               </p>
 
-              {/* Artist Chips / Star Cast Section */}
+              {/* Artist Chips / Star Cast Section (Real Database Cast & Crew) */}
               <div className="pt-2">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-[#64748B] block mb-2">
                   मुख्य कलाकार आणि चमू (Cast & Crew)
                 </span>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                  <div className="flex items-center gap-2.5 p-2 rounded-xl bg-[#FFF7ED] hover:bg-orange-100 transition-colors">
-                    <img
-                      src="https://lh3.googleusercontent.com/aida-public/AB6AXuDWiNwrgplEqHqtbnBXasF9CpPCjK16GTnwvF6XzJxvbOcrCcJyc23CifwONCKfFyAc3LWl2K4KxpHlqT4tMKfT_qEvZe6DSpwIL4hg3SmyQTlWz8MMZ5JYUqTBRKSv0RcUhH48kb2dOEjewafgScjjmNJza9pMtlsKAwWg-TOpWk87jBVEmfFm1I3AEDfFYUr54pDyV_sO1jmhnI9UGzW_s0jhcHUnlZQLB7hm4Y0"
-                      alt="Prasad Oak"
-                      className="w-10 h-10 rounded-full object-cover shadow-xs"
-                    />
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold text-[#141B2B] truncate">प्रसाद ओक</p>
-                      <p className="text-[10px] text-[#64748B] truncate">मुख्य भूमिका</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2.5 p-2 rounded-xl bg-[#FFF7ED] hover:bg-orange-100 transition-colors">
-                    <img
-                      src="https://lh3.googleusercontent.com/aida-public/AB6AXuCgC7qg2FNK9blGgU22br1A7K-iwkIhQlf4pxPpubVRZ1bqUvWq2npVBZUFI0LzDIrsmbhtIJ5DHEJUXuFUrUXh--EcSEkiZQllG4HpgEYuw3A8eBgKz3J8maAQ8Kzip7VObzOX_L8XVfnKmJzVKNoO40dVAbpQq7Nj36yKb2OFCnl_VQOLfQCsTL9I-gVo30mnc-ezTSbh-t2WS-DybVZ4DrYmbpqLjKwgHoc-sZc"
-                      alt="Mukta Barve"
-                      className="w-10 h-10 rounded-full object-cover shadow-xs"
-                    />
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold text-[#141B2B] truncate">मुक्ता बर्वे</p>
-                      <p className="text-[10px] text-[#64748B] truncate">मुख्य भूमिका</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2.5 p-2 rounded-xl bg-[#FFF7ED] hover:bg-orange-100 transition-colors">
-                    <img
-                      src="https://lh3.googleusercontent.com/aida-public/AB6AXuAcQ8m9dAq6r-XJu3fcpOnTgz4lKB0ueJsC2lHV50cZX6rd3TiEOH53iXedsJGVvr2EVf0H0KbnIrwCn5qgvTwksY3pS_M4Wof-n6G2NN7G7EwjGQW0d7p_v_prm-7vtlsRpHEW34lH5ms2KoTUZuWTRCt5EyCmN9dCRZeWKZGsFEs4DPw6ulOLn6wkEZEjzSnqOvy64YwrbUI8TaG8PpuOpA_n-4YraYBF1X2T72w"
-                      alt="Chandrakant Kulkarni"
-                      className="w-10 h-10 rounded-full object-cover shadow-xs"
-                    />
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold text-[#141B2B] truncate">चंद्रकांत कुलकर्णी</p>
-                      <p className="text-[10px] text-[#64748B] truncate">दिग्दर्शक</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2.5 p-2 rounded-xl bg-[#FFF7ED] hover:bg-orange-100 transition-colors">
-                    <img
-                      src="https://lh3.googleusercontent.com/aida-public/AB6AXuBU4kf5zs4linpmGzKH4TnHt97MG9116bxJb8dTZILFF9bd9GQxvAy9RSQZT9qF5R-peOKYGltrY2m3yEFleT5JU1JHN4cEO_0lbBlMtzcjTkRGLjMtCbbr9DkEmTRyzpM-_LxvxxXvfu5GmLT7efg8sVYXz9vMXc755HYnyMCkHO0LqXHba_JmFOnLsU7knNNSbkgMaK5AcjDp6fF-f-P4MnMGEz_m-uZgKLcXUAc"
-                      alt="Kshitee Jog"
-                      className="w-10 h-10 rounded-full object-cover shadow-xs"
-                    />
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold text-[#141B2B] truncate">क्षिती जोग</p>
-                      <p className="text-[10px] text-[#64748B] truncate">निर्माते</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* INTERACTIVE DATE & SHOWTIME SELECTOR */}
-            <div className="bg-white p-6 rounded-2xl shadow-xs border border-[#E5E7EB] space-y-4" id="booking-flow">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-5 rounded-full bg-[#EA580C]" />
-                  <h2 className="text-base font-bold text-[#141B2B]">तारीख आणि प्रयोग वेळ निवडा</h2>
-                </div>
-                <div className="flex items-center gap-2 text-xs text-[#64748B]">
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#16A34A]" /> उपलब्ध</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#F59E0B]" /> लवकर भरा</span>
-                </div>
-              </div>
-
-              {/* Horizontal Date Picker Strip */}
-              <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-                {datesList.map((d, idx) => {
-                  const isSelected = selectedDateIndex === idx;
-                  return (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => {
-                        setSelectedDateIndex(idx);
-                        if (d.sessions && d.sessions.length > 0) {
-                          setSelectedSession(d.sessions[0]);
-                        }
-                      }}
-                      className={`flex-shrink-0 flex flex-col items-center justify-center w-20 py-2.5 rounded-xl transition-all shadow-xs cursor-pointer ${isSelected
-                        ? 'bg-[#EA580C] text-white shadow-md'
-                        : 'bg-[#FFF7ED] hover:bg-orange-100 text-[#141B2B]'
-                        }`}
-                    >
-                      <span className={`text-[10px] uppercase font-bold ${isSelected ? 'text-white/90' : 'text-[#64748B]'}`}>
-                        {d.label}
-                      </span>
-                      <span className="text-xl font-extrabold my-0.5 leading-none">
-                        {d.day}
-                      </span>
-                      <span className="text-[11px] font-semibold">
-                        {d.month}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Selected Day Context */}
-              <div className="p-3 rounded-xl bg-[#FFF7ED] flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-[#EA580C]" />
-                  <span className="text-xs font-bold text-[#141B2B]">
-                    {datesList[selectedDateIndex]?.full || 'निवडलेले प्रयोग'}
-                  </span>
-                </div>
-                <span className="text-[10px] text-[#64748B] font-semibold">
-                  {activeSessions.length} {language === 'mr' ? 'प्रयोग उपलब्ध' : 'shows available'}
-                </span>
-              </div>
-
-              {/* Showtime Cards for Venue */}
-              <div className="space-y-3">
-                {activeSessions.length > 0 ? (
-                  activeSessions.map((sess, idx) => {
-                    const isSelected = selectedSession?.id === sess.id;
-                    const startTime = formatISTTime(sess.sessionStartTime, language, true);
-                    const dateStr = formatISTDate(sess.sessionStartTime, language, true);
-                    const hour = new Date(sess.sessionStartTime).getHours();
-                    const isEvening = hour >= 16;
-                    const periodLabel = language === 'mr'
-                      ? (hour >= 20 ? 'रात्रीचा शो' : hour >= 16 ? 'संध्याकाळचा शो' : hour >= 12 ? 'दुपारचा शो' : 'सकाळचा शो')
-                      : (hour >= 16 ? 'Evening Show' : 'Matinee Show');
-
-                    return (
-                      <div
-                        key={sess.id}
-                        className={`p-4 rounded-xl border transition-all ${
-                          isSelected
-                            ? 'bg-orange-50/70 border-[#EA580C] shadow-sm'
-                            : 'bg-white border-[#E5E7EB] hover:shadow-sm'
-                        }`}
-                      >
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-lg font-bold text-[#141B2B]">
-                                {startTime}
-                              </span>
-                              <span className="px-2 py-0.5 rounded-full bg-[#FFF7ED] text-[#A33900] text-[10px] font-bold">
-                                {dateStr} • {periodLabel}
-                              </span>
-                            </div>
-                            <p className="text-xs text-[#64748B]">{venueName}</p>
-                            <p className={`text-[11px] font-semibold flex items-center gap-1 ${isEvening ? 'text-[#F59E0B]' : 'text-[#16A34A]'}`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${isEvening ? 'bg-[#F59E0B]' : 'bg-[#16A34A]'}`} />
-                              {isEvening ? 'लवकर भरत आहे (फक्त १२ जागा शिल्लक!)' : 'उपलब्ध (७२ जागा शिल्लक)'}
-                            </p>
+                {Array.isArray((event as any).castCrewList) && (event as any).castCrewList.length > 0 ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    {(event as any).castCrewList.map((member: any, mIdx: number) => (
+                      <div key={mIdx} className="flex items-center gap-2.5 p-2 rounded-xl bg-[#FFF7ED] hover:bg-orange-100 transition-colors">
+                        {member.avatarUrl ? (
+                          <img
+                            src={member.avatarUrl}
+                            alt={member.nameMr || member.name}
+                            className="w-10 h-10 rounded-full object-cover shadow-xs shrink-0"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-orange-200 text-[#EA580C] flex items-center justify-center font-bold text-xs shrink-0">
+                            {(member.nameMr || member.name || 'म')[0]}
                           </div>
-
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => handleBookSession(sess)}
-                              className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 ${isSelected
-                                ? 'bg-[#EA580C] text-white shadow-sm'
-                                : 'bg-[#FFF7ED] hover:bg-[#EA580C] text-[#EA580C] hover:text-white'
-                                }`}
-                            >
-                              <span>{isSelected ? (language === 'mr' ? 'आसन निवडा ✓' : 'Select Seats ✓') : (language === 'mr' ? 'वेळ निवडा' : 'Select')}</span>
-                              <ChevronRight className="h-4 w-4" />
-                            </button>
-                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-[#141B2B] truncate">{member.nameMr || member.name}</p>
+                          <p className="text-[10px] text-[#64748B] truncate">{member.roleMr || member.role}</p>
                         </div>
                       </div>
-                    );
-                  })
+                    ))}
+                  </div>
                 ) : (
-                  <div className="p-4 rounded-xl bg-white border border-[#E5E7EB] text-center text-xs text-[#64748B]">
-                    सध्या या तारखेला कोणतेही शो उपलब्ध नाहीत.
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    <div className="flex items-center gap-2.5 p-2 rounded-xl bg-[#FFF7ED] hover:bg-orange-100 transition-colors">
+                      <div className="w-10 h-10 rounded-full bg-orange-200 text-[#EA580C] flex items-center justify-center font-bold text-xs shrink-0">
+                        भ
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-[#141B2B] truncate">भरत जाधव</p>
+                        <p className="text-[10px] text-[#64748B] truncate">मुख्य भूमिका</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2.5 p-2 rounded-xl bg-[#FFF7ED] hover:bg-orange-100 transition-colors">
+                      <div className="w-10 h-10 rounded-full bg-orange-200 text-[#EA580C] flex items-center justify-center font-bold text-xs shrink-0">
+                        प्र
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-[#141B2B] truncate">प्रशांत दामले</p>
+                        <p className="text-[10px] text-[#64748B] truncate">मुख्य भूमिका</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2.5 p-2 rounded-xl bg-[#FFF7ED] hover:bg-orange-100 transition-colors">
+                      <div className="w-10 h-10 rounded-full bg-orange-200 text-[#EA580C] flex items-center justify-center font-bold text-xs shrink-0">
+                        मु
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-[#141B2B] truncate">मुक्ता बर्वे</p>
+                        <p className="text-[10px] text-[#64748B] truncate">मुख्य भूमिका</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2.5 p-2 rounded-xl bg-[#FFF7ED] hover:bg-orange-100 transition-colors">
+                      <div className="w-10 h-10 rounded-full bg-orange-200 text-[#EA580C] flex items-center justify-center font-bold text-xs shrink-0">
+                        दि
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-[#141B2B] truncate">केदार शिंदे</p>
+                        <p className="text-[10px] text-[#64748B] truncate">दिग्दर्शक</p>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
             </div>
+
+            {/* INTERACTIVE DATE & SHOWTIME SELECTOR OR INFORMATIVE SHOWCASE */}
+            {(!event.sessions || event.sessions.length === 0 || (event as any).isInformational) ? (
+              <div className="bg-white p-6 rounded-2xl shadow-xs border border-orange-200 space-y-4" id="booking-flow">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-2.5 h-6 rounded-full bg-[#EA580C]" />
+                  <h2 className="text-base sm:text-lg font-bold text-[#141B2B]">
+                    {language === 'mr' ? 'माहितीपर शो व आगामी प्रयोग' : 'Informative Showcase & Upcoming Shows'}
+                  </h2>
+                </div>
+                <div className="p-4 sm:p-5 rounded-xl bg-orange-50 border border-orange-200/80 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <span className="text-2xl shrink-0">🎭</span>
+                    <div className="space-y-1.5 text-xs sm:text-sm text-[#141B2B]">
+                      <p className="font-bold text-[#A33900]">
+                        {language === 'mr'
+                          ? 'या नाटकाचे अधिकृत प्रयोग आणि नाट्यगृह वाटप लवकरच जाहीर केले जाईल.'
+                          : 'Official showtimes and venue allocation for this play will be announced soon.'}
+                      </p>
+                      <p className="text-[#64748B] leading-relaxed">
+                        {language === 'mr'
+                          ? 'सध्या आपण या नाटकाची कथा, कलाकार, तंत्रज्ञ आणि माहिती पाहू शकता. महाटिकिटवर तिकीट बुकिंग सुरू होताच थेट सूचना मिळवण्यासाठी खालील बटनावर नोंदणी करा.'
+                          : 'Currently, you can explore the synopsis, cast & crew, and preview details. Register below to get instant notification when ticket booking opens on MahaTicket.'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setNotifyMeRegistered(!notifyMeRegistered)}
+                      className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-2 cursor-pointer shadow-xs ${
+                        notifyMeRegistered
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-[#EA580C] hover:bg-[#C2410C] text-white'
+                      }`}
+                    >
+                      <span>{notifyMeRegistered ? '✓ नोंदणी झाली! बुकिंग सुरू होताच अलर्ट मिळेल' : '🔔 मला आठवण करा (Notify Me)'}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-white p-6 rounded-2xl shadow-xs border border-[#E5E7EB] space-y-4" id="booking-flow">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-5 rounded-full bg-[#EA580C]" />
+                    <h2 className="text-base font-bold text-[#141B2B]">तारीख आणि प्रयोग वेळ निवडा</h2>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-[#64748B]">
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#16A34A]" /> उपलब्ध</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#F59E0B]" /> लवकर भरा</span>
+                  </div>
+                </div>
+
+                {/* Horizontal Date Picker Strip */}
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+                  {datesList.map((d, idx) => {
+                    const isSelected = selectedDateIndex === idx;
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          setSelectedDateIndex(idx);
+                          if (d.sessions && d.sessions.length > 0) {
+                            setSelectedSession(d.sessions[0]);
+                          }
+                        }}
+                        className={`flex-shrink-0 flex flex-col items-center justify-center w-20 py-2.5 rounded-xl transition-all shadow-xs cursor-pointer ${isSelected
+                          ? 'bg-[#EA580C] text-white shadow-md'
+                          : 'bg-[#FFF7ED] hover:bg-orange-100 text-[#141B2B]'
+                          }`}
+                      >
+                        <span className={`text-[10px] uppercase font-bold ${isSelected ? 'text-white/90' : 'text-[#64748B]'}`}>
+                          {d.label}
+                        </span>
+                        <span className="text-xl font-extrabold my-0.5 leading-none">
+                          {d.day}
+                        </span>
+                        <span className="text-[11px] font-semibold">
+                          {d.month}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Selected Day Context */}
+                <div className="p-3 rounded-xl bg-[#FFF7ED] flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-[#EA580C]" />
+                    <span className="text-xs font-bold text-[#141B2B]">
+                      {datesList[selectedDateIndex]?.full || 'निवडलेले प्रयोग'}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-[#64748B] font-semibold">
+                    {activeSessions.length} {language === 'mr' ? 'प्रयोग उपलब्ध' : 'shows available'}
+                  </span>
+                </div>
+
+                {/* Showtime Cards for Venue */}
+                <div className="space-y-3">
+                  {activeSessions.length > 0 ? (
+                    activeSessions.map((sess, idx) => {
+                      const isSelected = selectedSession?.id === sess.id;
+                      const startTime = formatISTTime(sess.sessionStartTime, language, true);
+                      const dateStr = formatISTDate(sess.sessionStartTime, language, true);
+                      const hour = new Date(sess.sessionStartTime).getHours();
+                      const isEvening = hour >= 16;
+                      const periodLabel = language === 'mr'
+                        ? (hour >= 20 ? 'रात्रीचा शो' : hour >= 16 ? 'संध्याकाळचा शो' : hour >= 12 ? 'दुपारचा शो' : 'सकाळचा शो')
+                        : (hour >= 16 ? 'Evening Show' : 'Matinee Show');
+
+                      return (
+                        <div
+                          key={sess.id}
+                          className={`p-4 rounded-xl border transition-all ${
+                            isSelected
+                              ? 'bg-orange-50/70 border-[#EA580C] shadow-sm'
+                              : 'bg-white border-[#E5E7EB] hover:shadow-sm'
+                          }`}
+                        >
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-lg font-bold text-[#141B2B]">
+                                  {startTime}
+                                </span>
+                                <span className="px-2 py-0.5 rounded-full bg-[#FFF7ED] text-[#A33900] text-[10px] font-bold">
+                                  {dateStr} • {periodLabel}
+                                </span>
+                              </div>
+                              <p className="text-xs text-[#64748B]">{venueName}</p>
+                              <p className={`text-[11px] font-semibold flex items-center gap-1 ${isEvening ? 'text-[#F59E0B]' : 'text-[#16A34A]'}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${isEvening ? 'bg-[#F59E0B]' : 'bg-[#16A34A]'}`} />
+                                {isEvening ? 'लवकर भरत आहे (फक्त १२ जागा शिल्लक!)' : 'उपलब्ध (७२ जागा शिल्लक)'}
+                              </p>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleBookSession(sess)}
+                                className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 ${isSelected
+                                  ? 'bg-[#EA580C] text-white shadow-sm'
+                                  : 'bg-[#FFF7ED] hover:bg-[#EA580C] text-[#EA580C] hover:text-white'
+                                  }`}
+                              >
+                                <span>{isSelected ? (language === 'mr' ? 'आसन निवडा ✓' : 'Select Seats ✓') : (language === 'mr' ? 'वेळ निवडा' : 'Select')}</span>
+                                <ChevronRight className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="p-4 rounded-xl bg-white border border-[#E5E7EB] text-center text-xs text-[#64748B]">
+                      सध्या या तारखेला कोणतेही शो उपलब्ध नाहीत.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* VENUE INFORMATION SECTION */}
             <div className="bg-white p-6 rounded-2xl shadow-xs border border-[#E5E7EB] space-y-4">
@@ -1195,13 +1259,19 @@ export default function EventDetailPage() {
       <aside aria-label="तिकीट आरक्षण बार" className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md shadow-[0_-4px_20px_rgba(0,0,0,0.08)] py-3 border-t border-[#E5E7EB]">
         <div className="max-w-[1280px] mx-auto px-4 md:px-8 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-[#FFF7ED] flex items-center justify-center text-[#EA580C] shrink-0">
-              <Ticket className="h-5 w-5" />
+            <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-[#EA580C] shrink-0">
+              {(!event.sessions || event.sessions.length === 0 || (event as any).isInformational) ? (
+                <span className="text-lg">ℹ️</span>
+              ) : (
+                <Ticket className="h-5 w-5" />
+              )}
             </div>
             <div className="min-w-0">
               <p className="text-xs font-bold text-[#141B2B] truncate">
                 {title} • <span className="text-[#EA580C]">
-                  {selectedSession
+                  {(!event.sessions || event.sessions.length === 0 || (event as any).isInformational)
+                    ? 'माहितीपर शो'
+                    : selectedSession
                     ? `${new Date(selectedSession.sessionStartTime).toLocaleDateString(language === 'mr' ? 'mr-IN' : 'en-IN', { weekday: 'short', day: 'numeric', month: 'short' })} • ${new Date(selectedSession.sessionStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
                     : (language === 'mr' ? 'शो वेळ निवडा' : 'Select Showtime')}
                 </span>
@@ -1209,28 +1279,46 @@ export default function EventDetailPage() {
               <div className="flex items-center gap-2 text-[10px] text-[#64748B]">
                 <span className="truncate">{venueName}</span>
                 <span>•</span>
-                <span className="text-[#A33900] font-bold">दर: {stickyPriceDisplay}</span>
+                <span className="text-[#A33900] font-bold">
+                  {(!event.sessions || event.sessions.length === 0 || (event as any).isInformational)
+                    ? 'प्रयोग व नाट्यगृह लवकरच'
+                    : `दर: ${stickyPriceDisplay}`}
+                </span>
               </div>
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              if (selectedSession) {
-                handleBookSession(selectedSession);
-              } else {
-                const bookingFlow = document.getElementById('booking-flow');
-                if (bookingFlow) {
-                  bookingFlow.scrollIntoView({ behavior: 'smooth' });
+          {(!event.sessions || event.sessions.length === 0 || (event as any).isInformational) ? (
+            <button
+              type="button"
+              onClick={() => setNotifyMeRegistered(!notifyMeRegistered)}
+              className={`px-5 py-3 rounded-xl font-bold text-xs shadow-md transition-all flex items-center gap-2 shrink-0 cursor-pointer active:scale-95 ${
+                notifyMeRegistered
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                  : 'bg-amber-500 hover:bg-amber-600 text-white'
+              }`}
+            >
+              <span>{notifyMeRegistered ? 'नोंदणी झाली ✓' : '🔔 मला आठवण करा'}</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                if (selectedSession) {
+                  handleBookSession(selectedSession);
+                } else {
+                  const bookingFlow = document.getElementById('booking-flow');
+                  if (bookingFlow) {
+                    bookingFlow.scrollIntoView({ behavior: 'smooth' });
+                  }
                 }
-              }
-            }}
-            className="px-5 py-3 rounded-xl bg-[#EA580C] hover:bg-[#A33900] text-white font-bold text-xs shadow-md transition-all flex items-center gap-2 shrink-0 cursor-pointer active:scale-95"
-          >
-            <span>{selectedSession ? 'आसन निवडा (Select Seats)' : 'शो व वेळ निवडा'}</span>
-            <ChevronRight className="h-4 w-4" />
-          </button>
+              }}
+              className="px-5 py-3 rounded-xl bg-[#EA580C] hover:bg-[#A33900] text-white font-bold text-xs shadow-md transition-all flex items-center gap-2 shrink-0 cursor-pointer active:scale-95"
+            >
+              <span>{selectedSession ? 'आसन निवडा (Select Seats)' : 'शो व वेळ निवडा'}</span>
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          )}
         </div>
       </aside>
 
@@ -1322,10 +1410,12 @@ export default function EventDetailPage() {
         <SeatMapModal
           event={event as any}
           session={selectedSession}
-          language="mr"
+          allSessions={(event.sessions || []) as any}
+          language={language}
           onClose={() => {
             setSeatMapOpen(false);
           }}
+          onSessionChange={(s) => setSelectedSession(s as any)}
           onProceedToCheckout={handleProceedToCheckout}
         />
       )}

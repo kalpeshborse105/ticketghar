@@ -134,8 +134,8 @@ export function TikitMitraFloatingBot() {
 
   return (
     <>
-      {/* Floating Launcher Button - elevated cleanly above sticky bottom booking bar */}
-      <div className="fixed bottom-20 md:bottom-20 right-4 sm:right-6 z-40">
+      {/* Floating Launcher Button - elevated cleanly above sticky bottom mobile nav */}
+      <div className="fixed bottom-[76px] md:bottom-6 right-3 sm:right-6 z-30">
         {!isOpen && (
           <div className="flex items-center gap-1">
             {isMinimized ? (

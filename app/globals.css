@@ -1,25 +1,34 @@
 @import "tailwindcss";
 
 :root {
-  /* MahaTicket Stitch design tokens from projects/5418001882719593041 */
+  /* MahaTicket Stitch design tokens — warm orange brand, cream canvas */
   --mt-primary: #ea580c;
   --mt-primary-deep: #a33900;
+  --mt-deep: #a33900;
   --mt-secondary: #ac3400;
   --mt-secondary-container: #fd6b36;
   --mt-tertiary: #994100;
   --mt-tertiary-container: #c05400;
   --mt-surface-cream: #fff7ed;
   --mt-surface-card: #ffffff;
-  --mt-surface: #f9f9ff;
-  --mt-surface-dim: #d3daef;
-  --mt-surface-container: #e9edff;
-  --mt-surface-container-low: #f1f3ff;
-  --mt-surface-container-high: #e1e8fd;
-  --mt-surface-container-highest: #dce2f7;
+  --mt-surface: #fffaf5;
+  --mt-surface-dim: #f3e8dc;
+  --mt-surface-container: #fff1e6;
+  --mt-surface-container-low: #fff7ed;
+  --mt-surface-container-high: #ffedd5;
+  --mt-surface-container-highest: #fed7aa;
   --mt-on-surface: #141b2b;
   --mt-on-surface-variant: #5a4138;
   --mt-text-secondary: #64748b;
   --mt-border-subtle: #e5e7eb;
+  --mt-bg: #fff7ed;
+  --mt-text: #141b2b;
+  --mt-muted: #64748b;
+  --mt-border: #e5e7eb;
+  --mt-white: #ffffff;
+  --mt-warm: #fff7ed;
+  --mt-radius: 14px;
+  --mt-radius-sm: 10px;
   --mt-seat-available: #ffffff;
   --mt-seat-selected: #ea580c;
   --mt-seat-occupied: #e2e8f0;
@@ -77,16 +86,16 @@
   --color-inverse-surface: var(--mt-inverse-surface);
   --color-inverse-on-surface: var(--mt-inverse-on-surface);
 
-  --font-sans: var(--font-noto-sans), var(--font-noto-sans-devanagari), var(--font-inter), system-ui, sans-serif;
-  --font-headline: var(--font-noto-sans), var(--font-noto-sans-devanagari), sans-serif;
-  --font-label: var(--font-inter), sans-serif;
+  --font-sans: var(--font-manrope), var(--font-noto-sans-devanagari), system-ui, sans-serif;
+  --font-headline: var(--font-manrope), var(--font-noto-sans-devanagari), sans-serif;
+  --font-label: var(--font-manrope), sans-serif;
 }
 
 
 body {
   background-color: var(--mt-bg);
   color: var(--mt-text);
-  font-family: var(--font-outfit), var(--font-noto-sans-devanagari), system-ui, -apple-system, sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-tap-highlight-color: transparent;
@@ -96,14 +105,30 @@ body {
   overflow-x: hidden;
 }
 
-/* Stitch shell utilities */
+/* Stitch shell utilities — warm gradients + soft shapes */
 .mt-shell {
   background:
-    radial-gradient(900px 420px at 10% -10%, rgba(234, 88, 12, 0.08), transparent 55%),
-    radial-gradient(700px 360px at 90% 0%, rgba(249, 115, 22, 0.06), transparent 50%),
-    var(--mt-bg);
+    radial-gradient(ellipse 900px 420px at 8% -8%, rgba(234, 88, 12, 0.14), transparent 55%),
+    radial-gradient(ellipse 700px 380px at 96% 4%, rgba(251, 146, 60, 0.10), transparent 52%),
+    radial-gradient(ellipse 500px 280px at 50% 100%, rgba(253, 186, 116, 0.12), transparent 60%),
+    linear-gradient(180deg, #fffaf5 0%, #fff7ed 45%, #ffedd5 100%);
   min-height: 100vh;
   color: var(--mt-text);
+  position: relative;
+  isolation: isolate;
+}
+
+.mt-shell::before {
+  content: '';
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  opacity: 0.35;
+  background-image:
+    radial-gradient(circle at 20% 30%, rgba(234, 88, 12, 0.06) 0 1px, transparent 1px),
+    radial-gradient(circle at 80% 70%, rgba(194, 65, 12, 0.05) 0 1px, transparent 1px);
+  background-size: 48px 48px, 64px 64px;
 }
 
 .mt-container {

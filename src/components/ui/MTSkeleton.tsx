@@ -20,25 +20,25 @@ export const MTTicketLoader: React.FC<{
   submessage = 'महाटिकिट महाराष्ट्र',
   className = '',
 }) => (
-  <div className={`flex flex-col items-center justify-center py-6 px-4 text-center space-y-2.5 ${className}`}>
-    <div className="relative flex items-center justify-center">
-      <img
-        src="/logo.png"
-        alt="MahaTicket"
-        className="w-14 h-14 sm:w-16 sm:h-16 object-contain drop-shadow-md animate-pulse"
-      />
+    <div className={`flex flex-col items-center justify-center py-6 px-4 text-center space-y-2.5 ${className}`}>
+      <div className="relative flex items-center justify-center">
+        <img
+          src="/logo.png"
+          alt="MahaTicket"
+          className="w-14 h-14 sm:w-16 sm:h-16 object-contain drop-shadow-md animate-pulse"
+        />
+      </div>
+      <div className="space-y-0.5">
+        <p className="text-xs sm:text-sm font-black text-slate-800">{message}</p>
+        {submessage && (
+          <p className="text-[10px] font-bold text-slate-500">
+            <span className="text-[#EA580C]">महा</span>
+            <span className="text-slate-800">टिकिट</span> महाराष्ट्र
+          </p>
+        )}
+      </div>
     </div>
-    <div className="space-y-0.5">
-      <p className="text-xs sm:text-sm font-black text-slate-800">{message}</p>
-      {submessage && (
-        <p className="text-[10px] font-bold text-slate-500">
-          <span className="text-[#EA580C]">महा</span>
-          <span className="text-slate-800">टिकिट</span> महाराष्ट्र
-        </p>
-      )}
-    </div>
-  </div>
-);
+  );
 
 export const MTSkeleton: React.FC<MTSkeletonProps> = ({
   className = '',

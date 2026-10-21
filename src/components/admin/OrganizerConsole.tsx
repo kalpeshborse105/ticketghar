@@ -20,7 +20,8 @@ import {
   Sparkles,
   MapPin,
   HelpCircle,
-  Repeat
+  Repeat,
+  Download
 } from 'lucide-react';
 import { Language } from '../../lib/i18n.ts';
 import { EventItem, VenueItem } from '../../lib/types.ts';
@@ -49,6 +50,46 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
   const [ordersList, setOrdersList] = useState<any[]>([]);
   const [settlementsList, setSettlementsList] = useState<any[]>([]);
   const [venueForDesigner, setVenueForDesigner] = useState<VenueItem | null>(null);
+
+  const [activeTab, setActiveTab] = useState<'overview' | 'shows' | 'bookings' | 'scanner' | 'seats'>('overview');
+  const [bookingSearch, setBookingSearch] = useState('');
+  const [selectedEventFilter, setSelectedEventFilter] = useState<string>('all');
+  const [selectedOrg, setSelectedOrg] = useState('श्री चिंतामणी थिएटर्स, पुणे');
+  const [showOrgModal, setShowOrgModal] = useState(false);
+
+  const availableOrgs = [
+    { name: 'श्री चिंतामणी थिएटर्स, पुणे', id: 'org_1', verified: true, activeShows: 3 },
+    { name: 'अश्विनी थिएटर्स, मुंबई', id: 'org_2', verified: true, activeShows: 2 },
+    { name: 'नाट्यसंपदा कला मंच, कोथरूड', id: 'org_3', verified: true, activeShows: 4 },
+    { name: 'महाराष्ट्र राज्य रंगभूमी अकादमी', id: 'org_4', verified: true, activeShows: 1 },
+  ];
+
+  const exportBookingsCsv = () => {
+    if (!ordersList.length) {
+      triggerToast('सध्या कोणतेही व्यवहार उपलब्ध नाहीत');
+      return;
+    }
+    const headers = ['OrderNumber', 'CustomerName', 'Phone', 'Email', 'Amount_INR', 'PaymentStatus', 'Showtime', 'Seats'];
+    const rows = ordersList.map(o => [
+      `"${o.orderNumber || ''}"`,
+      `"${(o.userName || '').replace(/"/g, '""')}"`,
+      `"${o.userPhone || ''}"`,
+      `"${o.userEmail || ''}"`,
+      `"${((o.grandTotal || 0) / 100).toFixed(2)}"`,
+      `"${o.paymentStatus || ''}"`,
+      `"${o.sessionStartTime || ''}"`,
+      `"${(o.tickets?.map((t: any) => t.seatCode).join(', ') || '').replace(/"/g, '""')}"`
+    ]);
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `mahaticket_organizer_bookings_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    triggerToast('✓ सर्व व्यवहारांचा अहवाल (CSV) यशस्वीरीत्या डाऊनलोड झाला!');
+  };
 
   // Form states for new event
   const [eventTitleMr, setEventTitleMr] = useState('');
@@ -141,6 +182,8 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
           category: eventCategory,
           venueId: selectedVenue ? selectedVenue.id : 1,
           ticketPrice: eventBasePrice * 100,
+          // Always create a showtime so public Book → seats works (BMS flow)
+          sessionStartTime: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
           status: 'submitted',
           actorId: currentUser?.email || 'organizer',
         }),
@@ -187,17 +230,20 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
                 </h2>
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <span className="w-2 h-2 rounded-full bg-[#16A34A] animate-pulse inline-block"></span>
-                  <span className="text-xs text-[#16A34A] font-bold">थेट बुकिंग सुरू आहे • Active</span>
+                  <span className="text-xs text-[#16A34A] font-bold truncate max-w-[220px]">
+                    {selectedOrg}
+                  </span>
                 </div>
               </div>
             </div>
 
             <button
-              onClick={() => triggerToast('नाट्य संस्था स्विच केली')}
-              className="w-9 h-9 rounded-xl bg-[#E1E8FD] text-[#141B2B] flex items-center justify-center hover:bg-[#DCE2F7] active:scale-95 transition shrink-0"
+              onClick={() => setShowOrgModal(true)}
+              className="px-3 h-9 rounded-xl bg-[#E1E8FD] text-[#141B2B] flex items-center gap-1.5 hover:bg-[#DCE2F7] active:scale-95 transition shrink-0 text-xs font-bold"
               title="संस्था बदला"
             >
-              <Repeat className="w-4 h-4" />
+              <Repeat className="w-3.5 h-3.5 text-[#EA580C]" />
+              <span className="hidden sm:inline">संस्था बदला</span>
             </button>
           </div>
 
@@ -213,7 +259,74 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
           </div>
         </div>
 
-        {/* Key Business KPI Metrics (2x2 Grid) */}
+        {/* Organizer Primary Section Tabs */}
+        <div className="bg-white rounded-2xl p-1.5 border border-[#E2E8F0] shadow-xs flex items-center gap-1 overflow-x-auto">
+          <button
+            onClick={() => setActiveTab('overview')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
+              activeTab === 'overview'
+                ? 'bg-[#A33900] text-white shadow-xs'
+                : 'text-[#64748B] hover:text-[#141B2B] hover:bg-slate-50'
+            }`}
+          >
+            <TrendingUp className="w-3.5 h-3.5" />
+            <span>डॅशबोर्ड (Overview)</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('bookings')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
+              activeTab === 'bookings'
+                ? 'bg-[#A33900] text-white shadow-xs'
+                : 'text-[#64748B] hover:text-[#141B2B] hover:bg-slate-50'
+            }`}
+          >
+            <Ticket className="w-3.5 h-3.5" />
+            <span>बुकिंग व ग्राहक डेटा ({ordersList.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('scanner')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
+              activeTab === 'scanner'
+                ? 'bg-[#A33900] text-white shadow-xs'
+                : 'text-[#64748B] hover:text-[#141B2B] hover:bg-slate-50'
+            }`}
+          >
+            <QrCode className="w-3.5 h-3.5" />
+            <span>गेट स्कॅनर (Live QR)</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('shows')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
+              activeTab === 'shows'
+                ? 'bg-[#A33900] text-white shadow-xs'
+                : 'text-[#64748B] hover:text-[#141B2B] hover:bg-slate-50'
+            }`}
+          >
+            <Calendar className="w-3.5 h-3.5" />
+            <span>माझे शोज ({eventsList.length})</span>
+          </button>
+
+          <button
+            onClick={() => {
+              if (venuesList[0]) {
+                setVenueForDesigner(venuesList[0]);
+                setShowSeatDesigner(true);
+              } else {
+                triggerToast('नाट्यगृह लोड होत आहे...');
+              }
+            }}
+            className="px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 text-[#64748B] hover:text-[#141B2B] hover:bg-slate-50 cursor-pointer"
+          >
+            <Armchair className="w-3.5 h-3.5" />
+            <span>आसन रचना व दर</span>
+          </button>
+        </div>
+
+        {activeTab === 'overview' && (
+          <div className="space-y-4">
         <div>
           <div className="flex items-center justify-between mb-2 px-1">
             <h3 className="text-base font-bold text-[#141B2B]">आजचे मुख्य निर्देशक</h3>
@@ -335,7 +448,7 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
 
             {/* Action 3: Manage Shows */}
             <button
-              onClick={() => triggerToast('शोज यादी फिल्टर केली')}
+              onClick={() => setActiveTab('shows')}
               className="bg-white p-4 rounded-2xl shadow-sm border border-[#E2E8F0] text-left active:scale-[0.98] transition-transform flex flex-col justify-between min-h-[110px]"
             >
               <div className="w-9 h-9 rounded-xl bg-[#E1E8FD] flex items-center justify-center mb-3 text-[#141B2B]">
@@ -421,8 +534,8 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
                   <span className="text-[#16A34A] font-bold">🚪 गेट २ स्कॅनर सक्रिय</span>
                 </div>
                 <button
-                  onClick={() => triggerToast('"नियम व अटी लागू" चा लाइव्ह तपशील उघडला')}
-                  className="bg-[#FFF7ED] text-[#A33900] px-3.5 py-1.5 rounded-xl text-xs font-bold active:scale-95 transition flex items-center gap-1"
+                  onClick={() => setActiveTab('shows')}
+                  className="bg-[#FFF7ED] text-[#A33900] px-3.5 py-1.5 rounded-xl text-xs font-bold active:scale-95 transition flex items-center gap-1 hover:bg-[#FFEDD5]"
                 >
                   <span>तपशील पहा</span>
                   <ArrowRight className="w-3.5 h-3.5" />
@@ -571,10 +684,10 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
               </span>
             </div>
             <button
-              onClick={() => triggerToast('सर्व व्यवहारांचा इतिहास लोड केला')}
-              className="text-xs font-bold text-[#A33900]"
+              onClick={() => setActiveTab('bookings')}
+              className="text-xs font-bold text-[#A33900] hover:underline"
             >
-              सर्व व्यवहार
+              सर्व व्यवहार →
             </button>
           </div>
 
@@ -605,8 +718,250 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
                 </div>
               </div>
             ))}
+            </div>
           </div>
-        </div>
+          </div>
+        )}
+
+        {/* 2. BOOKINGS & ATTENDEE DATA TAB */}
+        {activeTab === 'bookings' && (
+          <div className="space-y-4">
+            <div className="bg-white p-4 rounded-2xl border border-[#E2E8F0] shadow-xs space-y-3">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-bold text-[#141B2B]">बुकिंग व ग्राहक तपशील (Bookings & Attendees)</h3>
+                  <p className="text-xs text-[#64748B]">ग्राहकांची माहिती, आसन क्रमांक व तिकीट दर तपशील</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs bg-[#FFF7ED] text-[#A33900] font-bold px-2.5 py-1 rounded-lg">
+                    {ordersList.length} एकूण बुकिंग्ज
+                  </span>
+                  <button
+                    onClick={exportBookingsCsv}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#16A34A] hover:bg-[#15803D] text-white text-xs font-bold shadow-xs active:scale-95 transition"
+                    title="CSV डाऊनलोड करा"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>CSV डाऊनलोड</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Search Bar */}
+              <input
+                type="text"
+                placeholder="ग्राहक नाव, फोन, ईमेल किंवा तिकीट कोडने शोधा..."
+                value={bookingSearch}
+                onChange={(e) => setBookingSearch(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#EA580C] focus:bg-white"
+              />
+            </div>
+
+            {/* Bookings List Cards */}
+            <div className="space-y-3">
+              {ordersList
+                .filter((o) => {
+                  if (!bookingSearch.trim()) return true;
+                  const q = bookingSearch.toLowerCase();
+                  const matchName = (o.userName || '').toLowerCase().includes(q);
+                  const matchEmail = (o.userEmail || '').toLowerCase().includes(q);
+                  const matchPhone = (o.userPhone || '').toLowerCase().includes(q);
+                  const matchOrder = (o.orderNumber || '').toLowerCase().includes(q);
+                  const matchEvent = (o.event?.title || o.event?.titleMr || '').toLowerCase().includes(q);
+                  const matchTickets = (o.tickets || []).some((t: any) =>
+                    (t.ticketCode || '').toLowerCase().includes(q) || (t.seatCode || '').toLowerCase().includes(q)
+                  );
+                  return matchName || matchEmail || matchPhone || matchOrder || matchEvent || matchTickets;
+                })
+                .map((order) => {
+                  const seatList = (order.tickets || []).map((t: any) => t.seatCode).join(', ') || `${order.ticketCount || 1} जागा`;
+                  const eventTitle = order.event?.titleMr || order.event?.title || 'तिकीट';
+                  const showtimeStr = order.session?.sessionStartTime
+                    ? new Date(order.session.sessionStartTime).toLocaleString('mr-IN', {
+                        day: 'numeric',
+                        month: 'short',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
+                    : 'प्रयोग';
+
+                  return (
+                    <div
+                      key={order.id}
+                      className="bg-white rounded-2xl p-4 border border-[#E2E8F0] shadow-xs space-y-3"
+                    >
+                      {/* Top Bar: Customer & Order Status */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-orange-100 text-[#A33900] font-black flex items-center justify-center text-sm shrink-0">
+                            {(order.userName || 'G').charAt(0)}
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-black text-[#141B2B]">{order.userName || 'ग्राहक'}</h4>
+                            <div className="text-[11px] text-[#64748B] flex items-center gap-2 mt-0.5">
+                              <span>📞 {order.userPhone || '—'}</span>
+                              <span>✉️ {order.userEmail || '—'}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="text-right">
+                          <span className="text-sm font-black text-[#16A34A] block">
+                            ₹{((order.grandTotal || 0) / 100).toLocaleString('en-IN')}
+                          </span>
+                          <span className="text-[10px] bg-emerald-50 text-[#16A34A] border border-emerald-200 px-2 py-0.5 rounded-full font-bold inline-block mt-0.5">
+                            {order.paymentStatus === 'captured' || order.paymentStatus === 'paid' ? 'Paid ✓' : order.paymentStatus}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Middle Details Grid */}
+                      <div className="bg-slate-50 rounded-xl p-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                        <div>
+                          <span className="text-[10px] text-[#64748B] block">कार्यक्रम</span>
+                          <span className="font-bold text-[#141B2B] truncate block">{eventTitle}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-[#64748B] block">तारीख व वेळ</span>
+                          <span className="font-bold text-[#141B2B] block">{showtimeStr}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-[#64748B] block">आसन क्रमांक</span>
+                          <span className="font-bold text-[#A33900] block">{seatList}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-[#64748B] block">ऑर्डर कोड</span>
+                          <span className="font-mono text-[11px] font-bold text-slate-700 block truncate">
+                            {order.orderNumber}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Bottom Ticket Codes Strip */}
+                      {(order.tickets || []).length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 pt-1 border-t border-slate-100">
+                          {order.tickets.map((t: any) => (
+                            <span
+                              key={t.id || t.ticketCode}
+                              className="text-[10px] bg-white border border-slate-200 text-slate-700 font-mono px-2 py-0.5 rounded-lg flex items-center gap-1"
+                            >
+                              <Ticket className="w-3 h-3 text-[#EA580C]" />
+                              <span>{t.ticketCode} ({t.seatCode})</span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+              {ordersList.length === 0 && (
+                <div className="bg-white p-8 rounded-2xl border border-[#E2E8F0] text-center text-[#64748B]">
+                  <Ticket className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                  <p className="font-bold">सध्या कोणतीही बुकिंग नोंद उपलब्ध नाही</p>
+                  <p className="text-xs text-slate-400 mt-1">थेट ग्राहक बुकिंग आल्यावर येथे दिसेल</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 3. LIVE GATE SCANNER TAB */}
+        {activeTab === 'scanner' && (
+          <div className="space-y-4">
+            <div className="bg-white p-4 rounded-2xl border border-[#E2E8F0] shadow-xs">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="text-base font-black text-[#141B2B]">थेट गेट तिकीट स्कॅनर (Live Gate QR Scanner)</h3>
+                  <p className="text-xs text-[#64748B]">कॅमेरा समोर ग्राहकाचे डिजिटल QR M-Ticket धरा, सिस्टीम त्वरित व्हेरिफाय करेल</p>
+                </div>
+                <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span>
+                  कॅमेरा सज्ज
+                </span>
+              </div>
+
+              <AdminScanner
+                scannerUserId={currentUser?.id || 1}
+                initialGateName="मुख्य प्रवेशद्वार (Gate 1)"
+                onTicketVerified={(ticket) => {
+                  triggerToast(`✓ तिकीट ${ticket?.code || ''} यशस्वीरित्या प्रमाणित!`);
+                }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* 4. SHOWS & EVENTS TAB */}
+        {activeTab === 'shows' && (
+          <div className="space-y-4">
+            <div className="bg-white p-4 rounded-2xl border border-[#E2E8F0] shadow-xs flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-[#141B2B]">माझे शोज व आगामी कार्यक्रम</h3>
+                <p className="text-xs text-[#64748B]">आपल्या संस्थेचे सर्व सक्रिय व आगामी नाट्यगृह प्रयोग</p>
+              </div>
+              <button
+                onClick={() => setShowAddEventModal(true)}
+                className="bg-[#A33900] hover:bg-[#832600] text-white px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+              >
+                <Plus className="w-4 h-4" />
+                <span>नवीन कार्यक्रम जोडा</span>
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {eventsList.map((ev) => (
+                <div
+                  key={ev.id}
+                  className="bg-white rounded-2xl p-4 shadow-sm border border-[#E2E8F0] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                >
+                  <div className="flex items-start gap-3.5">
+                    <img
+                      src={ev.posterUrl || 'https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?w=400'}
+                      alt={ev.titleMr || ev.title}
+                      className="w-14 h-20 object-cover rounded-xl shadow-xs shrink-0 border border-[#E2E8F0]"
+                    />
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[10px] bg-orange-50 text-[#EA580C] font-bold px-2 py-0.5 rounded-full border border-orange-200">
+                          {ev.category === 'plays' ? 'नाटक' : ev.category}
+                        </span>
+                        <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-full border border-emerald-200">
+                          Published
+                        </span>
+                      </div>
+                      <h4 className="text-sm font-black text-[#141B2B]">{ev.titleMr || ev.title}</h4>
+                      <p className="text-xs text-[#64748B] mt-0.5">{ev.title}</p>
+                      <p className="text-[11px] text-slate-500 mt-1">⏱ {ev.durationMinutes || 150} मिनिटे • {ev.language || 'मराठी'}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 w-full sm:w-auto justify-end border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100">
+                    <button
+                      onClick={() => {
+                        const targetVenue = venuesList.find((v) => v.id === ev.venueId) || venuesList[0];
+                        if (targetVenue) {
+                          setVenueForDesigner(targetVenue);
+                          setShowSeatDesigner(true);
+                        }
+                      }}
+                      className="bg-[#E1E8FD] text-[#141B2B] px-3.5 py-1.5 rounded-xl text-xs font-bold active:scale-95 transition"
+                    >
+                      आसन रचना
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('bookings')}
+                      className="bg-[#FFF7ED] text-[#A33900] px-3.5 py-1.5 rounded-xl text-xs font-bold active:scale-95 transition flex items-center gap-1"
+                    >
+                      <span>बुकिंग्ज</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Add Event Wizard Modal */}
@@ -726,6 +1081,71 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
                 triggerToast(`तिकीट ${ticket?.code || ''} स्कॅन पूर्ण!`);
               }}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Organization Switcher Modal */}
+      {showOrgModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-5 relative shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🎭</span>
+                <h3 className="text-base font-black text-[#141B2B]">नाट्य संस्था निवडा</h3>
+              </div>
+              <button
+                onClick={() => setShowOrgModal(false)}
+                className="p-1.5 rounded-full hover:bg-slate-100 text-[#64748B]"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-[#64748B]">
+              आपल्या खात्याशी जोडलेली सक्रिय नाट्य संस्था निवडा. निवडलेल्या संस्थेनुसार सर्व शोज, महसूल व बुकिंग्ज अद्ययावत होतील:
+            </p>
+
+            <div className="space-y-2">
+              {availableOrgs.map((org) => {
+                const isSelected = selectedOrg === org.name;
+                return (
+                  <button
+                    key={org.id}
+                    onClick={() => {
+                      setSelectedOrg(org.name);
+                      setShowOrgModal(false);
+                      triggerToast(`✓ सक्रिय संस्था: "${org.name}" सेट केली!`);
+                    }}
+                    className={`w-full text-left p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
+                      isSelected
+                        ? 'border-[#EA580C] bg-[#FFF7ED]'
+                        : 'border-[#E2E8F0] hover:border-slate-300 bg-white'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-[#141B2B]">{org.name}</span>
+                        {org.verified && (
+                          <span className="text-[10px] bg-emerald-100 text-[#16A34A] px-2 py-0.5 rounded-full font-bold">
+                            प्रमाणित ✓
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-xs text-[#64748B] mt-0.5 block">
+                        {org.activeShows} सक्रिय शोज चालू आहेत
+                      </span>
+                    </div>
+
+                    <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${
+                      isSelected ? 'border-[#EA580C] bg-[#EA580C]' : 'border-slate-300'
+                    }`}>
+                      {isSelected && <span className="w-2 h-2 rounded-full bg-white" />}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}

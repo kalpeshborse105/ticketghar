@@ -20,7 +20,7 @@ import { sql } from 'drizzle-orm';
 import crypto from 'crypto';
 
 async function seed() {
-  console.log('--- Starting TicketGhar Database Seed ---');
+  console.log('--- Starting MahaTicket Database Seed ---');
 
   // Check if events already seeded
   const existingEvents = await db.select({ count: sql<number>`count(*)` }).from(events);
@@ -32,8 +32,8 @@ async function seed() {
   // 1. Users (Admins, Scanners, Customers)
   console.log('Seeding users...');
   const [adminUser] = await db.insert(users).values({
-    uid: 'admin-ticketghar-super',
-    email: 'admin@ticketghar.in',
+    uid: 'admin-mahaticket-super',
+    email: 'admin@mahaticket.in',
     fullName: 'Kalpesh Borse (Super Admin)',
     phoneNumber: '+91 98200 12345',
     role: 'super_admin',
@@ -42,8 +42,8 @@ async function seed() {
   }).returning();
 
   const [opsUser] = await db.insert(users).values({
-    uid: 'ops-ticketghar-user',
-    email: 'operations@ticketghar.in',
+    uid: 'ops-mahaticket-user',
+    email: 'operations@mahaticket.in',
     fullName: 'Ananya Deshpande',
     phoneNumber: '+91 98200 67890',
     role: 'operations',
@@ -53,7 +53,7 @@ async function seed() {
 
   const [scannerUser] = await db.insert(users).values({
     uid: 'scanner-balgandharva-01',
-    email: 'gate1@balgandharva.org',
+    email: 'gate1@mahaticket.org',
     fullName: 'Ramesh Kulkarni (Gate 1 Scanner)',
     phoneNumber: '+91 98200 54321',
     role: 'scanner',
@@ -63,7 +63,7 @@ async function seed() {
 
   const [customerUser] = await db.insert(users).values({
     uid: 'cust-demo-101',
-    email: 'sachin.patil@gmail.com',
+    email: 'sachin.patil@mahaticket.com',
     fullName: 'Sachin Patil',
     phoneNumber: '+91 98233 44556',
     role: 'customer',
@@ -71,12 +71,12 @@ async function seed() {
     city: 'Pune',
   }).returning();
 
-  // 2. Organizers (Manually vetted by TicketGhar Company)
+  // 2. Organizers (Manually vetted by MahaTicket Company)
   console.log('Seeding organizers...');
   const [orgBhadipa] = await db.insert(organizers).values({
     name: 'Paula McGlynn & Sarang Sathaye',
     companyName: 'Bhadipa Productions LLP',
-    email: 'events@bhadipa.com',
+    email: 'events@mahaticket.com',
     phone: '+91 98201 11223',
     city: 'Pune',
     verificationStatus: 'verified',
@@ -92,7 +92,7 @@ async function seed() {
   const [orgNatyasampada] = await db.insert(organizers).values({
     name: 'Anant Panshikar',
     companyName: 'Natyasampada Commercial Theatres',
-    email: 'natyasampada@gmail.com',
+    email: 'natyasampada@mahaticket.com',
     phone: '+91 98210 99887',
     city: 'Mumbai',
     verificationStatus: 'verified',
@@ -108,7 +108,7 @@ async function seed() {
   const [orgSwaramadhuri] = await db.insert(organizers).values({
     name: 'Mahesh Kale Arts Foundation',
     companyName: 'Swaramadhuri Cultural Trust',
-    email: 'info@swaramadhuri.org',
+    email: 'info@mahaticket.org',
     phone: '+91 98220 33445',
     city: 'Pune',
     verificationStatus: 'verified',
@@ -470,7 +470,7 @@ async function seed() {
 
   // 9. Initial Confirmed Order & QR Tickets for Demo/Testing
   console.log('Seeding initial order and tickets...');
-  const orderNum = 'TG-2026-88192';
+  const orderNum = 'MT-2026-88192';
   const ticketFaceVal = 100000; // ₹1,000 (2 x ₹500)
   const platFee = 6000; // ₹60
   const tax = 1080; // ₹10.80 (18% on ₹60)
@@ -500,8 +500,8 @@ async function seed() {
   }).returning();
 
   // Create 2 tickets with verifiable cryptographic hashes
-  const secret = 'ticketghar_secret_salt_2026';
-  const tk1Code = 'TG-TK-88192-A1';
+  const secret = 'mahaticket_secret_salt_2026';
+  const tk1Code = 'MT-TK-88192-A1';
   const hash1 = crypto.createHmac('sha256', secret).update(`${tk1Code}|${event1.id}|${session1.id}|BAL-A01`).digest('hex');
 
   const [ticket1] = await db.insert(tickets).values({
@@ -522,7 +522,7 @@ async function seed() {
     status: 'valid',
   }).returning();
 
-  const tk2Code = 'TG-TK-88192-A2';
+  const tk2Code = 'MT-TK-88192-A2';
   const hash2 = crypto.createHmac('sha256', secret).update(`${tk2Code}|${event1.id}|${session1.id}|BAL-A02`).digest('hex');
 
   const [ticket2] = await db.insert(tickets).values({
@@ -599,7 +599,7 @@ async function seed() {
       expectedCapacity: 600,
       ticketPriceRange: '₹300 - ₹600',
       websiteOrSocial: 'instagram.com/sahyadrinatya',
-      message: 'Looking for verified listing on TicketGhar for our 50th show milestone celebration in Pune.',
+      message: 'Looking for verified listing on MahaTicket for our 50th show milestone celebration in Pune.',
       status: 'new',
     },
     {
@@ -625,11 +625,11 @@ async function seed() {
     actorRole: 'super_admin',
     action: 'SYSTEM_INITIALIZED',
     entityType: 'platform',
-    entityId: 'ticketghar-core',
-    details: JSON.stringify({ message: 'TicketGhar platform initialized with Maharashtra production seed catalog' }),
+    entityId: 'mahaticket-core',
+    details: JSON.stringify({ message: 'MahaTicket platform initialized with Maharashtra production seed catalog' }),
   });
 
-  console.log('--- TicketGhar Database Seed Complete! ---');
+  console.log('--- MahaTicket Database Seed Complete! ---');
 }
 
 seed().catch((err) => {

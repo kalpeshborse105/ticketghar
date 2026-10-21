@@ -4,7 +4,7 @@ dotenv.config();
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
-async function auditTicketGhar() {
+async function auditMahaTicket() {
   const dbUrl = process.env.DATABASE_URL;
   console.log('Using DATABASE_URL:', dbUrl ? dbUrl.replace(/:[^:@]+@/, ':****@') : 'NONE');
 
@@ -14,7 +14,7 @@ async function auditTicketGhar() {
   });
 
   await client.connect();
-  console.log('--- CONNECTED TO TICKETGHAR DATABASE ---');
+  console.log('--- CONNECTED TO MAHATICKET DATABASE ---');
 
   // 1. List all tables in public schema
   const tablesRes = await client.query(`
@@ -156,7 +156,7 @@ async function auditTicketGhar() {
   await client.end();
 }
 
-auditTicketGhar().catch(err => {
+auditMahaTicket().catch(err => {
   console.error('Audit Error:', err);
   process.exit(1);
 });

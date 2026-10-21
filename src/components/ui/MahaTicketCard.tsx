@@ -172,10 +172,10 @@ export const MahaTicketCard: React.FC<MahaTicketCardProps> = ({
       <div className="relative flex items-center justify-between my-1">
         {/* Left Semi-circle Notch */}
         <div className="w-5 h-8 bg-slate-100 sm:bg-slate-200 rounded-r-full -ml-1 border-r border-t border-b border-[#E5E7EB]" />
-        
+
         {/* Dashed Perforation Line */}
         <div className="flex-1 border-b-2 border-dashed border-[#CBD5E1] mx-3" />
-        
+
         {/* Right Semi-circle Notch */}
         <div className="w-5 h-8 bg-slate-100 sm:bg-slate-200 rounded-l-full -mr-1 border-l border-t border-b border-[#E5E7EB]" />
       </div>
@@ -211,7 +211,7 @@ export const MahaTicketCard: React.FC<MahaTicketCardProps> = ({
             <span>सुरक्षित डिजिटल तिकीट पडताळणी</span>
           </div>
           <p className="text-[10px] text-slate-500 leading-relaxed">
-            • हे तिकीट एनक्रिप्टेड (Encrypted MTSEC) असून केवळ अधिकृत आयोजक/गेट ऑपरेटरद्वारेच सुरक्षितपणे सत्यापित केले जाते.
+            • हे तिकीट अधिकृत आयोजक/गेट ऑपरेटरद्वारेच सुरक्षितपणे सत्यापित केले जाते.
           </p>
           <p className="text-[10px] text-slate-500 leading-relaxed">
             • प्रयोगाच्या वेळेपूर्वी १५ मिनिटे आधी सभागृहात उपस्थित राहावे.

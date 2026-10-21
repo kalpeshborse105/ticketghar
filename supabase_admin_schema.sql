@@ -1,5 +1,5 @@
 -- ==============================================================================
--- MahaTicket / TicketGhar - Unified Admin & Organizer Governance Schema Migration
+-- MahaTicket - Unified Admin & Organizer Governance Schema Migration
 -- ==============================================================================
 
 -- 1. Events Table Extensions for Rich Content & Stitch Compliance

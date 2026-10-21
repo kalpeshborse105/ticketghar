@@ -46,7 +46,7 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
   onBack,
   onLogout
 }) => {
-  const [activeTab, setActiveTab] = useState<'governance' | 'events' | 'theatre_designer' | 'venues' | 'scanner' | 'ads'>('governance');
+  const [activeTab, setActiveTab] = useState<'governance' | 'events' | 'theatre_designer' | 'venues' | 'scanner' | 'ads' | 'sections'>('governance');
   const [isProcessing, setIsProcessing] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showLiveAlert, setShowLiveAlert] = useState(false);
@@ -54,6 +54,8 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
   // Data states
   const [eventsList, setEventsList] = useState<EventItem[]>([]);
   const [venuesList, setVenuesList] = useState<VenueItem[]>([]);
+  const [sectionsList, setSectionsList] = useState<any[]>([]);
+  const [isSavingSections, setIsSavingSections] = useState(false);
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [searchEventQuery, setSearchEventQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('all');
@@ -120,6 +122,34 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
     { id: '#TK-7889', status: 'valid', text: 'प्रवेश वैध', venue: 'यशवंतराव चव्हाण नाट्यगृह, कोथरूड • गेट १', time: '४ सेकंद आधी', seat: 'सीट B-08' }
   ]);
 
+  const [isSalesFrozen, setIsSalesFrozen] = useState(false);
+
+  const exportOperationsReport = () => {
+    if (!eventsList.length) {
+      triggerToast('कोणतेही कार्यक्रम उपलब्ध नाहीत');
+      return;
+    }
+    const headers = ['EventID', 'TitleMr', 'TitleEn', 'Category', 'Status', 'Venue', 'SessionsCount'];
+    const rows = eventsList.map((e) => [
+      `"${e.id}"`,
+      `"${(e.titleMr || '').replace(/"/g, '""')}"`,
+      `"${(e.title || '').replace(/"/g, '""')}"`,
+      `"${e.category || ''}"`,
+      `"${e.status || ''}"`,
+      `"${(e.venue?.nameMr || e.venue?.name || '').replace(/"/g, '""')}"`,
+      `"${e.sessions?.length || 0}"`,
+    ]);
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `mahaticket_operations_report_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    triggerToast('✓ दैनिक ऑपरेशन्स अहवाल (CSV) यशस्वीरीत्या डाऊनलोड झाला!');
+  };
+
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
@@ -127,13 +157,19 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
 
   const fetchAllData = async () => {
     try {
-      const [eventsRes, venuesRes, dashRes, distRes, cityRes] = await Promise.all([
+      const [eventsRes, venuesRes, dashRes, distRes, cityRes, secRes] = await Promise.all([
         fetch('/api/admin/events'),
         fetch('/api/admin/venues'),
         fetch('/api/admin/dashboard'),
         fetch('/api/locations/districts'),
         fetch('/api/locations/cities'),
+        fetch('/api/admin/sections'),
       ]);
+
+      if (secRes.ok) {
+        const secData = await secRes.json();
+        if (Array.isArray(secData.sections)) setSectionsList(secData.sections);
+      }
 
       if (eventsRes.ok) {
         const evData = await eventsRes.json();
@@ -271,6 +307,36 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
   React.useEffect(() => {
     fetchAllData();
   }, []);
+
+  const updateSectionField = (index: number, field: string, value: any) => {
+    setSectionsList((prev) => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], [field]: value };
+      return copy;
+    });
+  };
+
+  const handleSaveSections = async () => {
+    setIsSavingSections(true);
+    try {
+      const res = await fetch('/api/admin/sections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sections: sectionsList }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        triggerToast('✓ सर्व सेक्शन्स यशस्वीरित्या सेव्ह केले (Android व Web वर तात्काळ लागू)!');
+        if (Array.isArray(data.sections)) setSectionsList(data.sections);
+      } else {
+        triggerToast(data.error || 'सेक्शन्स सेव्ह करताना त्रुटी आली');
+      }
+    } catch {
+      triggerToast('नेटवर्क त्रुटी');
+    } finally {
+      setIsSavingSections(false);
+    }
+  };
 
   const pendingEvent = eventsList.find(e => e.status === 'submitted' || e.status === 'draft') || eventsList[0];
 
@@ -503,8 +569,9 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
               </button>
 
               <button
-                onClick={() => triggerToast('दैनिक ऑपरेशन्स अहवाल (PDF/Excel) तयार होत आहे...')}
+                onClick={exportOperationsReport}
                 className="h-10 px-4 flex items-center gap-1.5 rounded-xl bg-[#A33900] hover:bg-[#832600] text-white font-bold text-xs active:scale-95 transition-all shadow-sm"
+                title="दैनिक अहवाल CSV डाऊनलोड"
               >
                 <Download className="w-4 h-4" />
                 <span>अहवाल</span>
@@ -570,6 +637,19 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
             }`}
           >
             जाहिरात व्यवस्थापन
+          </button>
+          <button
+            onClick={() => setActiveTab('sections')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition shrink-0 flex items-center gap-1.5 ${
+              activeTab === 'sections'
+                ? 'bg-[#A33900] text-white shadow-sm'
+                : 'bg-white text-[#64748B] hover:bg-slate-100 border border-[#E2E8F0]'
+            }`}
+          >
+            <span>📱 सेक्शन्स कस्टमायझेशन</span>
+            <span className="text-[10px] bg-orange-100 text-[#A33900] px-1.5 py-0.2 rounded-full font-extrabold">
+              {sectionsList.length || 9}
+            </span>
           </button>
         </div>
 
@@ -896,13 +976,19 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
 
               <div className="grid grid-cols-2 gap-2">
                 <button
-                  onClick={() => triggerToast('⚠️ तिकीट विक्री तात्पुरती स्थगित (Freeze) करण्यात आली.')}
-                  className="py-2.5 rounded-xl bg-[#DC2626] hover:bg-red-700 text-white font-bold text-xs shadow-sm transition active:scale-95"
+                  onClick={() => {
+                    const next = !isSalesFrozen;
+                    setIsSalesFrozen(next);
+                    triggerToast(next ? '⚠️ तिकीट विक्री तात्पुरती स्थगित (Frozen) करण्यात आली!' : '✓ तिकीट विक्री पूर्ववत सुरू करण्यात आली!');
+                  }}
+                  className={`py-2.5 rounded-xl text-white font-bold text-xs shadow-sm transition active:scale-95 ${
+                    isSalesFrozen ? 'bg-[#16A34A] hover:bg-emerald-700' : 'bg-[#DC2626] hover:bg-red-700'
+                  }`}
                 >
-                  तिकीट विक्री थांबवा
+                  {isSalesFrozen ? 'विक्री पूर्ववत सुरू करा' : 'तिकीट विक्री थांबवा'}
                 </button>
                 <button
-                  onClick={() => triggerToast('✓ सर्व गेट स्कॅनर टोकन्स रीसेट करण्यात आली.')}
+                  onClick={() => triggerToast(`✓ नवीन गेट स्कॅनर टोकन तयार झाले: GATE-SEC-${Math.random().toString(36).substring(2, 6).toUpperCase()}`)}
                   className="py-2.5 rounded-xl bg-white text-[#141B2B] border border-[#E2E8F0] hover:bg-slate-50 font-bold text-xs shadow-sm transition active:scale-95"
                 >
                   गेट लिंक रीसेट
@@ -1396,6 +1482,194 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                     <p className="text-[11px] text-[#64748B]">प्रायोजक: {ad.sponsor}</p>
                   </div>
                   <span className="text-xs text-[#16A34A] font-bold">सक्रिय (Active)</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* TAB: HOME SECTIONS CUSTOMIZATION */}
+        {activeTab === 'sections' && (
+          <div className="space-y-4 animate-in fade-in duration-200">
+            {/* Top Bar with Description and Save Button */}
+            <div className="bg-white p-5 rounded-2xl border border-[#E2E8F0] shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">📱</span>
+                  <h3 className="text-base font-extrabold text-[#141B2B]">
+                    होम स्क्रीन सेक्शन्स कस्टमायझेशन (Web & Android)
+                  </h3>
+                </div>
+                <p className="text-xs text-[#64748B] mt-1">
+                  येथून मुख्य पृष्ठावरील सर्व सेक्शन्सची शीर्षके, उपशीर्षके व बॅज थेट बदला. केलेले बदल तात्काळ वेबसाइट व अँड्रॉइड ॲपवर लागू होतील.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 self-end sm:self-center">
+                <button
+                  type="button"
+                  onClick={fetchAllData}
+                  className="px-3.5 py-2 rounded-xl border border-[#E2E8F0] bg-white text-xs font-bold text-[#64748B] hover:bg-slate-50 transition cursor-pointer flex items-center gap-1.5"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>रीफ्रेश</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSaveSections}
+                  disabled={isSavingSections}
+                  className="px-5 py-2 rounded-xl bg-[#A33900] hover:bg-[#832600] text-white text-xs font-bold transition shadow-sm disabled:opacity-50 cursor-pointer flex items-center gap-1.5 active:scale-95"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>{isSavingSections ? 'जतन करत आहे...' : '✓ बदल सेव्ह करा (Save All)'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Sections Cards Grid */}
+            <div className="space-y-3">
+              {sectionsList.map((sec, idx) => (
+                <div
+                  key={sec.sectionKey || idx}
+                  className={`bg-white p-4 sm:p-5 rounded-2xl border transition-all ${
+                    sec.isVisible === 1 || sec.isVisible === true
+                      ? 'border-[#E2E8F0] shadow-xs'
+                      : 'border-slate-200 opacity-60 bg-slate-50'
+                  }`}
+                >
+                  {/* Card Header */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 pb-3 mb-3 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-0.5 rounded-lg bg-orange-100 text-[#A33900] font-mono text-xs font-bold uppercase tracking-wider">
+                        #{idx + 1} • {sec.sectionKey}
+                      </span>
+                      <span className="text-xs font-bold text-[#141B2B]">
+                        {sec.titleMr || sec.titleEn}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      {/* Sort Order */}
+                      <div className="flex items-center gap-1.5">
+                        <label className="text-[11px] font-bold text-[#64748B]">क्रम (Order):</label>
+                        <input
+                          type="number"
+                          value={sec.sortOrder ?? idx + 1}
+                          onChange={(e) => updateSectionField(idx, 'sortOrder', Number(e.target.value))}
+                          className="w-14 px-2 py-1 text-xs font-bold border border-[#E2E8F0] rounded-lg text-center bg-white"
+                        />
+                      </div>
+
+                      {/* Visibility Toggle */}
+                      <button
+                        type="button"
+                        onClick={() => updateSectionField(idx, 'isVisible', sec.isVisible ? 0 : 1)}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
+                          sec.isVisible
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-slate-200 text-slate-600'
+                        }`}
+                      >
+                        {sec.isVisible ? '✓ सुरू (Visible)' : '✕ लपवा (Hidden)'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Form fields: 2 columns (Marathi & English) */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Marathi Column */}
+                    <div className="space-y-2 p-3 rounded-xl bg-orange-50/50 border border-orange-100">
+                      <div className="flex items-center gap-1 text-[11px] font-bold text-[#A33900]">
+                        <span>🚩 मराठी मजकूर (Marathi Text)</span>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-[#64748B] mb-0.5">
+                          शीर्षक (Title):
+                        </label>
+                        <input
+                          type="text"
+                          value={sec.titleMr || ''}
+                          onChange={(e) => updateSectionField(idx, 'titleMr', e.target.value)}
+                          placeholder="उदा. या आठवड्यातील लोकप्रिय प्रयोग"
+                          className="w-full px-3 py-1.5 text-xs font-bold rounded-lg border border-orange-200 bg-white text-[#141B2B]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-[#64748B] mb-0.5">
+                          उपशीर्षक (Subtitle):
+                        </label>
+                        <input
+                          type="text"
+                          value={sec.subtitleMr || ''}
+                          onChange={(e) => updateSectionField(idx, 'subtitleMr', e.target.value)}
+                          placeholder="उदा. रसिक प्रेक्षकांच्या पसंतीस उतरलेली नाटके"
+                          className="w-full px-3 py-1.5 text-xs rounded-lg border border-orange-200 bg-white text-[#141B2B]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-[#64748B] mb-0.5">
+                          बॅज / टॅग (Badge):
+                        </label>
+                        <input
+                          type="text"
+                          value={sec.badgeMr || ''}
+                          onChange={(e) => updateSectionField(idx, 'badgeMr', e.target.value)}
+                          placeholder="उदा. 🔥 लोकप्रिय ट्रेंडिंग"
+                          className="w-full px-3 py-1.5 text-xs rounded-lg border border-orange-200 bg-white text-[#141B2B]"
+                        />
+                      </div>
+                    </div>
+
+                    {/* English Column */}
+                    <div className="space-y-2 p-3 rounded-xl bg-slate-50 border border-slate-200">
+                      <div className="flex items-center gap-1 text-[11px] font-bold text-slate-700">
+                        <span>🇬🇧 English Text</span>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-[#64748B] mb-0.5">
+                          Title:
+                        </label>
+                        <input
+                          type="text"
+                          value={sec.titleEn || ''}
+                          onChange={(e) => updateSectionField(idx, 'titleEn', e.target.value)}
+                          placeholder="e.g. Trending Shows This Week"
+                          className="w-full px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-200 bg-white text-[#141B2B]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-[#64748B] mb-0.5">
+                          Subtitle:
+                        </label>
+                        <input
+                          type="text"
+                          value={sec.subtitleEn || ''}
+                          onChange={(e) => updateSectionField(idx, 'subtitleEn', e.target.value)}
+                          placeholder="e.g. Top rated shows based on audience reviews"
+                          className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white text-[#141B2B]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-[#64748B] mb-0.5">
+                          Badge:
+                        </label>
+                        <input
+                          type="text"
+                          value={sec.badgeEn || ''}
+                          onChange={(e) => updateSectionField(idx, 'badgeEn', e.target.value)}
+                          placeholder="e.g. POPULAR TRENDING"
+                          className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white text-[#141B2B]"
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>

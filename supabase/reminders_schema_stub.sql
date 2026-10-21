@@ -1,0 +1,11 @@
+-- Reminder storage scaffold for future FCM/event reminder delivery.
+-- Apply as a real migration once push delivery is wired end to end.
+--
+-- Expected columns:
+-- reminders(
+--   id bigserial primary key,
+--   user_id integer references users(id),
+--   event_id integer references events(id) not null,
+--   fcm_token text,
+--   created_at timestamptz not null default now()
+-- );

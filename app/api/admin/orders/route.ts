@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
 import { orders, events, venues, eventSessions, tickets } from '@/src/db/schema.ts';
-import { eq, desc } from 'drizzle-orm';
+import { inArray, eq, desc } from 'drizzle-orm';
 import { requireAdmin, verifyAdminSession } from '@/src/lib/admin-auth.ts';
 
 export async function GET(request: NextRequest) {
@@ -34,22 +34,25 @@ export async function GET(request: NextRequest) {
           .orderBy(desc(orders.createdAt))
           .limit(limitParam);
 
-    const enriched = await Promise.all(
-      orderRows.map(async (row) => {
-        const ticketList = await db
-          .select()
-          .from(tickets)
-          .where(eq(tickets.orderId, row.order.id));
+    const orderIds = orderRows.map((r) => r.order.id);
+    const allTickets = orderIds.length > 0
+      ? await db.select().from(tickets).where(inArray(tickets.orderId, orderIds))
+      : [];
 
-        return {
-          ...row.order,
-          event: row.event,
-          venue: row.venue,
-          session: row.session,
-          tickets: ticketList,
-        };
-      })
-    );
+    const ticketsByOrder = new Map<number, any[]>();
+    for (const t of allTickets) {
+      const list = ticketsByOrder.get(t.orderId) || [];
+      list.push(t);
+      ticketsByOrder.set(t.orderId, list);
+    }
+
+    const enriched = orderRows.map((row) => ({
+      ...row.order,
+      event: row.event,
+      venue: row.venue,
+      session: row.session,
+      tickets: ticketsByOrder.get(row.order.id) || [],
+    }));
 
     return NextResponse.json({ orders: enriched });
   } catch (error: any) {

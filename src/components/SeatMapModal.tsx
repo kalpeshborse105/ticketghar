@@ -16,12 +16,16 @@ import {
   Calendar,
   Sparkles,
 } from 'lucide-react';
+import type { AddonSelection } from '@/src/lib/concessions';
 
 interface SeatMapModalProps {
   event: EventItem;
   session: EventSessionItem;
+  /** All showtimes — enables BookMyShow-style date strip + time chips */
+  allSessions?: EventSessionItem[];
   language: Language;
   onClose: () => void;
+  onSessionChange?: (session: EventSessionItem) => void;
   onProceedToCheckout: (holdData: {
     sessionId: number;
     seatIds: number[];
@@ -29,6 +33,7 @@ interface SeatMapModalProps {
     faceValueTotal: number;
     holdExpiresAt: string;
     holdToken?: string;
+    addons?: AddonSelection[];
   }) => void;
 }
 
@@ -46,15 +51,20 @@ const toMarathiDigits = (val: string | number) => {
 export const SeatMapModal: React.FC<SeatMapModalProps> = ({
   event,
   session,
+  allSessions,
   language,
   onClose,
+  onSessionChange,
   onProceedToCheckout,
 }) => {
   const t = translations[language];
+  const sessions = (allSessions && allSessions.length > 0 ? allSessions : [session]).filter(Boolean);
+  const [activeSession, setActiveSession] = useState<EventSessionItem>(session);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [warningMessage, setWarningMessage] = useState<string | null>(null);
   const [venueData, setVenueData] = useState<any>(null);
+  const [layoutConfig, setLayoutConfig] = useState<any>(null);
   const [seats, setSeats] = useState<any[]>([]);
   const [sections, setSections] = useState<any[]>([]);
   const [selectedSeatIds, setSelectedSeatIds] = useState<number[]>([]);
@@ -62,6 +72,59 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [countdownSeconds, setCountdownSeconds] = useState<number>(5 * 60); // 5 min hold window
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+
+  useEffect(() => {
+    setActiveSession(session);
+    setSelectedSeatIds([]);
+    setCountdownSeconds(5 * 60);
+  }, [session.id]);
+
+  // Group sessions by calendar date for top date strip
+  const dateGroups = React.useMemo(() => {
+    const map = new Map<
+      string,
+      { key: string; label: string; day: string; weekday: string; sessions: EventSessionItem[] }
+    >();
+    sessions.forEach((s) => {
+      const d = new Date(s.sessionStartTime);
+      if (Number.isNaN(d.getTime())) return;
+      const key = d.toISOString().slice(0, 10);
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          label: d.toLocaleDateString(language === 'mr' ? 'mr-IN' : 'en-IN', {
+            day: 'numeric',
+            month: 'short',
+          }),
+          day: d.toLocaleDateString(language === 'mr' ? 'mr-IN' : 'en-IN', { day: 'numeric' }),
+          weekday: d.toLocaleDateString(language === 'mr' ? 'mr-IN' : 'en-IN', { weekday: 'short' }),
+          sessions: [],
+        });
+      }
+      map.get(key)!.sessions.push(s);
+    });
+    return Array.from(map.values()).sort((a, b) => a.key.localeCompare(b.key));
+  }, [sessions, language]);
+
+  const activeDateKey = React.useMemo(() => {
+    const d = new Date(activeSession.sessionStartTime);
+    return Number.isNaN(d.getTime()) ? dateGroups[0]?.key : d.toISOString().slice(0, 10);
+  }, [activeSession.sessionStartTime, dateGroups]);
+
+  const timesForActiveDate = React.useMemo(() => {
+    return (dateGroups.find((g) => g.key === activeDateKey)?.sessions || []).slice().sort(
+      (a, b) =>
+        new Date(a.sessionStartTime).getTime() - new Date(b.sessionStartTime).getTime()
+    );
+  }, [dateGroups, activeDateKey]);
+
+  const switchSession = (next: EventSessionItem) => {
+    if (next.id === activeSession.id) return;
+    setSelectedSeatIds([]);
+    setActiveSession(next);
+    setCountdownSeconds(5 * 60);
+    onSessionChange?.(next);
+  };
 
   const handleRequestClose = () => {
     if (selectedSeatIds.length > 0) {
@@ -71,10 +134,8 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
     }
   };
 
-  const touchStartDistRef = React.useRef<number | null>(null);
-
-  const handleZoomIn = () => setZoomLevel((prev) => Math.min(1.8, Number((prev + 0.15).toFixed(2))));
-  const handleZoomOut = () => setZoomLevel((prev) => Math.max(0.75, Number((prev - 0.15).toFixed(2))));
+  const handleZoomIn = () => setZoomLevel((prev) => Math.min(1.5, Number((prev + 0.1).toFixed(2))));
+  const handleZoomOut = () => setZoomLevel((prev) => Math.max(0.8, Number((prev - 0.1).toFixed(2))));
   const handleResetZoom = () => setZoomLevel(1);
 
   // Countdown timer ticking down
@@ -92,24 +153,25 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
     return language === 'mr' ? `${toMarathiDigits(str)} मि.` : `${str} min`;
   };
 
-  // Fetch real-time seat inventory for this session
+  // Fetch real-time seat inventory for this session (DB + cache)
   const fetchSessionSeats = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch(`/api/sessions/${session.id}/seats`);
+      const res = await fetch(`/api/sessions/${activeSession.id}/seats`);
       if (!res.ok) throw new Error('Failed to load seat layout');
       const data = await res.json();
       setVenueData(data.venue);
-      setSeats(data.seats || []);
-      setSections(data.sections || []);
+      setLayoutConfig(data.layoutConfig || data.venue?.layoutConfig || null);
+      setSeats(Array.isArray(data.seats) ? data.seats : []);
+      setSections(Array.isArray(data.sections) ? data.sections : []);
     } catch (err: any) {
       console.error(err);
       setError(err.message || 'Error loading seats');
     } finally {
       setLoading(false);
     }
-  }, [session.id]);
+  }, [activeSession.id]);
 
   useEffect(() => {
     fetchSessionSeats();
@@ -140,17 +202,17 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
   const selectedSeats = seats.filter((s) => selectedSeatIds.includes(s.seatId));
 
   const getSeatPricePaise = (s: any) => {
-    if (s.price && typeof s.price === 'number') return s.price;
-    const sec = sections.find((sec) => sec.id === s.sectionId);
-    if (sec?.price && typeof sec.price === 'number') return sec.price;
-    if (sec?.basePrice && typeof sec.basePrice === 'number') return sec.basePrice;
-    return 40000;
+    if (typeof s.price === 'number' && s.price > 0) return s.price;
+    const sec = sections.find((sec) => Number(sec.id) === Number(s.sectionId));
+    if (typeof sec?.price === 'number' && sec.price > 0) return sec.price;
+    if (typeof sec?.basePrice === 'number' && sec.basePrice > 0) return sec.basePrice;
+    return 25000;
   };
 
   const subtotalPaise = selectedSeats.reduce((sum: number, s: any) => sum + getSeatPricePaise(s), 0);
   const subtotalRupees = Math.round(subtotalPaise / 100);
 
-  // Handle temporary hold and proceed to booking
+  // Direct checkout: skips food/addons step completely
   const handleHoldAndProceed = async () => {
     if (selectedSeatIds.length === 0) return;
 
@@ -162,7 +224,7 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sessionId: session.id,
+          sessionId: activeSession.id,
           seatIds: selectedSeatIds,
           userIdStr: `guest-browser-${Date.now()}`,
         }),
@@ -173,8 +235,9 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
         throw new Error(data.error || 'Seat hold expired or unavailable.');
       }
 
+      // Direct to checkout — NO food or extra addon screen!
       onProceedToCheckout({
-        sessionId: session.id,
+        sessionId: activeSession.id,
         seatIds: selectedSeatIds,
         heldSeats:
           data.hold?.heldSeats ||
@@ -187,6 +250,7 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
         faceValueTotal: data.hold?.faceValueTotal || subtotalPaise,
         holdExpiresAt: data.hold?.holdExpiresAt || new Date(Date.now() + 300000).toISOString(),
         holdToken: data.holdToken || data.hold?.holdToken,
+        addons: [],
       });
     } catch (err: any) {
       console.error(err);
@@ -214,14 +278,19 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
     return rows;
   };
 
-  // Group seats by sections dynamically using authoritative DB sections and prices
+  // Group seats by sections — guaranteed to show all seats
   const displaySections = React.useMemo(() => {
+    let result: any[] = [];
     if (sections && sections.length > 0) {
-      return sections
+      result = sections
         .map((sec) => {
-          const secSeats = seats.filter((s) => s.sectionId === sec.id);
+          const secSeats = seats.filter((s) => Number(s.sectionId) === Number(sec.id));
+          const priced = secSeats.find((s) => typeof s.price === 'number' && s.price > 0);
           const effectivePricePaise =
-            secSeats.find((s) => s.price)?.price || sec.price || sec.basePrice || 40000;
+            priced?.price ||
+            (typeof sec.price === 'number' && sec.price > 0 ? sec.price : 0) ||
+            (typeof sec.basePrice === 'number' && sec.basePrice > 0 ? sec.basePrice : 0) ||
+            25000;
           return {
             id: sec.id,
             name: sec.name,
@@ -235,216 +304,194 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
         .filter((sec) => sec.seats.length > 0);
     }
 
-    // Logical fallback if sections array is not provided
-    const defaultSections = [
-      {
-        id: 1,
-        name: 'Balcony',
-        nameMr: language === 'mr' ? 'बालकनी (Balcony)' : 'Balcony',
-        pricePaise: 50000,
-        priceRupees: 500,
-        seats: seats.slice(0, 24),
-        rows: groupByRow(seats.slice(0, 24)),
-      },
-      {
-        id: 2,
-        name: 'Stall A',
-        nameMr: language === 'mr' ? 'प्रथम वर्ग (Stall A)' : 'Stall A',
-        pricePaise: 40000,
-        priceRupees: 400,
-        seats: seats.slice(24, 56),
-        rows: groupByRow(seats.slice(24, 56)),
-      },
-      {
-        id: 3,
-        name: 'Stall B',
-        nameMr: language === 'mr' ? 'द्वितीय वर्ग (Stall B)' : 'Stall B',
-        pricePaise: 30000,
-        priceRupees: 300,
-        seats: seats.slice(56),
-        rows: groupByRow(seats.slice(56)),
-      },
-    ].filter((sec) => sec.seats.length > 0);
+    if (result.length > 0) return result;
 
-    return defaultSections;
+    // Fallback if section IDs didn't match: group directly by seat inventory sectionId
+    const bySection = new Map<number, any[]>();
+    seats.forEach((s) => {
+      const sid = Number(s.sectionId) || 0;
+      if (!bySection.has(sid)) bySection.set(sid, []);
+      bySection.get(sid)!.push(s);
+    });
+
+    return Array.from(bySection.entries()).map(([id, secSeats]) => {
+      const pricePaise =
+        secSeats.find((s) => typeof s.price === 'number' && s.price > 0)?.price || 25000;
+      return {
+        id,
+        name: secSeats[0]?.ticketTypeName || `Section ${id}`,
+        nameMr: secSeats[0]?.ticketTypeNameMr || secSeats[0]?.ticketTypeName || `विभाग ${id}`,
+        pricePaise,
+        priceRupees: Math.round(pricePaise / 100),
+        seats: secSeats,
+        rows: groupByRow(secSeats),
+      };
+    });
   }, [sections, seats, language]);
 
   // Compute dynamic min & max price across all available sections/seats
-  const pricesList = displaySections.map((s) => s.priceRupees);
-  const minPrice = pricesList.length > 0 ? Math.min(...pricesList) : 300;
-  const maxPrice = pricesList.length > 0 ? Math.max(...pricesList) : 500;
+  const pricesList = displaySections.map((s) => s.priceRupees).filter((p) => p > 0);
+  const minPrice = pricesList.length > 0 ? Math.min(...pricesList) : 0;
+  const maxPrice = pricesList.length > 0 ? Math.max(...pricesList) : 0;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/75 backdrop-blur-xs flex items-center justify-center p-0 sm:p-4">
-      <div className="relative w-full max-w-2xl bg-white sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col min-h-screen sm:min-h-0 sm:max-h-[94vh] border border-slate-200">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
+      <div className="relative w-full max-w-3xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col h-[94vh] max-h-[840px] border border-slate-200">
         
-        {/* Stitch Header */}
-        <header className="sticky top-0 z-30 bg-[#FFF7ED]/95 backdrop-blur-md border-b border-[#E5E7EB] px-4 py-3 flex items-center justify-between">
+        {/* Compact Modern Header (Space-efficient) */}
+        <header className="bg-[#141B2B] text-white px-4 py-2.5 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             <button
               onClick={handleRequestClose}
               aria-label="Back"
-              className="w-10 h-10 flex items-center justify-center rounded-full text-[#141B2B] hover:bg-orange-100 transition-colors shrink-0 cursor-pointer"
+              className="w-8 h-8 flex items-center justify-center rounded-full text-slate-300 hover:text-white hover:bg-white/10 transition-colors shrink-0 cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="font-extrabold text-lg text-[#EA580C] tracking-tight shrink-0">महाटिकिट</span>
-              <span className="text-slate-300 shrink-0">|</span>
-              <h1 className="font-bold text-sm sm:text-base text-[#141B2B] truncate">
-                {language === 'mr' ? 'आसन व्यवस्था' : 'Seat Selection'}
-              </h1>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="text-[11px] font-bold text-[#EA580C] bg-orange-100/90 border border-orange-200 px-2.5 py-1 rounded-full">
-              {language === 'mr' ? 'थेट निवड' : 'Live'}
-            </span>
-          </div>
-        </header>
-
-        {/* Show & Venue Context Card (Stitch) */}
-        <div className="bg-[#FFF7ED] px-4 py-3 border-b border-orange-100">
-          <div className="flex items-center gap-3">
-            <div className="relative w-14 h-20 rounded-lg overflow-hidden shrink-0 shadow-sm bg-slate-200 aspect-[2/3]">
-              <img
-                src={event.posterUrl || 'https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?auto=format&fit=crop&w=400&q=80'}
-                alt={event.title}
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute top-1 left-1 bg-[#EA580C] text-white text-[9px] px-1 py-0.2 rounded font-bold">
-                नाटक
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="font-extrabold text-sm text-[#EA580C]">महाटिकिट</span>
+                <span className="text-slate-500">|</span>
+                <h1 className="font-bold text-sm sm:text-base text-white truncate">
+                  {language === 'mr' ? event.titleMr || event.title : event.title}
+                </h1>
               </div>
-            </div>
-            <div className="flex flex-col min-w-0 flex-1">
-              <div className="flex items-center gap-1.5 mb-0.5">
-                <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span className="text-[11px] text-emerald-700 font-bold uppercase tracking-wider">
-                  {language === 'mr' ? 'जलद भरणारे (Fast Filling)' : 'Fast Filling'}
-                </span>
-              </div>
-              <h2 className="font-bold text-sm sm:text-base text-[#141B2B] truncate leading-tight">
-                {language === 'mr' ? event.titleMr || event.title : event.title}
-              </h2>
-              <p className="text-xs text-slate-600 truncate mt-0.5">
-                प्रसाद ओक • मुक्ता बर्वे
+              <p className="text-[11px] text-slate-400 truncate">
+                {venueData?.nameMr || venueData?.name || event.venue?.name || '—'}
               </p>
-              <div className="flex items-center gap-2 text-slate-500 mt-1 text-[11px]">
-                <span className="text-[#EA580C] font-semibold">
-                  {session?.sessionStartTime
-                    ? `${new Date(session.sessionStartTime).toLocaleDateString(language === 'mr' ? 'mr-IN' : 'en-IN', {
-                        weekday: 'short',
-                        day: 'numeric',
-                        month: 'short',
-                      })} • ${new Date(session.sessionStartTime).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}`
-                    : (language === 'mr' ? 'वेळापत्रक उपलब्ध' : 'Schedule available')}
-                </span>
-                <span>•</span>
-                <span className="truncate">{venueData?.nameMr || venueData?.name || event.venue?.name || 'बाळ गंधर्व रंगमंदिर, पुणे'}</span>
-              </div>
             </div>
           </div>
 
           {/* Countdown Timer Pill */}
-          <div className="mt-2.5 bg-white rounded-full px-3 py-1.5 flex items-center justify-between border border-orange-200/60 shadow-xs">
-            <div className="flex items-center gap-1.5 text-xs text-[#EA580C] font-semibold">
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="bg-orange-500/20 border border-orange-500/40 text-[#EA580C] px-3 py-1 rounded-full flex items-center gap-1.5 text-xs font-bold font-mono">
               <Timer className="w-3.5 h-3.5" />
-              <span>{language === 'mr' ? 'तिकीट राखीव राहतील:' : 'Seats reserved for:'}</span>
+              <span>{formatCountdown(countdownSeconds)}</span>
             </div>
-            <div className="text-xs font-bold text-[#EA580C] tabular-nums font-mono">
-              {formatCountdown(countdownSeconds)}
-            </div>
+          </div>
+        </header>
+
+        {/* Compact Date & Showtime Selector Bar */}
+        <div className="bg-[#FFF7ED] border-b border-orange-200/60 px-4 py-2 flex items-center justify-between gap-3 shrink-0 flex-wrap sm:flex-nowrap">
+          {/* Date Chips */}
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
+            {dateGroups.map((g) => {
+              const selected = g.key === activeDateKey;
+              return (
+                <button
+                  key={g.key}
+                  type="button"
+                  onClick={() => {
+                    const first = g.sessions[0];
+                    if (first) switchSession(first);
+                  }}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition whitespace-nowrap ${
+                    selected
+                      ? 'bg-[#EA580C] text-white shadow-xs'
+                      : 'bg-white text-slate-700 border border-orange-100 hover:bg-orange-50'
+                  }`}
+                >
+                  <span>{g.weekday}</span>
+                  <span className="text-sm font-extrabold">{g.day}</span>
+                  <span>{g.label.replace(/^\d+\s*/, '')}</span>
+                </button>
+              );
+            })}
+
+            {/* Time Chips for current date */}
+            {timesForActiveDate.map((s) => {
+              const selected = s.id === activeSession.id;
+              const timeLabel = new Date(s.sessionStartTime).toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+              });
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => switchSession(s)}
+                  className={`rounded-lg px-2.5 py-1 text-xs font-bold transition whitespace-nowrap ${
+                    selected
+                      ? 'bg-[#141B2B] text-white'
+                      : 'bg-white border border-slate-200 text-[#EA580C] hover:border-[#EA580C]'
+                  }`}
+                >
+                  {timeLabel}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Quick Zoom Bar */}
+          <div className="flex items-center gap-1 bg-white px-2 py-0.5 rounded-xl border border-slate-200 shadow-2xs text-slate-700 shrink-0">
+            <button
+              type="button"
+              onClick={handleZoomOut}
+              disabled={zoomLevel <= 0.8}
+              className="p-1 rounded hover:bg-slate-100 disabled:opacity-30"
+              title="Zoom Out"
+            >
+              <ZoomOut className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={handleResetZoom}
+              className="px-1.5 text-[11px] font-mono font-bold"
+            >
+              {Math.round(zoomLevel * 100)}%
+            </button>
+            <button
+              type="button"
+              onClick={handleZoomIn}
+              disabled={zoomLevel >= 1.5}
+              className="p-1 rounded hover:bg-slate-100 disabled:opacity-30"
+              title="Zoom In"
+            >
+              <ZoomIn className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
 
-        {/* Legend Indicator Bar */}
-        <div className="px-4 py-2 bg-white border-b border-slate-200 flex items-center justify-around text-xs text-slate-600">
+        {/* Legend Bar */}
+        <div className="px-4 py-1.5 bg-white border-b border-slate-200 flex items-center justify-around text-[11px] text-slate-600 shrink-0">
           <div className="flex items-center gap-1.5">
-            <span className="w-4 h-4 rounded-t-xs rounded-b-sm bg-white border border-slate-300 shadow-2xs inline-block"></span>
-            <span>
-              {minPrice === maxPrice
-                ? language === 'mr'
-                  ? `उपलब्ध (₹${toMarathiDigits(minPrice)})`
-                  : `Available (₹${minPrice})`
-                : language === 'mr'
-                  ? `उपलब्ध (₹${toMarathiDigits(minPrice)} - ₹${toMarathiDigits(maxPrice)})`
-                  : `Available (₹${minPrice} - ₹${maxPrice})`}
-            </span>
+            <span className="w-3.5 h-3.5 rounded-t-xs rounded-b-sm bg-white border border-slate-300 shadow-2xs inline-block"></span>
+            <span>{language === 'mr' ? 'उपलब्ध' : 'Available'}</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-4 h-4 rounded-t-xs rounded-b-sm bg-[#EA580C] text-white flex items-center justify-center font-bold text-[10px]">
+            <span className="w-3.5 h-3.5 rounded-t-xs rounded-b-sm bg-[#EA580C] text-white flex items-center justify-center font-bold text-[9px]">
               <Check className="w-2.5 h-2.5 stroke-[3]" />
             </span>
             <span className="text-slate-900 font-bold">{language === 'mr' ? 'निवडलेले' : 'Selected'}</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-4 h-4 rounded-t-xs rounded-b-sm bg-slate-200 opacity-80 inline-block"></span>
+            <span className="w-3.5 h-3.5 rounded-t-xs rounded-b-sm bg-slate-300 opacity-80 inline-block"></span>
             <span>{language === 'mr' ? 'आरक्षित' : 'Occupied'}</span>
           </div>
         </div>
 
         {/* Warning Notification if > 5 seats attempted */}
         {warningMessage && (
-          <div className="px-4 py-2 bg-amber-50 border-b border-amber-200 text-amber-900 text-xs font-semibold flex items-center justify-between">
+          <div className="px-4 py-2 bg-amber-50 border-b border-amber-200 text-amber-900 text-xs font-semibold flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2">
               <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
               <span>{warningMessage}</span>
             </div>
-            <button
-              onClick={() => setWarningMessage(null)}
-              className="text-amber-800 hover:text-amber-950 font-bold"
-            >
-              ✕
-            </button>
+            <button onClick={() => setWarningMessage(null)} className="text-amber-800 hover:text-amber-950 font-bold">✕</button>
           </div>
         )}
 
-        {/* Interactive Stage & Seating Hall */}
-        <div className="flex-1 overflow-y-auto overflow-x-auto p-4 sm:p-6 bg-[#FAFAFA] relative space-y-6">
-          {/* Floating Zoom Bar */}
-          <div className="sticky top-2 z-20 flex justify-end px-2 pointer-events-none mb-[-36px]">
-            <div className="pointer-events-auto flex items-center gap-1 bg-white/95 backdrop-blur-md px-2 py-1 rounded-2xl border border-slate-200 shadow-sm text-slate-700">
-              <button
-                type="button"
-                onClick={handleZoomOut}
-                disabled={zoomLevel <= 0.75}
-                className="p-1 rounded-lg hover:bg-slate-100 disabled:opacity-30 text-slate-700 transition"
-                title="Zoom Out"
-              >
-                <ZoomOut className="w-3.5 h-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={handleResetZoom}
-                className="px-1.5 py-0.5 text-[11px] font-mono font-bold hover:bg-slate-100 rounded transition"
-                title="Reset 100%"
-              >
-                {Math.round(zoomLevel * 100)}%
-              </button>
-              <button
-                type="button"
-                onClick={handleZoomIn}
-                disabled={zoomLevel >= 1.8}
-                className="p-1 rounded-lg hover:bg-slate-100 disabled:opacity-30 text-slate-700 transition"
-                title="Zoom In"
-              >
-                <ZoomIn className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-
+        {/* Interactive Seating Hall (Main Focus: Ample Space for Stage & Seats) */}
+        <div className="flex-1 overflow-y-auto overflow-x-auto p-4 sm:p-6 bg-[#F8FAFC] relative">
           {loading ? (
-            <div className="py-20 flex flex-col items-center justify-center space-y-3 text-slate-500">
-              <div className="w-8 h-8 border-3 border-[#EA580C] border-t-transparent rounded-full animate-spin" />
+            <div className="h-full min-h-[300px] flex flex-col items-center justify-center space-y-3 text-slate-500">
+              <div className="w-10 h-10 border-3 border-[#EA580C] border-t-transparent rounded-full animate-spin" />
               <p className="text-xs sm:text-sm font-bold text-slate-700">
                 {language === 'mr' ? 'सभागृह आसन व्यवस्था लोड होत आहे...' : 'Loading seating plan...'}
               </p>
             </div>
           ) : error ? (
-            <div className="py-16 text-center space-y-3">
+            <div className="h-full min-h-[300px] flex flex-col items-center justify-center space-y-3 text-center">
               <AlertCircle className="w-10 h-10 text-red-500 mx-auto" />
               <p className="text-sm font-medium text-slate-800">{error}</p>
               <button
@@ -456,13 +503,13 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
             </div>
           ) : (
             <div
-              className="space-y-6 max-w-md mx-auto transition-transform duration-150 ease-out origin-top pb-10"
+              className="space-y-6 max-w-xl mx-auto transition-transform duration-150 ease-out origin-top pb-12"
               style={{ transform: `scale(${zoomLevel})` }}
             >
-              {/* Curved Theatre Stage Indicator (Stitch Exact) */}
-              <div className="flex flex-col items-center justify-center max-w-sm mx-auto mb-4">
+              {/* Curved Theatre Stage Indicator */}
+              <div className="flex flex-col items-center justify-center max-w-sm mx-auto mb-5">
                 <div className="relative w-full flex flex-col items-center">
-                  <svg className="w-64 h-9 drop-shadow-[0_4px_10px_rgba(234,88,12,0.22)]" fill="none" viewBox="0 0 320 38">
+                  <svg className="w-72 h-10 drop-shadow-[0_4px_12px_rgba(234,88,12,0.25)]" fill="none" viewBox="0 0 320 38">
                     <path className="text-[#FD6B36]" d="M 10,34 Q 160,2 310,34" stroke="currentColor" strokeLinecap="round" strokeWidth="4"></path>
                     <path className="text-[#FFB599]" d="M 25,36 Q 160,8 295,36" stroke="currentColor" strokeDasharray="3 3" strokeWidth="1.5"></path>
                   </svg>
@@ -473,26 +520,24 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
                 <span className="text-[11px] text-slate-500 mt-0.5">पडदा क्रमांक १ • प्रेक्षक समोर</span>
               </div>
 
-              {/* Dynamic Venue Sections — Authoritative Tier Prices from Database */}
+              {/* Dynamic Venue Sections */}
               {displaySections.map((sec, secIdx) => {
                 const isOrangeTheme = secIdx % 2 === 0;
                 return (
                   <div
                     key={sec.id}
-                    className={`rounded-xl p-3 shadow-xs border ${
+                    className={`rounded-2xl p-4 shadow-xs border ${
                       isOrangeTheme
                         ? 'bg-[#FFF7ED] border-orange-100'
-                        : 'bg-[#F8FAFC] border-slate-200'
+                        : 'bg-white border-slate-200'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-3 px-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-xs sm:text-sm text-[#141B2B]">
-                          {sec.nameMr}
-                        </span>
-                      </div>
+                      <span className="font-bold text-xs sm:text-sm text-[#141B2B]">
+                        {sec.nameMr}
+                      </span>
                       <span
-                        className={`bg-white font-bold text-[11px] px-2 py-0.5 rounded-full shadow-2xs border ${
+                        className={`bg-white font-extrabold text-xs px-2.5 py-0.5 rounded-full shadow-2xs border ${
                           isOrangeTheme
                             ? 'text-[#EA580C] border-orange-200'
                             : 'text-slate-700 border-slate-200'
@@ -505,24 +550,32 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
                     </div>
 
                     <div className="space-y-2 text-center">
-                      {Object.entries(sec.rows).map(([rowLabel, rowSeats]) => {
-                        const half = Math.ceil(rowSeats.length / 2);
-                        const leftWing = rowSeats.slice(0, half);
-                        const rightWing = rowSeats.slice(half);
+                      {Object.entries(sec.rows).map(([rowLabel, rowSeats]: [string, any]) => {
+                        const sorted = [...rowSeats].sort(
+                          (a, b) => Number(a.seatNumber) - Number(b.seatNumber)
+                        );
+                        const aisleIndex = Math.floor(sorted.length / 2);
 
                         return (
-                          <div key={rowLabel} className="flex items-center justify-between text-xs">
-                            <span className="w-4 font-bold text-slate-500 text-center">{rowLabel}</span>
-                            <div className="flex gap-1.5">
-                              {leftWing.map((seat) => renderSeatBtn(seat))}
+                          <div key={rowLabel} className="flex items-center justify-center gap-1 text-xs overflow-x-auto py-0.5">
+                            <span className="w-4 shrink-0 font-bold text-slate-400 text-center text-[11px]">
+                              {rowLabel}
+                            </span>
+                            <div className="flex items-center gap-1.5">
+                              {sorted.map((seat, seatIdx) => (
+                                <React.Fragment key={seat.seatId}>
+                                  {renderSeatBtn(seat)}
+                                  {seatIdx === aisleIndex - 1 && sorted.length > 5 && (
+                                    <div className="w-3 sm:w-4 shrink-0 text-slate-300 text-[10px] font-mono select-none" title="Aisle">
+                                      ║
+                                    </div>
+                                  )}
+                                </React.Fragment>
+                              ))}
                             </div>
-                            {rightWing.length > 0 && (
-                              <div className="w-3 text-slate-400 text-[10px] font-mono select-none">।</div>
-                            )}
-                            <div className="flex gap-1.5">
-                              {rightWing.map((seat) => renderSeatBtn(seat))}
-                            </div>
-                            <span className="w-4 font-bold text-slate-500 text-center">{rowLabel}</span>
+                            <span className="w-4 shrink-0 font-bold text-slate-400 text-center text-[11px]">
+                              {rowLabel}
+                            </span>
                           </div>
                         );
                       })}
@@ -540,30 +593,38 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
           )}
         </div>
 
-        {/* Sticky Bottom Summary Drawer & Action Bar (Stitch Exact) */}
-        <div className="sticky bottom-0 left-0 w-full bg-white/95 backdrop-blur-md shadow-[0_-6px_20px_rgba(0,0,0,0.08)] px-4 py-3 border-t border-slate-200 z-40">
-          <div className="max-w-md mx-auto flex items-center justify-between gap-4">
-            {/* Left: Seats & Price Breakdown */}
+        {/* Sticky Bottom Action Drawer (Stitch Exact) */}
+        <div className="bg-white border-t border-slate-200 px-5 py-3 shadow-[0_-6px_20px_rgba(0,0,0,0.06)] z-40 shrink-0">
+          <div className="max-w-xl mx-auto flex items-center justify-between gap-4">
+            {/* Left: Selected Seats Summary */}
             <div className="flex flex-col min-w-0">
               <div className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-[#EA580C]"></span>
                 <span className="text-xs sm:text-sm font-bold text-[#141B2B] truncate">
                   {selectedSeatIds.length > 0
-                    ? `${toMarathiDigits(selectedSeatIds.length)} आसने (${selectedSeats.map((s) => s.seatCode).join(', ')})`
-                    : 'कोणतेही आसन निवडलेले नाही'}
+                    ? language === 'mr'
+                      ? `${toMarathiDigits(selectedSeatIds.length)} आसने (${selectedSeats
+                          .map((s) => `${s.seatCode} ₹${toMarathiDigits(Math.round(getSeatPricePaise(s) / 100))}`)
+                          .join(', ')})`
+                      : `${selectedSeatIds.length} seats (${selectedSeats
+                          .map((s) => `${s.seatCode} ₹${Math.round(getSeatPricePaise(s) / 100)}`)
+                          .join(', ')})`
+                    : language === 'mr'
+                      ? 'कोणतेही आसन निवडलेले नाही'
+                      : 'No seats selected'}
                 </span>
               </div>
               <div className="flex items-baseline gap-1 mt-0.5">
                 <span className="text-lg sm:text-xl font-bold text-[#EA580C] tabular-nums font-mono">
-                  ₹{toMarathiDigits(subtotalRupees)}
+                  ₹{language === 'mr' ? toMarathiDigits(subtotalRupees) : subtotalRupees}
                 </span>
                 <span className="text-[11px] text-slate-500">
-                  + जीएसटी (GST)
+                  {language === 'mr' ? '+ जीएसटी (GST)' : '+ GST'}
                 </span>
               </div>
             </div>
 
-            {/* Right: Primary Call to Action */}
+            {/* Right: Proceed Directly to Checkout Button */}
             <button
               disabled={selectedSeatIds.length === 0 || isHolding}
               onClick={handleHoldAndProceed}
@@ -667,4 +728,3 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
     );
   }
 };
-
