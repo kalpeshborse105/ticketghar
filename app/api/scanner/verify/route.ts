@@ -32,6 +32,18 @@ export async function POST(request: Request) {
       );
     }
 
+    // Enforce event/show selection BEFORE any ticket lookup — blocks random QR spam
+    const mustScope =
+      requireScope !== false && (scannerOrganizerId || targetEventId || targetSessionId || requireScope === true);
+    if (mustScope && !targetEventId && !targetSessionId) {
+      return NextResponse.json({
+        valid: false,
+        scanResult: 'SCOPE_REQUIRED',
+        message:
+          'कृपया स्कॅन करण्यापूर्वी कार्यक्रम / शो निवडा (Select event & showtime before scanning).',
+      });
+    }
+
     let targetCode = String(ticketCodeOrPayload).trim();
     let embeddedEventId: number | undefined;
 
@@ -93,17 +105,6 @@ export async function POST(request: Request) {
         valid: false,
         scanResult: 'INVALID_SIGNATURE',
         message: 'अवैध किंवा हेरफेर केलेला क्युआर कोड! (Encrypted QR signature mismatch).',
-      });
-    }
-
-    // Organizers MUST scope scans to their event/session — never accept other shows
-    const mustScope = requireScope !== false && (scannerOrganizerId || targetEventId || targetSessionId);
-    if (mustScope && !targetEventId && !targetSessionId) {
-      return NextResponse.json({
-        valid: false,
-        scanResult: 'SCOPE_REQUIRED',
-        message:
-          'कृपया स्कॅन करण्यापूर्वी कार्यक्रम / शो निवडा (Select event & showtime before scanning).',
       });
     }
 
