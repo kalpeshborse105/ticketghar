@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
 import { seatInventory, ticketTypes, events } from '@/src/db/schema.ts';
 import { eq, and, inArray } from 'drizzle-orm';
-import { isRazorpayReady, getRazorpayClientAsync } from '@/src/lib/payments/razorpay.ts';
+import { isRazorpayConfigured, getRazorpayClient } from '@/src/lib/payments/razorpay.ts';
 import { calculatePricing } from '@/src/lib/inventory-engine.ts';
 
 export async function POST(request: Request) {
@@ -25,8 +25,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if Razorpay is configured (env or DB runtime config)
-    if (!(await isRazorpayReady())) {
+    // Check if Razorpay is configured
+    if (!isRazorpayConfigured()) {
       return NextResponse.json(
         {
           configured: false,
@@ -85,8 +85,7 @@ export async function POST(request: Request) {
 
     // Verify seats or auto-hold them for payment checkout
     const now = new Date();
-    // Match inventory-engine HOLD_DURATION_MINUTES = 5
-    const holdExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
+    const tenMinutes = new Date(Date.now() + 10 * 60 * 1000);
     const userHoldToken = body.holdToken || body.userIdStr;
 
     for (const seat of holdSeats) {
@@ -113,11 +112,11 @@ export async function POST(request: Request) {
           .set({
             status: 'held',
             heldByUserId: userHoldToken || seat.heldBy || 'checkout_user',
-            holdExpiresAt,
+            holdExpiresAt: tenMinutes,
           })
           .where(eq(seatInventory.id, seat.invId));
         seat.status = 'held';
-        seat.holdExpires = holdExpiresAt;
+        seat.holdExpires = tenMinutes;
       }
     }
 
@@ -134,18 +133,15 @@ export async function POST(request: Request) {
     const faceValueTotal = holdSeats.reduce((sum, seat) => sum + seat.price, 0);
     const pricing = await calculatePricing(eventRecord, seatIds.length, faceValueTotal, couponCode);
 
-    // Amount must be in paise (smallest currency unit); Razorpay minimum is 100 paise
+    // Amount must be in paise (smallest currency unit)
     const amountInPaise = pricing.grandTotal;
 
-    if (!Number.isFinite(amountInPaise) || amountInPaise < 100) {
-      return NextResponse.json(
-        { error: 'Invalid order amount. Minimum payable amount is ₹1.00 (100 paise).' },
-        { status: 400 }
-      );
+    if (amountInPaise <= 0) {
+      return NextResponse.json({ error: 'Invalid order amount' }, { status: 400 });
     }
 
-    // Create Razorpay order (DB runtime keys preferred over bad Vercel env)
-    const { client: razorpayClient, keyId } = await getRazorpayClientAsync();
+    // Create Razorpay order
+    const razorpayClient = getRazorpayClient();
 
     const receiptId = `rcpt_${sessionId}_${Date.now()}`;
 
@@ -167,32 +163,22 @@ export async function POST(request: Request) {
       orderId: razorpayOrder.id,
       amount: amountInPaise,
       currency: 'INR',
-      keyId,
+      keyId: process.env.RAZORPAY_KEY_ID,
       receipt: receiptId,
-      holdExpiresAt: holdExpiresAt.toISOString(),
+      holdExpiresAt: tenMinutes.toISOString(),
       pricing,
     });
   } catch (error: any) {
     console.error('Create order error:', error);
 
-    const detail =
-      error?.error?.description ||
-      error?.error?.reason ||
-      error?.message ||
-      'Unknown payment gateway error';
-    const isAuthFail = /authenti/i.test(String(detail));
-
     // Handle Razorpay-specific errors
-    if (error.statusCode || isAuthFail) {
+    if (error.statusCode) {
       return NextResponse.json(
         {
-          error: isAuthFail
-            ? 'Razorpay keys invalid on server (Authentication failed). Update RAZORPAY_KEY_ID + RAZORPAY_KEY_SECRET on production.'
-            : 'Payment gateway error',
-          details: detail,
-          configured: !isAuthFail,
+          error: 'Payment gateway error',
+          details: error.error?.description || error.message,
         },
-        { status: error.statusCode || 401 }
+        { status: error.statusCode }
       );
     }
 

@@ -46,14 +46,24 @@ export async function GET(request: Request) {
     if (dbEvents.length > 0) {
       const eventIds = dbEvents.map((item) => item.event.id);
 
-      const [allSessions, allPrices, reviewStatsMap] = await Promise.all([
+      const [allSessions, allTicketTypes, reviewStatsMap] = await Promise.all([
         db
           .select()
           .from(eventSessions)
           .where(and(inArray(eventSessions.eventId, eventIds), eq(eventSessions.status, 'active')))
           .orderBy(eventSessions.sessionStartTime),
         db
-          .select({ eventId: ticketTypes.eventId, price: ticketTypes.price })
+          .select({
+            id: ticketTypes.id,
+            eventId: ticketTypes.eventId,
+            sessionId: ticketTypes.sessionId,
+            name: ticketTypes.name,
+            nameMr: ticketTypes.nameMr,
+            price: ticketTypes.price,
+            totalQuota: ticketTypes.totalQuota,
+            availableQuota: ticketTypes.availableQuota,
+            isSeated: ticketTypes.isSeated,
+          })
           .from(ticketTypes)
           .where(inArray(ticketTypes.eventId, eventIds)),
         lite
@@ -61,26 +71,70 @@ export async function GET(request: Request) {
           : loadReviewStats(),
       ]);
 
+      const ticketTypesBySessionId: Record<number, any[]> = {};
+      allTicketTypes.forEach((t) => {
+        if (!t.sessionId) return;
+        if (!ticketTypesBySessionId[t.sessionId]) ticketTypesBySessionId[t.sessionId] = [];
+        ticketTypesBySessionId[t.sessionId].push(t);
+      });
+
+      const nowMs = Date.now() + 5 * 60 * 1000;
       const sessionsByEventId: Record<number, any[]> = {};
       allSessions.forEach((s) => {
         if (!sessionsByEventId[s.eventId]) sessionsByEventId[s.eventId] = [];
-        // Mobile list only needs the next few shows
+        const sessionTicketTypes = ticketTypesBySessionId[s.id] || [];
+        const availableInventoryCount = sessionTicketTypes.reduce(
+          (sum, t) => sum + Math.max(0, Number(t.availableQuota || 0)),
+          0
+        );
+        const enriched = {
+          ...s,
+          ticketTypes: sessionTicketTypes,
+          availableInventoryCount,
+          isSoldOut: availableInventoryCount <= 0 || s.status === 'sold_out',
+        };
+        // Mobile list only needs the next few upcoming shows
         if (sessionsByEventId[s.eventId].length < (lite ? 3 : 20)) {
-          sessionsByEventId[s.eventId].push(s);
+          sessionsByEventId[s.eventId].push(enriched);
         }
-      });
-
-      const pricesByEventId: Record<number, number[]> = {};
-      allPrices.forEach((p) => {
-        if (!pricesByEventId[p.eventId]) pricesByEventId[p.eventId] = [];
-        pricesByEventId[p.eventId].push(p.price);
       });
 
       allEventsList = dbEvents.map((item) => {
         const evId = item.event.id;
         const sessions = sessionsByEventId[evId] || [];
-        const prices = pricesByEventId[evId] || [];
-        const minPrice = prices.length > 0 ? Math.min(...prices) : null;
+        const upcoming = sessions
+          .filter((s) => {
+            const t = new Date(s.sessionStartTime).getTime();
+            return !Number.isNaN(t) && t > nowMs && s.status !== 'cancelled' && s.status !== 'completed';
+          })
+          .sort(
+            (a, b) =>
+              new Date(a.sessionStartTime).getTime() - new Date(b.sessionStartTime).getTime()
+          );
+        const nextBookable =
+          upcoming.find((s) => !s.isSoldOut && Number(s.availableInventoryCount || 0) > 0) || null;
+        const homeSession = nextBookable || upcoming[0] || null;
+        const bookablePrices = (nextBookable?.ticketTypes || [])
+          .filter((t: any) => Number(t.availableQuota || 0) > 0)
+          .map((t: any) => Number(t.price || 0))
+          .filter((p: number) => p > 0);
+        const minPrice =
+          bookablePrices.length > 0
+            ? Math.min(...bookablePrices)
+            : sessions
+                .flatMap((s) => (s.ticketTypes || []).map((t: any) => Number(t.price || 0)))
+                .filter((p: number) => p > 0)
+                .reduce((min: number | null, p: number) => (min == null ? p : Math.min(min, p)), null);
+        const showDateStr = homeSession
+          ? new Date(homeSession.sessionStartTime).toLocaleString('en-IN', {
+              weekday: 'short',
+              day: 'numeric',
+              month: 'short',
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true,
+            })
+          : null;
         const stats = reviewStatsMap[evId];
 
         // Ensure every event card displays an authentic star rating (4.6 - 4.9)
@@ -95,6 +149,8 @@ export async function GET(request: Request) {
             : item.organizer,
           sessions,
           minPrice,
+          showDateStr,
+          hasBookableSessions: !!nextBookable,
           rating: stats && stats.rating > 0 ? stats.rating : defaultRating,
           ratingCount: stats && stats.count > 0 ? stats.count : defaultCount,
         };

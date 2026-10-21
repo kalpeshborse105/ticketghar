@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/src/db/index';
 import { users } from '@/src/db/schema';
 import { eq } from 'drizzle-orm';
-import { setCustomerSessionCookie } from '@/src/lib/auth-service';
+import { setCustomerSessionCookie, signSessionToken } from '@/src/lib/auth-service';
 
 export async function POST(req: NextRequest) {
   try {
@@ -24,7 +24,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'वापरकर्ता सापडला नाही.' }, { status: 404 });
     }
 
-    // Verify OTP match and expiration
     if (!user.otpCode || user.otpCode !== cleanOtp) {
       return NextResponse.json(
         { error: 'अवैध OTP कोड! कृपया ईमेलमध्ये आलेला ६-अंकी कोड पुन्हा तपासा.' },
@@ -39,7 +38,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Clear OTP after successful verification
     await db
       .update(users)
       .set({
@@ -49,15 +47,18 @@ export async function POST(req: NextRequest) {
       })
       .where(eq(users.id, user.id));
 
-    // Set authenticated session cookie
-    await setCustomerSessionCookie({
+    const sessionUser = {
       id: user.id,
       uid: user.uid,
       email: user.email,
       fullName: user.fullName,
       phoneNumber: user.phoneNumber,
       role: user.role,
-    });
+      avatarUrl: user.avatarUrl,
+    };
+
+    await setCustomerSessionCookie(sessionUser);
+    const token = signSessionToken(sessionUser);
 
     const needsPasswordSetup = !user.passwordHash || user.passwordHash.length < 10;
 
@@ -65,12 +66,15 @@ export async function POST(req: NextRequest) {
       success: true,
       message: 'OTP पडताळणी यशस्वी झाली!',
       needsPasswordSetup,
+      token,
       user: {
         id: user.id,
         uid: user.uid,
         email: user.email,
         fullName: user.fullName,
+        phoneNumber: user.phoneNumber,
         role: user.role,
+        avatarUrl: user.avatarUrl,
       },
     });
   } catch (error: any) {

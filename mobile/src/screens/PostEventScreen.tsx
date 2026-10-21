@@ -5,7 +5,6 @@
  */
 import React, { useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -20,7 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, RADIUS, SPACING } from '../theme';
 import { useAuthStore } from '../store';
-import { BackHeader, Button } from '../components';
+import { BackHeader, Button, MTPopupModal } from '../components';
 import { CONTACT, PARTNER_API_URL, WEB_ORIGIN, openMailto, openUrl } from '../lib/contact';
 
 const EVENT_TYPES = [
@@ -74,6 +73,21 @@ export default function PostEventScreen({ navigation }: any) {
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+  const [popupModal, setPopupModal] = useState<{
+    visible: boolean;
+    type: 'warning' | 'error' | 'success' | 'info';
+    title: string;
+    message: string;
+    primaryButtonText?: string;
+    secondaryButtonText?: string;
+    onPrimaryPress?: () => void;
+    onSecondaryPress?: () => void;
+  }>({
+    visible: false,
+    type: 'warning',
+    title: '',
+    message: '',
+  });
 
   const mailFallback = () => {
     const typeLabel = EVENT_TYPES.find((t) => t.value === category)?.label || category;
@@ -94,17 +108,24 @@ export default function PostEventScreen({ navigation }: any) {
   };
 
   const validate = () => {
-    if (!name.trim()) return 'Please enter your name.';
-    if (phone.replace(/\D/g, '').length !== 10) return 'Enter a valid 10-digit mobile number.';
-    if (!/^\S+@\S+\.\S+$/.test(email.trim())) return 'Enter a valid email address.';
-    if (!eventName.trim()) return 'Please enter your event name.';
+    if (!name.trim()) return 'कृपया आपले नाव टाका (Please enter your name).';
+    if (phone.replace(/\D/g, '').length !== 10) return 'कृपया वैध १०-अंकी मोबाईल नंबर टाका (Enter a valid 10-digit mobile number).';
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) return 'कृपया वैध ईमेल पत्ता टाका (Enter a valid email address).';
+    if (!eventName.trim()) return 'कृपया आपल्या कार्यक्रमाचे नाव टाका (Please enter your event name).';
     return null;
   };
 
   const submit = async () => {
     const err = validate();
     if (err) {
-      Alert.alert('Check your details', err);
+      setPopupModal({
+        visible: true,
+        type: 'warning',
+        title: 'माहिती तपासा (Check Details)',
+        message: err,
+        primaryButtonText: 'समजले (OK)',
+        onPrimaryPress: () => setPopupModal((prev) => ({ ...prev, visible: false })),
+      });
       return;
     }
     setSubmitting(true);
@@ -131,14 +152,19 @@ export default function PostEventScreen({ navigation }: any) {
       setDone(true);
     } catch (e: any) {
       clearTimeout(timer);
-      Alert.alert(
-        'Could not submit',
-        'We could not reach the server. Send your details by email instead?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Email us', onPress: mailFallback },
-        ]
-      );
+      setPopupModal({
+        visible: true,
+        type: 'error',
+        title: 'सबमिट होऊ शकले नाही (Could Not Submit)',
+        message: 'सर्व्हरशी संपर्क होऊ शकला नाही. आपण ईमेलद्वारे पाठवू इच्छिता का? (Could not reach server. Send details by email instead?)',
+        primaryButtonText: 'ईमेल पाठवा (Email us)',
+        secondaryButtonText: 'रद्द करा (Cancel)',
+        onPrimaryPress: () => {
+          setPopupModal((prev) => ({ ...prev, visible: false }));
+          mailFallback();
+        },
+        onSecondaryPress: () => setPopupModal((prev) => ({ ...prev, visible: false })),
+      });
     } finally {
       setSubmitting(false);
     }
@@ -268,6 +294,18 @@ export default function PostEventScreen({ navigation }: any) {
           <View style={{ height: 40 }} />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <MTPopupModal
+        visible={popupModal.visible}
+        type={popupModal.type}
+        title={popupModal.title}
+        message={popupModal.message}
+        primaryButtonText={popupModal.primaryButtonText}
+        secondaryButtonText={popupModal.secondaryButtonText}
+        onPrimaryPress={popupModal.onPrimaryPress || (() => setPopupModal((prev) => ({ ...prev, visible: false })))}
+        onSecondaryPress={popupModal.onSecondaryPress || (() => setPopupModal((prev) => ({ ...prev, visible: false })))}
+        onRequestClose={() => setPopupModal((prev) => ({ ...prev, visible: false }))}
+      />
     </View>
   );
 }

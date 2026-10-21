@@ -5,10 +5,23 @@ import { eq } from 'drizzle-orm';
 import { setCustomerSessionCookie, signSessionToken, CustomerSessionUser } from '@/src/lib/auth-service.ts';
 import { createClient } from '@/src/lib/supabase/server.ts';
 
+function getOrigin(request: Request): string {
+  const forwardedHost = request.headers.get('x-forwarded-host');
+  const forwardedProto = request.headers.get('x-forwarded-proto') || 'https';
+  if (forwardedHost) {
+    return `${forwardedProto}://${forwardedHost}`;
+  }
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL;
+  if (appUrl && !appUrl.includes('localhost')) {
+    return appUrl.replace(/\/+$/, '');
+  }
+  return new URL(request.url).origin;
+}
+
 export async function GET(request: Request) {
   try {
     const urlObj = new URL(request.url);
-    const origin = process.env.NEXT_PUBLIC_APP_URL || urlObj.origin;
+    const origin = getOrigin(request);
     const clientId = process.env.GOOGLE_CLIENT_ID || process.env.Client_ID;
     const acceptHeader = request.headers.get('accept') || '';
     const isDirect = urlObj.searchParams.get('direct') === 'true' || acceptHeader.includes('text/html');
@@ -77,7 +90,8 @@ export async function POST(request: Request) {
     let avatarUrl = userInfo?.picture || userInfo?.avatarUrl || null;
     let googleSub = userInfo?.id || userInfo?.sub;
 
-    // Verify token with Google if token provided
+    // Require a verified Google token — never trust client userInfo alone
+    let googleVerified = false;
     const tokenToVerify = idToken || credential;
     if (tokenToVerify) {
       try {
@@ -90,9 +104,10 @@ export async function POST(request: Request) {
           fullName = payload.name || payload.given_name || fullName;
           avatarUrl = payload.picture || avatarUrl;
           googleSub = payload.sub || googleSub;
+          googleVerified = !!(payload.email && payload.sub);
         }
       } catch (err) {
-        console.warn('Google tokeninfo check failed, checking direct profile info:', err);
+        console.warn('Google tokeninfo check failed:', err);
       }
     } else if (accessToken) {
       try {
@@ -105,23 +120,23 @@ export async function POST(request: Request) {
           fullName = payload.name || fullName;
           avatarUrl = payload.picture || avatarUrl;
           googleSub = payload.id || googleSub;
+          googleVerified = !!(payload.email && (payload.id || payload.sub));
         }
       } catch (err) {
         console.warn('Google userinfo fetch failed:', err);
       }
     }
 
-    if (!email) {
+    if (!googleVerified || !email || !googleSub) {
       return NextResponse.json(
-        { success: false, error: 'Valid Google email is required for login' },
-        { status: 400 }
+        { success: false, error: 'Valid Google sign-in token is required' },
+        { status: 401 }
       );
     }
 
     email = email.trim().toLowerCase();
-    googleSub = googleSub || `google-${Date.now()}`;
 
-    // Upsert into users table
+    // Upsert into users table — fail closed (no fake id 999999)
     let dbUser: any = null;
     try {
       const existing = await db.select().from(users).where(eq(users.email, email)).limit(1);
@@ -142,7 +157,7 @@ export async function POST(request: Request) {
         const [inserted] = await db
           .insert(users)
           .values({
-            uid: `google-${googleSub}`,
+            uid: String(googleSub),
             email,
             fullName,
             avatarUrl,
@@ -154,15 +169,12 @@ export async function POST(request: Request) {
           .returning();
         dbUser = inserted;
       }
-    } catch {
-      dbUser = {
-        id: 999999,
-        uid: `google-${googleSub}`,
-        email,
-        fullName,
-        avatarUrl,
-        role: 'customer',
-      };
+    } catch (dbErr: any) {
+      console.error('Google auth DB upsert failed:', dbErr?.message);
+      return NextResponse.json(
+        { success: false, error: 'Could not create account. Please try again.' },
+        { status: 500 }
+      );
     }
 
     const customerUser: CustomerSessionUser = {

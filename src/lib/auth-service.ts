@@ -6,7 +6,15 @@ import { users } from '@/src/db/schema';
 import { eq } from 'drizzle-orm';
 
 const AUTH_COOKIE_NAME = 'mahaticket_customer_session';
-const SESSION_SECRET = process.env.ADMIN_SESSION_SECRET || process.env.TICKET_SECRET || 'mahaticket_secure_production_secret_key_2026';
+const SESSION_SECRET =
+  process.env.ADMIN_SESSION_SECRET ||
+  process.env.TICKET_SECRET ||
+  'mahaticket_secure_production_secret_key_2026';
+
+/** Stable app uid — UUID preferred; keep existing staff/google prefixes intact */
+export function newCustomerUid(): string {
+  return crypto.randomUUID();
+}
 
 export interface CustomerSessionUser {
   id: number;
@@ -95,13 +103,27 @@ export function verifySessionToken(token: string): CustomerSessionUser | null {
 }
 
 /**
- * Get current customer session from cookies (server-side)
+ * Get current customer session from cookies or Authorization Bearer (Android).
  */
-export async function getCustomerSession(): Promise<CustomerSessionUser | null> {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
-  if (!token) return null;
-  return verifySessionToken(token);
+export async function getCustomerSession(
+  authorizationHeader?: string | null
+): Promise<CustomerSessionUser | null> {
+  if (authorizationHeader) {
+    const m = authorizationHeader.match(/^Bearer\s+(.+)$/i);
+    if (m?.[1]) {
+      const fromBearer = verifySessionToken(m[1].trim());
+      if (fromBearer) return fromBearer;
+    }
+  }
+
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
+    if (!token) return null;
+    return verifySessionToken(token);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -203,12 +225,36 @@ export async function sendOtpEmail(email: string, otp: string): Promise<boolean>
       console.log(`[AUTH-OTP] Sent OTP via SMTP to ${email}`);
       return true;
     } catch (err) {
-      console.error('[AUTH-OTP] SMTP delivery failed, falling back:', err);
-      return false;
+      console.error('[AUTH-OTP] SMTP delivery failed, trying Supabase fallback:', err);
+    }
+  }
+
+  // Fallback to Supabase Auth OTP delivery if configured
+  const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supaKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (supaUrl && supaKey) {
+    try {
+      const supaRes = await fetch(`${supaUrl}/auth/v1/otp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: supaKey,
+        },
+        body: JSON.stringify({ email, create_user: true }),
+      });
+      if (supaRes.ok) {
+        console.log(`[AUTH-OTP] Sent OTP via Supabase Auth email service to ${email}`);
+        return true;
+      }
+    } catch (supaErr) {
+      console.warn('[AUTH-OTP] Supabase OTP fallback failed:', supaErr);
     }
   }
 
   // Development logging fallback
-  console.log(`[AUTH-OTP DEVELOPMENT CODE for ${email}]: >>> ${otp} <<<`);
+  console.log(`[AUTH-OTP CODE for ${email}]: >>> ${otp} <<<`);
+  if (process.env.NODE_ENV !== 'production') {
+    return true;
+  }
   return false;
 }

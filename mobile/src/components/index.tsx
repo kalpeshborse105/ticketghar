@@ -6,6 +6,8 @@ export { MahaTicketPass } from './MahaTicketPass';
 export type { MahaTicketPassProps } from './MahaTicketPass';
 export { TicketCardFrame } from './TicketCardFrame';
 export type { TicketCardFrameProps } from './TicketCardFrame';
+export { MTPopupModal } from './MTPopupModal';
+export type { MTPopupModalProps, MTPopupType } from './MTPopupModal';
 
 import React, { useEffect, useRef } from 'react';
 import {
@@ -23,7 +25,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { COLORS, RADIUS, SPACING, SHADOWS, TYPOGRAPHY, ANIMATION } from '../theme';
-import { absoluteMediaUrl, fallbackPosterUrl } from '../api';
+import { absoluteMediaUrl, fallbackPosterUrl, getEventCardDateLabel } from '../api';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { TicketCardFrame } from './TicketCardFrame';
 import { useUIStore } from '../store';
@@ -415,15 +417,15 @@ export function EventCard({
   showPromoted?: boolean;
 }) {
   const language = useUIStore((s) => s.language);
-  const w = cardWidth || SCREEN_WIDTH * 0.46;
+  const w = cardWidth || SCREEN_WIDTH * 0.445;
   const ratingNum = typeof event.rating === 'number' && event.rating > 0
     ? (event.rating > 5 ? event.rating / 2 : event.rating)
     : 4.8;
   const rating = ratingNum.toFixed(1);
   const ratingCount = event.ratingCountStr
     || (typeof event.ratingCount === 'number' && event.ratingCount > 0
-        ? (event.ratingCount >= 1000 ? `${(event.ratingCount / 1000).toFixed(1)}k` : `${event.ratingCount}`)
-        : '1.2k');
+      ? (event.ratingCount >= 1000 ? `${(event.ratingCount / 1000).toFixed(1)}k` : `${event.ratingCount}`)
+      : '1.2k');
   const isPromoted = showPromoted || event.featured === 1 || event.isPromoted;
 
   // Category label based on language
@@ -444,68 +446,67 @@ export function EventCard({
     : (event.venue?.name || event.venue?.nameMr || 'Auditorium');
   const cityTitle = displayCity(event.venue?.city, language);
 
-  const dateStr = event.showDateStr
-    || (language === 'mr' ? 'आगामी प्रयोग • तारीख लवकरच' : 'Upcoming • Dates soon');
+  const dateStr = getEventCardDateLabel(event, language);
 
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.88} style={{ width: w }}>
       <TicketCardFrame borderRadius={RADIUS.md} notchRadius={5} scalloped teethCount={5}>
-      {/* Poster */}
-      <View style={[styles.eventCardImg, { height: w * 1.38 }]}>
-        <Image
-          source={{ uri: posterUri }}
-          style={StyleSheet.absoluteFillObject}
-          resizeMode="cover"
-          onError={() => setFailedUri(primaryUri)}
-        />
+        {/* Poster */}
+        <View style={[styles.eventCardImg, { height: w * 1.38 }]}>
+          <Image
+            source={{ uri: posterUri }}
+            style={StyleSheet.absoluteFillObject}
+            resizeMode="cover"
+            onError={() => setFailedUri(primaryUri)}
+          />
 
-        {/* Gradient dark overlay at bottom */}
-        <View style={styles.eventCardGradient} />
+          {/* Gradient dark overlay at bottom */}
+          <View style={styles.eventCardGradient} />
 
-        {/* Category tag pill (Top Left) */}
-        <View style={styles.eventCardCatBadge}>
-          <Text style={styles.eventCardCatText}>{categoryLabel}</Text>
+          {/* Category tag pill (Top Left) */}
+          <View style={styles.eventCardCatBadge}>
+            <Text style={styles.eventCardCatText}>{categoryLabel}</Text>
+          </View>
+
+          {/* Promoted badge (Top Right) */}
+          {isPromoted && (
+            <View style={styles.promotedBadge}>
+              <Text style={styles.promotedBadgeText}>
+                {language === 'mr' ? 'विशेष' : 'Promoted'}
+              </Text>
+            </View>
+          )}
+
+          {/* Star Rating Badge (Bottom Left - matching golden star #FFB800) */}
+          <View style={styles.cardRatingBadgeBottom}>
+            <Icon name="star" size={12} color="#FFB800" />
+            <Text style={styles.cardRatingScore}>{rating}</Text>
+          </View>
         </View>
 
-        {/* Promoted badge (Top Right) */}
-        {isPromoted && (
-          <View style={styles.promotedBadge}>
-            <Text style={styles.promotedBadgeText}>
-              {language === 'mr' ? 'विशेष' : 'Promoted'}
+        {/* Info Section below poster */}
+        <View style={styles.eventCardInfo}>
+          {/* Title in bold according to language */}
+          <Text style={styles.eventCardTitle} numberOfLines={1}>
+            {displayTitle(event, language)}
+          </Text>
+
+          {/* Venue with Map Marker */}
+          <View style={styles.venueRowInline}>
+            <Icon name="map-marker" size={13} color={COLORS.primary} style={{ marginTop: 1 }} />
+            <Text style={styles.eventCardVenue} numberOfLines={1}>
+              {venueTitle}{cityTitle ? `, ${cityTitle}` : ''}
             </Text>
           </View>
-        )}
 
-        {/* Star Rating Badge (Bottom Left - matching golden star #FFB800) */}
-        <View style={styles.cardRatingBadgeBottom}>
-          <Icon name="star" size={12} color="#FFB800" />
-          <Text style={styles.cardRatingScore}>{rating}</Text>
+          {/* Date & Time Row */}
+          <View style={styles.dateRowInline}>
+            <Icon name="clock-outline" size={12} color={COLORS.textMuted} />
+            <Text style={styles.eventCardDate} numberOfLines={1}>
+              {dateStr}
+            </Text>
+          </View>
         </View>
-      </View>
-
-      {/* Info Section below poster */}
-      <View style={styles.eventCardInfo}>
-        {/* Title in bold according to language */}
-        <Text style={styles.eventCardTitle} numberOfLines={1}>
-          {displayTitle(event, language)}
-        </Text>
-
-        {/* Venue with Map Marker */}
-        <View style={styles.venueRowInline}>
-          <Icon name="map-marker" size={13} color={COLORS.primary} style={{ marginTop: 1 }} />
-          <Text style={styles.eventCardVenue} numberOfLines={1}>
-            {venueTitle}{cityTitle ? `, ${cityTitle}` : ''}
-          </Text>
-        </View>
-
-        {/* Date & Time Row */}
-        <View style={styles.dateRowInline}>
-          <Icon name="clock-outline" size={12} color={COLORS.textMuted} />
-          <Text style={styles.eventCardDate} numberOfLines={1}>
-            {dateStr}
-          </Text>
-        </View>
-      </View>
       </TicketCardFrame>
     </TouchableOpacity>
   );
@@ -521,8 +522,8 @@ export function EventListCard({ event, onPress }: { event: any; onPress: () => v
   const rating = ratingNum.toFixed(1);
   const ratingCount = event.ratingCountStr
     || (typeof event.ratingCount === 'number' && event.ratingCount > 0
-        ? (event.ratingCount >= 1000 ? `${(event.ratingCount / 1000).toFixed(1)}k` : `${event.ratingCount}`)
-        : '1.2k');
+      ? (event.ratingCount >= 1000 ? `${(event.ratingCount / 1000).toFixed(1)}k` : `${event.ratingCount}`)
+      : '1.2k');
   const fallbackUri = fallbackPosterUrl(event?.id);
   const primaryUri =
     absoluteMediaUrl(event?.posterUrl) ||
@@ -540,8 +541,7 @@ export function EventListCard({ event, onPress }: { event: any; onPress: () => v
     : (event.venue?.name || event.venue?.nameMr);
   const cityName = displayCity(event.venue?.city, language);
 
-  const dateStr = event.showDateStr
-    || (language === 'mr' ? 'आगामी प्रयोग • तारीख लवकरच' : 'Upcoming • Dates soon');
+  const dateStr = getEventCardDateLabel(event, language);
 
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.85} style={styles.listCard}>

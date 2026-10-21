@@ -2,11 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/src/db/index';
 import { users } from '@/src/db/schema';
 import { eq } from 'drizzle-orm';
-import { hashPassword, getCustomerSession, setCustomerSessionCookie } from '@/src/lib/auth-service';
+import {
+  hashPassword,
+  getCustomerSession,
+  setCustomerSessionCookie,
+  signSessionToken,
+} from '@/src/lib/auth-service';
 
 export async function POST(req: NextRequest) {
   try {
-    const { email, password } = await req.json();
+    const body = await req.json().catch(() => ({}));
+    const { password, email } = body;
+    const authHeader = req.headers.get('authorization');
 
     if (!password || password.length < 6) {
       return NextResponse.json(
@@ -15,13 +22,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Must be verified via session or explicit email
-    const session = await getCustomerSession();
+    const session = await getCustomerSession(authHeader);
     const targetEmail = (session?.email || email || '').trim().toLowerCase();
 
     if (!targetEmail) {
       return NextResponse.json(
-        { error: 'अनधिकृत विनंती. कृपया आधी OTP द्वारे पडताळणी करा.' },
+        { error: 'अनधिकृत विनंती. कृपया आधी ईमेल किंवा OTP द्वारे पडताळणी करा.' },
         { status: 401 }
       );
     }
@@ -42,19 +48,33 @@ export async function POST(req: NextRequest) {
       })
       .where(eq(users.id, user.id));
 
-    // Ensure session is fresh
-    await setCustomerSessionCookie({
+    const sessionUser = {
       id: user.id,
       uid: user.uid,
       email: user.email,
       fullName: user.fullName,
       phoneNumber: user.phoneNumber,
       role: user.role,
-    });
+      avatarUrl: user.avatarUrl,
+    };
+
+    await setCustomerSessionCookie(sessionUser);
+    const token = signSessionToken(sessionUser);
 
     return NextResponse.json({
       success: true,
-      message: 'आपला पासवर्ड यशस्वीरीत्या जतन झाला आहे! पुढच्या वेळी आपण थेट या पासवर्डने लॉगिन करू शकता.',
+      message:
+        'आपला पासवर्ड यशस्वीरीत्या जतन झाला आहे! पुढच्या वेळी आपण थेट या पासवर्डने लॉगिन करू शकता.',
+      token,
+      user: {
+        id: user.id,
+        uid: user.uid,
+        email: user.email,
+        fullName: user.fullName,
+        phoneNumber: user.phoneNumber,
+        role: user.role,
+        avatarUrl: user.avatarUrl,
+      },
     });
   } catch (error: any) {
     console.error('Set password error:', error);

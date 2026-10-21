@@ -16,8 +16,7 @@ export async function GET(
     const url = new URL(req.url);
     const forceDownload = url.searchParams.get('download') === '1';
 
-    // 1. Find ticket and associated order
-    const [ticketRecord] = await db
+    let [ticketRecord] = await db
       .select({
         ticket: tickets,
         order: orders,
@@ -28,6 +27,36 @@ export async function GET(
       .innerJoin(eventSessions, eq(tickets.sessionId, eventSessions.id))
       .where(eq(tickets.ticketCode, ticketCode))
       .limit(1);
+
+    if (!ticketRecord) {
+      // Direct order number fallback
+      [ticketRecord] = await db
+        .select({
+          ticket: tickets,
+          order: orders,
+          session: eventSessions,
+        })
+        .from(tickets)
+        .innerJoin(orders, eq(tickets.orderId, orders.id))
+        .innerJoin(eventSessions, eq(tickets.sessionId, eventSessions.id))
+        .where(eq(orders.orderNumber, ticketCode))
+        .limit(1);
+    }
+
+    if (!ticketRecord && /^\d+$/.test(ticketCode)) {
+      // Numeric order ID fallback
+      [ticketRecord] = await db
+        .select({
+          ticket: tickets,
+          order: orders,
+          session: eventSessions,
+        })
+        .from(tickets)
+        .innerJoin(orders, eq(tickets.orderId, orders.id))
+        .innerJoin(eventSessions, eq(tickets.sessionId, eventSessions.id))
+        .where(eq(orders.id, parseInt(ticketCode, 10)))
+        .limit(1);
+    }
 
     if (!ticketRecord) {
       return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });

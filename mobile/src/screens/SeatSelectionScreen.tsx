@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   BackHandler,
   Dimensions,
   Image,
+  Modal,
   Pressable,
   ScrollView,
   StatusBar,
@@ -17,6 +17,12 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Svg, { Defs, LinearGradient, Path, Stop } from 'react-native-svg';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import AnimatedRe, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+} from 'react-native-reanimated';
 import { COLORS, RADIUS, SHADOWS } from '../theme';
 import {
   api,
@@ -25,12 +31,15 @@ import {
   formatDate,
   formatShow,
   formatTime,
+  paise,
 } from '../api';
 import { useCartStore, useAuthStore } from '../store';
-import { Button } from '../components';
+import { Button, MTPopupModal } from '../components';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const POLL_INTERVAL = 10000;
+const MAP_MIN_SCALE = 1;
+const MAP_MAX_SCALE = 2.75;
+const POLL_INTERVAL = 20000;
 const DEVANAGARI_RE = /[\u0900-\u097F]/;
 const LATIN_RE = /[A-Za-z]/;
 const TEXT_COLLATOR = new Intl.Collator('en', { numeric: true, sensitivity: 'base' });
@@ -97,8 +106,7 @@ type SectionView = {
 };
 
 /**
- * Realistic 3D Auditorium Seat Component (BookMyShow ReDesign style)
- * Renders backrest, side armrests, and seat cushion
+ * BookMyShow-style compact seat — fixed box size so full theatre fits on screen.
  */
 const RealisticSeatIcon = React.memo(
   ({
@@ -114,97 +122,36 @@ const RealisticSeatIcon = React.memo(
     isBooked: boolean;
     onPress: (seat: SeatItem) => void;
   }) => {
-    const armrestWidth = Math.max(3, Math.round(size * 0.11));
-    const armrestHeight = Math.round(size * 0.56);
-    const cushionRadius = Math.round(size * 0.24);
+    const num = String(seat.seatNumber ?? seat.seatCode?.replace(/\D/g, '') ?? '');
+    const fontSize = size >= 20 ? 10 : size >= 16 ? 9 : 8;
 
     return (
       <Pressable
         onPress={() => onPress(seat)}
         disabled={isBooked}
-        hitSlop={{ top: 3, bottom: 3, left: 2, right: 2 }}
+        hitSlop={{ top: 2, bottom: 2, left: 1, right: 1 }}
         style={({ pressed }) => [
-          styles.realSeatOuter,
-          { width: size + 4, height: size + 4 },
-          pressed && !isBooked && { transform: [{ scale: 0.9 }] },
+          styles.bmsSeatBox,
+          {
+            width: size,
+            height: size,
+            borderRadius: Math.max(3, Math.round(size * 0.18)),
+          },
+          isSelected
+            ? styles.bmsSeatSelected
+            : isBooked
+              ? styles.bmsSeatBooked
+              : styles.bmsSeatAvailable,
+          pressed && !isBooked && { opacity: 0.85, transform: [{ scale: 0.94 }] },
         ]}
       >
-        {/* Top Curved Headrest / Backrest Rim */}
-        <View
-          style={[
-            styles.realSeatHeadrest,
-            {
-              width: size * 0.72,
-              height: Math.max(3.5, Math.round(size * 0.13)),
-            },
-            isSelected
-              ? styles.realSeatHeadrestSelected
-              : isBooked
-                ? styles.realSeatHeadrestBooked
-                : styles.realSeatHeadrestAvailable,
-          ]}
-        />
-
-        {/* Main Seat Body with Left/Right Armrests */}
-        <View style={styles.realSeatBodyRow}>
-          {/* Left Armrest */}
-          <View
-            style={[
-              styles.realSeatArmrest,
-              { width: armrestWidth, height: armrestHeight },
-              isSelected
-                ? styles.realSeatArmrestSelected
-                : isBooked
-                  ? styles.realSeatArmrestBooked
-                  : styles.realSeatArmrestAvailable,
-            ]}
-          />
-
-          {/* Center Seat Cushion */}
-          <View
-            style={[
-              styles.realSeatCushion,
-              {
-                width: size - armrestWidth * 1.4,
-                height: size * 0.78,
-                borderRadius: cushionRadius,
-              },
-              isSelected
-                ? styles.realSeatCushionSelected
-                : isBooked
-                  ? styles.realSeatCushionBooked
-                  : styles.realSeatCushionAvailable,
-            ]}
-          >
-            {isSelected ? (
-              <Icon name="check-bold" size={Math.max(11, Math.round(size * 0.42))} color="#FFFFFF" />
-            ) : (
-              <Text
-                style={[
-                  styles.realSeatNumber,
-                  { fontSize: Math.max(9, Math.round(size * 0.33)) },
-                  isBooked ? styles.realSeatNumberBooked : styles.realSeatNumberAvailable,
-                ]}
-                numberOfLines={1}
-              >
-                {seat.seatNumber}
-              </Text>
-            )}
-          </View>
-
-          {/* Right Armrest */}
-          <View
-            style={[
-              styles.realSeatArmrest,
-              { width: armrestWidth, height: armrestHeight },
-              isSelected
-                ? styles.realSeatArmrestSelected
-                : isBooked
-                  ? styles.realSeatArmrestBooked
-                  : styles.realSeatArmrestAvailable,
-            ]}
-          />
-        </View>
+        {isSelected ? (
+          <Icon name="check-bold" size={Math.max(9, size * 0.42)} color="#FFFFFF" />
+        ) : isBooked ? null : (
+          <Text style={[styles.bmsSeatNum, { fontSize, color: '#15803D' }]} numberOfLines={1}>
+            {num}
+          </Text>
+        )}
       </Pressable>
     );
   }
@@ -245,17 +192,50 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
   const [loading, setLoading] = useState(true);
   const [holding, setHolding] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [zoomedIn, setZoomedIn] = useState(false);
 
-  // Reservation countdown timer: 10 minutes (599s)
-  const [secondsLeft, setSecondsLeft] = useState(599);
+  const mapScale = useSharedValue(1);
+  const mapSavedScale = useSharedValue(1);
+  const mapTX = useSharedValue(0);
+  const mapTY = useSharedValue(0);
+  const mapSavedTX = useSharedValue(0);
+  const mapSavedTY = useSharedValue(0);
+
+  const [showDiscardModal, setShowDiscardModal] = useState(false);
+  const [showTimeoutModal, setShowTimeoutModal] = useState(false);
+  const [errorModalMsg, setErrorModalMsg] = useState<string | null>(null);
+  const [showHelpModal, setShowHelpModal] = useState(false);
+
+  // Hold window matches web/backend: 5 minutes (only runs while seats are selected)
+  const HOLD_SECONDS = 5 * 60;
+  const [secondsLeft, setSecondsLeft] = useState(HOLD_SECONDS);
+  const [holdTimerActive, setHoldTimerActive] = useState(false);
 
   useEffect(() => {
+    if (selected.length > 0 && !holdTimerActive) {
+      setHoldTimerActive(true);
+      setSecondsLeft(HOLD_SECONDS);
+    }
+    if (selected.length === 0 && holdTimerActive) {
+      setHoldTimerActive(false);
+      setSecondsLeft(HOLD_SECONDS);
+    }
+  }, [selected.length, holdTimerActive]);
+
+  useEffect(() => {
+    if (!holdTimerActive) return;
     const timer = setInterval(() => {
-      setSecondsLeft((prev) => (prev > 0 ? prev - 1 : 599));
+      setSecondsLeft((prev) => {
+        if (prev <= 1) {
+          setShowTimeoutModal(true);
+          setSelected([]);
+          setHoldTimerActive(false);
+          return 0;
+        }
+        return prev - 1;
+      });
     }, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [holdTimerActive]);
 
   const formattedTimer = useMemo(() => {
     const m = Math.floor(secondsLeft / 60);
@@ -272,21 +252,7 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
 
   const handleBackPress = useCallback(() => {
     if (selected.length > 0) {
-      Alert.alert(
-        'सीट निवड रद्द करायची का?',
-        'तुम्ही निवडलेली आसने परत उपलब्ध होतील. बाहेर पडायचे आहे का? (Your selected seats will be released back to the auditorium map.)',
-        [
-          { text: 'नाही (Cancel)', style: 'cancel' },
-          {
-            text: 'होय, (Release)',
-            style: 'destructive',
-            onPress: () => {
-              setSelected([]);
-              navigation.goBack();
-            },
-          },
-        ]
-      );
+      setShowDiscardModal(true);
       return true;
     }
     navigation.goBack();
@@ -342,16 +308,18 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
 
       if (!liveSeats.length) {
         setError('No seats available for this show right now.');
+      } else {
+        setError(null);
       }
     } catch {
-      // Background poll failure is silent
+      // Background poll failure is silent — never treat network abort as hold timeout
     }
   }, [sessionId]);
 
   useEffect(() => {
     if (!sessionId) {
       setLoading(false);
-      setError('No upcoming show selected.');
+      setError('No upcoming show selected. Please go back and pick a show time.');
       return;
     }
 
@@ -368,11 +336,13 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
     }
 
     setSelected([]);
+    setHoldTimerActive(false);
+    setSecondsLeft(HOLD_SECONDS);
     setError(null);
 
-    api
-      .getSessionSeats(sessionId)
-      .then((data) => {
+    const loadSeats = async () => {
+      try {
+        const data = await api.getSessionSeats(sessionId);
         if (cancelled) return;
         const liveSeats = data.seats || [];
         setSeats(liveSeats);
@@ -386,23 +356,50 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
         });
         if (!liveSeats.length) {
           setError('No seats available for this show right now.');
+        } else {
+          setError(null);
         }
-      })
-      .catch((e) => {
-        if (!cancelled && !cached) {
-          setError(e.message || 'Seat map unavailable.');
+      } catch (e: any) {
+        if (cancelled) return;
+        const msg = String(e?.message || '');
+        if (/session not found/i.test(msg) && eventId) {
+          try {
+            const d = await api.getEvent(eventId);
+            const upcoming = filterUpcomingSessions(d.event?.sessions);
+            setSessions(upcoming);
+            const next =
+              upcoming.find((s: any) => s.id === sessionId) ||
+              upcoming.find((s: any) => s.status !== 'sold_out') ||
+              upcoming[0];
+            if (next && next.id !== sessionId) {
+              setSessionId(next.id);
+              setError(null);
+              return;
+            }
+            setError('Session not found for this show. Please pick another time.');
+          } catch {
+            setError('Session not found. Please go back and open the event again.');
+          }
+        } else if (!cached) {
+          setError(
+            /timed out|timeout|slow/i.test(msg)
+              ? 'Seat map is taking longer than usual. Tap Retry seats.'
+              : msg || 'Seat map unavailable.'
+          );
         }
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setLoading(false);
-      });
+      }
+    };
+
+    loadSeats();
 
     pollRef.current = setInterval(fetchSeats, POLL_INTERVAL);
     return () => {
       cancelled = true;
       clearInterval(pollRef.current);
     };
-  }, [fetchSeats, sessionId]);
+  }, [fetchSeats, sessionId, eventId]);
 
   const sectionViews = useMemo<SectionView[]>(() => {
     const layoutSections = Array.isArray(layoutConfig?.sections) ? layoutConfig.sections : [];
@@ -600,10 +597,16 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
     () => seats.filter((seat) => selected.includes(seat.seatId)),
     [seats, selected]
   );
-  const subtotal = useMemo(
-    () => selectedSeats.reduce((total, seat) => total + Number(seat.price || 0), 0),
-    [selectedSeats]
-  );
+  const subtotal = useMemo(() => {
+    const sectionFallback = sectionViews[0]?.price || 0;
+    return selectedSeats.reduce((total, seat) => {
+      const price = Number(seat.price || 0);
+      if (price > 0) return total + price;
+      const fromSection =
+        sectionViews.find((s) => s.sectionId === seat.sectionId)?.price || sectionFallback;
+      return total + Number(fromSection || 0);
+    }, 0);
+  }, [selectedSeats, sectionViews]);
 
   const priceRangeLabel = useMemo(() => {
     const prices = sectionViews.map((s) => Math.round(s.price / 100)).filter((p) => p > 0);
@@ -614,20 +617,90 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
     return `₹${toMarathiDigits(min)}/${toMarathiDigits(max)}`;
   }, [sectionViews]);
 
-  const maxSeatsAcrossRows = useMemo(() => {
-    return Math.max(
-      1,
-      ...sectionViews.flatMap((section) =>
-        section.rows.map((row) => row.seats.length + row.aisleAfter.length)
-      )
-    );
+  const { maxSeatsInRow, maxAislesInRow } = useMemo(() => {
+    let maxSeats = 1;
+    let maxAisles = 0;
+    sectionViews.forEach((section) => {
+      section.rows.forEach((row) => {
+        maxSeats = Math.max(maxSeats, row.seats.length);
+        const aisles =
+          row.aisleAfter.length ||
+          (row.seats.length >= 6 ? 1 : 0);
+        maxAisles = Math.max(maxAisles, aisles);
+      });
+    });
+    return { maxSeatsInRow: maxSeats, maxAislesInRow: maxAisles };
   }, [sectionViews]);
 
+  // Comfortable tap target size with smooth horizontal scroll for wide theatre rows
   const seatCellSize = useMemo(() => {
-    if (zoomedIn) return 34;
-    const usableWidth = SCREEN_WIDTH - 76;
-    return Math.max(26, Math.min(31, Math.floor(usableWidth / Math.min(maxSeatsAcrossRows + 2, 11))));
-  }, [maxSeatsAcrossRows, zoomedIn]);
+    const usable = SCREEN_WIDTH - 48;
+    const fitted = Math.floor(usable / Math.max(maxSeatsInRow, 1));
+    return Math.max(24, Math.min(30, fitted));
+  }, [maxSeatsInRow]);
+
+  useEffect(() => {
+    mapScale.value = withTiming(1, { duration: 180 });
+    mapSavedScale.value = 1;
+    mapTX.value = withTiming(0, { duration: 180 });
+    mapTY.value = withTiming(0, { duration: 180 });
+    mapSavedTX.value = 0;
+    mapSavedTY.value = 0;
+  }, [sessionId, maxSeatsInRow, seatCellSize]);
+
+  const pinchGesture = useMemo(
+    () =>
+      Gesture.Pinch()
+        .onUpdate((e) => {
+          const next = Math.min(
+            MAP_MAX_SCALE,
+            Math.max(MAP_MIN_SCALE, mapSavedScale.value * e.scale)
+          );
+          mapScale.value = next;
+        })
+        .onEnd(() => {
+          mapSavedScale.value = mapScale.value;
+          if (mapScale.value <= 1.02) {
+            mapScale.value = withTiming(1);
+            mapSavedScale.value = 1;
+            mapTX.value = withTiming(0);
+            mapTY.value = withTiming(0);
+            mapSavedTX.value = 0;
+            mapSavedTY.value = 0;
+          }
+        }),
+    []
+  );
+
+  const panGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .averageTouches(true)
+        .minDistance(12)
+        .onUpdate((e) => {
+          if (mapSavedScale.value <= 1.02) return;
+          mapTX.value = mapSavedTX.value + e.translationX;
+          mapTY.value = mapSavedTY.value + e.translationY;
+        })
+        .onEnd(() => {
+          mapSavedTX.value = mapTX.value;
+          mapSavedTY.value = mapTY.value;
+        }),
+    []
+  );
+
+  const mapGesture = useMemo(
+    () => Gesture.Simultaneous(pinchGesture, panGesture),
+    [pinchGesture, panGesture]
+  );
+
+  const mapAnimStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: mapTX.value },
+      { translateY: mapTY.value },
+      { scale: mapScale.value },
+    ],
+  }));
 
   const toggle = useCallback(
     (seat: SeatItem) => {
@@ -658,12 +731,33 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
     try {
       setHolding(true);
       const userIdStr = user?.id ? String(user.id) : `guest-app-${Date.now()}`;
-      const hold = await api.hold({ sessionId, seatIds: selected, userIdStr });
-      const lockedFace = hold.hold.faceValueTotal > 0 ? hold.hold.faceValueTotal : subtotal;
+      let holdToken = `app-hold-${sessionId}-${Date.now()}`;
+      let expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+      let lockedFace = subtotal;
+
+      // Temporary local hold with 5-minute timer; try server hold with fast timeout
+      try {
+        const holdPromise = api.hold({ sessionId, seatIds: selected, userIdStr });
+        const hold = await Promise.race([
+          holdPromise,
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Hold timeout')), 3500)),
+        ]);
+        if (hold?.holdToken) {
+          holdToken = hold.holdToken;
+        }
+        if (hold?.hold?.holdExpiresAt) {
+          expiresAt = hold.hold.holdExpiresAt;
+        }
+        if (hold?.hold?.faceValueTotal > 0) {
+          lockedFace = hold.hold.faceValueTotal;
+        }
+      } catch {
+        // Fast local fallback: keep hold client-side in Zustand cart without blocking on DB
+      }
 
       setHold({
-        holdToken: hold.holdToken,
-        expiresAt: hold.hold.holdExpiresAt,
+        holdToken,
+        expiresAt,
         eventId,
         sessionId,
         seatIds: selected,
@@ -672,11 +766,11 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
       });
 
       navigation.navigate('Checkout', {
-        holdToken: hold.holdToken,
+        holdToken,
         faceValue: lockedFace,
         seatCodes: selectedSeats.map((seat) => seat.seatCode),
         seatIds: selected,
-        expiresAt: hold.hold.holdExpiresAt,
+        expiresAt,
         addons: {},
         addonTotal: 0,
         partySize: selected.length,
@@ -687,7 +781,9 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
         sessionMeta: sessionStartTime ? formatShow(sessionStartTime) : routeSessionMeta,
       });
     } catch (e: any) {
-      setError(e.message || 'Selected seats are no longer available. Please refresh the map.');
+      const msg = e.message || 'निवडलेली आसने या शोसाठी उपलब्ध नाहीत किंवा वेळ संपली आहे. कृपया पुन्हा आसने निवडा.';
+      setError(msg);
+      setErrorModalMsg(msg);
       fetchSeats();
       setSelected([]);
     } finally {
@@ -742,29 +838,23 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
           <TouchableOpacity
             style={styles.navActionIcon}
             activeOpacity={0.7}
-            onPress={() => navigation.navigate('Search')}
-          >
-            <Text style={styles.navSearchInitial}>S.</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.navActionIcon}
-            activeOpacity={0.7}
-            onPress={() => {
-              Alert.alert(
-                'MahaTicket Help & Support',
-                'नाट्यगृह आसन आरक्षण व तिकीट सहाय्यासाठी संपर्क: contact.mahaticket@gmail.com किंवा WhatsApp 8888888888',
-                [{ text: 'ठीक आहे' }]
-              );
-            }}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            onPress={() => setShowHelpModal(true)}
           >
             <Icon name="help-circle-outline" size={22} color="#334155" />
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.navAvatarBtn}
-            activeOpacity={0.8}
-            onPress={() => navigation.navigate('Profile')}
+            activeOpacity={0.75}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            onPress={() => {
+              try {
+                navigation.navigate('Profile');
+              } catch {
+                navigation.navigate('Main', { screen: 'Profile' });
+              }
+            }}
           >
             {user?.avatarUrl ? (
               <Image source={{ uri: user.avatarUrl }} style={styles.avatarImg} />
@@ -844,7 +934,13 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
                 return (
                   <TouchableOpacity
                     key={s.id}
-                    onPress={() => setSessionId(s.id)}
+                    onPress={() => {
+                      if (s.id === sessionId) return;
+                      setSelected([]);
+                      setError(null);
+                      setErrorModalMsg(null);
+                      setSessionId(s.id);
+                    }}
                     activeOpacity={0.8}
                     style={[styles.sessionChip, isActive && styles.sessionChipActive]}
                   >
@@ -866,58 +962,39 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
           </View>
         ) : null}
 
-        {/* ── 3. Reservation Hold Countdown Timer Banner (UNCHANGED) ── */}
-        <View style={styles.timerBannerWrap}>
-          <View style={styles.timerBanner}>
-            <View style={styles.timerLeft}>
-              <Text style={styles.timerClockEmoji}>⏱️</Text>
-              <Text style={styles.timerLabelText}>तिकिटे राखीव राहतील:</Text>
+        {/* ── 3. Hold countdown only after seats selected (5 min, same as web) ── */}
+        {holdTimerActive ? (
+          <View style={styles.timerBannerWrap}>
+            <View style={styles.timerBanner}>
+              <View style={styles.timerLeft}>
+                <Text style={styles.timerClockEmoji}>⏱️</Text>
+                <Text style={styles.timerLabelText}>तिकिटे राखीव राहतील:</Text>
+              </View>
+              <Text style={styles.timerCountdownText}>{formattedTimer}</Text>
             </View>
-            <Text style={styles.timerCountdownText}>{formattedTimer}</Text>
           </View>
-        </View>
+        ) : null}
 
-        {/* ── 4. Modern Seat Legend & Zoom Control Bar ── */}
+        {/* ── 4. Seat legend (BMS-style — no zoom text UI) ── */}
         <View style={styles.legendCardBar}>
           <View style={styles.legendItemsGroup}>
-            {/* Available Mini Chair */}
             <View style={styles.legendItem}>
               <View style={styles.legendMiniSeatAvail}>
                 <View style={styles.legendMiniSeatTopAvail} />
               </View>
               <Text style={styles.legendText}>उपलब्ध ({priceRangeLabel})</Text>
             </View>
-
-            {/* Selected Mini Chair */}
             <View style={styles.legendItem}>
               <View style={styles.legendMiniSeatSelected}>
                 <Icon name="check-bold" size={9} color="#FFFFFF" />
               </View>
               <Text style={[styles.legendText, styles.legendTextBold]}>निवडलेले</Text>
             </View>
-
-            {/* Reserved Mini Chair */}
             <View style={styles.legendItem}>
               <View style={styles.legendMiniSeatBooked} />
               <Text style={styles.legendText}>आरक्षित</Text>
             </View>
           </View>
-
-          {/* Zoom Toggle Pill */}
-          <TouchableOpacity
-            onPress={() => setZoomedIn((z) => !z)}
-            activeOpacity={0.8}
-            style={[styles.zoomToggleBtn, zoomedIn && styles.zoomToggleBtnActive]}
-          >
-            <Icon
-              name={zoomedIn ? 'magnify-minus-outline' : 'magnify-plus-outline'}
-              size={14}
-              color={zoomedIn ? '#FFFFFF' : '#EA580C'}
-            />
-            <Text style={[styles.zoomToggleText, zoomedIn && { color: '#FFFFFF' }]}>
-              {zoomedIn ? '1.25x' : '1x'}
-            </Text>
-          </TouchableOpacity>
         </View>
 
         {/* Error notification banner if any */}
@@ -941,41 +1018,33 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
             <Button title="Go Back" onPress={() => navigation.goBack()} style={{ marginTop: 12 }} />
           </View>
         ) : !sectionViews.length ? (
-          <View style={styles.generalAdmissionBox}>
-            <View style={styles.gaIconCircle}>
-              <Icon name="ticket-confirmation" size={36} color="#EA580C" />
-            </View>
-            <Text style={styles.gaHeading}>थेट प्रवेश पास (Open Entry)</Text>
-            <Text style={styles.gaSubText}>
-              या कार्यक्रमासाठी थेट खुली जागा / प्रवेश आहे. आपले तिकीट सुरक्षित करण्यासाठी खालील बटनावर टॅप करा.
+          <View style={styles.loadingBox}>
+            <Icon name="seat-outline" size={44} color={COLORS.textMuted} />
+            <Text style={styles.loadingText}>
+              {error || 'Seat layout not available for this show. Please refresh or pick another time.'}
             </Text>
-            <TouchableOpacity
-              style={styles.gaProceedBtn}
+            <Button
+              title="Retry seats"
               onPress={() => {
-                const tt = (activeSession?.ticketTypes && activeSession.ticketTypes[0]) || {
-                  price: 25000,
-                  name: 'Entry Pass',
-                };
-                const fVal = tt.price || 25000;
-                navigation.navigate('Checkout', {
-                  holdToken: `ga_pass_${Date.now()}`,
-                  faceValue: fVal,
-                  seatCodes: ['GA-PASS-1'],
-                  seatIds: [1],
-                  expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-                  addonTotal: 0,
-                  eventId: eventId,
-                  sessionId: sessionId,
-                  eventTitle: eventTitle,
-                  posterUrl: posterUrl,
-                  sessionMeta: sessionStartTime ? formatShow(sessionStartTime) : routeSessionMeta,
-                  venueName: venueName,
-                });
+                setError(null);
+                setLoading(true);
+                api
+                  .getSessionSeats(sessionId)
+                  .then((data) => {
+                    const liveSeats = data.seats || [];
+                    setSeats(liveSeats);
+                    setSectionsData(Array.isArray(data.sections) ? data.sections : []);
+                    setLayoutConfig(data.layoutConfig || null);
+                    if (!liveSeats.length) {
+                      setError('No seats available for this show right now.');
+                    }
+                  })
+                  .catch((e) => setError(e?.message || 'Seat map unavailable.'))
+                  .finally(() => setLoading(false));
               }}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.gaProceedBtnText}>तिकीट खरेदी करा (Book Pass) →</Text>
-            </TouchableOpacity>
+              style={{ marginTop: 12 }}
+            />
+            <Button title="Go Back" onPress={() => navigation.goBack()} style={{ marginTop: 8 }} />
           </View>
         ) : (
           <View style={styles.seatingPlanContainer}>
@@ -1041,129 +1110,106 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
               </View>
             </View>
 
-            {/* ── Auditorium Tier Section Cards ── */}
-            {sectionViews.map((section) => {
-              const needsHorizontalScroll =
-                zoomedIn ||
-                section.rows.some((r) => r.seats.length + r.aisleAfter.length > 9);
+            {/* ── Auditorium map: clean horizontal & vertical scrolling matching web ── */}
+            <View style={styles.theatreMapViewport}>
+              {sectionViews.map((section) => {
+                const renderRowsGrid = (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    nestedScrollEnabled={true}
+                    contentContainerStyle={styles.sectionSeatsHorizontalScroll}
+                  >
+                    <View style={styles.sectionSeatsGrid}>
+                      {section.rows.map((row) => {
+                        const aisleIndex = Math.floor(row.seats.length / 2);
+                        return (
+                          <View key={`${section.key}-${row.label}`} style={styles.seatRowWrapper}>
+                            <Text style={styles.rowLabelText}>{row.label}</Text>
+                            <View style={styles.seatsTrack}>
+                              {row.seats.map((seat, seatIdx) => {
+                                const isSelected = selected.includes(seat.seatId);
+                                const isBooked =
+                                  seat.status === 'booked' ||
+                                  seat.status === 'held' ||
+                                  seat.status === 'blocked';
+                                const showAisle =
+                                  row.aisleAfter.includes(seatIdx + 1) ||
+                                  (!row.aisleAfter.length &&
+                                    row.seats.length >= 6 &&
+                                    seatIdx === aisleIndex - 1);
 
-              const renderRowsGrid = (
-                <View style={styles.sectionSeatsGrid}>
-                  {section.rows.map((row) => {
-                    const aisleIndex = Math.floor(row.seats.length / 2);
-                    return (
-                      <View key={`${section.key}-${row.label}`} style={styles.seatRowWrapper}>
-                        {/* Left Row Pill Badge */}
-                        <View style={styles.rowLabelPill}>
-                          <Text style={styles.rowLabelBadgeText}>{row.label}</Text>
+                                return (
+                                  <React.Fragment key={seat.seatId}>
+                                    <RealisticSeatIcon
+                                      seat={seat}
+                                      size={seatCellSize}
+                                      isSelected={isSelected}
+                                      isBooked={isBooked}
+                                      onPress={toggle}
+                                    />
+                                    {showAisle ? <View style={styles.aisleWalkway} /> : null}
+                                  </React.Fragment>
+                                );
+                              })}
+                            </View>
+                            <Text style={styles.rowLabelTextRight}>{row.label}</Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </ScrollView>
+                );
+
+                return (
+                  <View key={section.key} style={styles.sectionCard}>
+                    <View style={styles.sectionCardHeader}>
+                      <View style={styles.sectionTitleLeft}>
+                        <View style={styles.sectionIconBox}>
+                          <Icon name={section.iconName} size={16} color="#EA580C" />
                         </View>
-
-                        {/* Center Realistic Chairs Track */}
-                        <View style={styles.seatsTrack}>
-                          {row.seats.map((seat, seatIdx) => {
-                            const isSelected = selected.includes(seat.seatId);
-                            const isBooked =
-                              seat.status === 'booked' ||
-                              seat.status === 'held' ||
-                              seat.status === 'blocked';
-                            const showAisle =
-                              row.aisleAfter.includes(seatIdx + 1) ||
-                              (!row.aisleAfter.length &&
-                                row.seats.length >= 6 &&
-                                seatIdx === aisleIndex - 1);
-
-                            return (
-                              <React.Fragment key={seat.seatId}>
-                                <RealisticSeatIcon
-                                  seat={seat}
-                                  size={seatCellSize}
-                                  isSelected={isSelected}
-                                  isBooked={isBooked}
-                                  onPress={toggle}
-                                />
-
-                                {showAisle ? (
-                                  <View style={styles.aisleWalkway}>
-                                    <View style={styles.aisleDash} />
-                                    <View style={styles.aisleDash} />
-                                  </View>
-                                ) : null}
-                              </React.Fragment>
-                            );
-                          })}
-                        </View>
-
-                        {/* Right Row Pill Badge */}
-                        <View style={styles.rowLabelPill}>
-                          <Text style={styles.rowLabelBadgeText}>{row.label}</Text>
-                        </View>
-                      </View>
-                    );
-                  })}
-                </View>
-              );
-
-              return (
-                <View key={section.key} style={styles.sectionCard}>
-                  {/* Tier Header with Name, Available Count & Price Pill */}
-                  <View style={styles.sectionCardHeader}>
-                    <View style={styles.sectionTitleLeft}>
-                      <View style={styles.sectionIconBox}>
-                        <Icon name={section.iconName} size={16} color="#EA580C" />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.sectionTitleText} numberOfLines={1}>
-                          {section.secondaryLabel || section.primaryLabel}{' '}
-                          <Text style={styles.sectionSubLabel}>({section.primaryLabel})</Text>
-                        </Text>
-                        <View style={styles.sectionMetaRow}>
-                          <View
-                            style={[
-                              styles.sectionAvailDot,
-                              {
-                                backgroundColor:
-                                  section.availableCount > 15
-                                    ? '#16A34A'
-                                    : section.availableCount > 0
-                                      ? '#F59E0B'
-                                      : '#94A3B8',
-                              },
-                            ]}
-                          />
-                          <Text style={styles.sectionAvailText}>
-                            {section.availableCount > 0
-                              ? `${toMarathiDigits(section.availableCount)} जागा उपलब्ध`
-                              : 'हाऊसफुल (Sold Out)'}
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.sectionTitleText} numberOfLines={1}>
+                            {section.secondaryLabel || section.primaryLabel}{' '}
+                            <Text style={styles.sectionSubLabel}>({section.primaryLabel})</Text>
                           </Text>
+                          <View style={styles.sectionMetaRow}>
+                            <View
+                              style={[
+                                styles.sectionAvailDot,
+                                {
+                                  backgroundColor:
+                                    section.availableCount > 15
+                                      ? '#16A34A'
+                                      : section.availableCount > 0
+                                        ? '#F59E0B'
+                                        : '#94A3B8',
+                                },
+                              ]}
+                            />
+                            <Text style={styles.sectionAvailText}>
+                              {section.availableCount > 0
+                                ? `${toMarathiDigits(section.availableCount)} जागा उपलब्ध`
+                                : 'हाऊसफुल (Sold Out)'}
+                            </Text>
+                          </View>
                         </View>
+                      </View>
+
+                      <View style={styles.sectionPricePill}>
+                        <Text style={styles.sectionPricePillText}>
+                          ₹{toMarathiDigits(Math.round(section.price / 100))}
+                        </Text>
+                        <Text style={styles.sectionPricePerSeat}>/ आसन</Text>
                       </View>
                     </View>
 
-                    <View style={styles.sectionPricePill}>
-                      <Text style={styles.sectionPricePillText}>
-                        ₹{toMarathiDigits(Math.round(section.price / 100))}
-                      </Text>
-                      <Text style={styles.sectionPricePerSeat}>/ आसन</Text>
-                    </View>
+                    <View style={styles.sectionHeaderDivider} />
+                    {renderRowsGrid}
                   </View>
-
-                  <View style={styles.sectionHeaderDivider} />
-
-                  {/* Smooth Horizontal Scroll for Wide Rows */}
-                  {needsHorizontalScroll ? (
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={styles.horizontalSeatScrollContent}
-                    >
-                      {renderRowsGrid}
-                    </ScrollView>
-                  ) : (
-                    renderRowsGrid
-                  )}
-                </View>
-              );
-            })}
+                );
+              })}
+            </View>
 
             {/* ── 6. Trust & Security Footer Badge ── */}
             <View style={styles.trustBadgeContainer}>
@@ -1203,6 +1249,21 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
           </ScrollView>
         )}
 
+        {/* Floating error notification banner above bottom dock */}
+        {error ? (
+          <TouchableOpacity
+            style={styles.floatingBottomAlert}
+            activeOpacity={0.9}
+            onPress={() => setError(null)}
+          >
+            <Icon name="alert-circle" size={15} color="#DC2626" />
+            <Text style={styles.floatingAlertText} numberOfLines={2}>
+              {error}
+            </Text>
+            <Icon name="close" size={14} color="#64748B" />
+          </TouchableOpacity>
+        ) : null}
+
         <View style={styles.bottomDockMainRow}>
           <View style={styles.bottomDockLeft}>
             <View style={styles.selectedCountRow}>
@@ -1214,10 +1275,8 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
               />
               <Text style={styles.selectedSeatsSummaryText} numberOfLines={1}>
                 {selected.length > 0
-                  ? `${toMarathiDigits(selected.length)} आसने निवडली (${selectedSeats
-                    .map((s) => s.seatCode)
-                    .join(', ')})`
-                  : 'आसने निवडा'}
+                  ? `${toMarathiDigits(selected.length)} आसने निवडली`
+                  : 'कोणतेही आसन निवडलेले नाही'}
               </Text>
             </View>
 
@@ -1239,16 +1298,102 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
             activeOpacity={0.85}
           >
             {holding ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
+              <View style={styles.proceedBtnInner}>
+                <ActivityIndicator color="#FFFFFF" size="small" style={{ marginRight: 6 }} />
+                <Text style={styles.proceedButtonText}>प्रक्रिया करत आहे...</Text>
+              </View>
             ) : (
               <View style={styles.proceedBtnInner}>
-                <Text style={styles.proceedButtonText}>पुढे जा</Text>
-                <Icon name="arrow-right" size={16} color="#FFFFFF" style={{ marginLeft: 4 }} />
+                <Text
+                  style={[
+                    styles.proceedButtonText,
+                    !selected.length && styles.proceedButtonTextDisabled,
+                  ]}
+                >
+                  {selected.length > 0
+                    ? `पुढे जा (Proceed)`
+                    : 'आसने निवडा'}
+                </Text>
+                <Icon
+                  name={selected.length > 0 ? 'arrow-right' : 'seat-outline'}
+                  size={16}
+                  color={selected.length > 0 ? '#FFFFFF' : '#64748B'}
+                  style={{ marginLeft: 5 }}
+                />
               </View>
             )}
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* ── Discard Seat Selection Confirmation Modal ── */}
+      <MTPopupModal
+        visible={showDiscardModal}
+        type="warning"
+        title="बुकिंग रद्द करायची आहे का?"
+        message="तुम्ही मागे गेल्यास तुमची निवडलेली तात्पुरती आसने रद्द केली जातील आणि कॅश/कुकीज क्लिअर केले जातील. (Your selected seats will be released.)"
+        primaryButtonText="होय, रद्द करा (Release)"
+        onPrimaryPress={() => {
+          setShowDiscardModal(false);
+          setSelected([]);
+          useCartStore.getState().clearCart();
+          sessionSeatsCache.delete(sessionId);
+          navigation.goBack();
+        }}
+        secondaryButtonText="नाही, सुरू ठेवा (Cancel)"
+        onSecondaryPress={() => setShowDiscardModal(false)}
+        onRequestClose={() => setShowDiscardModal(false)}
+      />
+
+      {/* ── Reservation Timeout Modal ── */}
+      <MTPopupModal
+        visible={showTimeoutModal}
+        type="warning"
+        title="वेळ संपली (Hold Timed Out)"
+        message="आसन निवडीची ५ मिनिटांची वेळ संपली आहे. तुमची निवडलेली आसने इतरांसाठी खुली करण्यात आली आहेत. कृपया पुन्हा आसने निवडा."
+        primaryButtonText="पुन्हा आसने निवडा (Select Seats)"
+        onPrimaryPress={() => {
+          setShowTimeoutModal(false);
+          setHoldTimerActive(false);
+          setSecondsLeft(HOLD_SECONDS);
+          setSelected([]);
+          fetchSeats();
+        }}
+        onRequestClose={() => {
+          setShowTimeoutModal(false);
+          setHoldTimerActive(false);
+          setSecondsLeft(HOLD_SECONDS);
+          fetchSeats();
+        }}
+      />
+
+      {/* ── Error / Notice Modal ── */}
+      <MTPopupModal
+        visible={!!errorModalMsg}
+        type="error"
+        title="आसन आरक्षण सूचना"
+        message={errorModalMsg || 'निवडलेली आसने या शोसाठी उपलब्ध नाहीत किंवा वेळ संपली आहे.'}
+        primaryButtonText="समजले (OK)"
+        onPrimaryPress={() => {
+          setErrorModalMsg(null);
+          fetchSeats();
+        }}
+        onRequestClose={() => {
+          setErrorModalMsg(null);
+          fetchSeats();
+        }}
+      />
+
+      {/* ── Help & Support Modal ── */}
+      <MTPopupModal
+        visible={showHelpModal}
+        type="help"
+        title="MahaTicket ग्राहक सहाय्यता"
+        message="नाट्यगृह आसन आरक्षण व तिकीट सहाय्यासाठी संपर्क: contact.mahaticket@gmail.com किंवा WhatsApp +91-7020210543"
+        primaryButtonText="समजले (Close)"
+        onPrimaryPress={() => setShowHelpModal(false)}
+        onRequestClose={() => setShowHelpModal(false)}
+      />
     </View>
   );
 }
@@ -1515,8 +1660,8 @@ const styles = StyleSheet.create({
 
   // 3. Countdown Timer Banner (UNCHANGED)
   timerBannerWrap: {
-    marginHorizontal: 16,
-    marginTop: 10,
+    marginHorizontal: 12,
+    marginTop: 6,
   },
   timerBanner: {
     flexDirection: 'row',
@@ -1525,9 +1670,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF7ED',
     borderWidth: 1,
     borderColor: '#FED7AA',
-    borderRadius: 24,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    borderRadius: 16,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
   },
   timerLeft: {
     flexDirection: 'row',
@@ -1553,13 +1698,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginHorizontal: 16,
-    marginTop: 12,
-    marginBottom: 4,
-    paddingVertical: 9,
-    paddingHorizontal: 12,
+    marginHorizontal: 12,
+    marginTop: 6,
+    marginBottom: 2,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
@@ -1578,10 +1723,10 @@ const styles = StyleSheet.create({
   legendMiniSeatAvail: {
     width: 16,
     height: 16,
-    borderRadius: 5,
+    borderRadius: 4,
     backgroundColor: '#FFFFFF',
     borderWidth: 1.5,
-    borderColor: '#94A3B8',
+    borderColor: '#16A34A',
     alignItems: 'center',
     overflow: 'hidden',
   },
@@ -1619,7 +1764,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#0F172A',
   },
-  zoomToggleBtn: {
+  pinchHintPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
@@ -1631,19 +1776,20 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginLeft: 6,
   },
-  zoomToggleBtnActive: {
-    backgroundColor: '#EA580C',
-    borderColor: '#C2410C',
-  },
-  zoomToggleText: {
+  pinchHintText: {
     fontSize: 10,
     fontWeight: '800',
     color: '#EA580C',
+  },
+  theatreMapViewport: {
+    width: '100%',
+    alignItems: 'stretch',
   },
 
   // 5. Stage Screen & Auditorium Seating Plan
   seatingPlanContainer: {
     marginTop: 6,
+    overflow: 'hidden',
   },
   stageTheaterBox: {
     alignItems: 'center',
@@ -1686,13 +1832,14 @@ const styles = StyleSheet.create({
   // Section Card
   sectionCard: {
     backgroundColor: '#FFFFFF',
-    marginHorizontal: 14,
-    marginBottom: 14,
-    borderRadius: 20,
+    marginHorizontal: 8,
+    marginBottom: 8,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    paddingVertical: 14,
-    paddingHorizontal: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    overflow: 'hidden',
     ...SHADOWS.sm,
   },
   sectionCardHeader: {
@@ -1777,40 +1924,80 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  // Seats Grid
+  sectionSeatsHorizontalScroll: {
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    minWidth: '100%',
+  },
   sectionSeatsGrid: {
     alignItems: 'center',
-    gap: 8,
+    gap: 4,
   },
   seatRowWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
+    paddingVertical: 2,
+  },
+  rowLabelText: {
+    width: 18,
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#64748B',
+    textAlign: 'center',
+    marginRight: 4,
+  },
+  rowLabelTextRight: {
+    width: 18,
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#64748B',
+    textAlign: 'center',
+    marginLeft: 4,
   },
   rowLabelPill: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
+    width: 16,
+    height: 16,
+    borderRadius: 4,
     backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
   },
   rowLabelBadgeText: {
-    fontSize: 10.5,
+    fontSize: 9,
     fontWeight: '900',
     color: '#475569',
   },
   seatsTrack: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    paddingHorizontal: 6,
-    flex: 1,
+    justifyContent: 'flex-start',
+    flexShrink: 1,
+    gap: 2,
   },
 
-  // Realistic 3D Theater Armchair Styles
+  // BMS compact seat boxes
+  bmsSeatBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+  },
+  bmsSeatAvailable: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#16A34A',
+  },
+  bmsSeatSelected: {
+    backgroundColor: '#16A34A',
+    borderColor: '#15803D',
+  },
+  bmsSeatBooked: {
+    backgroundColor: '#E2E8F0',
+    borderColor: '#E2E8F0',
+  },
+  bmsSeatNum: {
+    fontWeight: '800',
+  },
+
+  // Realistic 3D Theater Armchair Styles (unused on map)
   realSeatOuter: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -1890,14 +2077,12 @@ const styles = StyleSheet.create({
   },
 
   aisleWalkway: {
-    width: 14,
-    height: 22,
-    alignItems: 'center',
-    justifyContent: 'space-evenly',
+    width: 8,
+    height: 1,
   },
   aisleDash: {
-    width: 1.5,
-    height: 5,
+    width: 1,
+    height: 4,
     borderRadius: 1,
     backgroundColor: '#CBD5E1',
   },
@@ -1926,8 +2111,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
     borderTopColor: '#E2E8F0',
-    paddingHorizontal: 16,
-    paddingTop: 10,
+    paddingHorizontal: 12,
+    paddingTop: 8,
     elevation: 16,
     shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: -4 },
@@ -2004,30 +2189,39 @@ const styles = StyleSheet.create({
   },
   proceedButton: {
     backgroundColor: '#EA580C',
-    borderRadius: 24,
-    paddingVertical: 12,
-    paddingHorizontal: 22,
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#EA580C',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 5,
+    minWidth: 96,
   },
   proceedButtonDisabled: {
-    backgroundColor: '#CBD5E1',
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
     shadowOpacity: 0,
     elevation: 0,
   },
   proceedBtnInner: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   proceedButtonText: {
     color: '#FFFFFF',
-    fontSize: 15,
+    fontSize: 12,
     fontWeight: '900',
+    lineHeight: 18,
+  },
+  proceedButtonTextDisabled: {
+    color: '#64748B',
+    fontWeight: '700',
   },
 
   // Fallback views
@@ -2110,5 +2304,130 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '900',
+  },
+
+  /* ── In-App Web-Parity Modals (Discard, Timeout, Error) ── */
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    elevation: 8,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+  },
+  modalIconWrapWarn: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: '#FECACA',
+  },
+  modalIconWrapTimer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#FFF7ED',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: '#FFEDD5',
+  },
+  modalTitle: {
+    fontSize: 17.5,
+    fontWeight: '900',
+    color: '#0F172A',
+    textAlign: 'center',
+    marginBottom: 8,
+    letterSpacing: -0.2,
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 19,
+    marginBottom: 20,
+  },
+  modalActionsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  modalBtnCancel: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalBtnCancelText: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#334155',
+  },
+  modalBtnDiscard: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: '#DC2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalBtnDiscardText: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  modalBtnPrimary: {
+    width: '100%',
+    paddingVertical: 13,
+    borderRadius: 14,
+    backgroundColor: '#EA580C',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalBtnPrimaryText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#FFFFFF',
+  },
+  floatingBottomAlert: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 8,
+    gap: 8,
+  },
+  floatingAlertText: {
+    flex: 1,
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#B91C1C',
   },
 });

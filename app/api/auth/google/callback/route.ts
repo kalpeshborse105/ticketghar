@@ -4,6 +4,19 @@ import { users } from '@/src/db/schema.ts';
 import { eq } from 'drizzle-orm';
 import { setCustomerSessionCookie, signSessionToken, CustomerSessionUser } from '@/src/lib/auth-service.ts';
 
+function getOrigin(request: Request): string {
+  const forwardedHost = request.headers.get('x-forwarded-host');
+  const forwardedProto = request.headers.get('x-forwarded-proto') || 'https';
+  if (forwardedHost) {
+    return `${forwardedProto}://${forwardedHost}`;
+  }
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL;
+  if (appUrl && !appUrl.includes('localhost')) {
+    return appUrl.replace(/\/+$/, '');
+  }
+  return new URL(request.url).origin;
+}
+
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
@@ -20,7 +33,7 @@ export async function GET(request: Request) {
       state = {};
     }
 
-    const origin = process.env.NEXT_PUBLIC_APP_URL || url.origin;
+    const origin = getOrigin(request);
 
     if (error || !code) {
       console.error('Google OAuth callback error:', error);
@@ -112,15 +125,10 @@ export async function GET(request: Request) {
         dbUser = inserted;
       }
     } catch (dbErr: any) {
-      console.warn('DB upsert error on Google auth (fallback to memory session):', dbErr?.message);
-      dbUser = {
-        id: 999999,
-        uid: `google-${googleSub}`,
-        email,
-        fullName,
-        avatarUrl,
-        role: 'customer',
-      };
+      console.error('DB upsert error on Google auth:', dbErr?.message);
+      return NextResponse.redirect(
+        `${process.env.NEXT_PUBLIC_APP_URL || 'https://mahaticket.kalpkrutinfotech.com'}/?authError=db`
+      );
     }
 
     // 4. Create verified customer session user

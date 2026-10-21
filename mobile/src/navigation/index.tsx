@@ -110,7 +110,12 @@ export default function RootNavigator() {
       <Stack.Screen
         name="Checkout"
         component={CheckoutScreen}
-        options={{ animation: 'slide_from_right', animationDuration: 150 }}
+        options={{
+          animation: 'slide_from_right',
+          animationDuration: 150,
+          // Hold + pricing lock: do not swipe-back into seat map mid-checkout
+          gestureEnabled: false,
+        }}
       />
       <Stack.Screen
         name="BookingConfirmed"
@@ -136,6 +141,16 @@ export default function RootNavigator() {
       <Stack.Screen
         name="EditProfile"
         component={EditProfileScreen}
+        options={{ animation: 'slide_from_right', animationDuration: 150 }}
+      />
+      <Stack.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{ animation: 'slide_from_right', animationDuration: 150 }}
+      />
+      <Stack.Screen
+        name="Tickets"
+        component={MyTicketsScreen}
         options={{ animation: 'slide_from_right', animationDuration: 150 }}
       />
       <Stack.Screen

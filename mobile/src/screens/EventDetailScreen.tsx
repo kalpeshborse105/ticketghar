@@ -123,10 +123,10 @@ export default function EventDetailScreen({ navigation, route }: any) {
           (a, b) => new Date(a.sessionStartTime).getTime() - new Date(b.sessionStartTime).getTime()
         );
         const firstAvailable =
-          sorted.find((s) => getSessionAvailableCount(s) > 0 && s.status !== 'sold_out') || sorted[0];
-        setSelectedSession((prev) => prev || firstAvailable);
-        const dKey = toLocalDateKey(firstAvailable.sessionStartTime);
-        setSelectedDateKey((prev) => prev || dKey);
+          sorted.find((s) => getSessionAvailableCount(s) > 0 && s.status !== 'sold_out' && !s.isSoldOut) ||
+          sorted[0];
+        setSelectedSession(firstAvailable);
+        setSelectedDateKey(toLocalDateKey(firstAvailable.sessionStartTime));
       }
     } else {
       setLoading(true);
@@ -143,10 +143,19 @@ export default function EventDetailScreen({ navigation, route }: any) {
             (a, b) => new Date(a.sessionStartTime).getTime() - new Date(b.sessionStartTime).getTime()
           );
           const firstAvailable =
-            sorted.find((s) => getSessionAvailableCount(s) > 0 && s.status !== 'sold_out') || sorted[0];
-          setSelectedSession((prev) => prev || firstAvailable);
-          const dKey = toLocalDateKey(firstAvailable.sessionStartTime);
-          setSelectedDateKey((prev) => prev || dKey);
+            sorted.find((s) => getSessionAvailableCount(s) > 0 && s.status !== 'sold_out' && !s.isSoldOut) ||
+            sorted[0];
+          // Prefer detailed payload session (same id), never keep stale list-cache object
+          setSelectedSession((prev) => {
+            if (prev) {
+              const match = sorted.find((s) => s.id === prev.id);
+              if (match && getSessionAvailableCount(match) > 0 && match.status !== 'sold_out') {
+                return match;
+              }
+            }
+            return firstAvailable;
+          });
+          setSelectedDateKey(toLocalDateKey(firstAvailable.sessionStartTime));
         } else {
           setSelectedSession(null);
           setSelectedDateKey('');
@@ -381,7 +390,7 @@ export default function EventDetailScreen({ navigation, route }: any) {
     try {
       const res = await api.verifyEmailOtp(loginEmail, loginOtp);
       if (res.success && res.user) {
-        await setAuth(res.user, res.token || `mt-tok-${Date.now()}`);
+        await setAuth(res.user, res.token && res.token.includes('.') ? res.token : '');
         setLoginModalVisible(false);
         Toast.show({
           type: 'success',
@@ -518,29 +527,7 @@ export default function EventDetailScreen({ navigation, route }: any) {
       return;
     }
 
-    if (!isSeatedEvent) {
-      const tt = (selectedSession.ticketTypes && selectedSession.ticketTypes[0]) || {
-        price: 25000,
-        name: 'Entry Pass',
-      };
-      const fVal = tt.price || 25000;
-      navigation.navigate('Checkout', {
-        holdToken: `ga_pass_${Date.now()}`,
-        faceValue: fVal,
-        seatCodes: ['GA-PASS-1'],
-        seatIds: [1],
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-        addonTotal: 0,
-        eventId: event.id,
-        sessionId: selectedSession.id,
-        eventTitle: displayTitle(event),
-        posterUrl: absoluteMediaUrl(event.posterUrl) || fallbackPosterUrl(event.id),
-        sessionMeta: formatShow(selectedSession.sessionStartTime),
-        venueName: displayVenueName(event.venue),
-      });
-      return;
-    }
-
+    // Same as web: always open seat map → hold → checkout (no fake GA seatIds)
     const castString =
       event?.castCrewList && event.castCrewList.length > 0
         ? event.castCrewList.slice(0, 3).map((c: any) => c.name).join(' • ')
@@ -1810,6 +1797,8 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '900',
     color: '#0F172A',
+    lineHeight: 22,
+    paddingBottom: 2,
   },
   floatingHeader: {
     position: 'absolute',
@@ -1945,13 +1934,16 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#0F172A',
     letterSpacing: 0.2,
-    lineHeight: 30,
+    lineHeight: 34,
+    paddingBottom: 4,
   },
   eventTitleSub: {
     fontSize: 14,
     color: '#64748B',
     marginTop: 2,
     fontWeight: '600',
+    lineHeight: 22,
+    paddingBottom: 2,
   },
   quickMetaGrid: {
     flexDirection: 'row',
@@ -2319,10 +2311,10 @@ const styles = StyleSheet.create({
     opacity: 0.65,
   },
   bmsShowtimePillSelected: {
-    backgroundColor: '#0F172A',
-    borderColor: '#0F172A',
+    backgroundColor: '#15803D',
+    borderColor: '#15803D',
     elevation: 3,
-    shadowColor: '#0F172A',
+    shadowColor: '#15803D',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 5,
@@ -2371,7 +2363,7 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
   },
   bmsShowtimeSubSelected: {
-    color: '#E2E8F0',
+    color: '#DCFCE7',
   },
 
   /* Informative No-Booking Card */
@@ -2443,19 +2435,19 @@ const styles = StyleSheet.create({
   readMoreText: { color: '#EA580C', fontSize: 13, fontWeight: '800' },
 
   /* 5. Cast & Crew */
-  castAvatarScroll: { gap: 14, paddingTop: 4 },
+  castAvatarScroll: { gap: 12, paddingTop: 4 },
   castAvatarCol: { alignItems: 'center', width: 78 },
   castAvatarCircle: {
     width: 60,
     height: 60,
-    borderRadius: 30,
+    borderRadius: 12,
     backgroundColor: '#FFF7ED',
     borderWidth: 2,
     borderColor: '#FED7AA',
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
+    marginBottom: 8,
   },
   castAvatarImage: { width: '100%', height: '100%' },
   castAvatarFallback: {

@@ -2,7 +2,7 @@
  * Contact & external link constants — mirrors web /contact page
  * (https://mahaticket.kalpkrutinfotech.com/contact)
  */
-import { Alert, Linking } from 'react-native';
+import { Linking, Platform, ToastAndroid } from 'react-native';
 
 export const WEB_ORIGIN = 'https://mahaticket.kalpkrutinfotech.com';
 export const WEB_CONTACT_URL = `${WEB_ORIGIN}/contact`;
@@ -32,7 +32,11 @@ export async function openUrl(url: string, failMessage = 'Could not open this li
   try {
     await Linking.openURL(url);
   } catch {
-    Alert.alert('Unable to open', failMessage);
+    if (Platform.OS === 'android') {
+      ToastAndroid.show(failMessage, ToastAndroid.SHORT);
+    } else {
+      console.warn('Unable to open URL:', url, failMessage);
+    }
   }
 }
 
@@ -49,7 +53,11 @@ export async function openPlayStoreListing() {
     try {
       await Linking.openURL(PLAY_STORE_URL);
     } catch {
-      Alert.alert('Unable to open', 'Could not open the Play Store.');
+      if (Platform.OS === 'android') {
+        ToastAndroid.show('Could not open the Play Store.', ToastAndroid.SHORT);
+      } else {
+        console.warn('Could not open the Play Store.');
+      }
     }
   }
 }

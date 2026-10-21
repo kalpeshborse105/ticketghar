@@ -9,7 +9,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Linking,
   Modal,
@@ -28,7 +27,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, RADIUS, SPACING, SHADOWS } from '../theme';
 import { api, OrderItem, formatDate, formatTime, paise } from '../api';
 import { useAuthStore } from '../store';
-import { Badge, Button, EmptyState, MahaTicketPass, Skeleton } from '../components';
+import { Badge, Button, EmptyState, MahaTicketPass, Skeleton, MTPopupModal } from '../components';
 
 type Tab = 'upcoming' | 'past';
 
@@ -50,6 +49,12 @@ export default function MyTicketsScreen({ navigation }: any) {
 
   // Ticket Mitra modal state
   const [mitraModalVisible, setMitraModalVisible] = useState(false);
+  const [ticketPopupModal, setTicketPopupModal] = useState<{
+    visible: boolean;
+    type?: 'info' | 'warning' | 'error';
+    title: string;
+    message: string;
+  } | null>(null);
 
   const fetchTickets = useCallback(async () => {
     try {
@@ -148,16 +153,19 @@ export default function MyTicketsScreen({ navigation }: any) {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.unauthScroll}
         >
-          {/* ── CARD 1: Please Log In to View Your Tickets ──────────────────── */}
+          {/* ── CARD 1: आपले आरक्षित तिकीट पाहण्यासाठी लॉगिन करा ──────────────────── */}
           <View style={styles.cardPrimary}>
             <View style={styles.lockIconBox}>
               <Icon name="lock-outline" size={32} color={COLORS.primary} />
             </View>
             <Text style={styles.cardPrimaryTitle}>
-              Please Log In to View Your Tickets
+              आपले आरक्षित तिकीट पाहण्यासाठी लॉगिन करा
             </Text>
             <Text style={styles.cardPrimarySub}>
-              Please log in to your account to securely view your booked digital tickets, entry QR passes, and seat reservations.
+              बुकिंग करताना वापरलेला ईमेल पत्ता वापरून आपले डिजिटल पासेस, QR कोड आणि आसन आरक्षणे सुरक्षितपणे पहा.
+            </Text>
+            <Text style={[styles.cardPrimarySub, { fontSize: 11.5, marginTop: -8, color: '#64748B' }]}>
+              (Please sign in with your booking email to view passes and reservations)
             </Text>
 
             <TouchableOpacity
@@ -165,8 +173,8 @@ export default function MyTicketsScreen({ navigation }: any) {
               style={styles.primaryBtn}
               activeOpacity={0.85}
             >
-              <Icon name="arrow-right" size={16} color={COLORS.white} style={{ marginRight: 6 }} />
-              <Text style={styles.primaryBtnText}>Log In / Register</Text>
+              <Icon name="login" size={16} color={COLORS.white} style={{ marginRight: 6 }} />
+              <Text style={styles.primaryBtnText}>ईमेल द्वारे लॉगिन करा (Log In)</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -174,7 +182,7 @@ export default function MyTicketsScreen({ navigation }: any) {
               style={styles.secondaryBtn}
               activeOpacity={0.85}
             >
-              <Text style={styles.secondaryBtnText}>Return to Discovery</Text>
+              <Text style={styles.secondaryBtnText}>कार्यक्रमांची यादी पहा (Browse Events)</Text>
             </TouchableOpacity>
           </View>
 
@@ -483,7 +491,13 @@ export default function MyTicketsScreen({ navigation }: any) {
               showsVerticalScrollIndicator={false}
               nestedScrollEnabled={true}
               keyboardShouldPersistTaps="handled"
-              contentContainerStyle={{ paddingBottom: 140, paddingTop: 8 }}
+              bounces
+              contentContainerStyle={{
+                paddingBottom: 120 + Math.max(insets.bottom, 12),
+                paddingTop: 8,
+                paddingHorizontal: 4,
+                flexGrow: 1,
+              }}
             >
               <MahaTicketPass
                 ticketCode={
@@ -492,19 +506,26 @@ export default function MyTicketsScreen({ navigation }: any) {
                   'MT-PASS'
                 }
                 seatCode={
-                  selectedOrder?.tickets?.map((t) => t.seatCode).join(', ') || undefined
+                  selectedOrder?.tickets?.map((t) => t.seatCode).filter(Boolean).join(', ') ||
+                  undefined
                 }
                 eventTitle={
-                  selectedOrder?.event?.title ||
                   selectedOrder?.event?.titleMr ||
+                  selectedOrder?.event?.title ||
                   'Event'
                 }
                 venueName={
-                  selectedOrder?.event?.venue?.name ||
                   selectedOrder?.event?.venue?.nameMr ||
-                  'Venue'
+                  selectedOrder?.event?.venue?.name ||
+                  (selectedOrder as any)?.venueName ||
+                  (selectedOrder as any)?.venue?.name ||
+                  'Auditorium'
                 }
-                venueCity={selectedOrder?.event?.venue?.city || 'City'}
+                venueCity={
+                  selectedOrder?.event?.venue?.city ||
+                  (selectedOrder as any)?.venue?.city ||
+                  ''
+                }
                 showDateStr={
                   selectedOrder?.session?.sessionStartTime
                     ? formatDate(selectedOrder.session.sessionStartTime)
@@ -523,60 +544,31 @@ export default function MyTicketsScreen({ navigation }: any) {
                   selectedOrder?.orderNumber ||
                   'MahaTicket'
                 }
+                ticketIndex={1}
                 totalTickets={selectedOrder?.tickets?.length || selectedOrder?.ticketCount}
+                onClose={() => setQrVisible(false)}
+                onHome={() => {
+                  setQrVisible(false);
+                  navigation.navigate('Main', { screen: 'Home' });
+                }}
               />
             </ScrollView>
-
-            {/* Compact Icon-Only Action Bar */}
-            <View style={styles.ticketActions}>
-              <TouchableOpacity
-                style={styles.iconAction}
-                onPress={async () => {
-                  try {
-                    await Share.share({
-                      title: selectedOrder?.event?.title || 'Ticket',
-                      message: `My ticket for ${selectedOrder?.event?.title || 'Event'}. Order: ${selectedOrder?.orderNumber || 'N/A'}`,
-                    });
-                  } catch {}
-                }}
-              >
-                <Icon name="share-variant" size={20} color={COLORS.primary} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.iconAction}
-                onPress={() => {
-                  Alert.alert('Email Ticket', 'Email ticket functionality will be available soon.');
-                }}
-              >
-                <Icon name="email-outline" size={20} color={COLORS.primary} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.iconAction}
-                onPress={() => {
-                  const text = encodeURIComponent(
-                    `My ticket: ${selectedOrder?.event?.title || 'Event'}\nOrder: ${selectedOrder?.orderNumber || 'N/A'}`
-                  );
-                  Linking.openURL(`whatsapp://send?text=${text}`).catch(() => {
-                    Alert.alert('WhatsApp not available');
-                  });
-                }}
-              >
-                <Icon name="whatsapp" size={20} color="#25D366" />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.iconAction, styles.closeAction]}
-                onPress={() => setQrVisible(false)}
-              >
-                <Icon name="close" size={18} color={COLORS.textMuted} />
-                <Text style={styles.closeText}>Close</Text>
-              </TouchableOpacity>
-            </View>
           </View>
         </View>
       </Modal>
+
+      {/* Modern In-App Popup Modal */}
+      {ticketPopupModal ? (
+        <MTPopupModal
+          visible={ticketPopupModal.visible}
+          type={ticketPopupModal.type || 'info'}
+          title={ticketPopupModal.title}
+          message={ticketPopupModal.message}
+          primaryButtonText="समजले (OK)"
+          onPrimaryPress={() => setTicketPopupModal(null)}
+          onRequestClose={() => setTicketPopupModal(null)}
+        />
+      ) : null}
     </View>
   );
 }
@@ -858,11 +850,11 @@ const styles = StyleSheet.create({
   },
   qrActionText: { color: COLORS.primary, fontSize: 11, fontWeight: '700' },
 
-  modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)' },
+  modalBg: { flex: 1, backgroundColor: 'rgba(15,23,42,0.96)' },
   fullScreenTicket: {
     flex: 1,
-    backgroundColor: COLORS.bg,
-    paddingHorizontal: 16,
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 12,
   },
   modalTopBar: {
     flexDirection: 'row',

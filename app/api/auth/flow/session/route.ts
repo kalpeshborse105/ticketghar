@@ -1,14 +1,16 @@
-import { NextResponse } from 'next/server';
-import { getCustomerSession } from '@/src/lib/auth-service';
+import { NextRequest, NextResponse } from 'next/server';
+import { getCustomerSession, setCustomerSessionCookie, signSessionToken } from '@/src/lib/auth-service';
 import { createClient } from '@/src/lib/supabase/server';
 import { db } from '@/src/db/index';
 import { users } from '@/src/db/schema';
 import { eq } from 'drizzle-orm';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    // 1. Check customer session cookie
-    const customerUser = await getCustomerSession();
+    const authHeader = req.headers.get('authorization');
+
+    // 1. App session (cookie or Android Bearer HMAC token)
+    const customerUser = await getCustomerSession(authHeader);
     if (customerUser) {
       if (db && users && (customerUser.id || customerUser.email)) {
         try {
@@ -21,38 +23,88 @@ export async function GET() {
             customerUser.avatarUrl = dbUser.avatarUrl || customerUser.avatarUrl;
             customerUser.fullName = dbUser.fullName || customerUser.fullName;
             customerUser.phoneNumber = dbUser.phoneNumber || customerUser.phoneNumber;
+            customerUser.uid = dbUser.uid || customerUser.uid;
+            customerUser.id = dbUser.id;
+            customerUser.role = dbUser.role || customerUser.role;
           }
         } catch {
-          // non-blocking fallback to cookie data
+          // non-blocking
         }
       }
 
       return NextResponse.json({
         user: customerUser,
-        source: 'cookie',
+        source: 'session',
+        token: signSessionToken(customerUser),
       });
     }
 
-    // 2. Check Supabase session if configured
+    // 2. Supabase Auth → map to public.users (integer id), never return raw UUID as id
     try {
       const supabase = await createClient();
       const {
         data: { user: supaUser },
       } = await supabase.auth.getUser();
 
-      if (supaUser) {
+      if (supaUser?.email) {
+        const email = supaUser.email.trim().toLowerCase();
+        let [dbUser] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+
+        if (!dbUser) {
+          const [inserted] = await db
+            .insert(users)
+            .values({
+              uid: supaUser.id,
+              email,
+              fullName:
+                (supaUser.user_metadata?.full_name as string) ||
+                email.split('@')[0] ||
+                'MahaTicket User',
+              role: 'customer',
+              preferredLanguage: 'mr',
+              city: 'Pune',
+              avatarUrl: (supaUser.user_metadata?.avatar_url as string) || null,
+              status: 'active',
+            })
+            .returning();
+          dbUser = inserted;
+        } else if (
+          dbUser.uid &&
+          !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(dbUser.uid)
+        ) {
+          // Link legacy string uid → Supabase UUID when safe
+          try {
+            const [updated] = await db
+              .update(users)
+              .set({ uid: supaUser.id, updatedAt: new Date() })
+              .where(eq(users.id, dbUser.id))
+              .returning();
+            dbUser = updated;
+          } catch {
+            // uid collision — keep existing
+          }
+        }
+
+        const sessionUser = {
+          id: dbUser.id,
+          uid: dbUser.uid,
+          email: dbUser.email,
+          fullName: dbUser.fullName,
+          phoneNumber: dbUser.phoneNumber,
+          role: dbUser.role,
+          avatarUrl: dbUser.avatarUrl,
+        };
+
+        await setCustomerSessionCookie(sessionUser);
+
         return NextResponse.json({
-          user: {
-            id: supaUser.id,
-            email: supaUser.email,
-            fullName: supaUser.user_metadata?.full_name || supaUser.email?.split('@')[0],
-            role: 'customer',
-          },
+          user: sessionUser,
           source: 'supabase',
+          token: signSessionToken(sessionUser),
         });
       }
     } catch {
-      // Supabase not configured or failed, non-blocking
+      // Supabase not configured or failed
     }
 
     return NextResponse.json({ user: null });

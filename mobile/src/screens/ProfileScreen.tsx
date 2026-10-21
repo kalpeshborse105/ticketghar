@@ -5,7 +5,6 @@
  */
 import React, { useState } from 'react';
 import {
-  Alert,
   Image,
   Linking,
   ScrollView,
@@ -20,7 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, RADIUS, SPACING, SHADOWS } from '../theme';
 import { useAuthStore, useUIStore } from '../store';
-import { Button, Divider } from '../components';
+import { Button, Divider, MTPopupModal } from '../components';
 import { WEB_ADMIN_URL, openUrl, openPlayStoreListing } from '../lib/contact';
 import { resolveApiBase } from '../api';
 
@@ -54,6 +53,7 @@ export default function ProfileScreen({ navigation }: any) {
   const { user, isAuthenticated, clearAuth } = useAuthStore();
   const { language, setLanguage } = useUIStore();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const userRole = user?.role || 'customer';
   const isOrganizer = userRole === 'organizer';
@@ -61,21 +61,7 @@ export default function ProfileScreen({ navigation }: any) {
   const isOrganizerOrAdmin = isOrganizer || isAdmin;
 
   const handleLogout = () => {
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign Out',
-          style: 'destructive',
-          onPress: async () => {
-            await clearAuth();
-            navigation.replace('Login');
-          },
-        },
-      ]
-    );
+    setShowLogoutModal(true);
   };
 
   const toggleLanguage = () => {
@@ -164,11 +150,11 @@ export default function ProfileScreen({ navigation }: any) {
             <View style={styles.authIconRing}>
               <Icon name="ticket-confirmation-outline" size={36} color={COLORS.primary} />
             </View>
-            <Text style={styles.authTitle}>Sign in to MahaTicket</Text>
-            <Text style={styles.authSub}>Access your tickets, bookings, and exclusive Marathi drama passes</Text>
+            <Text style={styles.authTitle}>आपल्या खात्यामध्ये लॉगिन करा</Text>
+            <Text style={styles.authSub}>आपले आरक्षित तिकीट, पासेस आणि बुकिंग तपशील सुरक्षितपणे पाहण्यासाठी साइन इन करा.</Text>
             
             <Button
-              title="Sign In with Email / Mobile"
+              title="ईमेल द्वारे लॉगिन करा (Sign In with Email)"
               onPress={() => navigation.navigate('Login')}
               fullWidth
               style={{ marginTop: 18 }}
@@ -384,6 +370,22 @@ export default function ProfileScreen({ navigation }: any) {
           <Text style={styles.footerSub}>Maharashtra's Premier Ticketing Platform</Text>
         </View>
       </ScrollView>
+
+      <MTPopupModal
+        visible={showLogoutModal}
+        type="warning"
+        title="बाहेर पडायचे आहे का? (Sign Out)"
+        message="तुम्हाला तुमच्या खात्यातून बाहेर पडायचे आहे का? (Are you sure you want to sign out from MahaTicket?)"
+        primaryButtonText="होय, बाहेर पडा (Sign Out)"
+        onPrimaryPress={async () => {
+          setShowLogoutModal(false);
+          await clearAuth();
+          navigation.replace('Login');
+        }}
+        secondaryButtonText="नाही (Cancel)"
+        onSecondaryPress={() => setShowLogoutModal(false)}
+        onRequestClose={() => setShowLogoutModal(false)}
+      />
     </View>
   );
 }

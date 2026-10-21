@@ -415,7 +415,12 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
       const orderData = await createOrderRes.json();
 
       if (!createOrderRes.ok) {
-        throw new Error(orderData.error || 'पेमेंट ऑर्डर तयार करता आली नाही.');
+        throw new Error(orderData.error || 'Could not create payment order. Please try again.');
+      }
+
+      // Must use the SAME key_id that created the order — never mix test/live (wrong UPI)
+      if (!orderData.keyId || !orderData.orderId) {
+        throw new Error('Payment gateway is not configured. Please contact support.');
       }
 
       // Synchronize client countdown with server-authoritative 10-minute extended hold
@@ -428,7 +433,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
       }
 
       if (!window.Razorpay) {
-        throw new Error('Razorpay गेटवे लोड होत आहे. कृपया २ सेकंद थांबा आणि पुन्हा प्रयत्न करा.');
+        throw new Error('Payment gateway is still loading. Wait a moment and try again.');
       }
 
       // Step 2: Open official Razorpay Checkout modal
@@ -436,7 +441,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
         key: orderData.keyId,
         amount: orderData.amount,
         currency: orderData.currency || 'INR',
-        name: 'MahaTicket (महाटिकिट)',
+        name: 'MahaTicket',
         description: `${language === 'mr' ? event.titleMr || event.title : event.title}`,
         order_id: orderData.orderId,
         prefill: {
@@ -495,6 +500,15 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
       };
 
       const razorpay = new window.Razorpay(options);
+      razorpay.on('payment.failed', (response: any) => {
+        setIsProcessing(false);
+        setErrorMessage(
+          response?.error?.description ||
+            (language === 'mr'
+              ? 'पेमेंट अयशस्वी. कृपया पुन्हा प्रयत्न करा.'
+              : 'Payment failed. Please try again.')
+        );
+      });
       razorpay.open();
     } catch (err: any) {
       console.error('Booking processing error:', err);
@@ -572,7 +586,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
             {isProcessing && (
               <div className="flex items-center gap-2 p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold animate-pulse">
                 <Lock className="w-4 h-4 text-amber-600 shrink-0" />
-                <span>{language === 'mr' ? '🔒 पेमेंट सुरू आहे... आपली माहिती लॉक केली आहे.' : '🔒 Payment processing... Details locked.'}</span>
+                <span>{language === 'mr' ? '🔒 पेमेंट सुरू आहे...' : '🔒 Payment processing...'}</span>
               </div>
             )}
 

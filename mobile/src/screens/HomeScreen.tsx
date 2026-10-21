@@ -23,7 +23,15 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, RADIUS, SPACING, SHADOWS } from '../theme';
-import { api, EventItem, VenueItem, Announcement, absoluteMediaUrl, fallbackPosterUrl } from '../api';
+import {
+  api,
+  EventItem,
+  VenueItem,
+  Announcement,
+  absoluteMediaUrl,
+  fallbackPosterUrl,
+  getEventCardDateLabel,
+} from '../api';
 import { useEventsStore, useAuthStore, useUIStore } from '../store';
 import {
   CategoryPill,
@@ -40,11 +48,11 @@ import { displayTitle, displayCity } from '../utils/display';
 
 const { width } = Dimensions.get('window');
 
-// Hero carousel: wide banner spanning nearly full width with minor margin, minor radius
-const HERO_SLIDE = width - 24;
-const HERO_GAP = 8;
+// Hero carousel: wide banner spanning nearly full width with minor margin reduction (.1 to .2)
+const HERO_SLIDE = width - 32;
+const HERO_GAP = 10;
 const HERO_SNAP = HERO_SLIDE + HERO_GAP;
-const HERO_SIDE_PAD = 12;
+const HERO_SIDE_PAD = 16;
 
 const CATEGORIES = [
   { id: 'all', label: 'All', labelMr: 'सर्व', iconName: 'view-grid-outline' },
@@ -434,8 +442,9 @@ export default function HomeScreen({ navigation }: any) {
                     ]}
                   >
                     <TicketCardFrame
-                      borderRadius={RADIUS.sm}
-                      notchRadius={6}
+                      borderRadius={RADIUS.md}
+                      notchRadius={5}
+                      notchColor={COLORS.bg}
                       backgroundColor={COLORS.surface2}
                       style={styles.heroBannerFrame}
                     >
@@ -465,7 +474,7 @@ export default function HomeScreen({ navigation }: any) {
                           <View style={styles.heroMetaPill}>
                             <Icon name="calendar-clock" size={12} color={COLORS.primary} />
                             <Text style={styles.heroMetaPillText}>
-                              {item.showDateStr || (language === 'mr' ? 'आज रात्री' : 'Tonight')}
+                              {getEventCardDateLabel(item, language)}
                             </Text>
                           </View>
                           {item.venue && (
@@ -1239,13 +1248,16 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '900',
     color: COLORS.text,
-    lineHeight: 26,
+    lineHeight: 28,
     paddingTop: 4,
+    paddingBottom: 2,
   },
   weekendPlannerSub: {
     fontSize: 11,
     color: COLORS.textMuted,
     marginTop: 2,
+    lineHeight: 18,
+    paddingBottom: 2,
   },
 
   trendingHeader: { paddingHorizontal: SPACING.base, marginBottom: SPACING.sm },
@@ -1255,8 +1267,9 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '900',
     color: COLORS.text,
-    lineHeight: 26,
+    lineHeight: 28,
     paddingTop: 4,
+    paddingBottom: 2,
   },
   trendingCard: { width: 118 },
   trendingPosterBox: {
@@ -1316,7 +1329,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.sm,
   },
   heroLangPillText: { fontSize: 10, fontWeight: '700', color: COLORS.white },
-  heroBannerTitle: { fontSize: 18, fontWeight: '900', color: COLORS.white, lineHeight: 24 },
+  heroBannerTitle: { fontSize: 18, fontWeight: '900', color: COLORS.white, lineHeight: 28, paddingBottom: 2 },
   heroMetaRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   heroMetaPill: {
     flexDirection: 'row',
@@ -1348,8 +1361,9 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '900',
     color: COLORS.text,
-    lineHeight: 25,
+    lineHeight: 28,
     paddingTop: 4,
+    paddingBottom: 2,
   },
 
   categoryContainer: { paddingVertical: SPACING.md },
@@ -1425,7 +1439,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.xs,
   },
   festivalTitle: { fontSize: 14, fontWeight: '800', color: COLORS.text, marginTop: 2 },
-  festivalSub: { fontSize: 11, color: COLORS.textMuted, marginTop: 2, lineHeight: 16 },
+  festivalSub: { fontSize: 11, color: COLORS.textMuted, marginTop: 2, lineHeight: 18, paddingBottom: 2 },
 
   rankBadge: {
     position: 'absolute',

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/src/db/index';
 import { users } from '@/src/db/schema';
 import { eq } from 'drizzle-orm';
-import { sendOtpEmail } from '@/src/lib/auth-service';
+import { sendOtpEmail, newCustomerUid } from '@/src/lib/auth-service';
 
 export async function POST(req: NextRequest) {
   try {
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
       const [newUser] = await db
         .insert(users)
         .values({
-          uid: `cust-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          uid: newCustomerUid(),
           email: cleanEmail,
           fullName: cleanEmail.split('@')[0],
           role: 'customer',

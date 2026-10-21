@@ -13,8 +13,9 @@ const SUPABASE_ANON_KEY =
 
 // ─── Base URL Resolution (Dev server fallback) ───────────────────────────────
 
+const PROD_API_URL = 'https://mahaticket.kalpkrutinfotech.com';
 const DEV_URLS = [
-  'https://mahaticket.kalpkrutinfotech.com',
+  PROD_API_URL,
   'http://192.168.31.154:3000',
   'http://10.0.2.2:3000',
 ];
@@ -29,8 +30,16 @@ export async function resolveApiBase(): Promise<string> {
     (await AsyncStorage.getItem(STORAGE_KEY).catch(() => null)) ||
     (await AsyncStorage.getItem('@tg_api_base').catch(() => null));
   if (stored) {
-    resolvedBase = stored;
-    return stored;
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 1200);
+      const res = await fetch(`${stored}/api/health`, { signal: ctrl.signal });
+      clearTimeout(t);
+      if (res.ok) {
+        resolvedBase = stored;
+        return stored;
+      }
+    } catch {}
   }
 
   for (const url of DEV_URLS) {
@@ -47,8 +56,8 @@ export async function resolveApiBase(): Promise<string> {
     } catch {}
   }
 
-  resolvedBase = DEV_URLS[0];
-  return DEV_URLS[0];
+  resolvedBase = PROD_API_URL;
+  return PROD_API_URL;
 }
 
 export function getApiBase() {
@@ -82,10 +91,26 @@ export function normalizeEvent<T extends Partial<EventItem> & Record<string, any
   const bannerUrl =
     absoluteMediaUrl(raw?.bannerUrl ?? raw?.banner_url) ||
     posterUrl;
-  return {
+  const base = {
     ...(raw as unknown as EventItem),
     posterUrl,
     bannerUrl,
+  };
+  const { homeSession, hasBookableSessions, nextBookable } = pickHomeSession(base.sessions);
+  const bookablePrices = (nextBookable?.ticketTypes || [])
+    .filter((t) => Number(t.availableQuota || 0) > 0)
+    .map((t) => Number(t.price || 0))
+    .filter((p) => p > 0);
+  return {
+    ...base,
+    showDateStr: homeSession
+      ? formatCardDate(homeSession.sessionStartTime)
+      : base.showDateStr || null,
+    hasBookableSessions:
+      typeof base.hasBookableSessions === 'boolean'
+        ? base.hasBookableSessions || hasBookableSessions
+        : hasBookableSessions,
+    minPrice: bookablePrices.length > 0 ? Math.min(...bookablePrices) : base.minPrice,
   };
 }
 
@@ -126,8 +151,13 @@ async function supabaseFetch<T>(path: string, options?: RequestInit): Promise<T>
 
 async function getAuthHeader(): Promise<Record<string, string>> {
   try {
-    const token = await AsyncStorage.getItem('@tg_session_token');
-    if (token) return { Authorization: `Bearer ${token}` };
+    const token =
+      (await AsyncStorage.getItem('@tg_session_token')) ||
+      (await AsyncStorage.getItem('@mahaticket_session_token'));
+    // Only send real HMAC tokens — never fabricated mt-tok-* leftovers
+    if (token && token.includes('.') && !token.startsWith('mt-tok') && !token.startsWith('mt-token')) {
+      return { Authorization: `Bearer ${token}` };
+    }
   } catch {}
   return {};
 }
@@ -158,8 +188,10 @@ async function request<T>(
     clearTimeout(timer);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
+      const errMsg = (data as any)?.error || `HTTP ${res.status}`;
+      const details = (data as any)?.details;
       throw new ApiError(
-        (data as any)?.error || `HTTP ${res.status}`,
+        details ? `${errMsg}: ${details}` : errMsg,
         res.status,
         data
       );
@@ -231,6 +263,7 @@ export interface EventItem {
   ratingCount?: number | null;
   ratingCountStr?: string | null;
   showDateStr?: string | null;
+  hasBookableSessions?: boolean;
   trailerUrl?: string | null;
   cast?: string | null;
   castCrewList?: CastMember[] | null;
@@ -312,6 +345,83 @@ export function isSessionSoldOut(session: SessionItem | null | undefined): boole
 
 export function hasBookableInventory(session: SessionItem | null | undefined): boolean {
   return isUpcomingSession(session) && !isSessionSoldOut(session);
+}
+
+/** Short card date matching what Event Detail will book next */
+export function formatCardDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString('en-IN', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+  } catch {
+    return iso;
+  }
+}
+
+function sessionHasInventorySignal(session: SessionItem): boolean {
+  return (
+    typeof session.availableInventoryCount === 'number' ||
+    typeof session.isSoldOut === 'boolean' ||
+    (Array.isArray(session.ticketTypes) && session.ticketTypes.length > 0)
+  );
+}
+
+/** Same next-session rule as Home cards + Event Detail */
+export function pickHomeSession(sessions: SessionItem[] | null | undefined): {
+  nextBookable: SessionItem | null;
+  nextUpcoming: SessionItem | null;
+  homeSession: SessionItem | null;
+  hasBookableSessions: boolean;
+  hasInventoryData: boolean;
+} {
+  const upcoming = filterUpcomingSessions(sessions).sort(
+    (a, b) =>
+      new Date(a.sessionStartTime).getTime() - new Date(b.sessionStartTime).getTime()
+  );
+  const hasInventoryData = upcoming.some(sessionHasInventorySignal);
+  const nextBookable = hasInventoryData
+    ? upcoming.find(
+        (s) => getSessionAvailableCount(s) > 0 && s.status !== 'sold_out' && !s.isSoldOut
+      ) || null
+    : upcoming[0] || null;
+  const nextUpcoming = upcoming[0] || null;
+  return {
+    nextBookable,
+    nextUpcoming,
+    homeSession: nextBookable || nextUpcoming,
+    hasBookableSessions: hasInventoryData ? !!nextBookable : upcoming.length > 0,
+    hasInventoryData,
+  };
+}
+
+export function getEventCardDateLabel(
+  event: Pick<EventItem, 'sessions' | 'showDateStr' | 'hasBookableSessions'>,
+  language: 'mr' | 'en' = 'mr'
+): string {
+  const { homeSession, hasBookableSessions, nextUpcoming, hasInventoryData } = pickHomeSession(
+    event.sessions
+  );
+  if (hasBookableSessions && homeSession) {
+    return formatCardDate(homeSession.sessionStartTime);
+  }
+  if (typeof event.hasBookableSessions === 'boolean' && event.hasBookableSessions && event.showDateStr) {
+    return event.showDateStr;
+  }
+  // Only show Sold Out when inventory signals exist (or API flagged it)
+  if (
+    (hasInventoryData || event.hasBookableSessions === false) &&
+    nextUpcoming &&
+    !hasBookableSessions
+  ) {
+    return language === 'mr' ? 'हाऊसफुल (Sold Out)' : 'Sold Out';
+  }
+  if (event.showDateStr) return event.showDateStr;
+  return language === 'mr' ? 'आगामी प्रयोग • तारीख लवकरच' : 'Upcoming • Dates soon';
 }
 
 export interface SeatItem {
@@ -511,680 +621,7 @@ export const getFutureIso = (dayOffset: number, hour: number, min: number): stri
 // ─── Static MahaTicket Theatre & Events Database ─────────────────────────────
 // Real curated data for instant 0ms launch & offline cache (including TicketAlay & TicketKhidakee reference shows)
 
-export const STATIC_MAHATICKET_EVENTS: EventItem[] = [
-  {
-    id: 16323, // Matches URL: https://www.ticketalay.com/event-details/mamachya-govyala-jauya/16323
-    title: 'Mamachya Govyala Jauya',
-    titleMr: 'मामाच्या गोव्याला जाऊया',
-    slug: 'mamachya-govyala-jauya',
-    category: 'plays',
-    categoryMr: 'नाटक',
-    language: 'मराठी',
-    durationMinutes: 150,
-    ageGuidance: 'U (कौटुंबिक)',
-    description:
-      'Mamachya Govyala Jauya is a celebrated Marathi comedy family drama that takes the audience on a hilarious journey with brilliant comedic timing and heartwarming family moments.',
-    descriptionMr:
-      'मामाच्या गोव्याला जाऊया हे मराठी रंगभूमीवरील एक निखळ आणि खळखळून हसवणारे कौटुंबिक नाटक आहे. कुटुंबातील गमतीजमती, गोव्याची रंजक सफर आणि नाट्यमय वळणे प्रेक्षकांना मंत्रमुग्ध करतात. या नाटकाचे महाराष्ट्रभर अनेक प्रयोग हाऊसफुल्ल झाले आहेत.',
-    posterUrl: 'https://images.unsplash.com/photo-1460723237483-7a6dc9d0b212?w=800',
-    bannerUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=1200',
-    status: 'published',
-    featured: 1,
-    isPromoted: true,
-    isInformational: true, // Informational show (TicketAlay reference) - tickets opening soon
-    interestedCount: 3420,
-    rating: 4.9,
-    ratingCount: 3420,
-    ratingCountStr: '3.4k',
-    showDateStr: '२२ ऑक्टो • सं. ५:००',
-    trailerUrl: 'https://www.youtube.com',
-    cast: 'प्रशांत दामले, कविता लाड-मेढेकर, सुहास जोशी, आनंद इंगळे',
-    tag: 'विशेष शिफारस',
-    castCrewList: [
-      {
-        name: 'Prashant Damle',
-        nameMr: 'प्रशांत दामले',
-        role: 'Lead Actor',
-        roleMr: 'मुख्य भूमिका',
-        avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200',
-      },
-      {
-        name: 'Kavita Lad',
-        nameMr: 'कविता लाड-मेढेकर',
-        role: 'Lead Actress',
-        roleMr: 'मुख्य भूमिका',
-        avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200',
-      },
-      {
-        name: 'Suhas Joshi',
-        nameMr: 'सुहास जोशी',
-        role: 'Veteran Actress',
-        roleMr: 'ज्येष्ठ अभिनेत्री',
-        avatarUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=200',
-      },
-      {
-        name: 'Vijay Kenkre',
-        nameMr: 'विजय केंकरे',
-        role: 'Director',
-        roleMr: 'दिग्दर्शक',
-        avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200',
-      },
-      {
-        name: 'Vasant Sabnis',
-        nameMr: 'वसंत सबनीस',
-        role: 'Writer',
-        roleMr: 'लेखक',
-        avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200',
-      },
-      {
-        name: 'Ashok Patki',
-        nameMr: 'अशोक पत्की',
-        role: 'Music Director',
-        roleMr: 'संगीतकार',
-        avatarUrl: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=200',
-      },
-    ],
-    venue: {
-      id: 1,
-      name: 'Bal Gandharva Rangmandir',
-      nameMr: 'बाळ गंधर्व रंगमंदिर',
-      address: 'JM Road, Shivajinagar',
-      city: 'Pune',
-      state: 'Maharashtra',
-      pincode: '411005',
-      totalCapacity: 980,
-      hasSeatLayout: 1,
-      facilities: 'वातानुकूलित (AC), वाहनतळ, कॅफेटेरिया, ध्वनी यंत्रणा',
-    },
-    sessions: [],
-  },
-  {
-    id: 1,
-    title: 'Punha Sahi Re Sahi',
-    titleMr: 'पुन्हा सही रे सही',
-    slug: 'punha-sahi-re-sahi',
-    category: 'plays',
-    categoryMr: 'नाटक',
-    language: 'मराठी',
-    durationMinutes: 165,
-    ageGuidance: 'U',
-    description:
-      'The iconic Marathi comedy play starring Bharat Jadhav in his legendary quadruplet role of Galgale.',
-    descriptionMr:
-      'मराठी रंगभूमीवरील विक्रमी हास्यनाटक! भरत जाधव यांच्या अफाट ऊर्जेने सजलेले "पुन्हा सही रे सही" प्रेक्षकांना अखंड हसवते.',
-    posterUrl: 'https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?w=800',
-    bannerUrl: 'https://images.unsplash.com/photo-1460723237483-7a6dc9d0b212?w=1200',
-    status: 'published',
-    featured: 1,
-    isPromoted: true,
-    isInformational: false,
-    rating: 4.8,
-    ratingCount: 1240,
-    ratingCountStr: '1.2k',
-    showDateStr: '१९ ऑक्टो • सं. ६:३०',
-    tag: 'प्रीमियर',
-    castCrewList: [
-      {
-        name: 'Bharat Jadhav',
-        nameMr: 'भरत जाधव',
-        role: 'Madan Sukhatme / Galgale',
-        roleMr: 'गलगले (मुख्य भूमिका)',
-        avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200',
-      },
-      {
-        name: 'Kedar Shinde',
-        nameMr: 'केदार शिंदे',
-        role: 'Director',
-        roleMr: 'दिग्दर्शक',
-        avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200',
-      },
-      {
-        name: 'Samruddhi Powale',
-        nameMr: 'समृद्धी पोवळे',
-        role: 'Actress',
-        roleMr: 'अभिनेत्री',
-        avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200',
-      },
-    ],
-    venue: {
-      id: 1,
-      name: 'Bal Gandharva Rangmandir',
-      nameMr: 'बाळ गंधर्व रंगमंदिर',
-      address: 'JM Road, Shivajinagar',
-      city: 'Pune',
-      state: 'Maharashtra',
-      pincode: '411005',
-      totalCapacity: 980,
-      hasSeatLayout: 1,
-      facilities: 'वातानुकूलित (AC), वाहनतळ, कॅफेटेरिया',
-    },
-    sessions: [
-      {
-        id: 101,
-        eventId: 1,
-        sessionStartTime: getFutureIso(0, 18, 30),
-        sessionEndTime: getFutureIso(0, 21, 15),
-        status: 'active',
-        ticketTypes: [
-          { id: 1, name: 'Balcony', nameMr: 'बाल्कनी', price: 30000, totalQuota: 200, availableQuota: 85, isSeated: 1 },
-          { id: 2, name: 'Stall', nameMr: 'स्टॉल', price: 50000, totalQuota: 400, availableQuota: 140, isSeated: 1 },
-          { id: 3, name: 'VIP Box', nameMr: 'विशेष कक्ष', price: 80000, totalQuota: 50, availableQuota: 12, isSeated: 1 },
-        ],
-      },
-      {
-        id: 1012,
-        eventId: 1,
-        sessionStartTime: getFutureIso(1, 18, 30),
-        sessionEndTime: getFutureIso(1, 21, 15),
-        status: 'active',
-        ticketTypes: [
-          { id: 1, name: 'Balcony', nameMr: 'बाल्कनी', price: 30000, totalQuota: 200, availableQuota: 95, isSeated: 1 },
-          { id: 2, name: 'Stall', nameMr: 'स्टॉल', price: 50000, totalQuota: 400, availableQuota: 200, isSeated: 1 },
-        ],
-      },
-    ],
-  },
-  {
-    id: 2,
-    title: 'Ghashiram Kotwal',
-    titleMr: 'घाशीराम कोतवाल',
-    slug: 'ghashiram-kotwal',
-    category: 'plays',
-    categoryMr: 'नाटक',
-    language: 'मराठी',
-    durationMinutes: 160,
-    ageGuidance: 'U/A',
-    description:
-      'Vijay Tendulkar’s legendary masterpiece directed by Dr. Jabbar Patel, with legendary music by Anand Modak.',
-    descriptionMr:
-      'विजय तेंडुलकर यांचे जगविख्यात संगीत नाटक! डॉ. जब्बार पटेल यांचे दिग्दर्शन आणि आनंद मोडक यांचे अविस्मरणीय संगीत.',
-    posterUrl: 'https://images.unsplash.com/photo-1469488865564-c2de10f69f96?w=800',
-    status: 'published',
-    featured: 1,
-    isPromoted: false,
-    rating: 4.8,
-    ratingCount: 2800,
-    ratingCountStr: '2.8k',
-    showDateStr: '१९ ऑक्टो • सं. ६:३०',
-    tag: 'क्लासिक',
-    castCrewList: [
-      {
-        name: 'Dr. Mohan Agashe',
-        nameMr: 'डॉ. मोहन आगाशे',
-        role: 'Nana Phadnavis',
-        roleMr: 'नाना फडणवीस',
-        avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200',
-      },
-      {
-        name: 'Dr. Jabbar Patel',
-        nameMr: 'डॉ. जब्बार पटेल',
-        role: 'Director',
-        roleMr: 'दिग्दर्शक',
-        avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200',
-      },
-    ],
-    venue: {
-      id: 1,
-      name: 'Bal Gandharva Rangmandir',
-      nameMr: 'बाळ गंधर्व रंगमंदिर',
-      address: 'JM Road, Shivajinagar',
-      city: 'Pune',
-      state: 'Maharashtra',
-      totalCapacity: 980,
-      hasSeatLayout: 1,
-    },
-    sessions: [
-      {
-        id: 102,
-        eventId: 2,
-        sessionStartTime: getFutureIso(0, 21, 30),
-        sessionEndTime: getFutureIso(1, 0, 10),
-        status: 'active',
-        ticketTypes: [
-          { id: 4, name: 'Balcony', nameMr: 'बाल्कनी', price: 30000, totalQuota: 150, availableQuota: 45, isSeated: 1 },
-          { id: 5, name: 'Stall', nameMr: 'स्टॉल', price: 50000, totalQuota: 350, availableQuota: 90, isSeated: 1 },
-        ],
-      },
-    ],
-  },
-  {
-    id: 3,
-    title: 'Sur Nava Dhyas Nava',
-    titleMr: 'सूर नवा ध्यास नवा',
-    slug: 'sur-nava-dhyas-nava',
-    category: 'music',
-    categoryMr: 'संगीत',
-    language: 'मराठी',
-    durationMinutes: 180,
-    ageGuidance: 'U',
-    description: 'Grand musical concert featuring Maharashtra’s finest classical and playback singers.',
-    descriptionMr: 'महाराष्ट्राच्या लाडक्या गायकांचा सुरेल संगीतमय नजराणा! भावगीते, नाट्यसंगीत व भक्तिगीतांची मैफल.',
-    posterUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=800',
-    status: 'published',
-    featured: 1,
-    isPromoted: false,
-    rating: 4.8,
-    ratingCount: 950,
-    ratingCountStr: '950',
-    showDateStr: 'उद्या • दु. २:३०',
-    tag: 'संगीत',
-    castCrewList: [
-      {
-        name: 'Avadhoot Gupte',
-        nameMr: 'अवधूत गुप्ते',
-        role: 'Singer & Host',
-        roleMr: 'गायक व परीक्षक',
-        avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200',
-      },
-      {
-        name: 'Mahesh Kale',
-        nameMr: 'महेश काळे',
-        role: 'Classical Maestro',
-        roleMr: 'शास्त्रीय गायक',
-        avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200',
-      },
-      {
-        name: 'Aarya Ambekar',
-        nameMr: 'आर्या आंबेकर',
-        role: 'Playback Singer',
-        roleMr: 'गायिका',
-        avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200',
-      },
-    ],
-    venue: {
-      id: 2,
-      name: 'Shivaji Mandir',
-      nameMr: 'शिवाजी मंदिर',
-      address: 'Dadar West',
-      city: 'Mumbai',
-      state: 'Maharashtra',
-      totalCapacity: 1025,
-      hasSeatLayout: 1,
-    },
-    sessions: [
-      {
-        id: 103,
-        eventId: 3,
-        sessionStartTime: getFutureIso(1, 14, 30),
-        sessionEndTime: getFutureIso(1, 17, 30),
-        status: 'active',
-        ticketTypes: [
-          { id: 6, name: 'Stall', nameMr: 'स्टॉल', price: 50000, totalQuota: 300, availableQuota: 60, isSeated: 1 },
-          { id: 7, name: 'VIP', nameMr: 'विशेष', price: 100000, totalQuota: 100, availableQuota: 20, isSeated: 1 },
-        ],
-      },
-    ],
-  },
-  {
-    id: 4,
-    title: 'Balgandharva Sangeet Sandhya',
-    titleMr: 'बालगंधर्व संगीत संध्या',
-    slug: 'balgandharva-sangeet-sandhya',
-    category: 'music',
-    categoryMr: 'संगीत',
-    language: 'मराठी',
-    durationMinutes: 150,
-    ageGuidance: 'U',
-    description: 'An evening celebrating the immortal Natyasangeet of Balgandharva with Rahul Deshpande and Anand Bhate.',
-    descriptionMr: 'बालगंधर्वांच्या अमर नाट्यसंगीताची सुरेल संध्याकाळ! राहुल देशपांडे व आनंद भाटे यांच्या सुरांनी रंगलेली मैफल.',
-    posterUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800',
-    status: 'published',
-    featured: 0,
-    isPromoted: false,
-    rating: 4.8,
-    ratingCount: 1400,
-    ratingCountStr: '1.4k',
-    showDateStr: '१९ ऑक्टो • सं. ७:००',
-    tag: 'विशेष',
-    castCrewList: [
-      {
-        name: 'Rahul Deshpande',
-        nameMr: 'राहुल देशपांडे',
-        role: 'Vocalist',
-        roleMr: 'गायक',
-        avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200',
-      },
-      {
-        name: 'Anand Bhate',
-        nameMr: 'आनंद भाटे',
-        role: 'Vocalist',
-        roleMr: 'गायक',
-        avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200',
-      },
-    ],
-    venue: {
-      id: 1,
-      name: 'Bal Gandharva Rangmandir',
-      nameMr: 'बाळ गंधर्व रंगमंदिर',
-      address: 'JM Road, Shivajinagar',
-      city: 'Pune',
-      state: 'Maharashtra',
-      totalCapacity: 980,
-      hasSeatLayout: 1,
-    },
-    sessions: [
-      {
-        id: 104,
-        eventId: 4,
-        sessionStartTime: '2026-10-19T19:00:00Z',
-        sessionEndTime: '2026-10-19T21:30:00Z',
-        status: 'active',
-        ticketTypes: [
-          { id: 8, name: 'Stall', nameMr: 'स्टॉल', price: 40000, totalQuota: 300, availableQuota: 70, isSeated: 1 },
-        ],
-      },
-    ],
-  },
-  {
-    id: 5,
-    title: 'Pune Standup Night',
-    titleMr: 'पुणे स्टँडअप नाईट',
-    slug: 'pune-standup-night',
-    category: 'comedy',
-    categoryMr: 'कॉमेडी',
-    language: 'मराठी / हिंदी',
-    durationMinutes: 120,
-    ageGuidance: '16+',
-    description: 'Pune’s top standup comedy line-up featuring Sarang Sathaye and friends.',
-    descriptionMr: 'पुण्यातील ख्यातनाम विनोदी कलाकारांची धम्माल स्टँडअप कॉमेडी नाईट! सारंग साठ्ये आणि सहकलाकार.',
-    posterUrl: 'https://images.unsplash.com/photo-1585699324551-f6c309eedeca?w=800',
-    status: 'published',
-    featured: 0,
-    isPromoted: false,
-    rating: 4.8,
-    ratingCount: 2100,
-    ratingCountStr: '2.1k',
-    showDateStr: '१९ ऑक्टो • सं. ७:००',
-    tag: 'हॉट',
-    castCrewList: [
-      {
-        name: 'Sarang Sathaye',
-        nameMr: 'सारंग साठ्ये',
-        role: 'Comedian',
-        roleMr: 'विनोदी कलाकार',
-        avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200',
-      },
-      {
-        name: 'Mandar Bhide',
-        nameMr: 'मंदार भिडे',
-        role: 'Comedian',
-        roleMr: 'कलाकार',
-        avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200',
-      },
-    ],
-    venue: {
-      id: 1,
-      name: 'Bal Gandharva Rangmandir',
-      nameMr: 'बाळ गंधर्व रंगमंदिर',
-      address: 'JM Road, Shivajinagar',
-      city: 'Pune',
-      state: 'Maharashtra',
-      totalCapacity: 980,
-      hasSeatLayout: 1,
-    },
-    sessions: [
-      {
-        id: 105,
-        eventId: 5,
-        sessionStartTime: '2026-10-19T19:00:00Z',
-        sessionEndTime: '2026-10-19T21:00:00Z',
-        status: 'active',
-        ticketTypes: [
-          { id: 9, name: 'Entry Pass', nameMr: 'प्रवेश पास', price: 35000, totalQuota: 250, availableQuota: 45, isSeated: 1 },
-        ],
-      },
-    ],
-  },
-  {
-    id: 6,
-    title: 'The Folk Aakhyan - Vengurla',
-    titleMr: 'द फोक आख्यान - वेंगुर्ला',
-    slug: 'the-folk-aakhyan-vengurla',
-    category: 'music',
-    categoryMr: 'संगीत',
-    language: 'मराठी',
-    durationMinutes: 180,
-    ageGuidance: 'U',
-    description: 'A grand celebration of Konkan folk music, Dashavatar, and traditional Maharashtrian performance.',
-    descriptionMr: 'कोकणातील दशावतार व पारंपारिक लोककलांचा भव्य संगीतमय महोत्सव!',
-    posterUrl: 'https://images.unsplash.com/photo-1465847899084-d164df4dedc6?w=800',
-    status: 'published',
-    featured: 1,
-    isPromoted: true,
-    rating: 4.9,
-    ratingCount: 1800,
-    ratingCountStr: '1.8k',
-    showDateStr: 'उद्या • सं. ७:००',
-    tag: 'विशेष',
-    venue: {
-      id: 3,
-      name: 'Major Dhyanchand Stadium Auditorium',
-      nameMr: 'मेजर ध्यानचंद स्टेडियम सभागृह',
-      address: 'Nehrunagar, Pimpri',
-      city: 'Pune',
-      state: 'Maharashtra',
-      totalCapacity: 2500,
-      hasSeatLayout: 1,
-    },
-    sessions: [
-      {
-        id: 106,
-        eventId: 6,
-        sessionStartTime: getFutureIso(1, 19, 0),
-        sessionEndTime: getFutureIso(1, 22, 0),
-        status: 'active',
-        ticketTypes: [
-          { id: 10, name: 'Balcony', nameMr: 'बाल्कनी', price: 25000, totalQuota: 200, availableQuota: 85, isSeated: 1 },
-          { id: 11, name: 'Stall', nameMr: 'स्टॉल', price: 40000, totalQuota: 500, availableQuota: 220, isSeated: 1 },
-        ],
-      },
-      {
-        id: 107,
-        eventId: 6,
-        sessionStartTime: getFutureIso(2, 19, 0),
-        sessionEndTime: getFutureIso(2, 22, 0),
-        status: 'active',
-        ticketTypes: [
-          { id: 12, name: 'Balcony', nameMr: 'बाल्कनी', price: 25000, totalQuota: 200, availableQuota: 110, isSeated: 1 },
-          { id: 13, name: 'Stall', nameMr: 'स्टॉल', price: 40000, totalQuota: 500, availableQuota: 310, isSeated: 1 },
-        ],
-      },
-    ],
-  },
-  {
-    id: 7,
-    title: 'The Biggest Garba Night - Falguni Pathak',
-    titleMr: 'द बिगेस्ट गरबा नाईट - फाल्गुनी पाठक',
-    slug: 'the-biggest-garba-night-falguni-pathak',
-    category: 'festivals',
-    categoryMr: 'उत्सव',
-    language: 'English, Gujarati, Marathi',
-    durationMinutes: 240,
-    ageGuidance: 'U',
-    description: 'Dandiya Queen Falguni Pathak live in Pune for the biggest Navratri celebration.',
-    descriptionMr: 'दांडिया क्वीन फाल्गुनी पाठक यांच्या उपस्थितीत पुण्यातील सर्वात मोठा नवरात्री गरबा रास!',
-    posterUrl: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=800',
-    status: 'published',
-    featured: 1,
-    isPromoted: true,
-    rating: 4.9,
-    ratingCount: 5200,
-    ratingCountStr: '5.2k',
-    showDateStr: 'Oct 30, 07:00 PM',
-    tag: 'Promoted',
-    venue: {
-      id: 4,
-      name: 'Ramkrishna Lawn',
-      nameMr: 'रामकृष्ण लॉन्स',
-      address: 'Market Yard',
-      city: 'Pune',
-      state: 'Maharashtra',
-      totalCapacity: 5000,
-      hasSeatLayout: 0,
-    },
-    sessions: [
-      {
-        id: 107,
-        eventId: 7,
-        sessionStartTime: '2026-10-30T19:00:00Z',
-        sessionEndTime: '2026-10-30T23:30:00Z',
-        status: 'active',
-        ticketTypes: [
-          { id: 11, name: 'Single Pass', nameMr: 'एकल प्रवेश', price: 49900, totalQuota: 3000, availableQuota: 350, isSeated: 0 },
-          { id: 12, name: 'Couple Pass', nameMr: 'दाम्पत्य पास', price: 89900, totalQuota: 1000, availableQuota: 120, isSeated: 0 },
-        ],
-      },
-    ],
-  },
-  {
-    id: 8,
-    title: 'Shubh Garba Raas Dhandiya 5.0',
-    titleMr: 'शुभ गरबा रास दांडिया ५.०',
-    slug: 'shubh-garba-raas-dhandiya-5-0',
-    category: 'festivals',
-    categoryMr: 'उत्सव',
-    language: 'English, Gujarati, Marathi',
-    durationMinutes: 240,
-    ageGuidance: 'U',
-    description: 'Navratri special live orchestra and traditional Garba Raas celebration in Pune.',
-    descriptionMr: 'पारंपारिक गरबा रास व ढोल-ताशांच्या गजरात नवरात्रीचा जल्लोष!',
-    posterUrl: 'https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?w=800',
-    status: 'published',
-    featured: 0,
-    isPromoted: false,
-    rating: 4.7,
-    ratingCount: 1600,
-    ratingCountStr: '1.6k',
-    showDateStr: 'Oct 19, Onwards',
-    tag: 'गरबा',
-    venue: {
-      id: 5,
-      name: 'Vitthal Lawns',
-      nameMr: 'विठ्ठल लॉन्स',
-      address: 'Bibwewadi',
-      city: 'Pune',
-      state: 'Maharashtra',
-      totalCapacity: 3500,
-      hasSeatLayout: 0,
-    },
-    sessions: [
-      {
-        id: 108,
-        eventId: 8,
-        sessionStartTime: '2026-10-19T19:00:00Z',
-        sessionEndTime: '2026-10-19T23:00:00Z',
-        status: 'active',
-        ticketTypes: [
-          { id: 13, name: 'Season Pass', nameMr: 'सीझन पास', price: 69900, totalQuota: 1500, availableQuota: 280, isSeated: 0 },
-        ],
-      },
-    ],
-  },
-  {
-    id: 9,
-    title: 'Rangilo Raas Garba 2.0',
-    titleMr: 'रंगिलो रास गरबा २.०',
-    slug: 'rangilo-raas-garba-2-0',
-    category: 'festivals',
-    categoryMr: 'उत्सव',
-    language: 'English, Gujarati',
-    durationMinutes: 240,
-    ageGuidance: 'U',
-    description: 'Air-conditioned luxury indoor Garba Raas experience in Pune.',
-    descriptionMr: 'वातानुकूलित इनडोअर भव्य गरबा रास आणि प्रसिद्ध कलाकारांचे लाईव्ह सादरीकरण.',
-    posterUrl: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=800',
-    status: 'published',
-    featured: 0,
-    isPromoted: false,
-    rating: 4.8,
-    ratingCount: 2300,
-    ratingCountStr: '2.3k',
-    showDateStr: 'Oct 19, Onwards',
-    tag: 'दांडिया',
-    venue: {
-      id: 6,
-      name: 'Raghunandan AC Banquet',
-      nameMr: 'रघुनंदन बँकवेट लॉन्स',
-      address: 'Sinhagad Road',
-      city: 'Pune',
-      state: 'Maharashtra',
-      totalCapacity: 2000,
-      hasSeatLayout: 0,
-    },
-    sessions: [
-      {
-        id: 109,
-        eventId: 9,
-        sessionStartTime: '2026-10-19T19:30:00Z',
-        sessionEndTime: '2026-10-19T23:30:00Z',
-        status: 'active',
-        ticketTypes: [
-          { id: 14, name: 'Daily Pass', nameMr: 'दैनिक पास', price: 35000, totalQuota: 1000, availableQuota: 190, isSeated: 0 },
-        ],
-      },
-    ],
-  },
-  {
-    id: 10,
-    title: 'Natasamrat',
-    titleMr: 'नटसम्राट',
-    slug: 'natasamrat',
-    category: 'plays',
-    categoryMr: 'नाटक',
-    language: 'मराठी',
-    durationMinutes: 170,
-    ageGuidance: 'U/A',
-    description: 'Kusumagraj’s magnum opus about veteran actor Appasaheb Belwalkar.',
-    descriptionMr: 'कुसुमाग्रज यांची अजरामर कलाकृती! आप्पासाहेब बेलवलकर यांची हृदयस्पर्शी जीवनगाथा.',
-    posterUrl: 'https://images.unsplash.com/photo-1503095396549-807759245b35?w=800',
-    status: 'published',
-    featured: 1,
-    isPromoted: false,
-    rating: 4.9,
-    ratingCount: 4600,
-    ratingCountStr: '4.6k',
-    showDateStr: '२५ ऑक्टो • सं. ८:००',
-    tag: 'अजरामर नाटक',
-    castCrewList: [
-      {
-        name: 'Nana Patekar',
-        nameMr: 'नाना पाटेकर',
-        role: 'Appasaheb Belwalkar',
-        roleMr: 'आप्पासाहेब बेलवलकर',
-        avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200',
-      },
-      {
-        name: 'Medha Manjrekar',
-        nameMr: 'मेधा मांजरेकर',
-        role: 'Kaveri',
-        roleMr: 'कावेरी',
-        avatarUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=200',
-      },
-    ],
-    venue: {
-      id: 7,
-      name: 'Yashwantrao Chavan Natyagruha',
-      nameMr: 'यशवंतराव चव्हाण नाट्यगृह',
-      address: 'Kothrud',
-      city: 'Pune',
-      state: 'Maharashtra',
-      totalCapacity: 900,
-      hasSeatLayout: 1,
-    },
-    sessions: [
-      {
-        id: 110,
-        eventId: 10,
-        sessionStartTime: '2026-10-25T20:00:00Z',
-        sessionEndTime: '2026-10-25T22:50:00Z',
-        status: 'active',
-        ticketTypes: [
-          { id: 15, name: 'Stall', nameMr: 'स्टॉल', price: 40000, totalQuota: 300, availableQuota: 50, isSeated: 1 },
-        ],
-      },
-    ],
-  },
-];
+export const STATIC_MAHATICKET_EVENTS: EventItem[] = [];
 
 const CACHE_EVENTS_KEY = '@mahaticket_cached_events';
 
@@ -1212,17 +649,13 @@ async function refreshEventsCacheFromSupabase(): Promise<EventItem[]> {
       const evtPrices = pricesRaw.filter((p) => p.event_id === e.id);
       const minPrice = evtPrices.length ? Math.min(...evtPrices.map((p) => p.price)) : 30000;
 
-      // Find static metadata enrichment if matching
-      const staticMatch = STATIC_MAHATICKET_EVENTS.find((s) => s.id === e.id || s.slug === e.slug);
       const posterUrl =
         absoluteMediaUrl(e.poster_url) ||
         absoluteMediaUrl(e.banner_url) ||
-        absoluteMediaUrl(staticMatch?.posterUrl) ||
         fallbackPosterUrl(e.id);
       const bannerUrl =
         absoluteMediaUrl(e.banner_url) ||
         absoluteMediaUrl(e.poster_url) ||
-        absoluteMediaUrl(staticMatch?.bannerUrl) ||
         posterUrl;
 
       return normalizeEvent({
@@ -1241,20 +674,19 @@ async function refreshEventsCacheFromSupabase(): Promise<EventItem[]> {
         bannerUrl,
         status: e.status,
         featured: e.featured === 1 ? 1 : 0,
-        isPromoted: staticMatch?.isPromoted || e.featured === 1,
-        isInformational: staticMatch?.isInformational || false,
-        interestedCount: staticMatch?.interestedCount || 1200,
-        tag: e.tag || staticMatch?.tag || (e.featured === 1 ? 'प्रीमियर' : null),
+        isPromoted: e.featured === 1,
+        isInformational: !!e.is_informational,
+        interestedCount: e.interested_count || 0,
+        tag: e.tag || (e.featured === 1 ? 'Featured' : null),
         cast:
           typeof e.cast_crew === 'string' && !e.cast_crew.trim().startsWith('[')
             ? e.cast_crew
             : null,
-        // Prefer live DB cast_crew — never inject static fake cast for DB events
         castCrewList: parseCastCrew(e.cast_crew),
         minPrice,
-        rating: staticMatch?.rating || 4.8,
-        ratingCountStr: staticMatch?.ratingCountStr || '1.2k',
-        showDateStr: staticMatch?.showDateStr || null,
+        rating: e.rating != null ? Number(e.rating) : null,
+        ratingCountStr: e.rating_count_str || null,
+        showDateStr: e.show_date_str || null,
         venue: venue
           ? {
               id: venue.id,
@@ -1269,7 +701,7 @@ async function refreshEventsCacheFromSupabase(): Promise<EventItem[]> {
               totalCapacity: venue.total_capacity || 800,
               hasSeatLayout: venue.has_seat_layout ?? 1,
             }
-          : staticMatch?.venue || null,
+          : null,
         sessions: filterUpcomingSessions(
           evtSessions.map((s) => ({
             id: s.id,
@@ -1293,19 +725,11 @@ async function refreshEventsCacheFromSupabase(): Promise<EventItem[]> {
       });
     });
 
-    // Merge static events (like Mamachya Govyala Jauya id 16323) that may not be in DB yet
-    const combined = [...freshMapped];
-    for (const statEvt of STATIC_MAHATICKET_EVENTS) {
-      if (!combined.some((c) => c.id === statEvt.id)) {
-        combined.push(normalizeEvent(statEvt));
-      }
-    }
-
-    inMemoryEvents = combined;
-    AsyncStorage.setItem(CACHE_EVENTS_KEY, JSON.stringify(combined)).catch(() => null);
-    return combined;
+    inMemoryEvents = freshMapped;
+    AsyncStorage.setItem(CACHE_EVENTS_KEY, JSON.stringify(freshMapped)).catch(() => null);
+    return freshMapped;
   } catch (err) {
-    return STATIC_MAHATICKET_EVENTS.map(normalizeEvent);
+    return inMemoryEvents || [];
   }
 }
 
@@ -1322,8 +746,24 @@ export const api = {
     search?: string;
     limit?: number;
   }): Promise<{ events: EventItem[] }> => {
-    // 1. Instant Cache or Static data first
-    let baseList: EventItem[] = inMemoryEvents || STATIC_MAHATICKET_EVENTS;
+    // Prefer live API, then in-memory / disk cache (no demo/static catalog)
+    try {
+      const qs = new URLSearchParams();
+      if (params?.city && !isAllCitiesValue(params.city)) qs.set('city', params.city);
+      if (params?.category && params.category !== 'all') qs.set('category', params.category);
+      if (params?.search?.trim()) qs.set('search', params.search.trim());
+      if (params?.limit) qs.set('limit', String(params.limit));
+      const q = qs.toString();
+      const res = await request<{ events: EventItem[] }>(`/api/events${q ? `?${q}` : ''}`);
+      if (Array.isArray(res?.events) && res.events.length > 0) {
+        const mapped = res.events.map(normalizeEvent);
+        inMemoryEvents = mapped;
+        AsyncStorage.setItem(CACHE_EVENTS_KEY, JSON.stringify(mapped)).catch(() => null);
+        return { events: mapped };
+      }
+    } catch {}
+
+    let baseList: EventItem[] = inMemoryEvents || [];
 
     if (!inMemoryEvents) {
       try {
@@ -1338,7 +778,6 @@ export const api = {
       } catch {}
     }
 
-    // Trigger background refresh (swr)
     refreshEventsCacheFromSupabase().catch(() => null);
 
     // Normalize every event so /uploads/... becomes http://host:port/uploads/... and missing posters use stable Picsum seed
@@ -1390,12 +829,6 @@ export const api = {
       }
     } catch {}
 
-    // Check static database if marked informational
-    const staticItem = STATIC_MAHATICKET_EVENTS.find((e) => e.id === Number(id));
-    if (staticItem && staticItem.isInformational) {
-      return { event: normalizeEvent(staticItem) };
-    }
-
     try {
       if (!resolvedBase) {
         await resolveApiBase().catch(() => null);
@@ -1408,23 +841,20 @@ export const api = {
       ]);
 
       if (!eventsRaw.length) {
-        if (staticItem) return { event: normalizeEvent(staticItem) };
         throw new Error('Event not found');
       }
 
       const e = eventsRaw[0];
       const venuesMap = Object.fromEntries(venuesRaw.map((v) => [v.id, v]));
       const venue = venuesMap[e.venue_id] || null;
-      const minPrice = pricesRaw.length ? Math.min(...pricesRaw.map((p) => p.price)) : 30000;
+      const minPrice = pricesRaw.length ? Math.min(...pricesRaw.map((p) => p.price)) : 0;
       const posterUrl =
         absoluteMediaUrl(e.poster_url) ||
         absoluteMediaUrl(e.banner_url) ||
-        absoluteMediaUrl(staticItem?.posterUrl) ||
         fallbackPosterUrl(e.id);
       const bannerUrl =
         absoluteMediaUrl(e.banner_url) ||
         absoluteMediaUrl(e.poster_url) ||
-        absoluteMediaUrl(staticItem?.bannerUrl) ||
         posterUrl;
 
       const event: EventItem = normalizeEvent({
@@ -1443,19 +873,19 @@ export const api = {
         bannerUrl,
         status: e.status,
         featured: e.featured === 1 ? 1 : 0,
-        isPromoted: staticItem?.isPromoted || e.featured === 1,
-        isInformational: staticItem?.isInformational || false,
-        interestedCount: staticItem?.interestedCount || 1500,
-        tag: e.tag || staticItem?.tag || (e.featured === 1 ? 'प्रीमियर' : null),
+        isPromoted: e.featured === 1,
+        isInformational: !!e.is_informational,
+        interestedCount: e.interested_count || 0,
+        tag: e.tag || (e.featured === 1 ? 'Featured' : null),
         cast:
           typeof e.cast_crew === 'string' && !String(e.cast_crew).trim().startsWith('[')
             ? e.cast_crew
             : null,
         castCrewList: parseCastCrew(e.cast_crew),
         minPrice,
-        rating: staticItem?.rating || 4.8,
-        ratingCountStr: staticItem?.ratingCountStr || '1.2k',
-        showDateStr: staticItem?.showDateStr || null,
+        rating: e.rating != null ? Number(e.rating) : null,
+        ratingCountStr: e.rating_count_str || null,
+        showDateStr: e.show_date_str || null,
         venue: venue
           ? {
               id: venue.id,
@@ -1470,7 +900,7 @@ export const api = {
               totalCapacity: venue.total_capacity || 800,
               hasSeatLayout: venue.has_seat_layout ?? 1,
             }
-          : staticItem?.venue || null,
+          : null,
         sessions: filterUpcomingSessions(
           sessionsRaw.map((s) => ({
             id: s.id,
@@ -1495,8 +925,8 @@ export const api = {
 
       return { event };
     } catch {
-      if (staticItem) return { event: normalizeEvent(staticItem) };
       const res = await request<{ event: EventItem }>(`/api/events/${id}`);
+      if (!res?.event?.id) throw new Error('Event not found');
       return { event: normalizeEvent(res.event) };
     }
   },
@@ -1570,7 +1000,7 @@ export const api = {
     };
   },
 
-  // Sessions & Seats (Exact Balcony / First Class / VIP Tiered Auditorium)
+  // Sessions & Seats — same as web: GET /api/sessions/:id/seats only (no fake map / raw DB)
   getSessionSeats: async (
     sessionId: number
   ): Promise<{
@@ -1578,113 +1008,50 @@ export const api = {
     sections: any[];
     layoutConfig?: SeatLayoutConfig;
   }> => {
-    try {
-      // 1. Ultra-fast backend route with parallel indexed query & caching
-      const fastData = await request<{
-        seats: SeatItem[];
-        sections: any[];
-        layoutConfig?: SeatLayoutConfig;
-      }>(`/api/sessions/${sessionId}/seats`);
-      if (fastData?.seats && fastData.seats.length > 0) {
-        return fastData;
-      }
-    } catch {}
-
-    try {
-      // 2. Direct Supabase fallback
-      const invRaw = await supabaseFetch<any[]>(
-        `seat_inventory?session_id=eq.${sessionId}&limit=160`
-      );
-
-      if (invRaw?.length > 0) {
-        const seatIds = invRaw.map((i) => i.seat_id);
-        const ttIds = [...new Set(invRaw.map((i) => i.ticket_type_id))];
-
-        const [seatsRaw, ttRaw] = await Promise.all([
-          supabaseFetch<any[]>(
-            `seats?id=in.(${seatIds.slice(0, 100).join(',')})&select=*`
-          ),
-          supabaseFetch<any[]>(
-            `ticket_types?id=in.(${ttIds.join(',')})&select=*`
-          ),
-        ]);
-
-        const seatsMap = Object.fromEntries(seatsRaw.map((s) => [s.id, s]));
-        const ttMap = Object.fromEntries(ttRaw.map((t) => [t.id, t]));
-
-        const seatItems: SeatItem[] = invRaw.map((inv) => {
-          const s = seatsMap[inv.seat_id] || {};
-          const tt = ttMap[inv.ticket_type_id] || {};
-          return {
-            seatId: inv.seat_id,
-            sectionId: s.section_id || 1,
-            rowLabel: s.row_label || 'A',
-            seatNumber: s.seat_number || 1,
-            seatCode:
-              s.seat_code ||
-              `${s.row_label || 'A'}${String(s.seat_number || 1).padStart(2, '0')}`,
-            price: tt.price || 50000,
-            status: inv.status as any,
-            tier: s.tier || 'First Class',
-            ticketTypeName: tt.name || 'First Class',
-            ticketTypeNameMr: tt.name_mr || 'प्रथम वर्ग',
-          };
-        });
-
+    if (!sessionId || Number.isNaN(Number(sessionId))) {
+      throw new Error('Session not found');
+    }
+    let lastErr: any = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const data = await request<{
+          seats: SeatItem[];
+          sections: any[];
+          layoutConfig?: SeatLayoutConfig;
+          venue?: any;
+          error?: string;
+        }>(`/api/sessions/${sessionId}/seats`, { timeout: 45000 });
+        if (!data || data.error) {
+          throw new ApiError(data?.error || 'Failed to load seat layout', 400, data);
+        }
         return {
-          seats: seatItems,
-          sections: [
-            { id: 1, name: 'Balcony / बाल्कनी', nameMr: 'बाल्कनी', price: 50000 },
-            { id: 2, name: 'Stall / स्टॉल', nameMr: 'स्टॉल', price: 30000 },
-          ],
+          seats: Array.isArray(data.seats) ? data.seats : [],
+          sections: Array.isArray(data.sections) ? data.sections : [],
+          layoutConfig: data.layoutConfig || data.venue?.layoutConfig || undefined,
         };
-      }
-    } catch {}
-
-    // Resilient fallback: Provide standard 3-tier auditorium layout so the user is never blocked
-    const defaultSections = [
-      { id: 1, name: 'Balcony / बाल्कनी', nameMr: 'बाल्कनी', price: 50000 },
-      { id: 2, name: 'First Class / प्रथम वर्ग', nameMr: 'प्रथम वर्ग', price: 35000 },
-      { id: 3, name: 'Stall / स्टॉल', nameMr: 'स्टॉल', price: 25000 },
-    ];
-    const generatedSeats: SeatItem[] = [];
-    const rows = [
-      { label: 'A', sectionId: 1, tier: 'Balcony', price: 50000, count: 8 },
-      { label: 'B', sectionId: 1, tier: 'Balcony', price: 50000, count: 8 },
-      { label: 'C', sectionId: 2, tier: 'First Class', price: 35000, count: 8 },
-      { label: 'D', sectionId: 2, tier: 'First Class', price: 35000, count: 8 },
-      { label: 'E', sectionId: 3, tier: 'Stall', price: 25000, count: 8 },
-      { label: 'F', sectionId: 3, tier: 'Stall', price: 25000, count: 8 },
-    ];
-    let seatCounter = 1;
-    for (const r of rows) {
-      for (let c = 1; c <= r.count; c++) {
-        const isSampleBooked = (c === 3 || c === 7) && (r.label === 'B' || r.label === 'D');
-        generatedSeats.push({
-          seatId: seatCounter++,
-          sectionId: r.sectionId,
-          rowLabel: r.label,
-          seatNumber: c,
-          seatCode: `${r.label}${c < 10 ? '0' + c : c}`,
-          price: r.price,
-          status: isSampleBooked ? 'booked' : 'available',
-          tier: r.tier,
-          ticketTypeName: r.tier,
-          ticketTypeNameMr: r.tier === 'Balcony' ? 'बाल्कनी' : r.tier === 'First Class' ? 'प्रथम वर्ग' : 'स्टॉल',
-        });
+      } catch (e: any) {
+        lastErr = e;
+        // Retry once on network/timeout only — not on Session not found
+        if (e?.status === 404 || /session not found/i.test(String(e?.message || ''))) {
+          throw new ApiError('Session not found', 404, e?.data);
+        }
+        if (attempt === 0 && (e?.status === 408 || e?.status === 0)) {
+          continue;
+        }
+        break;
       }
     }
-    return {
-      seats: generatedSeats,
-      sections: defaultSections,
-      layoutConfig: {
-        screenArc: true,
-        stageLabel: 'CINEMA SCREEN / रंगमंच',
-      } as any,
-    };
+    const msg = String(lastErr?.message || '');
+    if (/timed out|timeout|network/i.test(msg)) {
+      throw new ApiError(
+        'Seat map load is slow. Please retry — your show session is still valid.',
+        408
+      );
+    }
+    throw lastErr instanceof Error ? lastErr : new Error('Failed to load seat layout');
   },
 
-  // Hold — must hit live inventory (BookMyShow-style temporary lock)
+  // Hold — same payload as web SeatMapModal
   hold: async (body: {
     sessionId: number;
     seatIds: number[];
@@ -1697,13 +1064,13 @@ export const api = {
           sessionId: body.sessionId,
           seatIds: body.seatIds,
           userIdStr: body.userIdStr,
-          holdToken: body.userIdStr,
         }),
         timeout: 20000,
       });
-      if (res?.holdToken || res?.hold) {
+      const token = res?.holdToken || res?.hold?.holdToken;
+      if (token) {
         return {
-          holdToken: res.holdToken || res.hold?.holdToken || body.userIdStr,
+          holdToken: token,
           hold: {
             faceValueTotal:
               res.hold?.faceValueTotal ??
@@ -1713,7 +1080,7 @@ export const api = {
             holdExpiresAt:
               res.hold?.holdExpiresAt ||
               res.holdExpiresAt ||
-              new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+              new Date(Date.now() + 5 * 60 * 1000).toISOString(),
           },
         };
       }
@@ -1742,101 +1109,57 @@ export const api = {
     }
   },
 
-  // Coupons
+  // Coupons — same as web CheckoutDrawer: GET/POST /api/coupons
   getCoupons: async () => {
     try {
-      const coupons = await supabaseFetch<any[]>('coupons?active=eq.1');
-      if (coupons?.length) {
-        return {
-          coupons: coupons.map((c) => ({
-            id: c.id,
-            code: c.code,
-            discountType: c.discount_type,
-            discountValue: c.discount_value,
-            minOrderValue: c.min_order_value,
-            maxDiscount: c.max_discount,
-            description:
-              c.discount_type === 'percentage'
-                ? `${c.discount_value / 100}% off up to ₹${c.max_discount / 100}`
-                : `Flat ₹${c.discount_value / 100} off`,
-          })),
-        };
-      }
-    } catch {}
-
-    return {
-      coupons: [
-        {
-          id: 1,
-          code: 'MAHA50',
-          discountType: 'flat',
-          discountValue: 5000,
-          minOrderValue: 30000,
-          maxDiscount: 5000,
-          description: 'Flat ₹50 off on orders above ₹300',
-        },
-        {
-          id: 2,
-          code: 'NATAK10',
-          discountType: 'percentage',
-          discountValue: 1000,
-          minOrderValue: 20000,
-          maxDiscount: 10000,
-          description: '10% off up to ₹100',
-        },
-        {
-          id: 3,
-          code: 'CINEMA20',
-          discountType: 'flat',
-          discountValue: 2000,
-          minOrderValue: 15000,
-          maxDiscount: 2000,
-          description: 'Flat ₹20 off for movies & shows',
-        },
-      ],
-    };
+      const res = await request<{ coupons?: any[]; error?: string }>('/api/coupons');
+      const list = Array.isArray(res?.coupons) ? res.coupons : [];
+      return {
+        coupons: list.map((c) => ({
+          id: c.id,
+          code: c.code,
+          discountType: c.discountType || c.discount_type,
+          discountValue: c.discountValue ?? c.discount_value,
+          minOrderValue: c.minOrderValue ?? c.min_order_value,
+          maxDiscount: c.maxDiscount ?? c.max_discount,
+          description:
+            (c.discountType || c.discount_type) === 'percentage'
+              ? `${(c.discountValue ?? c.discount_value) / 100}% off up to ₹${(c.maxDiscount ?? c.max_discount) / 100}`
+              : `Flat ₹${(c.discountValue ?? c.discount_value) / 100} off`,
+        })),
+      };
+    } catch {
+      return { coupons: [] };
+    }
   },
 
   applyCoupon: async (
     code: string,
     amountPaise: number
   ): Promise<CouponResult> => {
-    const c = code.trim().toUpperCase();
-    if (c === 'MAHA50') {
-      if (amountPaise < 30000) {
+    try {
+      const res = await request<any>('/api/coupons', {
+        method: 'POST',
+        body: JSON.stringify({ code: code.trim(), amount: amountPaise }),
+      });
+      if (!res?.valid) {
         return {
           valid: false,
-          message: 'Minimum order amount for MAHA50 is ₹300',
+          message: res?.error || res?.message || 'Invalid or expired coupon code',
         };
       }
       return {
         valid: true,
-        couponCode: 'MAHA50',
-        discountType: 'flat',
-        discountAmount: 5000,
-        message: '₹50 flat discount applied!',
+        couponCode: res.code || code.trim().toUpperCase(),
+        discountAmount: res.discount ?? 0,
+        message: res.message || 'Coupon applied successfully!',
       };
-    }
-    if (c === 'NATAK10') {
-      const disc = Math.min(10000, Math.round(amountPaise * 0.1));
+    } catch (e: any) {
       return {
-        valid: true,
-        couponCode: 'NATAK10',
-        discountType: 'percent',
-        discountAmount: disc,
-        message: '10% discount applied!',
+        valid: false,
+        message: e?.data?.error || e?.message || 'Invalid or expired coupon code',
       };
     }
-    if (c === 'CINEMA20') {
-      return {
-        valid: true,
-        couponCode: 'CINEMA20',
-        discountType: 'flat',
-        discountAmount: 2000,
-        message: '₹20 discount applied!',
-      };
-    }
-    return { valid: false, message: 'Invalid or expired coupon code' };
   },
 
   // Orders / Payment (Razorpay)
@@ -1846,46 +1169,53 @@ export const api = {
     couponCode?: string | null;
     holdToken?: string;
   }) => {
-    const res = await request<any>('/api/payments/create-order', {
-      method: 'POST',
-      body: JSON.stringify(body),
-      timeout: 25000,
-    });
-    if (res?.orderId && res?.keyId) {
-      return res;
+    try {
+      const res = await request<any>('/api/payments/create-order', {
+        method: 'POST',
+        body: JSON.stringify(body),
+        timeout: 45000,
+      });
+      if (res?.orderId && res?.keyId) {
+        return res;
+      }
+      throw new Error(
+        res?.error ||
+          'पेमेंट ऑर्डर तयार झाली नाही. आसने DB मध्ये सापडली नाहीत — कृपया आसने पुन्हा निवडा.'
+      );
+    } catch (e: any) {
+      const detail = e?.data?.details || e?.message || '';
+      if (/authenti/i.test(String(detail))) {
+        throw new Error(
+          'Razorpay server keys invalid (Authentication failed). Production needs matching RAZORPAY_KEY_ID + RAZORPAY_KEY_SECRET.\n\nसर्व्हरवरील Razorpay की चुकीच्या आहेत — पेमेंट सुरू होऊ शकत नाही.'
+        );
+      }
+      throw e instanceof Error ? e : new Error(String(detail || 'Payment order failed'));
     }
-    throw new Error(
-      res?.error ||
-        'पेमेंट ऑर्डर तयार झाली नाही. आसने DB मध्ये सापडली नाहीत — कृपया आसने पुन्हा निवडा.'
-    );
   },
 
   verifyPayment: async (body: any) => {
-    try {
-      const res = await request<any>('/api/payments/verify', {
-        method: 'POST',
-        body: JSON.stringify(body),
-      });
-      if (res && (res.success || res.orderNumber || res.order)) {
-        try {
-          const existingStr = await AsyncStorage.getItem('@tg_offline_orders');
-          const existing = existingStr ? JSON.parse(existingStr) : [];
-          existing.unshift(res.order || res);
-          await AsyncStorage.setItem('@tg_offline_orders', JSON.stringify(existing.slice(0, 30)));
-        } catch {}
-        return res;
-      }
-      throw new Error(res?.error || 'Payment verification failed');
-    } catch (err: any) {
-      console.warn('verifyPayment API error, falling back to confirmBooking:', err?.message);
-      return api.confirmBooking({
-        ...body,
-        userPhone: body.userPhone?.startsWith('+')
-          ? body.userPhone
-          : `+91${String(body.userPhone || '').replace(/\D/g, '').slice(-10)}`,
-        paymentDetails: { gateway: 'razorpay', status: 'authorized', ...body },
-      });
+    const res = await request<any>('/api/payments/verify', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      timeout: 30000,
+    });
+    if (res && (res.success || res.orderNumber || res.order)) {
+      const orderPayload = res.order || res;
+      try {
+        const existingStr = await AsyncStorage.getItem('@tg_offline_orders');
+        const existing = existingStr ? JSON.parse(existingStr) : [];
+        existing.unshift(orderPayload);
+        await AsyncStorage.setItem('@tg_offline_orders', JSON.stringify(existing.slice(0, 30)));
+      } catch {}
+      try {
+        const myStr = await AsyncStorage.getItem('@tg_my_orders');
+        const myOrders = myStr ? JSON.parse(myStr) : [];
+        myOrders.unshift(orderPayload);
+        await AsyncStorage.setItem('@tg_my_orders', JSON.stringify(myOrders.slice(0, 30)));
+      } catch {}
+      return res;
     }
+    throw new Error(res?.error || 'Payment verification failed');
   },
 
   confirmBooking: async (body: {
@@ -1898,122 +1228,21 @@ export const api = {
     couponCode?: string | null;
     paymentDetails?: any;
   }) => {
-    try {
-      const res = await request<any>('/api/bookings/confirm', {
-        method: 'POST',
-        body: JSON.stringify(body),
-      });
-      if (res && (res.orderNumber || res.success)) {
-        try {
-          const existingStr = await AsyncStorage.getItem('@tg_offline_orders');
-          const existing = existingStr ? JSON.parse(existingStr) : [];
-          existing.unshift(res.order || res);
-          await AsyncStorage.setItem('@tg_offline_orders', JSON.stringify(existing.slice(0, 30)));
-        } catch {}
-        return res;
-      }
-    } catch (err: any) {
-      console.warn('Backend confirmBooking error, using resilient local confirmation:', err?.message);
-    }
-
-    const orderNumber = `MT-2026-${Math.floor(10000 + Math.random() * 90000)}`;
-
-    // Try fetching event title & date for ticket metadata
-    let eventTitle = 'मराठी महानाट्य';
-    let posterUrl = fallbackPosterUrl(body.eventId);
-    try {
-      const ev = await api.getEvent(body.eventId);
-      if (ev.event) {
-        eventTitle = ev.event.titleMr || ev.event.title;
-        posterUrl = absoluteMediaUrl(ev.event.posterUrl) || fallbackPosterUrl(body.eventId);
-      }
-    } catch {}
-
-    const tickets: TicketDetailItem[] = body.seatIds.map((seatId, idx) => {
-      const seatCode = `A${String(idx + 1).padStart(2, '0')}`;
-      const ticketCode = `TG-TK-${Math.floor(100000 + Math.random() * 900000)}`;
-      const qrPayload = JSON.stringify({
-        app: 'MahaTicket',
-        orderNumber,
-        ticketCode,
-        eventId: body.eventId,
-        sessionId: body.sessionId,
-        seatCode,
-        attendeeName: body.userName,
-        issuedAt: new Date().toISOString(),
-        verified: true,
-      });
-
-      return {
-        id: Date.now() + idx,
-        ticketCode,
-        orderId: Date.now(),
-        sessionId: body.sessionId,
-        seatCode,
-        attendeeName: body.userName,
-        faceValue: 50000,
-        status: 'valid' as const,
-        qrPayload,
-        createdAt: new Date().toISOString(),
-      };
+    // Web booking path uses /api/payments/verify — no local/fake order creation
+    const res = await request<any>('/api/bookings/confirm', {
+      method: 'POST',
+      body: JSON.stringify(body),
     });
-
-    const newOrder: OrderItem = {
-      id: Date.now(),
-      orderNumber,
-      eventId: body.eventId,
-      sessionId: body.sessionId,
-      ticketCount: body.seatIds.length,
-      ticketFaceValueTotal: 50000 * body.seatIds.length,
-      platformFeeTotal: 3000 * body.seatIds.length,
-      taxTotal: Math.round(3000 * body.seatIds.length * 0.18),
-      gatewayCostEstimate: 500,
-      discountTotal: 0,
-      grandTotal:
-        (50000 + 3000) * body.seatIds.length +
-        Math.round(3000 * body.seatIds.length * 0.18),
-      paymentStatus: 'paid',
-      orderStatus: 'confirmed',
-      razorpayOrderId: `order_rzp_${Date.now()}`,
-      createdAt: new Date().toISOString(),
-      event: {
-        id: body.eventId,
-        title: eventTitle,
-        titleMr: eventTitle,
-        slug: 'event-slug',
-        category: 'plays',
-        categoryMr: 'नाटक',
-        language: 'Marathi',
-        posterUrl,
-        status: 'published',
-      },
-      session: {
-        id: body.sessionId,
-        eventId: body.eventId,
-        sessionStartTime: new Date(Date.now() + 86400000).toISOString(),
-        sessionEndTime: new Date(Date.now() + 86400000 + 7200000).toISOString(),
-        status: 'active',
-      },
-      tickets,
-    };
-
-    // Save to AsyncStorage @tg_my_orders
-    try {
-      const existingStr = await AsyncStorage.getItem('@tg_my_orders');
-      const existing: OrderItem[] = existingStr ? JSON.parse(existingStr) : [];
-      await AsyncStorage.setItem(
-        '@tg_my_orders',
-        JSON.stringify([newOrder, ...existing])
-      );
-    } catch {}
-
-    return {
-      success: true,
-      orderId: newOrder.id,
-      bookingId: newOrder.id,
-      orderNumber,
-      tickets,
-    };
+    if (res && (res.orderNumber || res.success)) {
+      try {
+        const existingStr = await AsyncStorage.getItem('@tg_offline_orders');
+        const existing = existingStr ? JSON.parse(existingStr) : [];
+        existing.unshift(res.order || res);
+        await AsyncStorage.setItem('@tg_offline_orders', JSON.stringify(existing.slice(0, 30)));
+      } catch {}
+      return res;
+    }
+    throw new Error(res?.error || 'Booking confirmation failed');
   },
 
   // Orders / Tickets
@@ -2034,11 +1263,28 @@ export const api = {
   },
 
   getMyTickets: async (userEmail?: string, userPhone?: string): Promise<{ orders: OrderItem[] }> => {
+    const isDemoOrder = (ord: any) => {
+      const num = String(ord?.orderNumber || ord?.id || '');
+      if (num === 'MT-2026-88192' || num.toLowerCase().includes('demo')) return true;
+      if (Array.isArray(ord?.tickets)) {
+        if (ord.tickets.some((t: any) => String(t?.ticketCode || '').includes('88192') || String(t?.ticketCode || '').toLowerCase().includes('demo'))) {
+          return true;
+        }
+      }
+      return false;
+    };
+
     let localOrders: OrderItem[] = [];
     try {
       const stored = await AsyncStorage.getItem('@tg_my_orders');
       if (stored) {
-        localOrders = JSON.parse(stored);
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          localOrders = parsed.filter((o) => !isDemoOrder(o));
+          if (localOrders.length !== parsed.length) {
+            await AsyncStorage.setItem('@tg_my_orders', JSON.stringify(localOrders)).catch(() => null);
+          }
+        }
       }
     } catch {}
 
@@ -2053,6 +1299,7 @@ export const api = {
           const seen = new Set<string>();
           const merged: OrderItem[] = [];
           for (const ord of [...res.orders, ...localOrders]) {
+            if (isDemoOrder(ord)) continue;
             const key = String(ord.orderNumber || ord.id);
             if (!seen.has(key)) {
               seen.add(key);
@@ -2063,16 +1310,23 @@ export const api = {
         }
       } catch {}
     }
-    return { orders: localOrders };
+    return { orders: localOrders.filter((o) => !isDemoOrder(o)) };
   },
 
   // Live UI Home Sections Customization (Admin controlled)
   getHomeSections: () =>
     request<{ success: boolean; sections: any[] }>('/api/sections'),
 
-  // Gate Scanner Ticket Verification (Connected to backend DB + offline fallback)
+  // Gate Scanner — scoped to organizer event + session (no demo accept)
   verifyTicketScan: async (
-    ticketCodeOrPayload: string
+    ticketCodeOrPayload: string,
+    scope?: {
+      targetEventId?: number;
+      targetSessionId?: number;
+      scannerOrganizerId?: number;
+      gateName?: string;
+      scannerUserId?: number | string;
+    }
   ): Promise<{
     valid: boolean;
     status: 'valid' | 'already_used' | 'invalid';
@@ -2088,93 +1342,50 @@ export const api = {
       } catch {}
     }
 
-    // 1. Try real server scan API first
-    try {
-      const serverRes = await request<any>('/api/scanner/verify', {
-        method: 'POST',
-        body: JSON.stringify({
-          ticketCodeOrPayload: cleanCode,
-          gateName: 'Gate 1',
-          scannerDevice: 'MahaTicket Android Scanner',
-        }),
-      });
+    if (!scope?.targetEventId && !scope?.targetSessionId) {
+      return {
+        valid: false,
+        status: 'invalid',
+        message:
+          'कृपया स्कॅन करण्यापूर्वी कार्यक्रम व शो निवडा (Select event & showtime first).',
+      };
+    }
 
-      if (serverRes && typeof serverRes.valid === 'boolean') {
-        const status = serverRes.valid
-          ? 'valid'
-          : serverRes.scanResult === 'ALREADY_USED'
+    const serverRes = await request<any>('/api/scanner/verify', {
+      method: 'POST',
+      body: JSON.stringify({
+        ticketCodeOrPayload: cleanCode,
+        gateName: scope?.gateName || 'Gate 1',
+        scannerDevice: 'MahaTicket Android Scanner',
+        scannerUserId: scope?.scannerUserId || null,
+        targetEventId: scope?.targetEventId || null,
+        targetSessionId: scope?.targetSessionId || null,
+        scannerOrganizerId: scope?.scannerOrganizerId || null,
+        requireScope: true,
+      }),
+      timeout: 20000,
+    });
+
+    if (serverRes && typeof serverRes.valid === 'boolean') {
+      const status = serverRes.valid
+        ? 'valid'
+        : serverRes.scanResult === 'ALREADY_USED'
           ? 'already_used'
           : 'invalid';
 
-        return {
-          valid: serverRes.valid,
-          status,
-          message: serverRes.message || (serverRes.valid ? 'प्रवेश मंजूर!' : 'अवैध तिकीट!'),
-          ticket: serverRes.ticket
-            ? {
-                ticketCode: serverRes.ticket.code || cleanCode,
-                seatCode: serverRes.ticket.seat,
-                attendeeName: serverRes.ticket.attendee,
-                eventTitle: serverRes.ticket.eventMr || serverRes.ticket.event,
-              }
-            : undefined,
-        };
-      }
-    } catch (networkErr) {
-      console.log('Server scanner endpoint unreachable, checking offline cache...');
-    }
-
-    // 2. Offline Fallback: Check local stored orders
-    try {
-      const stored = await AsyncStorage.getItem('@tg_my_orders');
-      if (stored) {
-        const orders: OrderItem[] = JSON.parse(stored);
-        for (const ord of orders) {
-          const t = ord.tickets?.find(
-            (ticket) =>
-              ticket.ticketCode === cleanCode ||
-              ticket.qrPayload === ticketCodeOrPayload
-          );
-          if (t) {
-            if (t.status === 'used') {
-              return {
-                valid: false,
-                status: 'already_used',
-                message:
-                  'तिकीट आधीच वापरले गेले आहे! (Ticket already scanned for entry)',
-                ticket: t,
-                order: ord,
-              };
-            }
-            // Mark as used
-            t.status = 'used';
-            await AsyncStorage.setItem('@tg_my_orders', JSON.stringify(orders));
-            return {
-              valid: true,
-              status: 'valid',
-              message:
-                'प्रवेश मंजूर! तिकीट वैध आहे (Entry Granted - Valid MahaTicket Pass)',
-              ticket: t,
-              order: ord,
-            };
-          }
-        }
-      }
-    } catch {}
-
-    // Check if it matches TG-TK- or TG- ticket format (fallback for demo tickets)
-    if (cleanCode.startsWith('TG-TK-') || cleanCode.startsWith('TG-')) {
       return {
-        valid: true,
-        status: 'valid',
-        message: 'प्रवेश मंजूर! अधिकृत महाटिकिट पास (Valid MahaTicket Pass)',
-        ticket: {
-          ticketCode: cleanCode,
-          seatCode: 'A04',
-          attendeeName: 'Customer',
-          status: 'valid',
-          faceValue: 50000,
-        },
+        valid: serverRes.valid,
+        status,
+        message: serverRes.message || (serverRes.valid ? 'प्रवेश मंजूर!' : 'अवैध तिकीट!'),
+        ticket: serverRes.ticket
+          ? {
+              ticketCode: serverRes.ticket.code || cleanCode,
+              seatCode: serverRes.ticket.seat,
+              attendeeName: serverRes.ticket.attendee,
+              eventTitle: serverRes.ticket.eventMr || serverRes.ticket.event,
+              showtime: serverRes.ticket.showtime,
+            }
+          : undefined,
       };
     }
 
@@ -2182,6 +1393,7 @@ export const api = {
       valid: false,
       status: 'invalid',
       message:
+        serverRes?.error ||
         'अवैध तिकीट! प्रणालीमध्ये नोंद आढळली नाही (Invalid or Counterfeit Ticket)',
     };
   },
@@ -2383,12 +1595,22 @@ export const api = {
     }
   },
 
-  // Email-based Auth
+  // Email-based Auth (same as web CheckoutDrawer)
+  checkEmail: async (
+    email: string
+  ): Promise<{ exists?: boolean; hasPassword?: boolean; success?: boolean }> => {
+    return request<any>('/api/auth/flow/check-email', {
+      method: 'POST',
+      body: JSON.stringify({ email: email.trim().toLowerCase() }),
+      timeout: 15000,
+    });
+  },
+
   sendEmailOtp: async (email: string): Promise<{ success: boolean; message: string; devOtp?: string }> => {
     const res = await request<any>('/api/auth/flow/send-otp', {
       method: 'POST',
       body: JSON.stringify({ email: email.trim().toLowerCase() }),
-      timeout: 15000,
+      timeout: 20000,
     });
     if (!res || res.error) {
       throw new Error(res?.error || 'OTP पाठवण्यात त्रुटी आली. कृपया पुन्हा प्रयत्न करा.');
@@ -2396,14 +1618,20 @@ export const api = {
     return {
       success: true,
       message: res.message || '६-अंकी पडताळणी कोड आपल्या ईमेलवर पाठवला आहे.',
-      devOtp: res.otp,
+      devOtp: res.devOtp || res.otp,
     };
   },
 
   verifyEmailOtp: async (
     email: string,
     otp: string
-  ): Promise<{ success: boolean; user?: any; token?: string; message?: string }> => {
+  ): Promise<{
+    success: boolean;
+    user?: any;
+    token?: string;
+    message?: string;
+    needsPasswordSetup?: boolean;
+  }> => {
     const cleanEmail = email.trim().toLowerCase();
     const cleanOtp = otp.trim();
     const res = await request<any>('/api/auth/flow/verify-otp', {
@@ -2415,11 +1643,33 @@ export const api = {
       return {
         success: true,
         user: res.user,
-        token: res.token || `mt-token-${Date.now()}`,
+        // Signed HMAC token when server is updated; empty until deploy
+        token: typeof res.token === 'string' ? res.token : '',
         message: res.message || 'यशस्वी लॉगिन झाले!',
+        needsPasswordSetup: !!res.needsPasswordSetup,
       };
     }
     throw new Error(res?.error || res?.message || 'अवैध OTP कोड किंवा मुदत संपली आहे.');
+  },
+
+  setEmailPassword: async (
+    email: string,
+    password: string
+  ): Promise<{ success: boolean; user?: any; token?: string; message?: string }> => {
+    const res = await request<any>('/api/auth/flow/set-password', {
+      method: 'POST',
+      body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+      timeout: 15000,
+    });
+    if (res && (res.success || res.user)) {
+      return {
+        success: true,
+        user: res.user,
+        token: typeof res.token === 'string' ? res.token : '',
+        message: res.message || 'Password saved',
+      };
+    }
+    throw new Error(res?.error || 'पासवर्ड जतन करता आला नाही.');
   },
 
   loginWithEmailPassword: async (
@@ -2434,7 +1684,7 @@ export const api = {
       return {
         success: true,
         user: res.user,
-        token: `mt-token-${Date.now()}`,
+        token: typeof res.token === 'string' ? res.token : '',
         message: res.message,
       };
     }

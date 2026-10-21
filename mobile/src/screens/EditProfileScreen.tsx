@@ -5,7 +5,6 @@
  */
 import React, { useState } from 'react';
 import {
-  Alert,
   Image,
   KeyboardAvoidingView,
   Modal,
@@ -23,7 +22,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, RADIUS, SPACING } from '../theme';
 import { useAuthStore } from '../store';
 import { api } from '../api';
-import { BackHeader, Button } from '../components';
+import { BackHeader, Button, MTPopupModal } from '../components';
 
 const AVATAR_PRESETS = [
   {
@@ -68,6 +67,13 @@ export default function EditProfileScreen({ navigation }: any) {
   const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl || '');
   const [saving, setSaving] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
+  const [profilePopupModal, setProfilePopupModal] = useState<{
+    visible: boolean;
+    type?: 'success' | 'warning' | 'error' | 'info';
+    title: string;
+    message: string;
+    onPrimaryPress?: () => void;
+  } | null>(null);
 
   const initial = (name || user?.name || user?.email || 'U').trim()[0]?.toUpperCase() || 'U';
 
@@ -86,7 +92,12 @@ export default function EditProfileScreen({ navigation }: any) {
     const picked = samplePhotos[Math.floor(Math.random() * samplePhotos.length)];
     setAvatarUrl(picked);
     setModalVisible(false);
-    Alert.alert('फोटो निवडला', 'आपला प्रोफाइल फोटो यशस्वीरीत्या सेट केला आहे.');
+    setProfilePopupModal({
+      visible: true,
+      type: 'success',
+      title: 'फोटो निवडला',
+      message: 'आपला प्रोफाइल फोटो यशस्वीरीत्या सेट केला आहे.',
+    });
   };
 
   const handleRemovePhoto = () => {
@@ -100,15 +111,30 @@ export default function EditProfileScreen({ navigation }: any) {
     const trimmedPhone = phone.trim();
 
     if (!trimmedName) {
-      Alert.alert('नाव आवश्यक आहे', 'कृपया आपले पूर्ण नाव प्रविष्ट करा.');
+      setProfilePopupModal({
+        visible: true,
+        type: 'warning',
+        title: 'नाव आवश्यक आहे',
+        message: 'कृपया आपले पूर्ण नाव प्रविष्ट करा.',
+      });
       return;
     }
     if (trimmedEmail && !/^\S+@\S+\.\S+$/.test(trimmedEmail)) {
-      Alert.alert('अवैध ईमेल', 'कृपया वैध ईमेल पत्ता प्रविष्ट करा.');
+      setProfilePopupModal({
+        visible: true,
+        type: 'warning',
+        title: 'अवैध ईमेल',
+        message: 'कृपया वैध ईमेल पत्ता प्रविष्ट करा.',
+      });
       return;
     }
     if (trimmedPhone && !/^[0-9+ -]{8,15}$/.test(trimmedPhone)) {
-      Alert.alert('अवैध मोबाईल क्रमांक', 'कृपया वैध मोबाईल क्रमांक प्रविष्ट करा.');
+      setProfilePopupModal({
+        visible: true,
+        type: 'warning',
+        title: 'अवैध मोबाईल क्रमांक',
+        message: 'कृपया वैध मोबाईल क्रमांक प्रविष्ट करा.',
+      });
       return;
     }
 
@@ -131,11 +157,23 @@ export default function EditProfileScreen({ navigation }: any) {
         avatarUrl: avatarUrl || undefined,
       }).catch(() => null);
 
-      Alert.alert('प्रोफाइल अपडेट झाले', 'आपली माहिती यशस्वीरीत्या सेव्ह करण्यात आली आहे.', [
-        { text: 'ठीक आहे (OK)', onPress: () => navigation.goBack() },
-      ]);
+      setProfilePopupModal({
+        visible: true,
+        type: 'success',
+        title: 'प्रोफाइल अपडेट झाले',
+        message: 'आपली माहिती यशस्वीरीत्या सेव्ह करण्यात आली आहे.',
+        onPrimaryPress: () => {
+          setProfilePopupModal(null);
+          navigation.goBack();
+        },
+      });
     } catch {
-      Alert.alert('त्रुटी', 'माहिती सेव्ह करताना त्रुटी आली. पुन्हा प्रयत्न करा.');
+      setProfilePopupModal({
+        visible: true,
+        type: 'error',
+        title: 'त्रुटी',
+        message: 'माहिती सेव्ह करताना त्रुटी आली. कृपया पुन्हा प्रयत्न करा.',
+      });
     } finally {
       setSaving(false);
     }
@@ -291,6 +329,24 @@ export default function EditProfileScreen({ navigation }: any) {
           </View>
         </View>
       </Modal>
+
+      {profilePopupModal ? (
+        <MTPopupModal
+          visible={profilePopupModal.visible}
+          type={profilePopupModal.type || 'info'}
+          title={profilePopupModal.title}
+          message={profilePopupModal.message}
+          primaryButtonText="समजले (OK)"
+          onPrimaryPress={() => {
+            if (profilePopupModal.onPrimaryPress) {
+              profilePopupModal.onPrimaryPress();
+            } else {
+              setProfilePopupModal(null);
+            }
+          }}
+          onRequestClose={() => setProfilePopupModal(null)}
+        />
+      ) : null}
     </View>
   );
 }

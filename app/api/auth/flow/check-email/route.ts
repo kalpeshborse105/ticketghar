@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/src/db/index';
-import { users } from '@/src/db/schema';
+import { users, orders } from '@/src/db/schema';
 import { eq } from 'drizzle-orm';
 
 export async function POST(req: NextRequest) {
@@ -15,13 +15,31 @@ export async function POST(req: NextRequest) {
     let [user] = await db.select().from(users).where(eq(users.email, cleanEmail)).limit(1);
 
     if (!user) {
-      // Create guest customer entry so they have an account
+      // Check if user has booked tickets previously as guest
+      const [order] = await db
+        .select({ userEmail: orders.userEmail, userName: orders.userName, userPhone: orders.userPhone })
+        .from(orders)
+        .where(eq(orders.userEmail, cleanEmail))
+        .limit(1);
+
+      if (!order) {
+        return NextResponse.json(
+          {
+            exists: false,
+            error: 'हा ईमेल नोंदणीकृत नाही. कृपया तिकीट बुकिंग करताना वापरलेला ईमेल प्रविष्ट करा.',
+          },
+          { status: 404 }
+        );
+      }
+
+      // Guest has previous booking -> create user account entry with blank password so OTP flow can set one
       const [newUser] = await db
         .insert(users)
         .values({
           uid: `cust-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
           email: cleanEmail,
-          fullName: cleanEmail.split('@')[0],
+          fullName: order.userName || cleanEmail.split('@')[0],
+          phoneNumber: order.userPhone || null,
           role: 'customer',
           preferredLanguage: 'mr',
           city: 'Pune',

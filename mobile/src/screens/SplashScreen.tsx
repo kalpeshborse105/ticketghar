@@ -28,7 +28,7 @@ export default function SplashScreen({ navigation }: any) {
 
     Animated.timing(fadeAnim, {
       toValue: 1,
-      duration: 300,
+      duration: 180,
       useNativeDriver: true,
     }).start();
 
@@ -48,7 +48,7 @@ export default function SplashScreen({ navigation }: any) {
       }
 
       navigation.replace(isDone ? 'Main' : 'Onboarding');
-    }, 900);
+    }, 280);
 
     return () => clearTimeout(timer);
   }, [fadeAnim, loadStoredAuth, loadUIPrefs, navigation]);
@@ -107,6 +107,8 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 0.3,
     marginTop: 14,
+    lineHeight: 36,
+    paddingBottom: 2,
   },
   brandMr: {
     color: '#EA580C',
@@ -114,6 +116,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginTop: 2,
     letterSpacing: 0.5,
+    lineHeight: 22,
+    paddingBottom: 2,
   },
   taglineBox: {
     marginTop: 10,
@@ -124,15 +128,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: 'center',
     fontWeight: '600',
-    lineHeight: 18,
+    lineHeight: 20,
+    paddingBottom: 2,
   },
   footerNote: {
     position: 'absolute',
     bottom: 32,
+    left: 24,
+    right: 24,
     color: '#94A3B8',
     fontSize: 12,
     fontWeight: '600',
     letterSpacing: 0.2,
+    textAlign: 'center',
+    lineHeight: 20,
+    paddingBottom: 4,
   },
 });
 

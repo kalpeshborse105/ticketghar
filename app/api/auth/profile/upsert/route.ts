@@ -2,87 +2,105 @@ import { NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
 import { users } from '@/src/db/schema.ts';
 import { eq } from 'drizzle-orm';
+import {
+  getCustomerSession,
+  setCustomerSessionCookie,
+  signSessionToken,
+  newCustomerUid,
+} from '@/src/lib/auth-service.ts';
 
+/**
+ * Upsert profile — authenticated session (cookie or Bearer) or Supabase OAuth callback.
+ * When linking Supabase Auth UUID, pass uid = auth.users.id and it will be stored.
+ */
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const authHeader = request.headers.get('authorization');
+    const session = await getCustomerSession(authHeader);
+    const body = await request.json().catch(() => ({}));
     const { uid, email, fullName, phoneNumber, avatarUrl, city } = body;
 
-    if (!email && !uid) {
-      return NextResponse.json(
-        { error: 'uid or email is required' },
-        { status: 400 }
-      );
+    const cleanEmail = (session?.email || email || '').trim().toLowerCase();
+    if (!cleanEmail) {
+      return NextResponse.json({ error: 'Email is required' }, { status: 400 });
     }
 
-    const cleanEmail = email ? email.trim().toLowerCase() : null;
-    const cleanUid = uid ? uid.trim() : null;
+    const cleanUid =
+      typeof uid === 'string' &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uid.trim())
+        ? uid.trim()
+        : null;
 
-    // Check if user exists by email FIRST (authoritative key), or by uid
-    let existingUser = null;
-    if (cleanEmail) {
-      const byEmail = await db
-        .select()
-        .from(users)
-        .where(eq(users.email, cleanEmail))
-        .limit(1);
-      if (byEmail.length > 0) existingUser = byEmail[0];
-    }
-    if (!existingUser && cleanUid) {
-      const byUid = await db
-        .select()
-        .from(users)
-        .where(eq(users.uid, cleanUid))
-        .limit(1);
-      if (byUid.length > 0) existingUser = byUid[0];
-    }
+    const [existingUser] = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, cleanEmail))
+      .limit(1);
+
+    let activeUser: any = null;
 
     if (existingUser) {
-      const updateData: any = {
+      const updateData: Record<string, unknown> = {
         updatedAt: new Date(),
       };
-      if (cleanEmail) updateData.email = cleanEmail;
+      // Upgrade to real UUID when current uid is legacy string
+      if (
+        cleanUid &&
+        (!existingUser.uid ||
+          !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(existingUser.uid))
+      ) {
+        updateData.uid = cleanUid;
+      }
       if (fullName) updateData.fullName = fullName;
       if (phoneNumber !== undefined) updateData.phoneNumber = phoneNumber;
       if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl;
       if (city) updateData.city = city;
 
-      await db
+      const [updated] = await db
         .update(users)
         .set(updateData)
-        .where(eq(users.id, existingUser.id));
-
-      return NextResponse.json({
-        success: true,
-        user: { ...existingUser, ...updateData },
-      });
+        .where(eq(users.id, existingUser.id))
+        .returning();
+      activeUser = updated;
     } else {
-      // Insert new user with unique identifier
-      const newUid = cleanUid || `cust-${Date.now()}`;
-      const finalEmail = cleanEmail || `${newUid}@mahaticket.app`;
       const [newUser] = await db
         .insert(users)
         .values({
-          uid: newUid,
-          email: finalEmail,
-          fullName: fullName || 'MahaTicket User',
-          phoneNumber: phoneNumber || null,
-          avatarUrl: avatarUrl || null,
+          uid: cleanUid || newCustomerUid(),
+          email: cleanEmail,
+          fullName: fullName || session?.fullName || 'MahaTicket User',
+          phoneNumber: phoneNumber || session?.phoneNumber || null,
+          avatarUrl: avatarUrl || session?.avatarUrl || null,
           role: 'customer',
           preferredLanguage: 'mr',
           city: city || 'Pune',
         })
         .returning();
-
-      return NextResponse.json({
-        success: true,
-        user: newUser,
-      });
+      activeUser = newUser;
     }
+
+    const sessionUser = {
+      id: activeUser.id,
+      uid: activeUser.uid,
+      email: activeUser.email,
+      fullName: activeUser.fullName,
+      phoneNumber: activeUser.phoneNumber,
+      role: activeUser.role,
+      avatarUrl: activeUser.avatarUrl,
+    };
+
+    await setCustomerSessionCookie(sessionUser);
+    const token = signSessionToken(sessionUser);
+
+    return NextResponse.json({
+      success: true,
+      user: sessionUser,
+      token,
+    });
   } catch (error: any) {
     console.error('Profile upsert error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: error.message || 'Failed to upsert profile' },
       { status: 500 }
     );
   }

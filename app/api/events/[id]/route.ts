@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
-import { events, venues, organizers, eventSessions, ticketTypes, venueSections } from '@/src/db/schema.ts';
+import { events, venues, organizers, eventSessions, ticketTypes, venueSections, seatInventory } from '@/src/db/schema.ts';
 import { eq, and, sql } from 'drizzle-orm';
 
 export async function GET(
@@ -39,9 +39,17 @@ export async function GET(
       .where(and(eq(eventSessions.eventId, eventId), eq(eventSessions.status, 'active')))
       .orderBy(eventSessions.sessionStartTime);
 
-    // Fetch ticket types for all sessions
+    // Fetch ticket types and authoritative seat_inventory for all sessions
     const sessionDetails = await Promise.all(
       sessions.map(async (sess) => {
+        const [invCount] = await db
+          .select({
+            totalSeats: sql<number>`count(*)::int`,
+            availableSeats: sql<number>`count(*) filter (where status = 'available')::int`,
+          })
+          .from(seatInventory)
+          .where(eq(seatInventory.sessionId, sess.id));
+
         const types = await db
           .select({
             id: ticketTypes.id,
@@ -58,9 +66,43 @@ export async function GET(
           .from(ticketTypes)
           .where(eq(ticketTypes.sessionId, sess.id));
 
+        let syncedTypes = types;
+        if (invCount && invCount.totalSeats > 0) {
+          const typeCounts = await db
+            .select({
+              ticketTypeId: seatInventory.ticketTypeId,
+              avail: sql<number>`count(*) filter (where status = 'available')::int`,
+              total: sql<number>`count(*)::int`,
+            })
+            .from(seatInventory)
+            .where(eq(seatInventory.sessionId, sess.id))
+            .groupBy(seatInventory.ticketTypeId);
+
+          const typeMap = new Map(typeCounts.map((t) => [t.ticketTypeId, t]));
+
+          syncedTypes = types.map((t) => {
+            const match = typeMap.get(t.id);
+            if (match) {
+              return {
+                ...t,
+                availableQuota: match.avail,
+                totalQuota: match.total,
+              };
+            }
+            return t;
+          });
+        }
+
+        const realAvailableCount =
+          invCount && invCount.totalSeats > 0
+            ? invCount.availableSeats
+            : syncedTypes.reduce((sum, t) => sum + (t.availableQuota || 0), 0);
+
         return {
           ...sess,
-          ticketTypes: types,
+          ticketTypes: syncedTypes,
+          availableInventoryCount: realAvailableCount,
+          totalInventoryCount: invCount && invCount.totalSeats > 0 ? invCount.totalSeats : sess.totalInventoryCount,
         };
       })
     );

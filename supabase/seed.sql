@@ -362,31 +362,7 @@ BEGIN
    AND tt.section_id = s.section_id
   WHERE s.venue_id = v_inamdar;
 
-  -- Sample confirmed order + tickets
-  INSERT INTO public.orders (
-    order_number, user_id, user_email, user_phone, user_name, event_id, session_id,
-    ticket_count, ticket_face_value_total, platform_fee_total, tax_total, gateway_cost_estimate,
-    discount_total, grand_total, currency, payment_status, order_status,
-    razorpay_order_id, razorpay_payment_id, idempotency_key
-  ) VALUES (
-    'MT-2026-88192', customer_id, 'sachin.patil@gmail.com', '+91 98233 44556', 'Sachin Patil',
-    e1, s1, 2, ticket_face, plat_fee, tax_amt, 2140, 0, ticket_face + plat_fee + tax_amt, 'INR',
-    'captured', 'confirmed', 'order_SEED_DEMO', 'pay_SEED_DEMO', 'idem-seed-mahaticket-01'
-  ) RETURNING id INTO order_id_val;
-
-  UPDATE public.seat_inventory
-  SET order_id = order_id_val
-  WHERE session_id = s1 AND status = 'booked';
-
-  hash1 := encode(hmac('MT-TK-88192-A1|' || e1 || '|' || s1 || '|BAL-A01', 'mahaticket_seed_hmac', 'sha256'), 'hex');
-  hash2 := encode(hmac('MT-TK-88192-A2|' || e1 || '|' || s1 || '|BAL-A02', 'mahaticket_seed_hmac', 'sha256'), 'hex');
-
-  INSERT INTO public.tickets (ticket_code, order_id, session_id, ticket_type_id, seat_code, attendee_name, face_value, security_hash, qr_payload, status)
-  VALUES
-    ('MT-TK-88192-A1', order_id_val, s1, tt_bal, 'BAL-A01', 'Sachin Patil', 50000, hash1,
-     json_build_object('code','MT-TK-88192-A1','event','[SEED] Punha Sahi Re Sahi','seat','BAL-A01','hash', left(hash1,16))::text, 'valid'),
-    ('MT-TK-88192-A2', order_id_val, s1, tt_bal, 'BAL-A02', 'Priya Patil', 50000, hash2,
-     json_build_object('code','MT-TK-88192-A2','event','[SEED] Punha Sahi Re Sahi','seat','BAL-A02','hash', left(hash2,16))::text, 'valid');
+  -- (No demo orders: production and local app use only real customer bookings)
 
   INSERT INTO public.settlements (
     settlement_reference, organizer_id, event_id, total_gross_ticket_sales, total_platform_fees_collected,

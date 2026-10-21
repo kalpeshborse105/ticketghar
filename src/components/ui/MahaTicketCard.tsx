@@ -171,13 +171,13 @@ export const MahaTicketCard: React.FC<MahaTicketCardProps> = ({
       {/* TICKET PERFORATION & NOTCH CUTOUTS (Physical Pass Metaphor) */}
       <div className="relative flex items-center justify-between my-1">
         {/* Left Semi-circle Notch */}
-        <div className="w-5 h-8 bg-slate-100 sm:bg-slate-200 rounded-r-full -ml-1 border-r border-t border-b border-[#E5E7EB]" />
+        <div className="w-3 h-5 bg-slate-100 sm:bg-slate-200 rounded-r-full -ml-1 border-r border-t border-b border-[#E5E7EB]" />
 
         {/* Dashed Perforation Line */}
         <div className="flex-1 border-b-2 border-dashed border-[#CBD5E1] mx-3" />
 
         {/* Right Semi-circle Notch */}
-        <div className="w-5 h-8 bg-slate-100 sm:bg-slate-200 rounded-l-full -mr-1 border-l border-t border-b border-[#E5E7EB]" />
+        <div className="w-3 h-5 bg-slate-100 sm:bg-slate-200 rounded-l-full -mr-1 border-l border-t border-b border-[#E5E7EB]" />
       </div>
 
       {/* QR PRESENTATION ZONE (High contrast, pure white, generous quiet zone) */}

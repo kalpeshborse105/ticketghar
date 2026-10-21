@@ -4,7 +4,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Keyboard,
   KeyboardAvoidingView,
@@ -20,17 +19,23 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { COLORS, RADIUS, SPACING } from '../theme';
+import { COLORS, RADIUS, SHADOWS, SPACING } from '../theme';
 import { api, paise } from '../api';
 import { useCartStore, useAuthStore } from '../store';
 import RazorpayCheckout from 'react-native-razorpay';
-import { BackHeader, CountdownTimer, Divider, PriceRow, TicketCardFrame } from '../components';
+import { CommonActions } from '@react-navigation/native';
+import { BackHeader, CountdownTimer, Divider, PriceRow, TicketCardFrame, MTPopupModal } from '../components';
 
-function digitsOnlyPhone(raw?: string | null) {
-  return String(raw || '')
-    .replace(/\D/g, '')
-    .replace(/^91/, '')
-    .slice(-10);
+function cleanIndianMobile(raw?: string | null): string {
+  if (!raw) return '';
+  const digits = String(raw).replace(/\D/g, '');
+  if (digits.length === 12 && digits.startsWith('91')) {
+    return digits.slice(2);
+  }
+  if (digits.length > 10) {
+    return digits.slice(-10);
+  }
+  return digits;
 }
 
 function formatPaymentErrorMessage(err: any): { title: string; message: string } {
@@ -42,6 +47,7 @@ function formatPaymentErrorMessage(err: any): { title: string; message: string }
   }
 
   const rawStr = typeof err === 'string' ? err : JSON.stringify(err || {});
+  const plainMsg = typeof err?.message === 'string' ? err.message : '';
   let parsed: any = null;
   if (typeof err === 'string') {
     try {
@@ -64,8 +70,24 @@ function formatPaymentErrorMessage(err: any): { title: string; message: string }
     };
   }
 
+  if (/authenti|razorpay.*key|KEY_SECRET|KEY_ID/i.test(plainMsg + rawStr)) {
+    return {
+      title: 'Payment Gateway Error (गेटवे त्रुटी)',
+      message:
+        plainMsg ||
+        'Razorpay keys on the server are invalid. Update RAZORPAY_KEY_ID + RAZORPAY_KEY_SECRET on production, then retry.\n\nसर्व्हर Razorpay की चुकीच्या आहेत — Vercel/.env मध्ये योग्य की सेट करा.',
+    };
+  }
+
   const reason = rzp?.reason;
-  const desc = rzp?.description;
+  const desc = rzp?.description || parsed?.data?.details;
+
+  if (plainMsg && plainMsg.length > 8 && !plainMsg.startsWith('{') && !/Network error/i.test(plainMsg)) {
+    return {
+      title: 'Payment Failed (पेमेंट अयशस्वी)',
+      message: `${plainMsg}\n\nआपले सीट अजूनही सुरक्षित आहेत. कृपया पुन्हा प्रयत्न करा.`,
+    };
+  }
 
   if (desc && desc !== 'undefined' && typeof desc === 'string' && desc.length > 3 && !desc.startsWith('{')) {
     return {
@@ -83,7 +105,8 @@ function formatPaymentErrorMessage(err: any): { title: string; message: string }
 
   return {
     title: 'Payment Failed (पेमेंट अयशस्वी)',
-    message: 'We were unable to complete the transaction. Your seats are reserved during this session. Please try again.\n\nव्यवहार पूर्ण होऊ शकला नाही. आपले सीट सुरक्षित आहेत, कृपया पुन्हा प्रयत्न करा.',
+    message:
+      'We were unable to complete the transaction. Your seats are still held. Please retry.\n\nव्यवहार पूर्ण होऊ शकला नाही. आपले सीट अजूनही सुरक्षित (hold) आहेत — कृपया पुन्हा प्रयत्न करा.',
   };
 }
 
@@ -106,26 +129,46 @@ export default function CheckoutScreen({ navigation, route }: any) {
     taxTotal: routeTaxTotal,
   } = route.params;
 
-  const { user } = useAuthStore();
+  const { user, setAuth } = useAuthStore();
   const { setRazorpayOrder } = useCartStore();
 
-  // Contact — BMS order: name → phone → email
+  // Contact — BMS order: name → phone → age → email
   const [name, setName] = useState(user?.name || '');
   const [email, setEmail] = useState(user?.email || '');
-  const [phone, setPhone] = useState(digitsOnlyPhone(user?.phone));
+  const [phone, setPhone] = useState(cleanIndianMobile(user?.phone));
+  const [age, setAge] = useState('');
   const [fieldError, setFieldError] = useState<string | null>(null);
 
   const scrollRef = useRef<ScrollView>(null);
   const nameRef = useRef<TextInput>(null);
   const phoneRef = useRef<TextInput>(null);
+  const ageRef = useRef<TextInput>(null);
   const emailRef = useRef<TextInput>(null);
 
   useEffect(() => {
     if (user?.name && !name) setName(user.name);
     if (user?.email && !email) setEmail(user.email);
-    const p = digitsOnlyPhone(user?.phone);
+    const p = cleanIndianMobile(user?.phone);
     if (p && !phone) setPhone(p);
   }, [user]);
+
+  const persistAuthUser = async (u: any, token?: string) => {
+    if (!u?.id && !u?.email) return;
+    await setAuth(
+      {
+        id: u.id,
+        name: u.fullName || u.name || name.trim(),
+        email: u.email || email.trim().toLowerCase(),
+        phone: u.phoneNumber || u.phone || phone,
+        avatarUrl: u.avatarUrl,
+        role: u.role || 'customer',
+      },
+      // Empty string until server returns signed token (after auth deploy)
+      token && token.includes('.') ? token : ''
+    );
+  };
+
+  // Direct guest checkout - no inline auth verification blocking payment
 
   // Coupons
   const [availableCoupons, setAvailableCoupons] = useState<any[]>([]);
@@ -136,6 +179,62 @@ export default function CheckoutScreen({ navigation, route }: any) {
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
 
   const [paying, setPaying] = useState(false);
+  const PAYMENT_STATUS_MESSAGES = useMemo(
+    () => [
+      'पेमेंट प्रक्रिया सुरू आहे...',
+      '१ सेकंद... तुमच्या शोचा आनंद घ्या! 🎭',
+      'तिकीट सुरक्षित केले जात आहे...',
+    ],
+    []
+  );
+  const [paymentMsgIdx, setPaymentMsgIdx] = useState(0);
+
+  useEffect(() => {
+    if (!paying) {
+      setPaymentMsgIdx(0);
+      return;
+    }
+    const interval = setInterval(() => {
+      setPaymentMsgIdx((prev) => (prev + 1) % PAYMENT_STATUS_MESSAGES.length);
+    }, 1100);
+    return () => clearInterval(interval);
+  }, [paying, PAYMENT_STATUS_MESSAGES.length]);
+
+  const [checkoutModal, setCheckoutModal] = useState<{
+    visible: boolean;
+    type?: 'warning' | 'error' | 'success' | 'info';
+    title: string;
+    message: string;
+    primaryButtonText?: string;
+    onPrimaryPress?: () => void;
+    secondaryButtonText?: string;
+    onSecondaryPress?: () => void;
+  } | null>(null);
+
+  // Reject demo/fake holds — checkout only after real /api/bookings/hold
+  useEffect(() => {
+    const token = String(holdToken || '');
+    const invalid =
+      !token ||
+      token.startsWith('ga_pass_') ||
+      !Array.isArray(seatIds) ||
+      seatIds.length === 0 ||
+      !sessionId;
+    if (!invalid) return;
+    setCheckoutModal({
+      visible: true,
+      type: 'warning',
+      title: 'Invalid booking session',
+      message:
+        'Please select seats again. Checkout requires a live seat hold from the server (web workflow).',
+      primaryButtonText: 'Go back',
+      onPrimaryPress: () => {
+        setCheckoutModal(null);
+        navigation.goBack();
+      },
+    });
+  }, [holdToken, seatIds, sessionId, navigation]);
+
   const displayedSeatCodes = useMemo(
     () => Array.from(new Set((Array.isArray(seatCodes) ? seatCodes : []).filter(Boolean))),
     [seatCodes]
@@ -166,12 +265,17 @@ export default function CheckoutScreen({ navigation, route }: any) {
     countdownRef.current = setInterval(() => {
       setCountdown((c) => {
         if (c <= 1) {
-          clearInterval(countdownRef.current);
-          Alert.alert(
-            'Seat Hold Expired',
-            'Your temporary seat hold has expired. Please choose your seats again.',
-            [{ text: 'OK', onPress: () => handleDiscardAndBack() }]
-          );
+          setCheckoutModal({
+            visible: true,
+            type: 'warning',
+            title: 'आसन आरक्षण वेळ संपली (Hold Expired)',
+            message: 'तुमच्या तात्पुरत्या आसन आरक्षणाची वेळ संपली आहे. कृपया पुन्हा आसने निवडा. (Your temporary seat hold has expired.)',
+            primaryButtonText: 'आसने निवडा (Select Seats)',
+            onPrimaryPress: () => {
+              setCheckoutModal(null);
+              handleDiscardAndBack();
+            },
+          });
           return 0;
         }
         return c - 1;
@@ -206,8 +310,19 @@ export default function CheckoutScreen({ navigation, route }: any) {
       ? `${displayedSeatCodes.length} seat${displayedSeatCodes.length === 1 ? '' : 's'} • ${displayedSeatCodes.join(', ')}`
       : `${ticketCount} seat${ticketCount === 1 ? '' : 's'} selected`;
 
-  // Release hold on back
+  // Release hold on back — while paying, seats stay locked (no seat-map edit mid-payment)
   const handleDiscardAndBack = async () => {
+    if (paying) {
+      setCheckoutModal({
+        visible: true,
+        type: 'warning',
+        title: 'Payment in progress',
+        message: 'Please complete or cancel Razorpay first. Seats stay held until then.',
+        primaryButtonText: 'OK',
+        onPrimaryPress: () => setCheckoutModal(null),
+      });
+      return;
+    }
     try {
       if (sessionId && holdToken) {
         await api.releaseHold({ sessionId, holdToken, seatIds });
@@ -246,37 +361,48 @@ export default function CheckoutScreen({ navigation, route }: any) {
     setCouponMsg(null);
   };
 
-  const focusField = (which: 'name' | 'phone' | 'email') => {
+  const focusField = (which: 'name' | 'phone' | 'age' | 'email') => {
     scrollRef.current?.scrollTo({ y: 120, animated: true });
     requestAnimationFrame(() => {
       if (which === 'name') nameRef.current?.focus();
       if (which === 'phone') phoneRef.current?.focus();
+      if (which === 'age') ageRef.current?.focus();
       if (which === 'email') emailRef.current?.focus();
     });
   };
 
   const handlePayment = async () => {
     Keyboard.dismiss();
-    const cleanPhone = digitsOnlyPhone(phone);
+    const cleanPhone = cleanIndianMobile(phone);
     setFieldError(null);
 
     if (!name.trim()) {
-      setFieldError('Enter the ticket holder name.');
+      setFieldError('कृपया नाव प्रविष्ट करा (Enter ticket holder name).');
       focusField('name');
       return;
     }
     if (!cleanPhone || !/^[6-9]\d{9}$/.test(cleanPhone)) {
-      setFieldError('Enter a valid 10-digit mobile number.');
+      setFieldError('कृपया वैध १०-अंकी मोबाईल नंबर टाका (Valid 10-digit mobile).');
       focusField('phone');
       return;
     }
     if (!email.trim() || !email.includes('@')) {
-      setFieldError('Enter a valid email for your e-ticket.');
+      setFieldError('कृपया ई-तिकीटसाठी वैध ईमेल टाका (Valid email for ticket).');
       focusField('email');
       return;
     }
     if (countdown <= 0) {
-      Alert.alert('Reservation Expired', 'Seat hold reservation has expired. Please select seats again.');
+      setCheckoutModal({
+        visible: true,
+        type: 'warning',
+        title: 'आसन आरक्षण वेळ संपली (Hold Expired)',
+        message: 'तुमच्या तात्पुरत्या आसन आरक्षणाची वेळ संपली आहे. कृपया पुन्हा आसने निवडा. (Your reservation has expired.)',
+        primaryButtonText: 'आसने पुन्हा निवडा (Select Seats)',
+        onPrimaryPress: () => {
+          setCheckoutModal(null);
+          handleDiscardAndBack();
+        },
+      });
       return;
     }
 
@@ -296,20 +422,21 @@ export default function CheckoutScreen({ navigation, route }: any) {
 
       setRazorpayOrder(orderData.orderId, 0);
 
-      // Step 2: Open native Razorpay Checkout (parity with web CheckoutDrawer)
+      // Step 2: Open native Razorpay Checkout
       const paymentSuccessData = await RazorpayCheckout.open({
         key: orderData.keyId,
-        amount: String(orderData.amount ?? grandTotal),
+        amount: Number(orderData.amount ?? grandTotal),
         currency: orderData.currency || 'INR',
         name: 'MahaTicket',
-        description: eventTitle || 'Event tickets',
+        description: String(eventTitle || 'Event tickets').slice(0, 255),
         order_id: orderData.orderId,
         prefill: {
           name: name.trim(),
           email: email.trim().toLowerCase(),
-          contact: `+91${cleanPhone}`,
+          contact: cleanPhone,
         },
         theme: { color: '#EA580C' },
+        retry: { enabled: true, max_count: 2 },
       });
 
       // Step 3: Server-side signature verify → confirm booking
@@ -326,61 +453,52 @@ export default function CheckoutScreen({ navigation, route }: any) {
         razorpay_signature: paymentSuccessData.razorpay_signature,
       };
 
-      let verified: any = null;
-      try {
-        verified = await api.verifyPayment(payload);
-      } catch {
-        verified = await api.confirmBooking({
-          ...payload,
-          userPhone: `+91${cleanPhone}`,
-          paymentDetails: { gateway: 'razorpay', status: 'authorized', ...payload },
-        });
-      }
+      const verified = await api.verifyPayment(payload);
 
-      if (verified?.success || verified?.orderNumber || verified?.order) {
-        // Leave checkout permanently — show pass, then My Tickets
-        navigation.reset({
-          index: 1,
-          routes: [
-            { name: 'Main', state: { routes: [{ name: 'Tickets' }], index: 0 } },
-            {
-              name: 'BookingConfirmed',
-              params: {
-                orderId: verified.orderId || verified.bookingId || verified?.order?.id || 1,
-                orderNumber:
-                  verified.orderNumber ||
-                  verified?.order?.orderNumber ||
-                  `MT-${Date.now().toString().slice(-6)}`,
-                eventTitle:
-                  verified?.order?.event?.titleMr ||
-                  verified?.order?.event?.title ||
-                  eventTitle,
-                seatCodes:
-                  verified?.order?.tickets?.map((t: any) => t.seatCode) || seatCodes,
-                grandTotal: verified?.order?.grandTotal || grandTotal,
+      if (verified?.success || verified?.orderId || verified?.id || verified?.order) {
+        // Direct reset to BookingConfirmed so checkout is completely unmounted from the background
+        navigation.dispatch(
+          CommonActions.reset({
+            index: 0,
+            routes: [
+              {
+                name: 'BookingConfirmed',
+                params: {
+                  orderId: verified.orderId || verified.bookingId || verified?.order?.id || 1,
+                  orderNumber:
+                    verified.orderNumber ||
+                    verified?.order?.orderNumber ||
+                    `MT-${Date.now().toString().slice(-6)}`,
+                  eventTitle:
+                    verified?.order?.event?.titleMr ||
+                    verified?.order?.event?.title ||
+                    eventTitle,
+                  seatCodes:
+                    verified?.order?.tickets?.map((t: any) => t.seatCode) || seatCodes,
+                  grandTotal: verified?.order?.grandTotal || grandTotal,
+                },
               },
-            },
-          ],
-        });
+            ],
+          })
+        );
       } else {
         throw new Error(verified?.message || verified?.error || 'Payment confirmation failed');
       }
     } catch (err: any) {
       const { title, message } = formatPaymentErrorMessage(err);
-      Alert.alert(
-        title,
-        message,
-        [
-          {
-            text: 'Go to Seats',
-            onPress: () => navigation.goBack(),
-          },
-          {
-            text: 'Retry',
-            style: 'default',
-          },
-        ]
-      );
+      setCheckoutModal({
+        visible: true,
+        type: 'error',
+        title: title || 'पेमेंट त्रुटी (Payment Error)',
+        message: message || 'पेमेंट पूर्ण करताना त्रुटी आली. आपले सीट सुरक्षित आहेत, कृपया पुन्हा प्रयत्न करा.',
+        primaryButtonText: 'पुन्हा प्रयत्न करा (Retry)',
+        onPrimaryPress: () => setCheckoutModal(null),
+        secondaryButtonText: 'मागे जा (Go to Seats)',
+        onSecondaryPress: () => {
+          setCheckoutModal(null);
+          navigation.goBack();
+        },
+      });
     } finally {
       setPaying(false);
     }
@@ -523,7 +641,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
                 placeholderTextColor="#94A3B8"
                 value={phone}
                 onChangeText={(t) => {
-                  setPhone(digitsOnlyPhone(t));
+                  setPhone(cleanIndianMobile(t));
                   setFieldError(null);
                 }}
                 keyboardType="phone-pad"
@@ -532,6 +650,28 @@ export default function CheckoutScreen({ navigation, route }: any) {
                 returnKeyType="next"
                 textContentType="telephoneNumber"
                 autoComplete="tel"
+                onSubmitEditing={() => ageRef.current?.focus()}
+                blurOnSubmit={false}
+              />
+            </View>
+          </View>
+
+          {/* Age Field (वय) */}
+          <View style={styles.formFieldBox}>
+            <Text style={styles.formFieldLabel}>AGE (वय)</Text>
+            <View style={styles.formFieldInputRow}>
+              <Icon name="calendar-account-outline" size={18} color="#94A3B8" style={{ marginRight: 8 }} />
+              <TextInput
+                ref={ageRef}
+                style={[styles.modernTextInput, paying && styles.inputLocked]}
+                placeholder="Attendee age (e.g. 28)"
+                placeholderTextColor="#94A3B8"
+                value={age}
+                onChangeText={setAge}
+                keyboardType="number-pad"
+                maxLength={3}
+                editable={!paying}
+                returnKeyType="next"
                 onSubmitEditing={() => emailRef.current?.focus()}
                 blurOnSubmit={false}
               />
@@ -540,13 +680,13 @@ export default function CheckoutScreen({ navigation, route }: any) {
 
           {/* Email Field */}
           <View style={styles.formFieldBox}>
-            <Text style={styles.formFieldLabel}>EMAIL ADDRESS</Text>
+            <Text style={styles.formFieldLabel}>EMAIL ADDRESS (ईमेल)</Text>
             <View style={styles.formFieldInputRow}>
               <Icon name="email-outline" size={18} color="#94A3B8" style={{ marginRight: 8 }} />
               <TextInput
                 ref={emailRef}
                 style={[styles.modernTextInput, paying && styles.inputLocked]}
-                placeholder="For PDF ticket & invoice"
+                placeholder="For instant PDF pass & booking receipt"
                 placeholderTextColor="#94A3B8"
                 value={email}
                 onChangeText={(t) => {
@@ -575,24 +715,27 @@ export default function CheckoutScreen({ navigation, route }: any) {
             </View>
           </View>
 
-          {/* Quick One-Tap Coupon Pills */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickCouponRow}>
-            <TouchableOpacity onPress={() => applyCouponCode('MAHA50')} style={styles.quickCouponPill}>
-              <Icon name="tag" size={13} color="#EA580C" style={{ marginRight: 4 }} />
-              <Text style={styles.quickCouponCode}>MAHA50</Text>
-              <Text style={styles.quickCouponSave}>• Save ₹50</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => applyCouponCode('NATAK10')} style={styles.quickCouponPill}>
-              <Icon name="tag" size={13} color="#EA580C" style={{ marginRight: 4 }} />
-              <Text style={styles.quickCouponCode}>NATAK10</Text>
-              <Text style={styles.quickCouponSave}>• 10% Off</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => applyCouponCode('CINEMA20')} style={styles.quickCouponPill}>
-              <Icon name="tag" size={13} color="#EA580C" style={{ marginRight: 4 }} />
-              <Text style={styles.quickCouponCode}>CINEMA20</Text>
-              <Text style={styles.quickCouponSave}>• Save ₹20</Text>
-            </TouchableOpacity>
-          </ScrollView>
+          {/* Quick coupons from GET /api/coupons (same DB as web) */}
+          {availableCoupons.length > 0 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickCouponRow}>
+              {availableCoupons.slice(0, 6).map((c: any) => (
+                <TouchableOpacity
+                  key={String(c.id || c.code)}
+                  onPress={() => applyCouponCode(String(c.code))}
+                  style={styles.quickCouponPill}
+                  disabled={paying}
+                >
+                  <Icon name="tag" size={13} color="#EA580C" style={{ marginRight: 4 }} />
+                  <Text style={styles.quickCouponCode}>{c.code}</Text>
+                  {c.description ? (
+                    <Text style={styles.quickCouponSave} numberOfLines={1}>
+                      • {c.description}
+                    </Text>
+                  ) : null}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          ) : null}
 
           {appliedCoupon ? (
             <View style={styles.appliedCoupon}>
@@ -677,7 +820,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
         <View style={{ height: 16 }} />
       </ScrollView>
 
-      {/* Sticky Bottom Bar */}
+      {/* Sticky Bottom Bar with Live Payment Text Swipe */}
       <View style={[styles.ctaBar, { paddingBottom: insets.bottom > 0 ? insets.bottom : 12 }]}>
         <View style={{ marginRight: 14 }}>
           <Text style={styles.totalLabel}>Grand Total</Text>
@@ -692,20 +835,35 @@ export default function CheckoutScreen({ navigation, route }: any) {
             (paying || countdown <= 0) && styles.payBtnDisabled,
           ]}
         >
-          <Icon name="shield-lock-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-          <Text style={styles.payBtnText}>
-            Pay {paise(grandTotal)}
-          </Text>
+          {paying ? (
+            <View style={styles.payBtnLiveRow}>
+              <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
+              <Text style={styles.payBtnLiveText} numberOfLines={1}>
+                {PAYMENT_STATUS_MESSAGES[paymentMsgIdx]}
+              </Text>
+            </View>
+          ) : (
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Icon name="shield-lock-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+              <Text style={styles.payBtnText}>
+                Pay {paise(grandTotal)}
+              </Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
 
-      {/* Professional Centered Payment Processing Modal */}
+      {/* Professional Centered Payment Processing Modal with Live Status Message */}
       <Modal visible={paying} transparent animationType="fade">
         <View style={styles.paymentModalBackdrop}>
           <View style={styles.paymentModalCard}>
             <ActivityIndicator size="large" color="#EA580C" style={{ marginBottom: 16 }} />
-            <Text style={styles.paymentModalTitle}>सुरक्षित पेमेंट प्रक्रिया सुरू आहे...</Text>
-            <Text style={styles.paymentModalSub}>Processing Secure Payment</Text>
+            <Text style={styles.paymentModalTitle}>
+              {PAYMENT_STATUS_MESSAGES[paymentMsgIdx]}
+            </Text>
+            <Text style={styles.paymentModalSub}>
+              {paymentMsgIdx === 1 ? 'Enjoy your show! 🎭' : 'Processing Secure Payment • Razorpay'}
+            </Text>
             <View style={styles.paymentModalSecurityBadge}>
               <Icon name="shield-check" size={16} color="#16A34A" />
               <Text style={styles.paymentModalSecurityText}>256-Bit SSL Encrypted • RBI Approved Gateway</Text>
@@ -716,13 +874,28 @@ export default function CheckoutScreen({ navigation, route }: any) {
           </View>
         </View>
       </Modal>
+
+      {/* Modern In-App Popup Modal for errors & alerts */}
+      {checkoutModal ? (
+        <MTPopupModal
+          visible={checkoutModal.visible}
+          type={checkoutModal.type || 'warning'}
+          title={checkoutModal.title}
+          message={checkoutModal.message}
+          primaryButtonText={checkoutModal.primaryButtonText}
+          onPrimaryPress={checkoutModal.onPrimaryPress}
+          secondaryButtonText={checkoutModal.secondaryButtonText}
+          onSecondaryPress={checkoutModal.onSecondaryPress}
+          onRequestClose={() => setCheckoutModal(null)}
+        />
+      ) : null}
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.bg },
-  scroll: { paddingHorizontal: SPACING.base, gap: SPACING.md, paddingBottom: 24 },
+  scroll: { paddingHorizontal: SPACING.base, gap: SPACING.md, paddingBottom: 110 },
 
   timerPillBanner: {
     paddingHorizontal: SPACING.base,
@@ -782,6 +955,64 @@ const styles = StyleSheet.create({
 
   formFieldBox: {
     gap: 5,
+  },
+  verifyEmailBtn: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  verifyEmailBtnText: {
+    color: '#EA580C',
+    fontWeight: '800',
+    fontSize: 12,
+  },
+  authOkText: {
+    marginTop: 6,
+    color: '#15803D',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  authErrText: {
+    marginTop: 6,
+    color: '#DC2626',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  authBox: {
+    marginTop: 8,
+    gap: 8,
+  },
+  authInput: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 44,
+    color: '#0F172A',
+    fontWeight: '600',
+  },
+  authPrimaryBtn: {
+    backgroundColor: '#EA580C',
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  authPrimaryBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 13,
+  },
+  authLinkText: {
+    color: '#EA580C',
+    fontWeight: '700',
+    fontSize: 12,
+    textAlign: 'center',
   },
   formFieldLabel: {
     color: '#64748B',
@@ -1057,12 +1288,22 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
     paddingHorizontal: SPACING.base,
-    paddingTop: 12,
+    paddingTop: 10,
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
+    minHeight: 72,
+    ...SHADOWS.sm,
+    elevation: 12,
   },
   totalLabel: { color: COLORS.textMuted, fontSize: 11, fontWeight: '700' },
-  totalVal: { color: COLORS.primary, fontSize: 22, fontWeight: '900' },
+  totalVal: {
+    color: COLORS.primary,
+    fontSize: 20,
+    fontWeight: '900',
+    lineHeight: 26,
+    paddingBottom: 2,
+  },
   payBtn: {
     flex: 1,
     flexDirection: 'row',
@@ -1070,8 +1311,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: COLORS.primary,
     paddingVertical: 14,
+    paddingHorizontal: 12,
     borderRadius: RADIUS.md,
-    minHeight: 48,
+    minHeight: 52,
+    maxWidth: '68%',
   },
   payBtnDisabled: {
     opacity: 0.5,
@@ -1080,6 +1323,20 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontSize: 15,
     fontWeight: '800',
+    flexShrink: 1,
+  },
+  payBtnLiveRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    maxWidth: '100%',
+  },
+  payBtnLiveText: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: '800',
+    flexShrink: 1,
   },
   legalLink: {
     paddingHorizontal: 8,

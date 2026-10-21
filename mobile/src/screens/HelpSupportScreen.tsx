@@ -4,7 +4,6 @@
  */
 import React, { useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -19,7 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, RADIUS, SPACING } from '../theme';
 import { useAuthStore } from '../store';
-import { BackHeader, Button } from '../components';
+import { BackHeader, Button, MTPopupModal } from '../components';
 import { CONTACT, WEB_CONTACT_URL, openMailto, openUrl } from '../lib/contact';
 
 const FAQS = [
@@ -88,10 +87,11 @@ export default function HelpSupportScreen({ navigation }: any) {
   const [bookingId, setBookingId] = useState('');
   const [message, setMessage] = useState('');
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [supportModalMsg, setSupportModalMsg] = useState<string | null>(null);
 
   const send = () => {
     if (!message.trim()) {
-      Alert.alert('Message required', 'Please describe how we can help.');
+      setSupportModalMsg('कृपया आपली समस्या किंवा प्रश्न लिहा (Please describe how we can help).');
       return;
     }
     const body = [
@@ -267,6 +267,18 @@ export default function HelpSupportScreen({ navigation }: any) {
           <View style={{ height: 40 }} />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {supportModalMsg ? (
+        <MTPopupModal
+          visible={!!supportModalMsg}
+          type="warning"
+          title="माहिती आवश्यक आहे (Required)"
+          message={supportModalMsg}
+          primaryButtonText="समजले (OK)"
+          onPrimaryPress={() => setSupportModalMsg(null)}
+          onRequestClose={() => setSupportModalMsg(null)}
+        />
+      ) : null}
     </View>
   );
 }

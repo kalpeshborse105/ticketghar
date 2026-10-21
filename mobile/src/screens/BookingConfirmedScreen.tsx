@@ -12,6 +12,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  BackHandler,
   Dimensions,
   Easing,
   Linking,
@@ -33,6 +34,8 @@ import { COLORS, RADIUS, SPACING, SHADOWS } from '../theme';
 import { api, OrderItem, formatDate, formatTime, paise } from '../api';
 import { Button, Skeleton } from '../components';
 import { useCartStore } from '../store';
+import { WEB_ORIGIN, openUrl } from '../lib/contact';
+import { downloadTicketPdf } from '../lib/downloader';
 
 const { width } = Dimensions.get('window');
 
@@ -96,6 +99,18 @@ export default function BookingConfirmedScreen({ navigation, route }: any) {
   useEffect(() => {
     clearCart();
 
+    // Prevent returning to checkout on hardware back press — redirect to Main Tabs
+    const onBackPress = () => {
+      navigation.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'Main' }],
+        })
+      );
+      return true;
+    };
+    const backSub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
     // Sequence animations
     Animated.sequence([
       Animated.spring(scale, { toValue: 1, tension: 120, friction: 9, useNativeDriver: true }),
@@ -123,7 +138,11 @@ export default function BookingConfirmedScreen({ navigation, route }: any) {
     } else {
       setLoading(false);
     }
-  }, [orderNumber]);
+
+    return () => {
+      backSub.remove();
+    };
+  }, [orderNumber, navigation]);
 
   const resolvedOrderNum = order?.orderNumber || orderNumber || `TG-2026-${Math.floor(10000 + Math.random() * 90000)}`;
   const resolvedEventTitle = order?.event?.titleMr || order?.event?.title || eventTitle || 'मराठी महानाट्य';
@@ -164,6 +183,19 @@ export default function BookingConfirmedScreen({ navigation, route }: any) {
       timestamp: new Date().toISOString(),
     });
 
+  const primaryTicketCode = order?.tickets?.[0]?.ticketCode || resolvedOrderNum;
+  const pdfUrl = `${WEB_ORIGIN}/api/orders/${encodeURIComponent(resolvedOrderNum)}/pdf`;
+  const ticketWebUrl = `${WEB_ORIGIN}/tickets/${encodeURIComponent(primaryTicketCode)}`;
+
+  const handleDownloadPdf = async () => {
+    await downloadTicketPdf({
+      url: `${pdfUrl}?download=1`,
+      filename: `MahaTicket-${resolvedOrderNum}.pdf`,
+      title: `${resolvedEventTitle} - Ticket Pass`,
+      description: `Seats: ${formattedSeats} • Order #${resolvedOrderNum}`,
+    });
+  };
+
   const handleShare = async () => {
     const shareMessage = `🎭 *MahaTicket (महाटिकिट) - ई-तिकीट कन्फर्मेशन*\n\n` +
       `📌 *कार्यक्रम:* ${resolvedEventTitle}\n` +
@@ -172,22 +204,27 @@ export default function BookingConfirmedScreen({ navigation, route }: any) {
       `📍 *सभागृह:* ${resolvedVenue}, ${resolvedCity}\n` +
       `💺 *आसन क्रमांक:* ${formattedSeats}\n` +
       `🎟️ *ऑर्डर क्रमांक:* #${resolvedOrderNum}\n\n` +
+      `🌐 *तिकीट ऑनलाइन पहा:* \n${ticketWebUrl}\n\n` +
+      `📥 *थेट PDF डाउनलोड करा:* \n${pdfUrl}\n\n` +
       `प्रवेशद्वारावर डिजिटल क्यूआर कोड दाखवा. सुलभ तिकीट बुकिंग - MahaTicket!`;
 
     await Share.share({
       title: `${resolvedEventTitle} - MahaTicket Pass`,
       message: shareMessage,
+      url: ticketWebUrl,
     });
   };
 
   const handleWhatsAppShare = () => {
     const text = encodeURIComponent(
-      `🎭 *MahaTicket (महाटिकिट) बुकिंग निश्चित!*\n` +
-      `कार्यक्रम: ${resolvedEventTitle}\n` +
-      `तारीख: ${showDateStr} (${showTimeStr})\n` +
-      `सभागृह: ${resolvedVenue}\n` +
-      `आसने: ${formattedSeats}\n` +
-      `ऑर्डर: #${resolvedOrderNum}`
+      `🎭 *MahaTicket (महाटिकिट) बुकिंग निश्चित!*\n\n` +
+      `📌 *कार्यक्रम:* ${resolvedEventTitle}\n` +
+      `📅 *तारीख:* ${showDateStr} (${showTimeStr})\n` +
+      `📍 *सभागृह:* ${resolvedVenue}\n` +
+      `💺 *आसने:* ${formattedSeats}\n` +
+      `🎟️ *ऑर्डर:* #${resolvedOrderNum}\n\n` +
+      `🌐 *तिकीट पहा:* ${ticketWebUrl}\n` +
+      `📥 *PDF डाउनलोड:* ${pdfUrl}`
     );
     Linking.openURL(`whatsapp://send?text=${text}`).catch(() => {
       handleShare();
@@ -211,21 +248,24 @@ export default function BookingConfirmedScreen({ navigation, route }: any) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.scroll,
-          { paddingBottom: Math.max(insets.bottom, 12) + 8 },
+          { paddingBottom: Math.max(insets.bottom, 12) + 12 },
         ]}
       >
-        {/* Animated Green Success Circle Checkmark */}
-        <Animated.View style={[styles.successCircle, { transform: [{ scale }] }]}>
-          <Animated.Text style={[styles.checkmark, { opacity: checkOpacity }]}>✓</Animated.Text>
-        </Animated.View>
-
         <Animated.View
           style={[styles.animatedContent, { opacity: contentOpacity, transform: [{ translateY: contentY }] }]}
         >
-          <Text style={styles.title}>Booking Confirmed</Text>
-          <Text style={styles.subtitle}>
-            Your ticket is confirmed. Enjoy the show!
-          </Text>
+          {/* Compact Top Celebration Header */}
+          <View style={styles.compactSuccessHeader}>
+            <Animated.View style={[styles.compactSuccessBadge, { transform: [{ scale }] }]}>
+              <Icon name="check-bold" size={16} color="#FFFFFF" />
+            </Animated.View>
+            <View style={{ flex: 1, paddingLeft: 8 }}>
+              <Text style={styles.compactSuccessTitle}>बुकिंग निश्चित! (Booking Confirmed)</Text>
+              <Text style={styles.compactSuccessSubtitle}>
+                आपले ई-तिकीट तयार आहे • Show this QR pass at the venue entrance
+              </Text>
+            </View>
+          </View>
 
           {/* ════════════════════════════════════════════════════════════════════════
               MAHATICKET AUTHENTIC PHYSICAL PASS (Exact Web MahaTicketCard Parity)
@@ -240,7 +280,7 @@ export default function BookingConfirmedScreen({ navigation, route }: any) {
             >
               <View style={styles.headerBrandRow}>
                 <View style={styles.ticketIconBox}>
-                  <Icon name="ticket-confirmation" size={18} color="#FFFFFF" />
+                  <Icon name="ticket-confirmation" size={16} color="#FFFFFF" />
                 </View>
                 <View>
                   <Text style={styles.brandTitle}>महाटिकिट M-TICKET PASS</Text>
@@ -250,7 +290,7 @@ export default function BookingConfirmedScreen({ navigation, route }: any) {
 
               {/* Status Badge */}
               <View style={styles.validStatusBadge}>
-                <Icon name="shield-check" size={14} color="#6EE7B7" />
+                <Icon name="shield-check" size={13} color="#6EE7B7" />
                 <Text style={styles.validStatusText}>वैध (Valid)</Text>
               </View>
             </LinearGradient>
@@ -271,7 +311,7 @@ export default function BookingConfirmedScreen({ navigation, route }: any) {
               <View style={styles.detailsGrid}>
                 {/* Date */}
                 <View style={styles.gridItem}>
-                  <Icon name="calendar-month" size={16} color="#EA580C" style={styles.gridIcon} />
+                  <Icon name="calendar-month" size={15} color="#EA580C" style={styles.gridIcon} />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.gridLabel}>तारीख / DATE</Text>
                     <Text style={styles.gridVal} numberOfLines={1}>{showDateStr}</Text>
@@ -280,7 +320,7 @@ export default function BookingConfirmedScreen({ navigation, route }: any) {
 
                 {/* Time */}
                 <View style={styles.gridItem}>
-                  <Icon name="clock-outline" size={16} color="#EA580C" style={styles.gridIcon} />
+                  <Icon name="clock-outline" size={15} color="#EA580C" style={styles.gridIcon} />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.gridLabel}>वेळ / TIME</Text>
                     <Text style={styles.gridVal} numberOfLines={1}>{showTimeStr}</Text>
@@ -289,7 +329,7 @@ export default function BookingConfirmedScreen({ navigation, route }: any) {
 
                 {/* Venue (Full width) */}
                 <View style={[styles.gridItem, styles.gridItemFull]}>
-                  <Icon name="map-marker-radius" size={16} color="#EA580C" style={styles.gridIcon} />
+                  <Icon name="map-marker-radius" size={15} color="#EA580C" style={styles.gridIcon} />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.gridLabel}>सभागृह / VENUE</Text>
                     <Text style={styles.gridVal} numberOfLines={1}>
@@ -318,22 +358,22 @@ export default function BookingConfirmedScreen({ navigation, route }: any) {
               </View>
             </View>
 
-            {/* ══════ PHYSICAL TICKET PERFORATION & NOTCH CUTOUTS ══════ */}
+            {/* ══════ PHYSICAL TICKET PERFORATION & NOTCH CUTOUTS (Exact Web Parity) ══════ */}
             <View style={styles.perforationWrapper}>
-              {/* Left Notch (Cut into white card) */}
+              {/* Left Inward Semi-circle Notch */}
               <View style={styles.notchLeft} />
-              {/* Dashed Line */}
+              {/* Dashed Perforation Line */}
               <View style={styles.dashedDivider} />
-              {/* Right Notch */}
+              {/* Right Inward Semi-circle Notch */}
               <View style={styles.notchRight} />
             </View>
 
-            {/* ══════ QR CODE PRESENTATION ZONE ══════ */}
+            {/* ══════ QR CODE PRESENTATION ZONE (Compact, High-Contrast) ══════ */}
             <View style={styles.qrContainer}>
               <View style={styles.qrInnerBox}>
                 <QRCode
                   value={qrPayload}
-                  size={180}
+                  size={140}
                   backgroundColor="#FFFFFF"
                   color="#111827"
                 />
@@ -343,91 +383,101 @@ export default function BookingConfirmedScreen({ navigation, route }: any) {
                 प्रवेशद्वारावर हा QR कोड दाखवा (Entry Pass)
               </Text>
               <Text style={styles.qrSubInstructions}>
-                स्कॅन करण्यासाठी स्क्रीन ब्राईटनेस वाढवा • Increase brightness for scan
+                स्कॅन करण्यासाठी स्क्रीन ब्राईटनेस वाढवा • Increase brightness
               </Text>
               <Text style={styles.qrTicketCodeText}>
-                PASS ID: {resolvedOrderNum}
+                PASS ID: #{resolvedOrderNum}
               </Text>
 
-              {/* Security Shield Notice */}
+              {/* Compact Security Shield Badge */}
               <View style={styles.securityBox}>
                 <View style={styles.securityHeader}>
-                  <Icon name="shield-check" size={15} color="#EA580C" />
+                  <Icon name="shield-check" size={14} color="#EA580C" />
                   <Text style={styles.securityTitle}>सुरक्षित डिजिटल तिकीट पडताळणी</Text>
                 </View>
                 <Text style={styles.securityText}>
-                  • हे तिकीट एनक्रिप्टेड (Encrypted MTSEC) असून केवळ अधिकृत गेट ऑपरेटरद्वारेच स्कॅन केले जाते.
-                </Text>
-                <Text style={styles.securityText}>
-                  • प्रयोगाच्या वेळेपूर्वी १५ मिनिटे आधी सभागृहात उपस्थित राहावे.
+                  • हे तिकीट एनक्रिप्टेड (MTSEC) असून अधिकृत गेट ऑपरेटरद्वारे स्कॅन केले जाते.
                 </Text>
               </View>
             </View>
           </View>
 
           {/* ════════════════════════════════════════════════════════════════════════
-              PRIMARY & SECONDARY ACTION BUTTONS
+              SINGLE ROW MODERN ICON ACTION BUTTONS (NO CLUMSY STACKED BUTTONS)
           ════════════════════════════════════════════════════════════════════════ */}
-          <View style={styles.actionSection}>
-            {/* WhatsApp Share Button */}
+          <View style={styles.iconActionsRow}>
+            {/* WhatsApp Share */}
             <TouchableOpacity
               onPress={handleWhatsAppShare}
-              style={styles.whatsAppBtn}
-              activeOpacity={0.85}
+              style={styles.iconActionBtnItem}
+              activeOpacity={0.8}
             >
-              <Icon name="whatsapp" size={20} color="#FFFFFF" />
-              <Text style={styles.whatsAppBtnText}>Share on WhatsApp</Text>
+              <View style={[styles.iconCircle, { backgroundColor: '#25D366' }]}>
+                <Icon name="whatsapp" size={24} color="#FFFFFF" />
+              </View>
+              <Text style={styles.iconActionLabel}>WhatsApp</Text>
             </TouchableOpacity>
 
-            {/* My Tickets & Home 2-Button Row */}
-            <View style={styles.twoBtnRow}>
-              <TouchableOpacity
-                onPress={() =>
-                  navigation.dispatch(
-                    CommonActions.reset({
-                      index: 0,
-                      routes: [{ name: 'Main', state: { routes: [{ name: 'Tickets' }], index: 0 } }],
-                    })
-                  )
-                }
-                style={styles.myTicketsBtn}
-                activeOpacity={0.85}
-              >
-                <Icon name="ticket-confirmation-outline" size={18} color="#FFFFFF" />
-                <Text style={styles.myTicketsBtnText}>My Tickets</Text>
-              </TouchableOpacity>
+            {/* Native Share */}
+            <TouchableOpacity
+              onPress={handleShare}
+              style={styles.iconActionBtnItem}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.iconCircle, { backgroundColor: '#0284C7' }]}>
+                <Icon name="share-variant" size={21} color="#FFFFFF" />
+              </View>
+              <Text style={styles.iconActionLabel}>Share</Text>
+            </TouchableOpacity>
 
-              <TouchableOpacity
-                onPress={() =>
-                  navigation.dispatch(
-                    CommonActions.reset({
-                      index: 0,
-                      routes: [{ name: 'Main', state: { routes: [{ name: 'Home' }], index: 0 } }],
-                    })
-                  )
-                }
-                style={styles.homeBtn}
-                activeOpacity={0.85}
-              >
-                <Icon name="home-outline" size={18} color="#F8FAFC" />
-                <Text style={styles.homeBtnText}>Home</Text>
-              </TouchableOpacity>
-            </View>
+            {/* Download PDF */}
+            <TouchableOpacity
+              onPress={handleDownloadPdf}
+              style={styles.iconActionBtnItem}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.iconCircle, { backgroundColor: '#DC2626' }]}>
+                <Icon name="file-pdf-box" size={24} color="#FFFFFF" />
+              </View>
+              <Text style={styles.iconActionLabel}>PDF</Text>
+            </TouchableOpacity>
 
-            {/* Explore More Events Ghost Button */}
+            {/* My Tickets */}
             <TouchableOpacity
               onPress={() =>
                 navigation.dispatch(
                   CommonActions.reset({
                     index: 0,
-                    routes: [{ name: 'Main', state: { routes: [{ name: 'Explore' }], index: 0 } }],
+                    routes: [{ name: 'Main', state: { routes: [{ name: 'Tickets' }], index: 0 } }],
                   })
                 )
               }
-              style={styles.exploreBtn}
+              style={styles.iconActionBtnItem}
               activeOpacity={0.8}
             >
-              <Text style={styles.exploreBtnText}>Explore More Events →</Text>
+              <View style={[styles.iconCircle, { backgroundColor: '#EA580C' }]}>
+                <Icon name="ticket-confirmation-outline" size={22} color="#FFFFFF" />
+              </View>
+              <Text style={styles.iconActionLabel}>My Tickets</Text>
+            </TouchableOpacity>
+
+            {/* Home */}
+            <TouchableOpacity
+              onPress={() =>
+                navigation.dispatch(
+                  CommonActions.reset({
+                    index: 0,
+                    routes: [{ name: 'Main', state: { routes: [{ name: 'Home' }], index: 0 } }],
+                  })
+                )
+              }
+              style={styles.iconActionBtnItem}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.iconCircle, { backgroundColor: '#334155' }]}>
+                <Icon name="home-outline" size={22} color="#FFFFFF" />
+              </View>
+              <Text style={styles.iconActionLabel}>Home</Text>
             </TouchableOpacity>
           </View>
         </Animated.View>
@@ -453,59 +503,57 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-  successCircle: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: '#10B981',
+  compactSuccessHeader: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+  },
+  compactSuccessBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#16A34A',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
-    shadowColor: '#10B981',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 14,
-    elevation: 10,
   },
-  checkmark: {
-    fontSize: 48,
-    color: '#FFFFFF',
+  compactSuccessTitle: {
+    fontSize: 13.5,
     fontWeight: '900',
+    color: '#166534',
   },
-
-  title: {
-    color: COLORS.text,
-    fontSize: 26,
-    fontWeight: '900',
-    textAlign: 'center',
-    marginBottom: 6,
-  },
-  subtitle: {
-    color: COLORS.textMuted,
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 20,
-    lineHeight: 20,
+  compactSuccessSubtitle: {
+    fontSize: 11,
+    color: '#475569',
+    marginTop: 1,
   },
 
   /* Ticket Pass Container */
   ticketCard: {
     width: '100%',
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
+    borderRadius: 20,
     overflow: 'hidden',
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.35,
-    shadowRadius: 20,
-    elevation: 12,
-    marginBottom: 16,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
+    elevation: 8,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
 
   /* Top Gradient Banner */
   ticketHeaderGradient: {
-    paddingHorizontal: 18,
-    paddingVertical: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -513,24 +561,24 @@ const styles = StyleSheet.create({
   headerBrandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
   },
   ticketIconBox: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
+    width: 28,
+    height: 28,
+    borderRadius: 8,
     backgroundColor: 'rgba(255,255,255,0.22)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   brandTitle: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: '900',
     color: 'rgba(255,255,255,0.92)',
-    letterSpacing: 1.2,
+    letterSpacing: 1.1,
   },
   orderNumberText: {
-    fontSize: 13,
+    fontSize: 11.5,
     fontWeight: '800',
     color: '#FFFFFF',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
@@ -538,85 +586,85 @@ const styles = StyleSheet.create({
   validStatusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
     borderRadius: 100,
-    backgroundColor: 'rgba(0,0,0,0.28)',
+    backgroundColor: 'rgba(0,0,0,0.25)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
   },
   validStatusText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
     color: '#FFFFFF',
   },
 
   /* Ticket Body */
   ticketBody: {
-    padding: 20,
+    padding: 14,
     backgroundColor: '#FFFFFF',
   },
   categoryPill: {
     alignSelf: 'flex-start',
-    paddingHorizontal: 9,
-    paddingVertical: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
     borderRadius: 100,
     backgroundColor: '#FFF7ED',
     borderWidth: 1,
     borderColor: 'rgba(234,88,12,0.3)',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   categoryPillText: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: '800',
     color: '#C2410C',
     letterSpacing: 0.5,
   },
   eventTitleText: {
-    fontSize: 22,
+    fontSize: 17,
     fontWeight: '900',
     color: '#111827',
-    lineHeight: 28,
-    marginBottom: 14,
+    lineHeight: 23,
+    marginBottom: 10,
   },
 
   /* 2-Column Grid */
   detailsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingTop: 14,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
-    gap: 12,
+    gap: 10,
   },
   gridItem: {
     width: '47%',
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 8,
+    gap: 6,
   },
   gridItemFull: {
     width: '100%',
-    paddingTop: 4,
+    paddingTop: 2,
   },
   gridIcon: {
-    marginTop: 2,
+    marginTop: 1,
   },
   gridLabel: {
-    fontSize: 9,
+    fontSize: 8.5,
     fontWeight: '800',
     color: '#64748B',
-    letterSpacing: 0.5,
-    marginBottom: 2,
+    letterSpacing: 0.4,
+    marginBottom: 1,
   },
   gridVal: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
     color: '#0F172A',
   },
   gridSubVal: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '600',
     color: '#64748B',
     marginTop: 1,
@@ -624,10 +672,10 @@ const styles = StyleSheet.create({
 
   /* Seats Callout Box */
   seatsCallout: {
-    marginTop: 16,
-    padding: 12,
+    marginTop: 12,
+    padding: 10,
     backgroundColor: '#FFF7ED',
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: 'rgba(249,115,22,0.35)',
     flexDirection: 'row',
@@ -635,14 +683,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   seatsCalloutLabel: {
-    fontSize: 9,
+    fontSize: 8.5,
     fontWeight: '800',
     color: '#C2410C',
-    letterSpacing: 0.5,
-    marginBottom: 2,
+    letterSpacing: 0.4,
+    marginBottom: 1,
   },
   seatsCalloutVal: {
-    fontSize: 15,
+    fontSize: 13.5,
     fontWeight: '900',
     color: '#111827',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
@@ -651,196 +699,163 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   seatsCalloutPrice: {
-    fontSize: 16,
+    fontSize: 14.5,
     fontWeight: '900',
     color: '#EA580C',
   },
 
-  /* Physical Perforation */
+  /* Physical Perforation with Inward Semi-circle Notches */
   perforationWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
     position: 'relative',
-    height: 28,
+    height: 30,
+    marginVertical: 1,
   },
   notchLeft: {
-    width: 22,
-    height: 28,
-    borderTopRightRadius: 14,
-    borderBottomRightRadius: 14,
+    width: 10,
+    height: 16,
+    borderTopRightRadius: 8,
+    borderBottomRightRadius: 8,
     backgroundColor: COLORS.bg,
-    marginLeft: -2,
+    borderRightWidth: 1,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#E2E8F0',
+    marginLeft: -1,
   },
   dashedDivider: {
     flex: 1,
-    height: 1,
+    height: 0,
     borderStyle: 'dashed',
-    borderWidth: 1.2,
+    borderWidth: 1,
     borderColor: '#CBD5E1',
-    marginHorizontal: 8,
+    marginHorizontal: 6,
   },
   notchRight: {
-    width: 22,
-    height: 28,
-    borderTopLeftRadius: 14,
-    borderBottomLeftRadius: 14,
+    width: 10,
+    height: 16,
+    borderTopLeftRadius: 8,
+    borderBottomLeftRadius: 8,
     backgroundColor: COLORS.bg,
-    marginRight: -2,
+    borderLeftWidth: 1,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#E2E8F0',
+    marginRight: -1,
   },
 
   /* QR Presentation Zone */
   qrContainer: {
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 22,
-    paddingTop: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    paddingTop: 4,
   },
   qrInnerBox: {
-    padding: 14,
+    padding: 10,
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    borderWidth: 2,
+    borderRadius: 14,
+    borderWidth: 1.5,
     borderColor: '#E2E8F0',
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 3,
-    marginBottom: 14,
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+    marginBottom: 8,
   },
   qrInstructions: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '900',
     color: '#EA580C',
     textAlign: 'center',
-    marginBottom: 3,
+    marginBottom: 2,
   },
   qrSubInstructions: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#64748B',
     textAlign: 'center',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   qrTicketCodeText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
     color: '#94A3B8',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    marginBottom: 14,
+    marginBottom: 8,
   },
 
   /* Security Trust Card */
   securityBox: {
     width: '100%',
     backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 10,
+    padding: 8,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    gap: 4,
+    gap: 2,
   },
   securityHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 3,
+    gap: 4,
+    marginBottom: 1,
   },
   securityTitle: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
     color: '#1E293B',
   },
   securityText: {
-    fontSize: 10,
+    fontSize: 9.5,
     color: '#64748B',
-    lineHeight: 15,
+    lineHeight: 14,
   },
 
-  /* Bottom Actions */
-  actionSection: {
+  /* ════════ SINGLE ROW ICON ACTION BAR ════════ */
+  iconActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
     width: '100%',
-    gap: 10,
-    marginTop: 0,
-  },
-  whatsAppBtn: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-    paddingVertical: 12,
-    borderRadius: 14,
-    backgroundColor: '#25D366',
-    shadowColor: '#25D366',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  whatsAppBtnText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-
-  twoBtnRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  myTicketsBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-    paddingVertical: 12,
-    borderRadius: 14,
-    backgroundColor: '#EA580C',
-    shadowColor: '#EA580C',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  myTicketsBtnText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  homeBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-    paddingVertical: 12,
-    borderRadius: 14,
-    backgroundColor: '#1E293B',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: '#E2E8F0',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
   },
-  homeBtnText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#F8FAFC',
-  },
-
-  exploreBtn: {
-    width: '100%',
-    paddingVertical: 11,
+  iconActionBtnItem: {
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(234,88,12,0.35)',
-    backgroundColor: 'rgba(234,88,12,0.05)',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
   },
-  exploreBtnText: {
-    fontSize: 12,
+  iconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.16,
+    shadowRadius: 4,
+    elevation: 3,
+    marginBottom: 4,
+  },
+  iconActionLabel: {
+    fontSize: 10.5,
     fontWeight: '800',
-    color: '#EA580C',
+    color: '#475569',
   },
 });

@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-toast-message';
 import { RADIUS, SHADOWS } from '../theme';
-import { api, OrderItem } from '../api';
+import { api, EventItem, OrderItem, SessionItem, filterUpcomingSessions } from '../api';
 import { useAuthStore } from '../store';
 
 const PUBLIC_TICKET_BASE_URL = 'https://mahaticket.kalpkrutinfotech.com/tickets';
@@ -119,6 +119,9 @@ export default function TicketScannerScreen({ navigation }: any) {
   const [recentOrders, setRecentOrders] = useState<OrderItem[]>([]);
   const [scanLogs, setScanLogs] = useState<ScanLog[]>([]);
   const [selectedGate, setSelectedGate] = useState<'GATE 1' | 'GATE 2' | 'VIP GATE'>('GATE 1');
+  const [scannerEvents, setScannerEvents] = useState<EventItem[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
+  const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
   const [lastResult, setLastResult] = useState<{
     valid: boolean;
     status: 'valid' | 'already_used' | 'invalid';
@@ -126,6 +129,11 @@ export default function TicketScannerScreen({ navigation }: any) {
     ticket?: any;
     order?: any;
   } | null>(null);
+
+  const selectedEvent = scannerEvents.find((e) => e.id === selectedEventId) || null;
+  const scopedSessions: SessionItem[] = filterUpcomingSessions(selectedEvent?.sessions || []).length
+    ? filterUpcomingSessions(selectedEvent?.sessions || [])
+    : ((selectedEvent?.sessions || []) as SessionItem[]);
 
   const laserAnim = useRef(new Animated.Value(0)).current;
   const resultScaleAnim = useRef(new Animated.Value(0.95)).current;
@@ -160,8 +168,22 @@ export default function TicketScannerScreen({ navigation }: any) {
         .getMyOrders()
         .then((d) => setRecentOrders(d.orders || []))
         .catch(() => null);
+      api
+        .getEvents({ limit: 40 })
+        .then((d) => {
+          const list = d.events || [];
+          setScannerEvents(list);
+          if (list.length && !selectedEventId) {
+            setSelectedEventId(list[0].id);
+            const sess =
+              filterUpcomingSessions(list[0].sessions || [])[0] || list[0].sessions?.[0];
+            if (sess?.id) setSelectedSessionId(sess.id);
+          }
+        })
+        .catch(() => null);
     } else {
       setRecentOrders([]);
+      setScannerEvents([]);
     }
   }, [isOrganizerOrAdmin]);
 
@@ -218,9 +240,28 @@ export default function TicketScannerScreen({ navigation }: any) {
       return;
     }
 
+    if (!selectedEventId || !selectedSessionId) {
+      Toast.show({
+        type: 'error',
+        text1: 'शो निवडा (Select show)',
+        text2: 'स्कॅन करण्यापूर्वी कार्यक्रम व वेळ निवडा — फक्त त्या शोची तिकिटे पडताळली जातील.',
+      });
+      return;
+    }
+
     setVerifying(true);
     try {
-      const res = await api.verifyTicketScan(cleanCode);
+      const organizerId =
+        Number((user as any)?.organizerId) ||
+        Number(selectedEvent?.organizer?.id) ||
+        undefined;
+      const res = await api.verifyTicketScan(cleanCode, {
+        targetEventId: selectedEventId,
+        targetSessionId: selectedSessionId,
+        scannerOrganizerId: organizerId,
+        gateName: selectedGate,
+        scannerUserId: user?.id,
+      });
       setLastResult(res);
 
       if (res.status === 'valid') {
@@ -453,6 +494,56 @@ export default function TicketScannerScreen({ navigation }: any) {
               </TouchableOpacity>
             );
           })}
+        </View>
+
+        {/* Scope: only tickets for this event + showtime are accepted */}
+        <View style={styles.scopeCard}>
+          <Text style={styles.scopeTitle}>स्कॅन स्कोप (Event & Show)</Text>
+          <Text style={styles.scopeHint}>
+            फक्त निवडलेल्या कार्यक्रमाच्या व वेळेच्या तिकिटांची पडताळणी होईल — इतर शोचे QR नाकारले जातील.
+          </Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scopeChipRow}>
+            {scannerEvents.slice(0, 12).map((ev) => {
+              const active = ev.id === selectedEventId;
+              return (
+                <TouchableOpacity
+                  key={ev.id}
+                  style={[styles.scopeChip, active && styles.scopeChipActive]}
+                  onPress={() => {
+                    setSelectedEventId(ev.id);
+                    const sess =
+                      filterUpcomingSessions(ev.sessions || [])[0] || ev.sessions?.[0];
+                    setSelectedSessionId(sess?.id || null);
+                  }}
+                >
+                  <Text style={[styles.scopeChipText, active && styles.scopeChipTextActive]} numberOfLines={1}>
+                    {ev.titleMr || ev.title}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scopeChipRow}>
+            {scopedSessions.map((s) => {
+              const active = s.id === selectedSessionId;
+              const label = new Date(s.sessionStartTime).toLocaleString('en-IN', {
+                day: 'numeric',
+                month: 'short',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true,
+              });
+              return (
+                <TouchableOpacity
+                  key={s.id}
+                  style={[styles.scopeChip, active && styles.scopeChipActive]}
+                  onPress={() => setSelectedSessionId(s.id)}
+                >
+                  <Text style={[styles.scopeChipText, active && styles.scopeChipTextActive]}>{label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
         </View>
 
         <View style={styles.statsRow}>
@@ -924,6 +1015,50 @@ const styles = StyleSheet.create({
   },
   gatePillTextActive: {
     color: '#FFFFFF',
+  },
+  scopeCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 12,
+    gap: 8,
+  },
+  scopeTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  scopeHint: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '600',
+    lineHeight: 16,
+  },
+  scopeChipRow: {
+    gap: 8,
+    paddingVertical: 2,
+  },
+  scopeChip: {
+    maxWidth: 200,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  scopeChipActive: {
+    backgroundColor: '#FFF7ED',
+    borderColor: '#EA580C',
+  },
+  scopeChipText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  scopeChipTextActive: {
+    color: '#C2410C',
   },
   statsRow: {
     flexDirection: 'row',

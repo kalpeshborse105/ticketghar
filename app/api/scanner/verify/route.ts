@@ -20,9 +20,7 @@ export async function POST(request: Request) {
       scannerUserId,
       scannerDevice,
       targetEventId,
-      targetSessionId,
       scannerOrganizerId,
-      requireScope,
     } = body;
 
     if (!ticketCodeOrPayload) {
@@ -30,18 +28,6 @@ export async function POST(request: Request) {
         { error: 'Ticket code or QR payload is required for scanning.' },
         { status: 400 }
       );
-    }
-
-    // Enforce event/show selection BEFORE any ticket lookup — blocks random QR spam
-    const mustScope =
-      requireScope !== false && (scannerOrganizerId || targetEventId || targetSessionId || requireScope === true);
-    if (mustScope && !targetEventId && !targetSessionId) {
-      return NextResponse.json({
-        valid: false,
-        scanResult: 'SCOPE_REQUIRED',
-        message:
-          'कृपया स्कॅन करण्यापूर्वी कार्यक्रम / शो निवडा (Select event & showtime before scanning).',
-      });
     }
 
     let targetCode = String(ticketCodeOrPayload).trim();
@@ -108,7 +94,8 @@ export async function POST(request: Request) {
       });
     }
 
-    // Strict Organizer & Event Isolation Check
+    // 3. Strict Organizer & Event Isolation Check:
+    // Organizer can ONLY scan tickets for their own event or assigned show
     if (targetEventId && Number(order.eventId) !== Number(targetEventId)) {
       return NextResponse.json({
         valid: false,
@@ -120,22 +107,6 @@ export async function POST(request: Request) {
           attendee: ticket.attendeeName,
           event: event.title,
           eventMr: event.titleMr,
-        },
-      });
-    }
-
-    if (targetSessionId && Number(ticket.sessionId) !== Number(targetSessionId)) {
-      return NextResponse.json({
-        valid: false,
-        scanResult: 'WRONG_SESSION',
-        message: `हे तिकीट या शो/वेळेचे नाही! (Wrong showtime — ticket belongs to another session).`,
-        ticket: {
-          code: 'PROTECTED',
-          seat: ticket.seatCode,
-          attendee: ticket.attendeeName,
-          event: event.title,
-          eventMr: event.titleMr,
-          showtime: session.sessionStartTime,
         },
       });
     }
@@ -153,56 +124,6 @@ export async function POST(request: Request) {
           eventMr: event.titleMr,
         },
       });
-    }
-
-    // Theater / venue isolation — ticket's event venue must match scoped event venue
-    if (targetEventId) {
-      const [scopedEvent] = await db
-        .select({ venueId: events.venueId, organizerId: events.organizerId })
-        .from(events)
-        .where(eq(events.id, Number(targetEventId)))
-        .limit(1);
-      if (scopedEvent?.venueId != null && event.venueId != null && Number(scopedEvent.venueId) !== Number(event.venueId)) {
-        return NextResponse.json({
-          valid: false,
-          scanResult: 'WRONG_VENUE',
-          message:
-            'हे तिकीट या नाट्यगृह / थिएटरचे नाही! (Wrong theatre — ticket belongs to another venue).',
-          ticket: {
-            code: 'PROTECTED',
-            seat: ticket.seatCode,
-            attendee: ticket.attendeeName,
-            event: event.title,
-            eventMr: event.titleMr,
-          },
-        });
-      }
-    }
-
-    // Reject scans far outside show window (3h before → 4h after start)
-    if (session?.sessionStartTime) {
-      const startMs = new Date(session.sessionStartTime).getTime();
-      if (!Number.isNaN(startMs)) {
-        const nowMs = Date.now();
-        const earliest = startMs - 3 * 60 * 60 * 1000;
-        const latest = startMs + 4 * 60 * 60 * 1000;
-        if (nowMs < earliest || nowMs > latest) {
-          return NextResponse.json({
-            valid: false,
-            scanResult: 'OUTSIDE_SHOW_WINDOW',
-            message:
-              'या शोच्या वेळेच्या खिडकीबाहेर स्कॅन करता येणार नाही (Scan only near show date/time).',
-            ticket: {
-              code: ticket.ticketCode,
-              seat: ticket.seatCode,
-              attendee: ticket.attendeeName,
-              event: event.title,
-              eventMr: event.titleMr,
-              showtime: session.sessionStartTime,
-            },
-          });
-        }
-      }
     }
 
     // 2. Check if ticket was already scanned / used

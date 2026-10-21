@@ -468,80 +468,8 @@ async function seed() {
     });
   }
 
-  // 9. Initial Confirmed Order & QR Tickets for Demo/Testing
-  console.log('Seeding initial order and tickets...');
-  const orderNum = 'MT-2026-88192';
-  const ticketFaceVal = 100000; // ₹1,000 (2 x ₹500)
-  const platFee = 6000; // ₹60
-  const tax = 1080; // ₹10.80 (18% on ₹60)
-  const grandTot = ticketFaceVal + platFee + tax; // ₹1070.80 (107080 paise)
-
-  const [initialOrder] = await db.insert(orders).values({
-    orderNumber: orderNum,
-    userId: customerUser.id,
-    userEmail: customerUser.email,
-    userPhone: customerUser.phoneNumber || '+91 98233 44556',
-    userName: customerUser.fullName,
-    eventId: event1.id,
-    sessionId: session1.id,
-    ticketCount: 2,
-    ticketFaceValueTotal: ticketFaceVal,
-    platformFeeTotal: platFee,
-    taxTotal: tax,
-    gatewayCostEstimate: 2140, // 2% approx
-    discountTotal: 0,
-    grandTotal: grandTot,
-    currency: 'INR',
-    paymentStatus: 'captured',
-    orderStatus: 'confirmed',
-    razorpayOrderId: 'order_RZP982014920',
-    razorpayPaymentId: 'pay_RZP391049281',
-    idempotencyKey: 'idem-initial-seed-01',
-  }).returning();
-
-  // Create 2 tickets with verifiable cryptographic hashes
-  const secret = 'mahaticket_secret_salt_2026';
-  const tk1Code = 'MT-TK-88192-A1';
-  const hash1 = crypto.createHmac('sha256', secret).update(`${tk1Code}|${event1.id}|${session1.id}|BAL-A01`).digest('hex');
-
-  const [ticket1] = await db.insert(tickets).values({
-    ticketCode: tk1Code,
-    orderId: initialOrder.id,
-    sessionId: session1.id,
-    ticketTypeId: ttBalcony.id,
-    seatCode: 'BAL-A01',
-    attendeeName: 'Sachin Patil',
-    faceValue: 50000,
-    securityHash: hash1,
-    qrPayload: JSON.stringify({
-      code: tk1Code,
-      event: event1.title,
-      seat: 'BAL-A01',
-      hash: hash1.substring(0, 16),
-    }),
-    status: 'valid',
-  }).returning();
-
-  const tk2Code = 'MT-TK-88192-A2';
-  const hash2 = crypto.createHmac('sha256', secret).update(`${tk2Code}|${event1.id}|${session1.id}|BAL-A02`).digest('hex');
-
-  const [ticket2] = await db.insert(tickets).values({
-    ticketCode: tk2Code,
-    orderId: initialOrder.id,
-    sessionId: session1.id,
-    ticketTypeId: ttBalcony.id,
-    seatCode: 'BAL-A02',
-    attendeeName: 'Priya Patil',
-    faceValue: 50000,
-    securityHash: hash2,
-    qrPayload: JSON.stringify({
-      code: tk2Code,
-      event: event1.title,
-      seat: 'BAL-A02',
-      hash: hash2.substring(0, 16),
-    }),
-    status: 'valid',
-  }).returning();
+  // Real orders only (no fake/demo seeds)
+  console.log('Skipping demo orders: only real user bookings are stored.');
 
   // 10. Initial Settlement Record in Ledger
   console.log('Seeding settlement ledger...');

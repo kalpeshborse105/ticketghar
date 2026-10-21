@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/src/db/index';
 import { users } from '@/src/db/schema';
 import { eq } from 'drizzle-orm';
-import { verifyPassword, setCustomerSessionCookie } from '@/src/lib/auth-service';
+import { verifyPassword, setCustomerSessionCookie, signSessionToken } from '@/src/lib/auth-service';
 
 export async function POST(req: NextRequest) {
   try {
@@ -43,24 +43,31 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    await setCustomerSessionCookie({
+    const sessionUser = {
       id: user.id,
       uid: user.uid,
       email: user.email,
       fullName: user.fullName,
       phoneNumber: user.phoneNumber,
       role: user.role,
-    });
+      avatarUrl: user.avatarUrl,
+    };
+
+    await setCustomerSessionCookie(sessionUser);
+    const token = signSessionToken(sessionUser);
 
     return NextResponse.json({
       success: true,
       message: 'यशस्वी लॉगिन झाले!',
+      token,
       user: {
         id: user.id,
         uid: user.uid,
         email: user.email,
         fullName: user.fullName,
+        phoneNumber: user.phoneNumber,
         role: user.role,
+        avatarUrl: user.avatarUrl,
       },
     });
   } catch (error: any) {

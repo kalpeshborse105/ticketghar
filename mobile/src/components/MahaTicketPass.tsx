@@ -1,5 +1,17 @@
+/**
+ * MahaTicketPass — Unified Official Admission Pass
+ * Pixel-identical with BookingConfirmedScreen ticket pass:
+ * - Top gradient header with brand & order badge
+ * - 2-Column show details grid (Date, Time, Venue with City)
+ * - Saffron seats callout with seats & total amount
+ * - Physical ticket inward semi-circle notches & dashed perforation line
+ * - High-contrast QR presentation zone with scan instructions & security card
+ * - Action buttons: WhatsApp (with PDF), Share (with PDF), Download PDF, and Close
+ */
 import React from 'react';
 import {
+  Linking,
+  Platform,
   Share,
   StyleSheet,
   Text,
@@ -10,7 +22,9 @@ import {
 import LinearGradient from 'react-native-linear-gradient';
 import QRCode from 'react-native-qrcode-svg';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import Toast from 'react-native-toast-message';
+import { COLORS } from '../theme';
+import { WEB_ORIGIN, openUrl } from '../lib/contact';
+import { downloadTicketPdf } from '../lib/downloader';
 
 export interface MahaTicketPassProps {
   ticketCode: string;
@@ -27,6 +41,8 @@ export interface MahaTicketPassProps {
   status?: string;
   ticketIndex?: number;
   totalTickets?: number;
+  onClose?: () => void;
+  onHome?: () => void;
   style?: ViewStyle;
 }
 
@@ -34,675 +50,609 @@ export function MahaTicketPass({
   ticketCode,
   seatCode,
   eventTitle,
-  eventCategory = 'नाटक / Theatre',
+  eventCategory = 'नाटक / THEATRE',
   venueName,
-  venueCity = 'महाराष्ट्र',
-  showTimeStr,
-  showDateStr,
+  venueCity = 'पुणे, महाराष्ट्र',
+  showTimeStr = 'संध्या. ०७:०० वा.',
+  showDateStr = 'रविवार, २१ ऑक्टो २०२६',
   orderNumber,
   grandTotal,
   qrPayload,
   status = 'confirmed',
   ticketIndex,
   totalTickets,
+  onClose,
+  onHome,
   style,
 }: MahaTicketPassProps) {
+  const resolvedOrderNum = orderNumber || ticketCode || 'MT-PASS';
+  const resolvedTotal = grandTotal
+    ? `₹${Math.round(grandTotal / 100).toLocaleString('en-IN')}`
+    : '₹1,606';
+
   const normalizedStatus = (status || 'confirmed').toLowerCase();
   const isUsed = normalizedStatus === 'used';
   const isCancelled = normalizedStatus === 'cancelled';
 
-  const statusConfig = isUsed
-    ? {
-      label: 'प्रवेश पूर्ण • USED',
-      icon: 'check-all',
-      badgeBg: 'rgba(15, 23, 42, 0.35)',
-      dotColor: '#FDE047',
-    }
-    : isCancelled
-      ? {
-        label: 'रद्द • CANCELLED',
-        icon: 'close-octagon',
-        badgeBg: 'rgba(127, 29, 29, 0.5)',
-        dotColor: '#FCA5A5',
-      }
-      : {
-        label: 'वैध • VALID M-TICKET',
-        icon: 'shield-check',
-        badgeBg: 'rgba(0, 0, 0, 0.24)',
-        dotColor: '#6EE7B7',
-      };
+  const statusLabel = isUsed ? 'वापरलेले (Used)' : isCancelled ? 'रद्द (Cancelled)' : 'वैध (Valid)';
+  const statusColor = isUsed ? '#FDE047' : isCancelled ? '#FCA5A5' : '#6EE7B7';
 
-  const handleSharePass = async () => {
-    try {
-      await Share.share({
-        title: `${eventTitle} — M-Ticket`,
-        message: `🎟️ महाटिकिट M-Ticket\nनाटक: ${eventTitle}\nस्थळ: ${venueName}\nतारीख: ${showDateStr || 'Upcoming'
-          } • ${showTimeStr || ''}\nआसन (Seat): ${seatCode || 'General'
-          }\nTicket Code: ${ticketCode}\nhttps://mahaticket.kalpkrutinfotech.com/tickets/${encodeURIComponent(
-            ticketCode
-          )}`,
-      });
-    } catch { }
+  const pdfUrl = `${WEB_ORIGIN}/api/orders/${encodeURIComponent(resolvedOrderNum)}/pdf`;
+  const ticketWebUrl = `${WEB_ORIGIN}/tickets/${encodeURIComponent(ticketCode || resolvedOrderNum)}`;
+
+  const handleDownloadPdf = async () => {
+    await downloadTicketPdf({
+      url: `${pdfUrl}?download=1`,
+      filename: `MahaTicket-${resolvedOrderNum}.pdf`,
+      title: `${eventTitle} - Ticket Pass`,
+      description: `Seats: ${seatCode || 'General'} • Order #${resolvedOrderNum}`,
+    });
   };
 
-  const handleShowCodeToast = () => {
-    Toast.show({
-      type: 'success',
-      text1: `Ticket Code: ${ticketCode}`,
-      text2: `Seat ${seatCode || 'General'} • प्रवेशद्वारावर हा कोड दाखवा`,
+  const handleShare = async () => {
+    const shareMessage =
+      `🎭 *MahaTicket (महाटिकिट) - ई-तिकीट पास*\n\n` +
+      `📌 *कार्यक्रम:* ${eventTitle}\n` +
+      `📅 *तारीख:* ${showDateStr}\n` +
+      `⏰ *वेळ:* ${showTimeStr}\n` +
+      `📍 *सभागृह:* ${venueName}, ${venueCity}\n` +
+      `💺 *आसन क्रमांक:* ${seatCode || 'General'}\n` +
+      `🎟️ *ऑर्डर क्रमांक:* #${resolvedOrderNum}\n\n` +
+      `🌐 *तिकीट ऑनलाइन पहा:* \n${ticketWebUrl}\n\n` +
+      `📥 *थेट PDF डाउनलोड करा:* \n${pdfUrl}\n\n` +
+      `प्रवेशद्वारावर डिजिटल क्यूआर कोड दाखवा. सुलभ तिकीट बुकिंग - MahaTicket!`;
+
+    try {
+      await Share.share({
+        title: `${eventTitle} - MahaTicket Pass`,
+        message: shareMessage,
+        url: ticketWebUrl,
+      });
+    } catch {}
+  };
+
+  const handleWhatsAppShare = () => {
+    const text = encodeURIComponent(
+      `🎭 *MahaTicket (महाटिकिट) तिकीट पास!*\n\n` +
+      `📌 *कार्यक्रम:* ${eventTitle}\n` +
+      `📅 *तारीख:* ${showDateStr} (${showTimeStr})\n` +
+      `📍 *सभागृह:* ${venueName}, ${venueCity}\n` +
+      `💺 *आसने:* ${seatCode || 'General'}\n` +
+      `🎟️ *ऑर्डर:* #${resolvedOrderNum}\n\n` +
+      `🌐 *तिकीट पहा:* ${ticketWebUrl}\n` +
+      `📥 *PDF डाउनलोड:* ${pdfUrl}`
+    );
+    Linking.openURL(`whatsapp://send?text=${text}`).catch(() => {
+      handleShare();
     });
   };
 
   return (
-    <View style={[styles.card, style]}>
-      <LinearGradient
-        colors={
-          isCancelled
-            ? ['#64748B', '#475569']
-            : ['#EA580C', '#F97316', '#C2410C']
-        }
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={styles.banner}
-      >
-        <View style={styles.bannerLeft}>
-          <View style={styles.bannerIcon}>
-            <Icon name="ticket-confirmation" size={18} color="#FFFFFF" />
-          </View>
-          <View>
-            <Text style={styles.bannerEyebrow}>महाटिकिट • OFFICIAL E-PASS</Text>
-            <Text style={styles.bannerOrder}>
-              {orderNumber ? `ORDER #${orderNumber}` : ticketCode}
-            </Text>
-          </View>
-        </View>
-
-        <View style={[styles.statusBadge, { backgroundColor: statusConfig.badgeBg }]}>
-          <Icon name={statusConfig.icon} size={13} color={statusConfig.dotColor} />
-          <Text style={styles.statusText}>{statusConfig.label}</Text>
-        </View>
-      </LinearGradient>
-
-      <View style={styles.body}>
-        <View style={styles.topTagRow}>
-          <View style={styles.categoryPill}>
-            <Icon name="drama-masks" size={12} color="#C2410C" />
-            <Text style={styles.categoryText}>{eventCategory}</Text>
-          </View>
-
-          {totalTickets && totalTickets > 1 ? (
-            <View style={styles.passCounterPill}>
-              <Text style={styles.passCounterText}>
-                Pass {ticketIndex || 1} of {totalTickets}
-              </Text>
+    <View style={[styles.container, style]}>
+      {/* ══════ MAIN TICKET CARD ══════ */}
+      <View style={styles.ticketCard}>
+        {/* Top Gradient Banner */}
+        <LinearGradient
+          colors={
+            isCancelled
+              ? ['#64748B', '#475569']
+              : ['#EA580C', '#F97316', '#C2410C']
+          }
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.ticketHeaderGradient}
+        >
+          <View style={styles.headerBrandRow}>
+            <View style={styles.ticketIconBox}>
+              <Icon name="ticket-confirmation" size={17} color="#FFFFFF" />
             </View>
-          ) : null}
-        </View>
-
-        <Text style={styles.title}>{eventTitle}</Text>
-
-        <View style={styles.metaGrid}>
-          <View style={styles.metaCell}>
-            <View style={styles.metaIconBox}>
-              <Icon name="calendar-month" size={16} color="#EA580C" />
-            </View>
-            <View style={styles.metaTextWrap}>
-              <Text style={styles.metaLabel}>तारीख / DATE</Text>
-              <Text style={styles.metaValue}>{showDateStr || 'Upcoming'}</Text>
+            <View>
+              <Text style={styles.brandTitle}>MAHATICKET • E-PASS</Text>
+              <Text style={styles.orderNumberText}>ORDER #{resolvedOrderNum}</Text>
             </View>
           </View>
 
-          <View style={styles.metaCell}>
-            <View style={styles.metaIconBox}>
-              <Icon name="clock-time-four-outline" size={16} color="#EA580C" />
+          <View style={styles.validStatusBadge}>
+            <Icon name="shield-check" size={13} color={statusColor} />
+            <Text style={styles.validStatusText}>{statusLabel}</Text>
+          </View>
+        </LinearGradient>
+
+        {/* Ticket Upper Body */}
+        <View style={styles.ticketBody}>
+          {/* Category Badge & Pass Counter */}
+          <View style={styles.tagRow}>
+            <View style={styles.categoryPill}>
+              <Text style={styles.categoryPillText}>{eventCategory}</Text>
             </View>
-            <View style={styles.metaTextWrap}>
-              <Text style={styles.metaLabel}>वेळ / SHOWTIME</Text>
-              <Text style={styles.metaValue}>{showTimeStr || '7:00 PM'}</Text>
-            </View>
+            {totalTickets && totalTickets > 1 ? (
+              <View style={styles.counterPill}>
+                <Text style={styles.counterText}>Pass {ticketIndex || 1} of {totalTickets}</Text>
+              </View>
+            ) : null}
           </View>
 
-          <View style={[styles.metaCell, styles.metaFull]}>
-            <View style={styles.metaIconBox}>
-              <Icon name="theater" size={16} color="#EA580C" />
+          {/* Event Title */}
+          <Text style={styles.eventTitleText} numberOfLines={2}>
+            {eventTitle}
+          </Text>
+
+          {/* 2-Column Show Details Grid */}
+          <View style={styles.detailsGrid}>
+            {/* Date */}
+            <View style={styles.gridItem}>
+              <Icon name="calendar-month" size={15} color="#EA580C" style={styles.gridIcon} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.gridLabel}>तारीख / DATE</Text>
+                <Text style={styles.gridVal} numberOfLines={1}>{showDateStr}</Text>
+              </View>
             </View>
-            <View style={styles.metaTextWrap}>
-              <Text style={styles.metaLabel}>नाट्यगृह / AUDITORIUM VENUE</Text>
-              <Text style={styles.metaValue} numberOfLines={2}>
-                {venueName}
-              </Text>
-              {!!venueCity && <Text style={styles.metaCity}>{venueCity}</Text>}
+
+            {/* Time */}
+            <View style={styles.gridItem}>
+              <Icon name="clock-outline" size={15} color="#EA580C" style={styles.gridIcon} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.gridLabel}>वेळ / TIME</Text>
+                <Text style={styles.gridVal} numberOfLines={1}>{showTimeStr}</Text>
+              </View>
             </View>
-          </View>
-        </View>
 
-        <View style={styles.seatCallout}>
-          <View style={styles.seatPrimaryCol}>
-            <Text style={styles.seatLabel}>आरक्षित आसन / SEAT NO</Text>
-            <View style={styles.seatBadgeRow}>
-              <Icon name="seat-recline-extra" size={18} color="#EA580C" />
-              <Text style={styles.seatValue}>{seatCode || 'General'}</Text>
-            </View>
-          </View>
-
-          <View style={styles.seatVerticalDivider} />
-
-          <View style={styles.seatRight}>
-            <Text style={styles.seatRightLabel}>प्रवेश प्रकार / ADMISSION</Text>
-            <Text style={styles.seatRightValue}>M-Ticket QR</Text>
-          </View>
-
-          {!!grandTotal && grandTotal > 0 && (
-            <>
-              <View style={styles.seatVerticalDivider} />
-              <View style={styles.seatRight}>
-                <Text style={styles.seatRightLabel}>एकूण रक्कम / PAID</Text>
-                <Text style={styles.amountValue}>
-                  ₹{Math.round(grandTotal / 100)}
+            {/* Venue (Full width) */}
+            <View style={[styles.gridItem, styles.gridItemFull]}>
+              <Icon name="map-marker-radius" size={15} color="#EA580C" style={styles.gridIcon} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.gridLabel}>सभागृह / VENUE</Text>
+                <Text style={styles.gridVal} numberOfLines={1}>
+                  {venueName}
+                </Text>
+                <Text style={styles.gridSubVal} numberOfLines={1}>
+                  {venueCity}
                 </Text>
               </View>
-            </>
-          )}
+            </View>
+          </View>
+
+          {/* Saffron Highlighted Seats & Total Callout */}
+          <View style={styles.seatsCallout}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.seatsCalloutLabel}>आरक्षित आसन / SEAT</Text>
+              <Text style={styles.seatsCalloutVal} numberOfLines={1}>
+                {seatCode || 'General'}
+              </Text>
+            </View>
+
+            <View style={styles.seatsCalloutRight}>
+              <Text style={styles.seatsCalloutLabel}>एकूण रक्कम / TOTAL</Text>
+              <Text style={styles.seatsCalloutPrice}>{resolvedTotal}</Text>
+            </View>
+          </View>
         </View>
-      </View>
 
-      <View style={styles.perforation}>
-        <View style={[styles.notch, styles.notchLeft]} />
-        <View style={styles.dashLine} />
-        <View style={[styles.notch, styles.notchRight]} />
-      </View>
+        {/* ══════ PHYSICAL TICKET PERFORATION & NOTCH CUTOUTS ══════ */}
+        <View style={styles.perforationWrapper}>
+          <View style={styles.notchLeft} />
+          <View style={styles.dashedDivider} />
+          <View style={styles.notchRight} />
+        </View>
 
-      <View style={styles.qrZone}>
-        <View style={styles.qrOuterFrame}>
-          <View style={[styles.qrCorner, styles.qrCornerTL]} />
-          <View style={[styles.qrCorner, styles.qrCornerTR]} />
-          <View style={[styles.qrCorner, styles.qrCornerBL]} />
-          <View style={[styles.qrCorner, styles.qrCornerBR]} />
-
-          <View style={[(isUsed || isCancelled) && { opacity: 0.22 }]}>
+        {/* ══════ QR CODE PRESENTATION ZONE ══════ */}
+        <View style={styles.qrContainer}>
+          <View style={styles.qrInnerBox}>
             <QRCode
-              value={qrPayload || ticketCode}
-              size={164}
+              value={qrPayload}
+              size={140}
               backgroundColor="#FFFFFF"
-              color="#0F172A"
+              color="#111827"
             />
           </View>
 
-          {(isUsed || isCancelled) && (
-            <View
-              style={[
-                styles.stampOverlayBadge,
-                isCancelled ? styles.stampCancelled : styles.stampUsed,
-              ]}
-            >
-              <Icon
-                name={isCancelled ? 'close-octagon' : 'check-decagram'}
-                size={18}
-                color={isCancelled ? '#DC2626' : '#15803D'}
-              />
-              <Text
-                style={[
-                  styles.stampOverlayText,
-                  { color: isCancelled ? '#DC2626' : '#15803D' },
-                ]}
-              >
-                {isCancelled ? 'CANCELLED' : 'SCANNED & ADMITTED'}
-              </Text>
+          <Text style={styles.qrInstructions}>
+            प्रवेशद्वारावर हा QR कोड दाखवा (Entry Pass)
+          </Text>
+          <Text style={styles.qrSubInstructions}>
+            स्कॅन करण्यासाठी स्क्रीन ब्राईटनेस वाढवा • Increase brightness
+          </Text>
+          <Text style={styles.qrTicketCodeText}>
+            PASS ID: #{resolvedOrderNum}
+          </Text>
+
+          {/* Compact Security Shield Badge */}
+          <View style={styles.securityBox}>
+            <View style={styles.securityHeader}>
+              <Icon name="shield-check" size={14} color="#EA580C" />
+              <Text style={styles.securityTitle}>सुरक्षित डिजिटल तिकीट पडताळणी</Text>
             </View>
-          )}
-        </View>
-
-        <Text style={styles.qrTitle}>
-          प्रवेशद्वारावर हा QR कोड दाखवा (Scan at Gate)
-        </Text>
-        <Text style={styles.qrHint}>
-          जलद स्कॅनसाठी स्क्रीन ब्राईटनेस १००% ठेवा • Keep screen brightness high
-        </Text>
-
-        <View style={styles.codeActionRow}>
-          <TouchableOpacity
-            onPress={handleShowCodeToast}
-            activeOpacity={0.8}
-            style={styles.codePillBtn}
-          >
-            <Icon name="barcode" size={15} color="#EA580C" />
-            <Text style={styles.codePillText}>{ticketCode}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={handleSharePass}
-            activeOpacity={0.8}
-            style={styles.sharePassBtn}
-          >
-            <Icon name="share-variant-outline" size={15} color="#0F172A" />
-            <Text style={styles.sharePassBtnText}>Share</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.securityBox}>
-          <View style={styles.securityRow}>
-            <Icon name="shield-lock-outline" size={14} color="#EA580C" />
-            <Text style={styles.securityTitle}>
-              सुरक्षित डिजिटल तिकीट पडताळणी (MTSEC Verified)
+            <Text style={styles.securityText}>
+              • हे तिकीट एनक्रिप्टेड (MTSEC) असून अधिकृत गेट ऑपरेटरद्वारे स्कॅन केले जाते.
             </Text>
           </View>
-          <Text style={styles.securityText}>
-            • हे तिकीट एनक्रिप्टेड असून केवळ अधिकृत आयोजक स्कॅनरद्वारेच सत्यापित केले जाते.
-          </Text>
-          <Text style={styles.securityText}>
-            • नाट्यप्रयोग सुरू होण्यापूर्वी किमान २० मिनिटे आधी नाट्यगृहात उपस्थित राहावे.
-          </Text>
         </View>
+      </View>
+
+      {/* ══════ UNIFIED ACTION BUTTONS ROW ══════ */}
+      <View style={styles.iconActionsRow}>
+        {/* WhatsApp Share */}
+        <TouchableOpacity
+          onPress={handleWhatsAppShare}
+          style={styles.iconActionBtnItem}
+          activeOpacity={0.8}
+        >
+          <View style={[styles.iconCircle, { backgroundColor: '#25D366' }]}>
+            <Icon name="whatsapp" size={24} color="#FFFFFF" />
+          </View>
+          <Text style={styles.iconActionLabel}>WhatsApp</Text>
+        </TouchableOpacity>
+
+        {/* Share Ticket */}
+        <TouchableOpacity
+          onPress={handleShare}
+          style={styles.iconActionBtnItem}
+          activeOpacity={0.8}
+        >
+          <View style={[styles.iconCircle, { backgroundColor: '#0284C7' }]}>
+            <Icon name="share-variant" size={21} color="#FFFFFF" />
+          </View>
+          <Text style={styles.iconActionLabel}>Share</Text>
+        </TouchableOpacity>
+
+        {/* Download PDF */}
+        <TouchableOpacity
+          onPress={handleDownloadPdf}
+          style={styles.iconActionBtnItem}
+          activeOpacity={0.8}
+        >
+          <View style={[styles.iconCircle, { backgroundColor: '#DC2626' }]}>
+            <Icon name="file-pdf-box" size={23} color="#FFFFFF" />
+          </View>
+          <Text style={styles.iconActionLabel}>PDF</Text>
+        </TouchableOpacity>
+
+        {/* Home Button (if onHome callback provided) */}
+        {onHome ? (
+          <TouchableOpacity
+            onPress={onHome}
+            style={styles.iconActionBtnItem}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.iconCircle, { backgroundColor: '#334155' }]}>
+              <Icon name="home-outline" size={22} color="#FFFFFF" />
+            </View>
+            <Text style={styles.iconActionLabel}>Home</Text>
+          </TouchableOpacity>
+        ) : null}
+
+        {/* Close Button (if in modal) */}
+        {onClose ? (
+          <TouchableOpacity
+            onPress={onClose}
+            style={styles.iconActionBtnItem}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.iconCircle, { backgroundColor: '#64748B' }]}>
+              <Icon name="close" size={22} color="#FFFFFF" />
+            </View>
+            <Text style={styles.iconActionLabel}>बंद करा</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
+  container: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  ticketCard: {
+    width: '100%',
     backgroundColor: '#FFFFFF',
-    borderRadius: 22,
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
+    elevation: 8,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    overflow: 'hidden',
-    maxWidth: 420,
-    alignSelf: 'center',
-    width: '100%',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
-    elevation: 5,
   },
-  banner: {
-    paddingHorizontal: 16,
-    paddingVertical: 13,
+  ticketHeaderGradient: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  bannerLeft: {
+  headerBrandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    flex: 1,
+    gap: 8,
   },
-  bannerIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+  ticketIconBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.22)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  bannerEyebrow: {
+  brandTitle: {
     fontSize: 9.5,
     fontWeight: '900',
-    letterSpacing: 1,
-    color: 'rgba(255, 255, 255, 0.92)',
-    textTransform: 'uppercase',
+    color: 'rgba(255,255,255,0.92)',
+    letterSpacing: 1.1,
   },
-  bannerOrder: {
-    fontSize: 12,
+  orderNumberText: {
+    fontSize: 11.5,
     fontWeight: '800',
     color: '#FFFFFF',
-    fontFamily: 'monospace',
-    marginTop: 1,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
-  statusBadge: {
+  validStatusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
+    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 100,
+    backgroundColor: 'rgba(0,0,0,0.25)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.24)',
+    borderColor: 'rgba(255,255,255,0.2)',
   },
-  statusText: {
-    fontSize: 10.5,
-    fontWeight: '900',
+  validStatusText: {
+    fontSize: 10,
+    fontWeight: '800',
     color: '#FFFFFF',
   },
-  body: {
-    padding: 18,
-    gap: 12,
+  ticketBody: {
+    padding: 14,
+    backgroundColor: '#FFFFFF',
   },
-  topTagRow: {
+  tagRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 6,
   },
   categoryPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+    borderRadius: 100,
     backgroundColor: '#FFF7ED',
-    borderColor: '#FED7AA',
     borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
+    borderColor: 'rgba(234,88,12,0.3)',
   },
-  categoryText: {
-    fontSize: 10.5,
+  categoryPillText: {
+    fontSize: 9.5,
     fontWeight: '800',
     color: '#C2410C',
-    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  passCounterPill: {
+  counterPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+    borderRadius: 100,
     backgroundColor: '#F1F5F9',
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderRadius: 999,
   },
-  passCounterText: {
-    fontSize: 10.5,
-    fontWeight: '800',
-    color: '#475569',
-  },
-  title: {
-    fontSize: 19,
-    fontWeight: '900',
-    color: '#0F172A',
-    lineHeight: 25,
-  },
-  metaGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-  },
-  metaCell: {
-    width: '47%',
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'flex-start',
-  },
-  metaFull: {
-    width: '100%',
-    paddingTop: 4,
-  },
-  metaIconBox: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
-    backgroundColor: '#FFF7ED',
-    borderWidth: 1,
-    borderColor: '#FFEDD5',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  metaTextWrap: {
-    flex: 1,
-  },
-  metaLabel: {
+  counterText: {
     fontSize: 9.5,
-    fontWeight: '800',
+    fontWeight: '700',
     color: '#64748B',
-    letterSpacing: 0.4,
   },
-  metaValue: {
-    fontSize: 13.5,
-    fontWeight: '900',
-    color: '#0F172A',
-    marginTop: 1,
-  },
-  metaCity: {
-    fontSize: 11.5,
-    color: '#64748B',
-    marginTop: 1,
-    fontWeight: '600',
-  },
-  seatCallout: {
-    backgroundColor: '#FFF7ED',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#FED7AA',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 2,
-  },
-  seatPrimaryCol: {
-    flex: 1.2,
-  },
-  seatLabel: {
-    fontSize: 9.5,
-    fontWeight: '800',
-    color: '#9A3412',
-    letterSpacing: 0.4,
-  },
-  seatBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    marginTop: 2,
-  },
-  seatValue: {
+  eventTitleText: {
     fontSize: 17,
     fontWeight: '900',
-    color: '#0F172A',
-    fontFamily: 'monospace',
+    color: '#111827',
+    lineHeight: 23,
+    marginBottom: 10,
   },
-  seatVerticalDivider: {
-    width: 1,
-    height: 28,
-    backgroundColor: '#FED7AA',
-    marginHorizontal: 10,
+  detailsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    gap: 10,
   },
-  seatRight: {
-    alignItems: 'flex-end',
+  gridItem: {
+    width: '47%',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
   },
-  seatRightLabel: {
-    fontSize: 9.5,
-    fontWeight: '800',
-    color: '#64748B',
+  gridItemFull: {
+    width: '100%',
+    paddingTop: 2,
   },
-  seatRightValue: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: '#EA580C',
-    marginTop: 2,
-  },
-  amountValue: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: '#0F172A',
+  gridIcon: {
     marginTop: 1,
   },
-  perforation: {
+  gridLabel: {
+    fontSize: 8.5,
+    fontWeight: '800',
+    color: '#64748B',
+    letterSpacing: 0.4,
+    marginBottom: 1,
+  },
+  gridVal: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  gridSubVal: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: '#64748B',
+    marginTop: 1,
+  },
+  seatsCallout: {
+    marginTop: 12,
+    padding: 10,
+    backgroundColor: '#FFF7ED',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(249,115,22,0.35)',
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 2,
+    justifyContent: 'space-between',
   },
-  notch: {
-    width: 16,
-    height: 28,
-    backgroundColor: '#F8FAFC',
-    borderColor: '#E2E8F0',
+  seatsCalloutLabel: {
+    fontSize: 8.5,
+    fontWeight: '800',
+    color: '#C2410C',
+    letterSpacing: 0.4,
+    marginBottom: 1,
+  },
+  seatsCalloutVal: {
+    fontSize: 13.5,
+    fontWeight: '900',
+    color: '#111827',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  seatsCalloutRight: {
+    alignItems: 'flex-end',
+  },
+  seatsCalloutPrice: {
+    fontSize: 14.5,
+    fontWeight: '900',
+    color: '#EA580C',
+  },
+  perforationWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    position: 'relative',
+    height: 30,
+    marginVertical: 1,
   },
   notchLeft: {
-    borderTopRightRadius: 999,
-    borderBottomRightRadius: 999,
+    width: 10,
+    height: 16,
+    borderTopRightRadius: 8,
+    borderBottomRightRadius: 8,
+    backgroundColor: COLORS.bg,
     borderRightWidth: 1,
     borderTopWidth: 1,
     borderBottomWidth: 1,
+    borderColor: '#E2E8F0',
     marginLeft: -1,
   },
+  dashedDivider: {
+    flex: 1,
+    height: 0,
+    borderStyle: 'dashed',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    marginHorizontal: 6,
+  },
   notchRight: {
-    borderTopLeftRadius: 999,
-    borderBottomLeftRadius: 999,
+    width: 10,
+    height: 16,
+    borderTopLeftRadius: 8,
+    borderBottomLeftRadius: 8,
+    backgroundColor: COLORS.bg,
     borderLeftWidth: 1,
     borderTopWidth: 1,
     borderBottomWidth: 1,
+    borderColor: '#E2E8F0',
     marginRight: -1,
   },
-  dashLine: {
-    flex: 1,
-    height: 0,
-    marginHorizontal: 8,
-    borderBottomWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: '#CBD5E1',
-  },
-  qrZone: {
-    padding: 18,
-    alignItems: 'center',
+  qrContainer: {
     backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    paddingTop: 4,
   },
-  qrOuterFrame: {
-    padding: 16,
-    borderRadius: 20,
+  qrInnerBox: {
+    padding: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: '#FED7AA',
-    backgroundColor: '#FFFFFF',
-    marginBottom: 12,
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: '#E2E8F0',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+    marginBottom: 8,
   },
-  qrCorner: {
-    position: 'absolute',
-    width: 18,
-    height: 18,
-    borderColor: '#EA580C',
-  },
-  qrCornerTL: {
-    top: 6,
-    left: 6,
-    borderTopWidth: 3,
-    borderLeftWidth: 3,
-    borderTopLeftRadius: 5,
-  },
-  qrCornerTR: {
-    top: 6,
-    right: 6,
-    borderTopWidth: 3,
-    borderRightWidth: 3,
-    borderTopRightRadius: 5,
-  },
-  qrCornerBL: {
-    bottom: 6,
-    left: 6,
-    borderBottomWidth: 3,
-    borderLeftWidth: 3,
-    borderBottomLeftRadius: 5,
-  },
-  qrCornerBR: {
-    bottom: 6,
-    right: 6,
-    borderBottomWidth: 3,
-    borderRightWidth: 3,
-    borderBottomRightRadius: 5,
-  },
-  stampOverlayBadge: {
-    position: 'absolute',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 2,
-    transform: [{ rotate: '-10deg' }],
-  },
-  stampUsed: {
-    backgroundColor: '#F0FDF4',
-    borderColor: '#16A34A',
-  },
-  stampCancelled: {
-    backgroundColor: '#FEF2F2',
-    borderColor: '#DC2626',
-  },
-  stampOverlayText: {
-    fontSize: 12,
-    fontWeight: '900',
-    letterSpacing: 0.8,
-  },
-  qrTitle: {
-    fontSize: 12.5,
+  qrInstructions: {
+    fontSize: 11,
     fontWeight: '900',
     color: '#EA580C',
     textAlign: 'center',
-    letterSpacing: 0.3,
+    marginBottom: 2,
   },
-  qrHint: {
-    fontSize: 11,
+  qrSubInstructions: {
+    fontSize: 10,
     color: '#64748B',
     textAlign: 'center',
-    marginTop: 3,
-    fontWeight: '600',
+    marginBottom: 4,
   },
-  codeActionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 12,
-  },
-  codePillBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#FFF7ED',
-    borderWidth: 1,
-    borderColor: '#FED7AA',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 10,
-  },
-  codePillText: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: '#9A3412',
-    fontFamily: 'monospace',
-  },
-  sharePassBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 10,
-  },
-  sharePassBtnText: {
-    fontSize: 12,
+  qrTicketCodeText: {
+    fontSize: 10,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#94A3B8',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    marginBottom: 8,
   },
   securityBox: {
     width: '100%',
-    marginTop: 14,
-    padding: 12,
-    borderRadius: 12,
+    padding: 10,
     backgroundColor: '#F8FAFC',
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    gap: 4,
   },
-  securityRow: {
+  securityHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 2,
+    gap: 5,
+    marginBottom: 3,
   },
   securityTitle: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '800',
     color: '#0F172A',
   },
   securityText: {
-    fontSize: 10.5,
+    fontSize: 9.5,
     color: '#64748B',
-    lineHeight: 15,
-    fontWeight: '500',
+    lineHeight: 14,
+  },
+  iconActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 18,
+    marginTop: 6,
+    marginBottom: 16,
+  },
+  iconActionBtnItem: {
+    alignItems: 'center',
+    gap: 5,
+  },
+  iconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  iconActionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#334155',
   },
 });
 

@@ -9,7 +9,7 @@ async function main() {
     .replace(/\?&/, '?')
     .replace(/[?&]$/, '');
   const p = new pg.Pool({ connectionString: url, ssl: { rejectUnauthorized: false } });
-  const r = await p.query(`select ticket_code, length(qr_payload) as len, left(qr_payload,120) as q from tickets where ticket_code='MT-TK-88192-A1'`);
+  const r = await p.query(`select ticket_code, length(qr_payload) as len, left(qr_payload,120) as q from tickets order by id desc limit 5`);
   console.log(r.rows);
   await p.end();
 }

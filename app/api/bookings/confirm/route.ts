@@ -3,10 +3,7 @@ import { db } from '@/src/db/index.ts';
 import { users, events, eventSessions, seatInventory, ticketTypes, orders, tickets } from '@/src/db/schema.ts';
 import { eq, and, inArray } from 'drizzle-orm';
 import { confirmBookingOrder, calculatePricing } from '@/src/lib/inventory-engine.ts';
-import {
-  verifyPaymentSignatureAsync,
-  isRazorpayReady,
-} from '@/src/lib/payments/razorpay.ts';
+import { verifyPaymentSignature, isRazorpayConfigured } from '@/src/lib/payments/razorpay.ts';
 
 export async function POST(request: Request) {
   try {
@@ -149,7 +146,7 @@ export async function POST(request: Request) {
       }
 
       // Safe failure: missing, placeholder, or invalid credentials must NEVER bypass verification
-      if (!(await isRazorpayReady())) {
+      if (!isRazorpayConfigured()) {
         console.error('Razorpay verification requested but gateway is not configured on server.');
         return NextResponse.json(
           { error: 'Razorpay payment gateway is not configured on server. Cannot verify payment.' },
@@ -159,7 +156,7 @@ export async function POST(request: Request) {
 
       let isSignatureValid = false;
       try {
-        isSignatureValid = await verifyPaymentSignatureAsync(
+        isSignatureValid = verifyPaymentSignature(
           resolvedPayment.razorpayOrderId,
           resolvedPayment.razorpayPaymentId,
           resolvedPayment.razorpaySignature

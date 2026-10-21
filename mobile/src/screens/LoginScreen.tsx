@@ -1,6 +1,11 @@
 /**
  * LoginScreen — MahaTicket Android (महाटिकिट)
- * Email-based authentication with OTP or Password
+ * Smart booking-aware authentication flow:
+ * 1. User enters booking email
+ * 2. Checks database:
+ *    - If password exists -> Asks for Password (+ Forgot Password OTP option)
+ *    - If no password / new booking -> Auto-sends OTP -> Verifies OTP -> Sets new password
+ * 3. Supports Google Sign-In and Continue as Guest
  */
 import React, { useRef, useState } from 'react';
 import {
@@ -25,21 +30,54 @@ import { useAuthStore } from '../store';
 
 const { height } = Dimensions.get('window');
 
+type Step = 'email' | 'password' | 'otp' | 'set_password';
+
 export default function LoginScreen({ navigation, route }: any) {
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(route.params?.initialEmail || '');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [otp, setOtp] = useState('');
-  const [mode, setMode] = useState<'otp' | 'password'>('otp');
-  const [step, setStep] = useState<'email' | 'verify'>('email');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  const [step, setStep] = useState<Step>('email');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
+
   const setAuth = useAuthStore((s) => s.setAuth);
 
   const slideX = useRef(new Animated.Value(0)).current;
   const otpRef = useRef<TextInput>(null);
+  const passRef = useRef<TextInput>(null);
 
-  const handleSendOtp = async () => {
+  const transitionTo = (nextStep: Step) => {
+    Animated.timing(slideX, { toValue: -1, duration: 140, useNativeDriver: true }).start(() => {
+      setStep(nextStep);
+      setError('');
+      slideX.setValue(1);
+      Animated.timing(slideX, { toValue: 0, duration: 140, useNativeDriver: true }).start(() => {
+        if (nextStep === 'otp') otpRef.current?.focus();
+        if (nextStep === 'password') passRef.current?.focus();
+      });
+    });
+  };
+
+  const finishAuth = async (user: any, token?: string) => {
+    const validToken = token && typeof token === 'string' && token.includes('.') ? token : '';
+    await setAuth(user, validToken);
+    if (route.params?.onSuccess) {
+      route.params.onSuccess();
+      navigation.goBack();
+    } else if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.replace('Main', { screen: 'Tickets' });
+    }
+  };
+
+  // Step 1: Check Email
+  const handleEmailSubmit = async () => {
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail || !cleanEmail.includes('@') || !cleanEmail.includes('.')) {
       setError('कृपया वैध ईमेल पत्ता प्रविष्ट करा (Enter a valid email address)');
@@ -49,40 +87,84 @@ export default function LoginScreen({ navigation, route }: any) {
     setError('');
     setInfo('');
     try {
-      const res = await api.sendEmailOtp(cleanEmail);
-      setInfo(res.message || '६-अंकी OTP ईमेलवर पाठवला आहे.');
-      Animated.timing(slideX, { toValue: -1, duration: 180, useNativeDriver: true }).start(() => {
-        setStep('verify');
-        slideX.setValue(1);
-        Animated.timing(slideX, { toValue: 0, duration: 180, useNativeDriver: true }).start(() => {
-          otpRef.current?.focus();
-        });
-      });
+      const res = await api.checkEmail(cleanEmail);
+      if (res && res.hasPassword) {
+        // User has a password in DB -> prompt for password
+        transitionTo('password');
+      } else {
+        // User has previous booking or account without password -> send OTP
+        const otpRes = await api.sendEmailOtp(cleanEmail);
+        setInfo(otpRes.message || '६-अंकी पडताळणी कोड आपल्या ईमेलवर पाठवला आहे.');
+        transitionTo('otp');
+      }
     } catch (err: any) {
-      setError(err?.message || 'OTP पाठवता आला नाही. कृपया ईमेल व नेटवर्क तपासा.');
+      const errMsg =
+        err?.data?.error ||
+        err?.message ||
+        'हा ईमेल नोंदणीकृत नाही. कृपया तिकीट बुकिंग करताना वापरलेला ईमेल प्रविष्ट करा.';
+      setError(errMsg);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleVerifyOtp = async () => {
-    if (otp.length !== 6) {
-      setError('कृपया ६-अंकी OTP प्रविष्ट करा');
+  // Step 2A: Password Login
+  const handlePasswordLogin = async () => {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !password) {
+      setError('कृपया आपला पासवर्ड प्रविष्ट करा (Password required)');
       return;
     }
     setLoading(true);
     setError('');
     try {
-      const res = await api.verifyEmailOtp(email, otp);
+      const res = await api.loginWithEmailPassword(cleanEmail, password);
       if (res.success && res.user) {
-        await setAuth(res.user, res.token || `mt-tok-${Date.now()}`);
-        if (route.params?.onSuccess) {
-          route.params.onSuccess();
-          navigation.goBack();
-        } else if (navigation.canGoBack()) {
-          navigation.goBack();
+        await finishAuth(res.user, res.token);
+      } else {
+        setError(res.message || 'चुकीचा पासवर्ड. कृपया पुन्हा प्रयत्न करा.');
+      }
+    } catch (err: any) {
+      setError(err?.message || 'चुकीचा ईमेल किंवा पासवर्ड.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Trigger Forgot Password (Send OTP)
+  const handleForgotPassword = async () => {
+    const cleanEmail = email.trim().toLowerCase();
+    setLoading(true);
+    setError('');
+    try {
+      const res = await api.sendEmailOtp(cleanEmail);
+      setInfo(res.message || 'पासवर्ड रीसेट करण्यासाठी OTP पाठवला आहे.');
+      transitionTo('otp');
+    } catch (err: any) {
+      setError(err?.message || 'OTP पाठवता आला नाही.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Step 2B: Verify OTP
+  const handleVerifyOtp = async () => {
+    const cleanOtp = otp.trim();
+    if (cleanOtp.length !== 6) {
+      setError('कृपया ६-अंकी पडताळणी कोड प्रविष्ट करा (Enter 6-digit OTP)');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const res = await api.verifyEmailOtp(email, cleanOtp);
+      if (res.success && res.user) {
+        if (res.needsPasswordSetup) {
+          // User needs to set a permanent password
+          setInfo('पडताळणी यशस्वी! आता कायमस्वरूपी पासवर्ड तयार करा.');
+          transitionTo('set_password');
         } else {
-          navigation.replace('Main');
+          await finishAuth(res.user, res.token);
         }
       } else {
         setError(res.message || 'अवैध OTP कोड. कृपया पुन्हा प्रयत्न करा.');
@@ -94,36 +176,33 @@ export default function LoginScreen({ navigation, route }: any) {
     }
   };
 
-  const handlePasswordLogin = async () => {
-    const cleanEmail = email.trim().toLowerCase();
-    if (!cleanEmail || !password) {
-      setError('ईमेल आणि पासवर्ड आवश्यक आहे');
+  // Step 3: Set New Password
+  const handleSetPassword = async () => {
+    if (!password || password.length < 6) {
+      setError('पासवर्ड किमान ६ अक्षरांचा असावा (Minimum 6 characters)');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError('दोन्ही पासवर्ड जुळत नाहीत (Passwords do not match)');
       return;
     }
     setLoading(true);
     setError('');
     try {
-      const res = await api.loginWithEmailPassword(cleanEmail, password);
+      const res = await api.setEmailPassword(email, password);
       if (res.success && res.user) {
-        await setAuth(res.user, res.token || `mt-tok-${Date.now()}`);
-        if (route.params?.onSuccess) {
-          route.params.onSuccess();
-          navigation.goBack();
-        } else if (navigation.canGoBack()) {
-          navigation.goBack();
-        } else {
-          navigation.replace('Main');
-        }
+        await finishAuth(res.user, res.token);
       } else {
-        setError(res.message || 'लॉगिन अयशस्वी झाले');
+        setError(res.message || 'पासवर्ड जतन करता आला नाही.');
       }
     } catch (err: any) {
-      setError(err?.message || 'चुकीचा ईमेल किंवा पासवर्ड');
+      setError(err?.message || 'पासवर्ड जतन करताना त्रुटी आली.');
     } finally {
       setLoading(false);
     }
   };
 
+  // Google Sign In
   const handleGoogleLogin = async () => {
     try {
       setLoading(true);
@@ -132,25 +211,28 @@ export default function LoginScreen({ navigation, route }: any) {
       const targetUrl = `${base}/api/auth/google?direct=true&source=mobile`;
       await Linking.openURL(targetUrl);
     } catch (err: any) {
-      setError(err?.message || 'Google लॉगिन सुरू करता आले नाही. कृपया ईमेल द्वारे प्रयत्न करा.');
+      setError(err?.message || 'Google लॉगिन सुरू करता आले नाही.');
     } finally {
       setLoading(false);
     }
   };
 
   const goBackToEmail = () => {
-    Animated.timing(slideX, { toValue: 1, duration: 160, useNativeDriver: true }).start(() => {
+    Animated.timing(slideX, { toValue: 1, duration: 140, useNativeDriver: true }).start(() => {
       setStep('email');
+      setPassword('');
+      setConfirmPassword('');
       setOtp('');
       setError('');
+      setInfo('');
       slideX.setValue(-1);
-      Animated.timing(slideX, { toValue: 0, duration: 160, useNativeDriver: true }).start();
+      Animated.timing(slideX, { toValue: 0, duration: 140, useNativeDriver: true }).start();
     });
   };
 
   const translateX = slideX.interpolate({
     inputRange: [-1, 0, 1],
-    outputRange: [-300, 0, 300],
+    outputRange: [-240, 0, 240],
   });
 
   return (
@@ -173,7 +255,7 @@ export default function LoginScreen({ navigation, route }: any) {
             <Text style={{ color: COLORS.primary }}>महा</Text>टिकिट
           </Text>
           <Text style={styles.tagline}>
-            महाराष्ट्राचे अधिकृत तिकीट बुकिंग ॲप • Sign in
+            महाराष्ट्राचे अधिकृत तिकीट बुकिंग ॲप • MahaTicket
           </Text>
         </View>
 
@@ -182,36 +264,14 @@ export default function LoginScreen({ navigation, route }: any) {
           <View style={styles.cardTopBar} />
 
           <Animated.View style={{ transform: [{ translateX }] }}>
-            {step === 'email' ? (
+            {/* ── STEP 1: EMAIL INPUT ────────────────────────────────────────── */}
+            {step === 'email' && (
               <View>
-                <Text style={styles.stepTitle}>ईमेल द्वारे लॉगिन (Email Login)</Text>
+                <Text style={styles.stepTitle}>आपले तिकीट पाहण्यासाठी लॉगिन करा</Text>
                 <Text style={styles.stepSub}>
-                  आपल्या खात्यामध्ये सुरक्षित प्रवेश करण्यासाठी ईमेल प्रविष्ट करा
+                  बुकिंग करताना वापरलेला ईमेल पत्ता प्रविष्ट करा. खात्याचा पासवर्ड असल्यास थेट पासवर्ड किंवा OTP द्वारे सुरक्षित प्रवेश मिळेल.
                 </Text>
 
-                {/* Mode Selector */}
-                <View style={styles.modeTabs}>
-                  <TouchableOpacity
-                    style={[styles.modeTab, mode === 'otp' && styles.modeTabActive]}
-                    onPress={() => { setMode('otp'); setError(''); }}
-                  >
-                    <Icon name="email-fast-outline" size={16} color={mode === 'otp' ? COLORS.primary : COLORS.textDim} />
-                    <Text style={[styles.modeTabText, mode === 'otp' && styles.modeTabTextActive]}>
-                      Email OTP
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.modeTab, mode === 'password' && styles.modeTabActive]}
-                    onPress={() => { setMode('password'); setError(''); }}
-                  >
-                    <Icon name="lock-outline" size={16} color={mode === 'password' ? COLORS.primary : COLORS.textDim} />
-                    <Text style={[styles.modeTabText, mode === 'password' && styles.modeTabTextActive]}>
-                      Password
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                {/* Email Input */}
                 <View style={styles.inputWrap}>
                   <Icon name="email-outline" size={20} color={COLORS.textDim} style={styles.inputIcon} />
                   <TextInput
@@ -223,42 +283,23 @@ export default function LoginScreen({ navigation, route }: any) {
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoCorrect={false}
-                    returnKeyType={mode === 'otp' ? 'done' : 'next'}
-                    onSubmitEditing={mode === 'otp' ? handleSendOtp : undefined}
+                    returnKeyType="done"
+                    onSubmitEditing={handleEmailSubmit}
                   />
                 </View>
-
-                {/* Password Input (if password mode) */}
-                {mode === 'password' && (
-                  <View style={[styles.inputWrap, { marginTop: 12 }]}>
-                    <Icon name="lock-outline" size={20} color={COLORS.textDim} style={styles.inputIcon} />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="आपला पासवर्ड (Password)"
-                      placeholderTextColor={COLORS.textDim}
-                      value={password}
-                      onChangeText={(t) => { setPassword(t); setError(''); }}
-                      secureTextEntry
-                      returnKeyType="done"
-                      onSubmitEditing={handlePasswordLogin}
-                    />
-                  </View>
-                )}
 
                 {error ? <Text style={styles.error}>{error}</Text> : null}
 
                 <TouchableOpacity
                   style={[styles.cta, loading && { opacity: 0.6 }]}
-                  onPress={mode === 'otp' ? handleSendOtp : handlePasswordLogin}
+                  onPress={handleEmailSubmit}
                   disabled={loading}
                   activeOpacity={0.85}
                 >
                   {loading ? (
                     <ActivityIndicator color={COLORS.white} />
                   ) : (
-                    <Text style={styles.ctaText}>
-                      {mode === 'otp' ? 'Send Email OTP →' : 'लॉगिन करा (Sign In) →'}
-                    </Text>
+                    <Text style={styles.ctaText}>पुढे जा (Continue) →</Text>
                   )}
                 </TouchableOpacity>
 
@@ -280,14 +321,74 @@ export default function LoginScreen({ navigation, route }: any) {
                   <Text style={styles.googleBtnText}>Google द्वारे पुढे जा (Google Sign In)</Text>
                 </TouchableOpacity>
               </View>
-            ) : (
+            )}
+
+            {/* ── STEP 2A: PASSWORD LOGIN ───────────────────────────────────── */}
+            {step === 'password' && (
               <View>
                 <TouchableOpacity onPress={goBackToEmail} style={styles.backRow}>
                   <Icon name="arrow-left" size={16} color={COLORS.primary} />
-                  <Text style={styles.backText}>ईमेल बदला (Change Email)</Text>
+                  <Text style={styles.backText}>{email} (बदला / Change)</Text>
                 </TouchableOpacity>
 
-                <Text style={styles.stepTitle}>६-अंकी OTP प्रविष्ट करा</Text>
+                <Text style={styles.stepTitle}>आपला पासवर्ड प्रविष्ट करा</Text>
+                <Text style={styles.stepSub}>
+                  या ईमेलसाठी पासवर्ड सेट केलेला आहे. लॉगिन करण्यासाठी पासवर्ड टाका.
+                </Text>
+
+                <View style={styles.inputWrap}>
+                  <Icon name="lock-outline" size={20} color={COLORS.textDim} style={styles.inputIcon} />
+                  <TextInput
+                    ref={passRef}
+                    style={styles.input}
+                    placeholder="आपला पासवर्ड (Password)"
+                    placeholderTextColor={COLORS.textDim}
+                    value={password}
+                    onChangeText={(t) => { setPassword(t); setError(''); }}
+                    secureTextEntry={!showPassword}
+                    returnKeyType="done"
+                    onSubmitEditing={handlePasswordLogin}
+                  />
+                  <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ padding: 6 }}>
+                    <Icon name={showPassword ? 'eye-off' : 'eye'} size={20} color={COLORS.textDim} />
+                  </TouchableOpacity>
+                </View>
+
+                {error ? <Text style={styles.error}>{error}</Text> : null}
+
+                <TouchableOpacity
+                  style={[styles.cta, loading && { opacity: 0.6 }]}
+                  onPress={handlePasswordLogin}
+                  disabled={loading}
+                  activeOpacity={0.85}
+                >
+                  {loading ? (
+                    <ActivityIndicator color={COLORS.white} />
+                  ) : (
+                    <Text style={styles.ctaText}>लॉगिन करा (Sign In) ✓</Text>
+                  )}
+                </TouchableOpacity>
+
+                {/* Forgot Password OTP fallback */}
+                <TouchableOpacity
+                  onPress={handleForgotPassword}
+                  disabled={loading}
+                  style={styles.resendRow}
+                >
+                  <Text style={styles.resendText}>पासवर्ड विसरलात? OTP द्वारे लॉगिन करा →</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* ── STEP 2B: OTP VERIFICATION ─────────────────────────────────── */}
+            {step === 'otp' && (
+              <View>
+                <TouchableOpacity onPress={goBackToEmail} style={styles.backRow}>
+                  <Icon name="arrow-left" size={16} color={COLORS.primary} />
+                  <Text style={styles.backText}>{email} (बदला / Change)</Text>
+                </TouchableOpacity>
+
+                <Text style={styles.stepTitle}>६-अंकी पडताळणी OTP प्रविष्ट करा</Text>
                 <Text style={styles.stepSub}>
                   पडताळणी कोड <Text style={{ fontWeight: '700', color: COLORS.text }}>{email}</Text> वर पाठवला आहे.
                 </Text>
@@ -310,20 +411,79 @@ export default function LoginScreen({ navigation, route }: any) {
                 {error ? <Text style={styles.error}>{error}</Text> : null}
 
                 <TouchableOpacity
-                  style={[styles.cta, (loading || otp.length !== 6) && { opacity: 0.5 }]}
+                  style={[styles.cta, (loading || otp.trim().length !== 6) && { opacity: 0.5 }]}
                   onPress={handleVerifyOtp}
-                  disabled={loading || otp.length !== 6}
+                  disabled={loading || otp.trim().length !== 6}
                   activeOpacity={0.85}
                 >
                   {loading ? (
                     <ActivityIndicator color={COLORS.white} />
                   ) : (
-                    <Text style={styles.ctaText}>Verify & Continue ✓</Text>
+                    <Text style={styles.ctaText}>OTP पडताळणी करा (Verify OTP) ✓</Text>
                   )}
                 </TouchableOpacity>
 
-                <TouchableOpacity onPress={handleSendOtp} style={styles.resendRow}>
+                <TouchableOpacity onPress={handleForgotPassword} style={styles.resendRow}>
                   <Text style={styles.resendText}>पुन्हा कोड पाठवा (Resend OTP)</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* ── STEP 3: SET NEW PASSWORD ───────────────────────────────────── */}
+            {step === 'set_password' && (
+              <View>
+                <Text style={styles.stepTitle}>नवीन पासवर्ड तयार करा</Text>
+                <Text style={styles.stepSub}>
+                  भविष्यात थेट लॉगिन करण्यासाठी <Text style={{ fontWeight: '700', color: COLORS.text }}>{email}</Text> साठी पासवर्ड सेट करा.
+                </Text>
+
+                {info ? <Text style={styles.infoBadge}>ℹ️ {info}</Text> : null}
+
+                <View style={[styles.inputWrap, { marginBottom: 12 }]}>
+                  <Icon name="lock-outline" size={20} color={COLORS.textDim} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="नवीन पासवर्ड (किमान ६ अक्षरे)"
+                    placeholderTextColor={COLORS.textDim}
+                    value={password}
+                    onChangeText={(t) => { setPassword(t); setError(''); }}
+                    secureTextEntry={!showPassword}
+                  />
+                  <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ padding: 6 }}>
+                    <Icon name={showPassword ? 'eye-off' : 'eye'} size={20} color={COLORS.textDim} />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.inputWrap}>
+                  <Icon name="lock-check-outline" size={20} color={COLORS.textDim} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="पासवर्डची खात्री करा (Confirm Password)"
+                    placeholderTextColor={COLORS.textDim}
+                    value={confirmPassword}
+                    onChangeText={(t) => { setConfirmPassword(t); setError(''); }}
+                    secureTextEntry={!showConfirmPassword}
+                    returnKeyType="done"
+                    onSubmitEditing={handleSetPassword}
+                  />
+                  <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)} style={{ padding: 6 }}>
+                    <Icon name={showConfirmPassword ? 'eye-off' : 'eye'} size={20} color={COLORS.textDim} />
+                  </TouchableOpacity>
+                </View>
+
+                {error ? <Text style={styles.error}>{error}</Text> : null}
+
+                <TouchableOpacity
+                  style={[styles.cta, loading && { opacity: 0.6 }]}
+                  onPress={handleSetPassword}
+                  disabled={loading}
+                  activeOpacity={0.85}
+                >
+                  {loading ? (
+                    <ActivityIndicator color={COLORS.white} />
+                  ) : (
+                    <Text style={styles.ctaText}>पासवर्ड जतन करा व पुढे जा ✓</Text>
+                  )}
                 </TouchableOpacity>
               </View>
             )}
@@ -338,7 +498,7 @@ export default function LoginScreen({ navigation, route }: any) {
           }}
           style={styles.guestRow}
         >
-          <Text style={styles.guestText}>अतिथी म्हणून पुढे जा (Continue as Guest) →</Text>
+          <Text style={styles.guestText}>अतिथी म्हणून सुरू ठेवा (Continue as Guest) →</Text>
         </TouchableOpacity>
 
         <Text style={styles.legal}>
@@ -358,26 +518,26 @@ const styles = StyleSheet.create({
   scroll: {
     flexGrow: 1,
     paddingHorizontal: 24,
-    paddingTop: height * 0.06,
+    paddingTop: height * 0.05,
     paddingBottom: 32,
   },
 
-  header: { alignItems: 'center', marginBottom: 28 },
+  header: { alignItems: 'center', marginBottom: 24 },
   logoBadge: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
+    width: 60,
+    height: 60,
+    borderRadius: 18,
     backgroundColor: '#FFF7ED',
     borderWidth: 1.5,
     borderColor: '#FED7AA',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
-  brand: { color: COLORS.text, fontSize: 30, fontWeight: '900', letterSpacing: 0.5 },
+  brand: { color: COLORS.text, fontSize: 28, fontWeight: '900', letterSpacing: 0.5 },
   tagline: {
     color: COLORS.textDim,
-    fontSize: 13,
+    fontSize: 12,
     marginTop: 4,
     textAlign: 'center',
     fontWeight: '500',
@@ -386,7 +546,7 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: COLORS.white,
     borderRadius: RADIUS.xl,
-    padding: 24,
+    padding: 22,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     ...SHADOWS.lg,
@@ -401,38 +561,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
   },
 
-  stepTitle: { fontSize: 18, fontWeight: '800', color: COLORS.text, marginBottom: 4 },
-  stepSub: { fontSize: 13, color: COLORS.textDim, marginBottom: 18, lineHeight: 18 },
-
-  modeTabs: {
-    flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
-    borderRadius: RADIUS.md,
-    padding: 3,
-    marginBottom: 16,
-  },
-  modeTab: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    borderRadius: RADIUS.sm,
-    gap: 6,
-  },
-  modeTabActive: {
-    backgroundColor: COLORS.white,
-    ...SHADOWS.sm,
-  },
-  modeTabText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.textDim,
-  },
-  modeTabTextActive: {
-    color: COLORS.primary,
-    fontWeight: '700',
-  },
+  stepTitle: { fontSize: 17, fontWeight: '800', color: COLORS.text, marginBottom: 4 },
+  stepSub: { fontSize: 12.5, color: COLORS.textDim, marginBottom: 16, lineHeight: 18 },
 
   inputWrap: {
     flexDirection: 'row',
@@ -446,8 +576,8 @@ const styles = StyleSheet.create({
   inputIcon: { marginRight: 8 },
   input: {
     flex: 1,
-    height: 50,
-    fontSize: 15,
+    height: 48,
+    fontSize: 14.5,
     color: COLORS.text,
     fontWeight: '600',
   },
@@ -457,13 +587,13 @@ const styles = StyleSheet.create({
     borderColor: COLORS.primary,
     borderRadius: RADIUS.md,
     backgroundColor: '#FFF7ED',
-    height: 56,
-    fontSize: 26,
+    height: 54,
+    fontSize: 24,
     fontWeight: '800',
-    letterSpacing: 12,
+    letterSpacing: 10,
     textAlign: 'center',
     color: COLORS.text,
-    marginBottom: 14,
+    marginBottom: 12,
   },
 
   error: {
@@ -485,18 +615,18 @@ const styles = StyleSheet.create({
   cta: {
     backgroundColor: COLORS.primary,
     borderRadius: RADIUS.md,
-    height: 50,
+    height: 48,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 20,
+    marginTop: 18,
     ...SHADOWS.md,
   },
-  ctaText: { color: COLORS.white, fontSize: 16, fontWeight: '700' },
+  ctaText: { color: COLORS.white, fontSize: 15, fontWeight: '700' },
 
   orDividerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 16,
+    marginVertical: 14,
   },
   orLine: {
     flex: 1,
@@ -514,19 +644,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 48,
+    height: 46,
     borderRadius: RADIUS.md,
     backgroundColor: '#FFFFFF',
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
     elevation: 1,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
   },
   googleBtnText: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '700',
     color: '#1E293B',
   },
@@ -534,21 +660,21 @@ const styles = StyleSheet.create({
   backRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 12,
     gap: 4,
   },
-  backText: { color: COLORS.primary, fontSize: 13, fontWeight: '700' },
-  resendRow: { marginTop: 16, alignItems: 'center' },
+  backText: { color: COLORS.primary, fontSize: 12.5, fontWeight: '700' },
+  resendRow: { marginTop: 14, alignItems: 'center' },
   resendText: { color: COLORS.primary, fontSize: 13, fontWeight: '700' },
 
-  guestRow: { marginTop: 20, alignItems: 'center', padding: 8 },
-  guestText: { color: COLORS.textDim, fontSize: 14, fontWeight: '600' },
+  guestRow: { marginTop: 18, alignItems: 'center', padding: 6 },
+  guestText: { color: COLORS.textDim, fontSize: 13.5, fontWeight: '600' },
 
   legal: {
     textAlign: 'center',
     fontSize: 11,
     color: COLORS.textDim,
-    marginTop: 24,
+    marginTop: 20,
     lineHeight: 16,
     paddingHorizontal: 8,
   },

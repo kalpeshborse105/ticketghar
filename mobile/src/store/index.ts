@@ -4,7 +4,7 @@
  */
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { api, EventItem, EventCategory, STATIC_MAHATICKET_EVENTS, normalizeEvent } from '../api';
+import { api, EventItem, EventCategory } from '../api';
 
 // ─── Auth Store ──────────────────────────────────────────────────────────────
 
@@ -104,8 +104,8 @@ interface EventsState {
 }
 
 export const useEventsStore = create<EventsState>((set, get) => ({
-  events: STATIC_MAHATICKET_EVENTS.map(normalizeEvent), // Instant data on first frame!
-  loading: false,
+  events: [],
+  loading: true,
   error: null,
   selectedCity: 'Pune',
   selectedCategory: 'all',
@@ -118,17 +118,15 @@ export const useEventsStore = create<EventsState>((set, get) => ({
 
   fetchEvents: async (city, category) => {
     const c = city || get().selectedCity;
+    set({ loading: true, error: null });
     try {
       const data = await api.getEvents({ city: c, category });
       const unique = (data.events || []).filter(
         (e, i, arr) => arr.findIndex((x) => x.id === e.id) === i
       );
-      if (unique.length > 0) {
-        set({ events: unique, lastFetchedCity: c });
-      }
+      set({ events: unique, lastFetchedCity: c, loading: false, error: null });
     } catch (err: any) {
-      // Keep static/cached events intact if error
-      set({ error: err?.message || 'Failed to refresh events' });
+      set({ loading: false, error: err?.message || 'Failed to load events' });
     }
   },
 
