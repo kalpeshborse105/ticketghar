@@ -18,6 +18,7 @@ import {
   KeyRound,
   Loader2,
 } from 'lucide-react';
+import { CONCESSION_MENU, addonTotalPaise } from '@/src/lib/concessions';
 
 declare global {
   interface Window {
@@ -35,6 +36,7 @@ interface CheckoutDrawerProps {
     faceValueTotal: number;
     holdExpiresAt: string;
     holdToken?: string;
+    addons?: Array<{ id: string; qty: number }>;
   };
   language: Language;
   onClose: () => void;
@@ -481,8 +483,8 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
               throw new Error(verifyData.error || 'Payment verification failed');
             }
 
-            setIsProcessing(false);
             setShowDiscardConfirm(false);
+            // Keep locked while seamlessly transitioning to Ticket Pass
             onSuccess(verifyData);
           } catch (err: any) {
             console.error('Payment verification error:', err);
@@ -567,6 +569,13 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
               </span>
             </div>
 
+            {isProcessing && (
+              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold animate-pulse">
+                <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>{language === 'mr' ? '🔒 पेमेंट सुरू आहे... आपली माहिती लॉक केली आहे.' : '🔒 Payment processing... Details locked.'}</span>
+              </div>
+            )}
+
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -575,10 +584,11 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
                 <input
                   type="text"
                   required
+                  disabled={isProcessing}
                   placeholder="सचिन पाटील / Sachin Patil"
                   value={userName}
                   onChange={(e) => setUserName(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 focus:bg-white rounded-xl px-3.5 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#ea580c]/50 focus:border-[#ea580c] transition"
+                  className="w-full bg-slate-50 disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-300 focus:bg-white rounded-xl px-3.5 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#ea580c]/50 focus:border-[#ea580c] transition"
                 />
               </div>
 
@@ -587,13 +597,14 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     {t.phone} * (WhatsApp)
                   </label>
-                  <div className="flex rounded-xl border border-slate-300 bg-slate-50 overflow-hidden focus-within:ring-2 focus-within:ring-[#ea580c]/50 focus-within:border-[#ea580c] transition">
+                  <div className={`flex rounded-xl border border-slate-300 overflow-hidden transition ${isProcessing ? 'bg-slate-100 opacity-80' : 'bg-slate-50 focus-within:ring-2 focus-within:ring-[#ea580c]/50 focus-within:border-[#ea580c]'}`}>
                     <span className="px-3 py-2 bg-slate-100 text-slate-700 font-bold text-xs flex items-center border-r border-slate-200 select-none">
                       +91
                     </span>
                     <input
                       type="tel"
                       required
+                      disabled={isProcessing}
                       maxLength={10}
                       placeholder="98233 44556"
                       value={userPhone}
@@ -601,7 +612,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
                         const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
                         setUserPhone(digits);
                       }}
-                      className="w-full bg-transparent px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none font-mono"
+                      className="w-full bg-transparent px-3 py-2 text-xs text-slate-900 disabled:text-slate-500 disabled:cursor-not-allowed placeholder-slate-400 focus:outline-none font-mono"
                     />
                   </div>
                   <span className="text-[10px] text-slate-500 mt-0.5 block">१०-अंकी भारतीय मोबाईल नंबर</span>
@@ -613,10 +624,11 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
                   </label>
                   <input
                     type="number"
+                    disabled={isProcessing}
                     placeholder="उदा. 32"
                     value={userAge}
                     onChange={(e) => setUserAge(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 focus:bg-white rounded-xl px-3.5 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#ea580c]/50 focus:border-[#ea580c] transition"
+                    className="w-full bg-slate-50 disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-300 focus:bg-white rounded-xl px-3.5 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#ea580c]/50 focus:border-[#ea580c] transition"
                   />
                 </div>
               </div>
@@ -628,10 +640,11 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
                 <input
                   type="email"
                   required
+                  disabled={isProcessing}
                   placeholder="sachin.patil@example.com"
                   value={userEmail}
                   onChange={(e) => setUserEmail(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 focus:bg-white rounded-xl px-3.5 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#ea580c]/50 focus:border-[#ea580c] transition"
+                  className="w-full bg-slate-50 disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-300 focus:bg-white rounded-xl px-3.5 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#ea580c]/50 focus:border-[#ea580c] transition"
                 />
               </div>
 
@@ -812,6 +825,31 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
                 </span>
               </div>
 
+              {(holdData.addons || []).map((a) => {
+                const item = CONCESSION_MENU.find((c) => c.id === a.id);
+                if (!item || a.qty < 1) return null;
+                return (
+                  <div key={a.id} className="flex justify-between text-slate-600">
+                    <span>
+                      {item.emoji} {language === 'mr' ? item.nameMr : item.nameEn} ×{a.qty}
+                      <span className="text-[10px] text-slate-400 ml-1">
+                        ({language === 'mr' ? 'काउंटर' : 'counter'})
+                      </span>
+                    </span>
+                    <span className="font-mono">
+                      ₹{((item.pricePaise * a.qty) / 100).toFixed(0)}
+                    </span>
+                  </div>
+                );
+              })}
+              {addonTotalPaise(holdData.addons || []) > 0 ? (
+                <p className="text-[10px] text-amber-700 bg-amber-50 rounded-md px-2 py-1">
+                  {language === 'mr'
+                    ? 'स्नॅक्स काउंटरवर द्या · तिकीट पेमेंटमध्ये समाविष्ट नाही'
+                    : 'Snacks paid at counter · not in ticket payment'}
+                </p>
+              ) : null}
+
               <div className="flex justify-between text-slate-500">
                 <span>{t.convenienceFee}</span>
                 <span className="font-mono">₹{(platformFeeTotal / 100).toFixed(0)}</span>
@@ -884,6 +922,75 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
               {couponError && (
                 <p className="text-xs text-red-600 font-medium">{couponError}</p>
               )}
+
+              {/* Available Checkout Offers / Promo Discounts */}
+              <div className="space-y-1.5 pt-1">
+                <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                  <Tag className="w-3.5 h-3.5 text-[#ea580c]" />
+                  <span>{language === 'mr' ? 'उपलब्ध ऑफर्स व सवलती' : 'Available Offers'}</span>
+                </span>
+                <div className="grid grid-cols-1 xs:grid-cols-2 gap-2">
+                  {[
+                    {
+                      code: 'NATAK10',
+                      descMr: '१०% सवलत (कमाल ₹१०० पर्यंत)',
+                      descEn: '10% off (up to ₹100)',
+                    },
+                    {
+                      code: 'MAHA20',
+                      descMr: '२०% सवलत (मर्यादित ऑफर)',
+                      descEn: '20% festive discount',
+                    },
+                    {
+                      code: 'MAHA50',
+                      descMr: '₹५० थेट सवलत (किमान ₹३००)',
+                      descEn: 'Flat ₹50 off on ₹300+',
+                    },
+                  ].map((offer) => {
+                    const isCurrent = couponApplied === offer.code;
+                    return (
+                      <div
+                        key={offer.code}
+                        onClick={() => {
+                          if (!isCurrent) {
+                            setCouponInput(offer.code);
+                            handleApplyCoupon(offer.code);
+                          }
+                        }}
+                        className={`p-2 rounded-xl border transition cursor-pointer text-left flex items-center justify-between ${
+                          isCurrent
+                            ? 'bg-emerald-50 border-emerald-300 shadow-xs'
+                            : 'bg-orange-50/50 border-orange-200/70 hover:bg-orange-100/60'
+                        }`}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <span className="font-mono font-bold text-xs text-[#ea580c] block">
+                            {offer.code}
+                          </span>
+                          <span className="text-[10px] text-slate-600 block truncate">
+                            {language === 'mr' ? offer.descMr : offer.descEn}
+                          </span>
+                        </div>
+                        <span
+                          className={`text-[10px] font-black px-2 py-0.5 rounded-lg shrink-0 ml-1.5 ${
+                            isCurrent
+                              ? 'bg-emerald-600 text-white'
+                              : 'bg-white text-[#ea580c] border border-orange-300'
+                          }`}
+                        >
+                          {isCurrent
+                            ? language === 'mr'
+                              ? 'लागू'
+                              : 'Applied'
+                            : language === 'mr'
+                              ? 'लागू करा'
+                              : 'Apply'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
 

@@ -1,5 +1,5 @@
 -- ==============================================================================
--- MahaTicket / TicketGhar - Phase 2 Schema Migration
+-- MahaTicket - Phase 2 Schema Migration
 -- Maharashtra Location Master, Reusable Venue Templates & User Profile Avatar
 -- ==============================================================================
 

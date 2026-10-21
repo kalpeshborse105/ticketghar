@@ -1,8 +1,0 @@
-## This file must *NOT* be checked into Version Control Systems,
-## as it contains information specific to your local configuration.
-
-# SDK path (Android Studio auto-sets)
-sdk.dir=C\:\\Users\\YourUsername\\AppData\\Local\\Android\\Sdk
-
-# Optional: Override production API base URL for local backend testing
-# api.base.url=http://10.0.2.2:3000

@@ -19,7 +19,31 @@ END;
 $$;
 
 -- ---------------------------------------------------------------------------
--- 1. users
+-- 1. organizers (before users — users.organizer_id FK)
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.organizers (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  company_name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  city TEXT NOT NULL DEFAULT 'Pune',
+  verification_status TEXT NOT NULL DEFAULT 'verified'
+    CHECK (verification_status IN ('pending', 'verified', 'rejected')),
+  status TEXT DEFAULT 'active',
+  commission_type TEXT NOT NULL DEFAULT 'percentage'
+    CHECK (commission_type IN ('percentage', 'flat')),
+  commission_rate INTEGER NOT NULL DEFAULT 600,
+  bank_name TEXT,
+  bank_account_number TEXT,
+  bank_ifsc TEXT,
+  pan_number TEXT,
+  gstin TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ---------------------------------------------------------------------------
+-- 2. users
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.users (
   id SERIAL PRIMARY KEY,
@@ -48,47 +72,56 @@ CREATE TRIGGER trg_users_updated_at
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
 -- ---------------------------------------------------------------------------
--- 2. organizers
+-- 3. districts (36 Maharashtra)
 -- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.organizers (
+CREATE TABLE IF NOT EXISTS public.districts (
   id SERIAL PRIMARY KEY,
+  code TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
-  company_name TEXT NOT NULL,
-  email TEXT NOT NULL,
-  phone TEXT NOT NULL,
-  city TEXT NOT NULL DEFAULT 'Pune',
-  verification_status TEXT NOT NULL DEFAULT 'verified'
-    CHECK (verification_status IN ('pending', 'verified', 'rejected')),
-  status TEXT DEFAULT 'active',
-  commission_type TEXT NOT NULL DEFAULT 'percentage'
-    CHECK (commission_type IN ('percentage', 'flat')),
-  commission_rate INTEGER NOT NULL DEFAULT 600,
-  bank_name TEXT,
-  bank_account_number TEXT,
-  bank_ifsc TEXT,
-  pan_number TEXT,
-  gstin TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  name_mr TEXT NOT NULL,
+  division TEXT NOT NULL,
+  division_mr TEXT NOT NULL,
+  state TEXT NOT NULL DEFAULT 'Maharashtra',
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at TIMESTAMP DEFAULT NOW()
 );
 
 -- ---------------------------------------------------------------------------
--- 3. cities (Phase 2 — explicit city catalog)
+-- 3a. cities (Phase 2 — explicit city catalog)
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.cities (
   id SERIAL PRIMARY KEY,
+  district_id INTEGER REFERENCES public.districts (id),
+  taluka_id INTEGER,
   name TEXT NOT NULL UNIQUE,
   name_mr TEXT NOT NULL,
   state TEXT NOT NULL DEFAULT 'Maharashtra',
+  is_popular INTEGER NOT NULL DEFAULT 0,
   is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- ---------------------------------------------------------------------------
+-- 3b. talukas (Maharashtra sub-districts)
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.talukas (
+  id SERIAL PRIMARY KEY,
+  district_id INTEGER NOT NULL REFERENCES public.districts (id),
+  name TEXT NOT NULL,
+  name_mr TEXT NOT NULL,
+  is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_talukas_district_name ON public.talukas (district_id, name);
+
+-- ---------------------------------------------------------------------------
 -- 4. venues
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.venues (
   id SERIAL PRIMARY KEY,
+  district_id INTEGER REFERENCES public.districts (id),
+  city_id INTEGER REFERENCES public.cities (id),
   name TEXT NOT NULL,
   name_mr TEXT NOT NULL,
   address TEXT NOT NULL,
@@ -100,6 +133,10 @@ CREATE TABLE IF NOT EXISTS public.venues (
   facilities TEXT,
   total_capacity INTEGER NOT NULL DEFAULT 600,
   has_seat_layout INTEGER NOT NULL DEFAULT 1 CHECK (has_seat_layout IN (0, 1)),
+  verification_status TEXT NOT NULL DEFAULT 'verified',
+  is_template INTEGER NOT NULL DEFAULT 1,
+  ownership_type TEXT NOT NULL DEFAULT 'public_theatre',
+  layout_config TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -159,15 +196,18 @@ CREATE TABLE IF NOT EXISTS public.events (
   description_mr TEXT NOT NULL,
   poster_url TEXT NOT NULL,
   banner_url TEXT,
+  trailer_url TEXT,
+  gallery_urls TEXT,
   status TEXT NOT NULL DEFAULT 'published'
     CHECK (status IN ('draft', 'submitted', 'under_review', 'approved', 'rejected', 'published', 'unpublish', 'unpublished', 'cancelled', 'completed')),
   featured INTEGER NOT NULL DEFAULT 0 CHECK (featured IN (0, 1)),
+  tag TEXT,
+  cast_crew TEXT,
   rejection_reason TEXT,
   convenience_fee_type TEXT NOT NULL DEFAULT 'flat',
   convenience_fee_value INTEGER NOT NULL DEFAULT 3000,
   gst_percent INTEGER NOT NULL DEFAULT 18,
   cancellation_policy TEXT NOT NULL DEFAULT 'cancellable_up_to_4hr',
-  cast_crew TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

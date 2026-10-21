@@ -1,0 +1,57 @@
+-- Maharashtra location master: 36 districts (MH-* codes align with admin import)
+CREATE TABLE IF NOT EXISTS districts (
+  id SERIAL PRIMARY KEY,
+  code TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  name_mr TEXT NOT NULL,
+  division TEXT NOT NULL,
+  division_mr TEXT NOT NULL,
+  state TEXT NOT NULL DEFAULT 'Maharashtra',
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+INSERT INTO districts (code, name, name_mr, division, division_mr, state, is_active)
+VALUES
+  ('MH-AH', 'Ahmednagar', 'अहमदनगर', 'Nashik', 'नाशिक', 'Maharashtra', 1),
+  ('MH-AK', 'Akola', 'अकोला', 'Amravati', 'अमरावती', 'Maharashtra', 1),
+  ('MH-AM', 'Amravati', 'अमरावती', 'Amravati', 'अमरावती', 'Maharashtra', 1),
+  ('MH-CS', 'Chhatrapati Sambhajinagar', 'छत्रपती संभाजीनगर', 'Chhatrapati Sambhajinagar', 'छत्रपती संभाजीनगर', 'Maharashtra', 1),
+  ('MH-BD', 'Beed', 'बीड', 'Chhatrapati Sambhajinagar', 'छत्रपती संभाजीनगर', 'Maharashtra', 1),
+  ('MH-BH', 'Bhandara', 'भंडारा', 'Nagpur', 'नागपूर', 'Maharashtra', 1),
+  ('MH-BU', 'Buldhana', 'बुलढाणा', 'Amravati', 'अमरावती', 'Maharashtra', 1),
+  ('MH-CH', 'Chandrapur', 'चंद्रपूर', 'Nagpur', 'नागपूर', 'Maharashtra', 1),
+  ('MH-DH', 'Dhule', 'धुळे', 'Nashik', 'नाशिक', 'Maharashtra', 1),
+  ('MH-GA', 'Gadchiroli', 'गडचिरोली', 'Nagpur', 'नागपूर', 'Maharashtra', 1),
+  ('MH-GD', 'Gondia', 'गोंदिया', 'Nagpur', 'नागपूर', 'Maharashtra', 1),
+  ('MH-HG', 'Hingoli', 'हिंगोली', 'Chhatrapati Sambhajinagar', 'छत्रपती संभाजीनगर', 'Maharashtra', 1),
+  ('MH-JL', 'Jalgaon', 'जळगाव', 'Nashik', 'नाशिक', 'Maharashtra', 1),
+  ('MH-JN', 'Jalna', 'जालना', 'Chhatrapati Sambhajinagar', 'छत्रपती संभाजीनगर', 'Maharashtra', 1),
+  ('MH-KO', 'Kolhapur', 'कोल्हापूर', 'Pune', 'पुणे', 'Maharashtra', 1),
+  ('MH-LA', 'Latur', 'लातूर', 'Chhatrapati Sambhajinagar', 'छत्रपती संभाजीनगर', 'Maharashtra', 1),
+  ('MH-MC', 'Mumbai City', 'मुंबई शहर', 'Konkan', 'कोंकण', 'Maharashtra', 1),
+  ('MH-MS', 'Mumbai Suburban', 'मुंबई उपनगर', 'Konkan', 'कोंकण', 'Maharashtra', 1),
+  ('MH-NG', 'Nagpur', 'नागपूर', 'Nagpur', 'नागपूर', 'Maharashtra', 1),
+  ('MH-NA', 'Nanded', 'नांदेड', 'Chhatrapati Sambhajinagar', 'छत्रपती संभाजीनगर', 'Maharashtra', 1),
+  ('MH-ND', 'Nandurbar', 'नंदुरबार', 'Nashik', 'नाशिक', 'Maharashtra', 1),
+  ('MH-NS', 'Nashik', 'नाशिक', 'Nashik', 'नाशिक', 'Maharashtra', 1),
+  ('MH-DR', 'Dharashiv', 'धाराशिव', 'Chhatrapati Sambhajinagar', 'छत्रपती संभाजीनगर', 'Maharashtra', 1),
+  ('MH-PL', 'Palghar', 'पालघर', 'Konkan', 'कोंकण', 'Maharashtra', 1),
+  ('MH-PR', 'Parbhani', 'परभणी', 'Chhatrapati Sambhajinagar', 'छत्रपती संभाजीनगर', 'Maharashtra', 1),
+  ('MH-PU', 'Pune', 'पुणे', 'Pune', 'पुणे', 'Maharashtra', 1),
+  ('MH-RG', 'Raigad', 'रायगड', 'Konkan', 'कोंकण', 'Maharashtra', 1),
+  ('MH-RT', 'Ratnagiri', 'रत्नागिरी', 'Konkan', 'कोंकण', 'Maharashtra', 1),
+  ('MH-SN', 'Sangli', 'सांगली', 'Pune', 'पुणे', 'Maharashtra', 1),
+  ('MH-ST', 'Satara', 'सातारा', 'Pune', 'पुणे', 'Maharashtra', 1),
+  ('MH-SD', 'Sindhudurg', 'सिंधुदुर्ग', 'Konkan', 'कोंकण', 'Maharashtra', 1),
+  ('MH-SO', 'Solapur', 'सोलापूर', 'Pune', 'पुणे', 'Maharashtra', 1),
+  ('MH-TH', 'Thane', 'ठाणे', 'Konkan', 'कोंकण', 'Maharashtra', 1),
+  ('MH-WR', 'Wardha', 'वर्धा', 'Nagpur', 'नागपूर', 'Maharashtra', 1),
+  ('MH-WS', 'Washim', 'वाशिम', 'Amravati', 'अमरावती', 'Maharashtra', 1),
+  ('MH-YA', 'Yavatmal', 'यवतमाळ', 'Amravati', 'अमरावती', 'Maharashtra', 1)
+ON CONFLICT (code) DO UPDATE SET
+  name = EXCLUDED.name,
+  name_mr = EXCLUDED.name_mr,
+  division = EXCLUDED.division,
+  division_mr = EXCLUDED.division_mr,
+  is_active = 1;

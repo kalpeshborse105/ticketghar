@@ -140,9 +140,16 @@ export async function POST(request: NextRequest) {
       })
       .returning();
 
-    // Create session if time provided
-    if (sessionStartTime) {
-      const startTime = new Date(sessionStartTime);
+    // Always create at least one showtime (BookMyShow workflow needs session + seats)
+    {
+      const startTime = sessionStartTime
+        ? new Date(sessionStartTime)
+        : (() => {
+            const d = new Date();
+            d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7 || 7)); // next Saturday
+            d.setHours(18, 0, 0, 0);
+            return d;
+          })();
       const endTime = new Date(startTime.getTime() + (newEvent.durationMinutes || 150) * 60000);
 
       const [sess] = await db
@@ -155,27 +162,35 @@ export async function POST(request: NextRequest) {
         })
         .returning();
 
-      // Create ticket tier
-      await db.insert(ticketTypes).values({
-        eventId: newEvent.id,
-        sessionId: sess.id,
-        name: 'General Admission / प्रवेशिका',
-        nameMr: 'प्रवेशिका',
-        price: ticketPrice ? parseInt(ticketPrice, 10) : 35000,
-        totalQuota: 200,
-        availableQuota: 200,
-        isSeated: 0,
-      });
-
-      // Safely generate seated inventory from venue layout template
+      // Prefer venue section tiers (Balcony / Stall) via generateSessionInventory.
+      // Do NOT force a flat GA price over section base prices.
       try {
-        await generateSessionInventory(
-          sess.id,
-          finalVenueId,
-          ticketPrice ? parseInt(ticketPrice, 10) / 100 : undefined
-        );
+        const inv = await generateSessionInventory(sess.id, finalVenueId);
+        if (!inv || inv.createdCount === 0) {
+          // Venue has no seat template — create a single GA tier so booking still works
+          await db.insert(ticketTypes).values({
+            eventId: newEvent.id,
+            sessionId: sess.id,
+            name: 'General Admission',
+            nameMr: 'सामान्य प्रवेश',
+            price: ticketPrice ? parseInt(String(ticketPrice), 10) : 35000,
+            totalQuota: 200,
+            availableQuota: 200,
+            isSeated: 0,
+          });
+        }
       } catch (invErr) {
         console.warn('Notice generating venue session inventory:', invErr);
+        await db.insert(ticketTypes).values({
+          eventId: newEvent.id,
+          sessionId: sess.id,
+          name: 'General Admission',
+          nameMr: 'सामान्य प्रवेश',
+          price: ticketPrice ? parseInt(String(ticketPrice), 10) : 35000,
+          totalQuota: 200,
+          availableQuota: 200,
+          isSeated: 0,
+        });
       }
     }
 

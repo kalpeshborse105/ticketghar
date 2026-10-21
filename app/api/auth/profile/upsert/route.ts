@@ -5,48 +5,72 @@ import { eq } from 'drizzle-orm';
 
 export async function POST(request: Request) {
   try {
-    const { uid, email, fullName } = await request.json();
+    const body = await request.json();
+    const { uid, email, fullName, phoneNumber, avatarUrl, city } = body;
 
-    if (!uid || !email) {
+    if (!email && !uid) {
       return NextResponse.json(
-        { error: 'uid and email are required' },
+        { error: 'uid or email is required' },
         { status: 400 }
       );
     }
 
-    // Check if user exists
-    const existingUsers = await db
-      .select()
-      .from(users)
-      .where(eq(users.uid, uid))
-      .limit(1);
+    const cleanEmail = email ? email.trim().toLowerCase() : null;
+    const cleanUid = uid ? uid.trim() : null;
 
-    if (existingUsers.length > 0) {
-      // Update existing user
+    // Check if user exists by email FIRST (authoritative key), or by uid
+    let existingUser = null;
+    if (cleanEmail) {
+      const byEmail = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, cleanEmail))
+        .limit(1);
+      if (byEmail.length > 0) existingUser = byEmail[0];
+    }
+    if (!existingUser && cleanUid) {
+      const byUid = await db
+        .select()
+        .from(users)
+        .where(eq(users.uid, cleanUid))
+        .limit(1);
+      if (byUid.length > 0) existingUser = byUid[0];
+    }
+
+    if (existingUser) {
+      const updateData: any = {
+        updatedAt: new Date(),
+      };
+      if (cleanEmail) updateData.email = cleanEmail;
+      if (fullName) updateData.fullName = fullName;
+      if (phoneNumber !== undefined) updateData.phoneNumber = phoneNumber;
+      if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl;
+      if (city) updateData.city = city;
+
       await db
         .update(users)
-        .set({
-          email,
-          fullName: fullName || existingUsers[0].fullName,
-          updatedAt: new Date(),
-        })
-        .where(eq(users.uid, uid));
+        .set(updateData)
+        .where(eq(users.id, existingUser.id));
 
       return NextResponse.json({
         success: true,
-        user: { ...existingUsers[0], email, fullName },
+        user: { ...existingUser, ...updateData },
       });
     } else {
-      // Insert new user
+      // Insert new user with unique identifier
+      const newUid = cleanUid || `cust-${Date.now()}`;
+      const finalEmail = cleanEmail || `${newUid}@mahaticket.app`;
       const [newUser] = await db
         .insert(users)
         .values({
-          uid,
-          email,
-          fullName: fullName || 'Guest User',
+          uid: newUid,
+          email: finalEmail,
+          fullName: fullName || 'MahaTicket User',
+          phoneNumber: phoneNumber || null,
+          avatarUrl: avatarUrl || null,
           role: 'customer',
           preferredLanguage: 'mr',
-          city: 'Pune',
+          city: city || 'Pune',
         })
         .returning();
 

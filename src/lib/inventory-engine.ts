@@ -20,6 +20,12 @@ import { PricingBreakdown } from './types.ts';
 import { getTicketShareUrl } from './public-url.ts';
 import { sendBookingTicketEmail } from './email-service.ts';
 import { generateSecureTicketQr } from './ticket-crypto.ts';
+import {
+  clearSeatsHeldInCache,
+  markSeatsHeldInCache,
+  sessionSeatsCacheKey,
+  cacheDel,
+} from './redis.ts';
 
 function getTicketSecret(): string {
   return process.env.TICKET_SECRET || 'mahaticket_secure_signing_key_2026';
@@ -54,7 +60,14 @@ export async function releaseSeatsHold(
         holdExpiresAt: null,
       })
       .where(and(...conditions))
-      .returning({ id: seatInventory.id });
+      .returning({ id: seatInventory.id, seatId: seatInventory.seatId });
+
+    if (result.length > 0) {
+      await clearSeatsHeldInCache(
+        sessionId,
+        result.map((r) => r.seatId)
+      ).catch(() => undefined);
+    }
 
     return result.length;
   } catch (error) {
@@ -275,9 +288,19 @@ export async function createTemporarySeatHold(params: {
   // Compute face value total (server-authoritative from ticket_types)
   const faceValueTotal = sessionInventories.reduce((sum, item) => sum + item.price, 0);
 
+  // Fast path cache (Redis / memory) — DB remains authoritative
+  const heldIds = heldRows.map((r) => r.seatId);
+  await markSeatsHeldInCache(
+    sessionId,
+    heldIds.length > 0 ? heldIds : effectiveSeatIds,
+    userIdStr,
+    HOLD_DURATION_MINUTES * 60
+  ).catch(() => undefined);
+  await cacheDel(sessionSeatsCacheKey(sessionId)).catch(() => undefined);
+
   return {
     holdToken: userIdStr,
-    heldSeatIds: seatIds,
+    heldSeatIds: heldIds.length > 0 ? heldIds : effectiveSeatIds,
     heldSeats: sessionInventories.map((i) => ({
       seatId: i.seatId,
       seatCode: i.seatCode,
@@ -595,22 +618,60 @@ export async function generateSessionInventory(
 ): Promise<{ createdCount: number; totalSeats: number }> {
   try {
     // 1. Fetch physical venue sections and seats
-    const sections = await db
+    let sections = await db
       .select()
       .from(venueSections)
       .where(eq(venueSections.venueId, venueId));
 
     if (sections.length === 0) {
-      return { createdCount: 0, totalSeats: 0 };
+      // Auto-provision default 3-tier sections for this venue
+      const defaultSections = [
+        { name: 'Balcony', nameMr: 'बाल्कनी', rowsCount: 2, colsCount: 10, basePrice: 50000, accessible: 0 },
+        { name: 'First Class', nameMr: 'प्रथम वर्ग', rowsCount: 2, colsCount: 10, basePrice: 35000, accessible: 0 },
+        { name: 'Stall', nameMr: 'स्टॉल', rowsCount: 3, colsCount: 10, basePrice: 20000, accessible: 0 },
+      ];
+      for (const s of defaultSections) {
+        await db.insert(venueSections).values({
+          venueId,
+          ...s,
+        });
+      }
+      sections = await db.select().from(venueSections).where(eq(venueSections.venueId, venueId));
     }
 
-    const allSeats = await db
+    let allSeats = await db
       .select()
       .from(seats)
       .where(eq(seats.venueId, venueId));
 
     if (allSeats.length === 0) {
-      return { createdCount: 0, totalSeats: 0 };
+      // Auto-provision physical seats based on venue sections
+      const seatsToInsert: any[] = [];
+      const rowLetters = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+      let rowIndex = 0;
+      for (const sec of sections) {
+        const tier = sec.basePrice >= 40000 ? 'platinum' : sec.basePrice >= 30000 ? 'gold' : 'silver';
+        for (let r = 0; r < sec.rowsCount; r++) {
+          const rowLabel = rowLetters[rowIndex % rowLetters.length];
+          rowIndex++;
+          for (let c = 1; c <= sec.colsCount; c++) {
+            seatsToInsert.push({
+              venueId,
+              sectionId: sec.id,
+              rowLabel,
+              seatNumber: c,
+              seatCode: `${rowLabel}${c < 10 ? '0' + c : c}`,
+              tier,
+              isAccessible: c === 1 ? 1 : 0,
+              isBlocked: 0,
+            });
+          }
+        }
+      }
+      if (seatsToInsert.length > 0) {
+        await db.insert(seats).values(seatsToInsert);
+        allSeats = await db.select().from(seats).where(eq(seats.venueId, venueId));
+      }
     }
 
     // Fetch eventId for this session

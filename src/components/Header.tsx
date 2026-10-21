@@ -124,7 +124,7 @@ export const Header: React.FC<HeaderProps> = ({
       const saved = localStorage.getItem(CITY_STORAGE_KEY);
       if (saved) return saved;
     }
-    return 'महाराष्ट्र (All)';
+    return 'Pune';
   });
   const selectedCity = propSelectedCity || internalCity;
 
@@ -313,91 +313,18 @@ export const Header: React.FC<HeaderProps> = ({
     }
   };
 
-  /*
-   * ---------------------------------------------------------
-   * LIVE CITY DETECTION
-   *
-   * Priority:
-   * 1. Existing user selection in localStorage
-   * 2. Live IP city from ipapi.co
-   * 3. Existing parent selectedCity
-   * 4. Maharashtra fallback
-   *
-   * localStorage works on localhost AND production.
-   * It is browser/device-specific.
-   * ---------------------------------------------------------
-   */
+  // City is manual only (default Pune). No IP / geo auto-detect / refresh loop.
   useEffect(() => {
     if (cityDetectionStartedRef.current) return;
     cityDetectionStartedRef.current = true;
-
-    let cancelled = false;
-
-    const detectLiveCity = async () => {
-      if (typeof window === 'undefined') return;
-
-      // First respect a city the user explicitly selected.
-      const savedCity = localStorage.getItem(CITY_STORAGE_KEY);
-
-      if (
-        savedCity &&
-        savedCity !== 'महाराष्ट्र (All)' &&
-        cityList.includes(savedCity)
-      ) {
-        if (!cancelled && savedCity !== selectedCity) {
-          handleCityChange(savedCity);
-        }
-        return;
-      }
-
-      setDetectingCity(true);
-
-      try {
-        /*
-         * no-store is intentional:
-         * we want a fresh live location lookup instead of an old
-         * browser/network cached response.
-         */
-        const response = await fetch('https://ipapi.co/json/', {
-          method: 'GET',
-          cache: 'no-store',
-          headers: {
-            Accept: 'application/json',
-          },
-        });
-
-        if (!response.ok) throw new Error('IP location request failed');
-
-        const geo = await response.json();
-
-        if (cancelled) return;
-
-        const detected = getCityFromApiName(String(geo.city || ''));
-
-        if (detected && cityList.includes(detected)) {
-          handleCityChange(detected);
-          localStorage.setItem(CITY_STORAGE_KEY, detected);
-          setCityDetectedLive(true);
-
-          window.setTimeout(() => {
-            if (!cancelled) setCityDetectedLive(false);
-          }, 4000);
-        }
-      } catch {
-        // Do not block the site if IP location service fails.
-      } finally {
-        if (!cancelled) {
-          setDetectingCity(false);
-        }
-      }
-    };
-
-    detectLiveCity();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [cityList, onCityChange, selectedCity]);
+    if (typeof window === 'undefined') return;
+    const savedCity = localStorage.getItem(CITY_STORAGE_KEY);
+    if (!savedCity) {
+      localStorage.setItem(CITY_STORAGE_KEY, 'Pune');
+      handleCityChange('Pune');
+    }
+    setDetectingCity(false);
+  }, []);
 
 
 
@@ -610,23 +537,23 @@ export const Header: React.FC<HeaderProps> = ({
     <header className="sticky top-0 z-50 w-full bg-white/95 text-[#141B2B] shadow-[0_1px_6px_rgba(0,0,0,0.03)] backdrop-blur-md">
       <div className="mx-auto max-w-[1280px] px-3 sm:px-5 lg:px-8">
         {/* Tier 1: Brand, City, Search, Actions */}
-        <div className="flex h-16 items-center justify-between gap-3 md:gap-5">
+        <div className="flex h-16 items-center justify-between gap-1.5 xs:gap-2.5 md:gap-5">
           {/* Brand & City */}
-          <div className="flex items-center gap-3 lg:gap-4 shrink-0">
+          <div className="flex items-center gap-1.5 xs:gap-2.5 lg:gap-4 shrink-0">
             <button
               type="button"
               onClick={handleHomeClickAction}
-              className="flex items-center gap-2.5 text-left group cursor-pointer"
+              className="flex items-center gap-1.5 xs:gap-2 text-left group cursor-pointer"
               aria-label="MahaTicket Home"
             >
               <img
                 src="/logo.png"
                 alt="MahaTicket Logo"
-                className="w-14 h-14 object-contain rounded-xl shrink-0 group-hover:scale-105 transition-transform drop-shadow-xs"
+                className="w-8 h-8 xs:w-10 xs:h-10 sm:w-12 sm:h-12 object-contain rounded-xl shrink-0 group-hover:scale-105 transition-transform drop-shadow-xs"
               />
 
               <div className="flex flex-col leading-none">
-                <span className="text-xl font-black tracking-tight">
+                <span className="text-base xs:text-lg sm:text-xl font-black tracking-tight">
                   {language === 'mr' ? (
                     <>
                       <span className="text-[#EA580C]">महा</span>
@@ -639,24 +566,24 @@ export const Header: React.FC<HeaderProps> = ({
                     </>
                   )}
                 </span>
-                <span className="text-[10px] uppercase tracking-wider font-extrabold mt-0.5 flex items-center">
+                <span className="hidden xs:flex text-[9px] uppercase tracking-wider font-extrabold mt-0.5 items-center">
                   <span className="text-[#EA580C]">MAHA</span>
                   <span className="text-[#141B2B]">TICKET</span>
                 </span>
               </div>
             </button>
 
-            {/* Modern City Selector Dropdown */}
+            {/* Modern City Selector Dropdown (Responsive & Screen-Boundary Safe) */}
             <div ref={cityDropdownRef} className="relative flex items-center">
               <button
                 type="button"
                 onClick={() => setCityDropdownOpen((prev) => !prev)}
-                className="flex items-center gap-1.5 rounded-xl bg-[#FFF7ED] hover:bg-orange-100 border border-orange-200/70 px-2.5 sm:px-3 py-1.5 font-bold text-xs text-[#141B2B] shadow-xs transition-all active:scale-95 cursor-pointer"
+                className="flex items-center gap-1 xs:gap-1.5 rounded-xl bg-[#FFF7ED] hover:bg-orange-100 border border-orange-200/70 px-2 xs:px-2.5 sm:px-3 py-1.5 font-bold text-xs text-[#141B2B] shadow-xs transition-all active:scale-95 cursor-pointer"
                 aria-label="Select city"
                 aria-expanded={cityDropdownOpen}
               >
-                <MapPin className="h-4 w-4 text-[#EA580C] shrink-0" />
-                <span className="truncate max-w-[90px] sm:max-w-[130px]">
+                <MapPin className="h-3.5 w-3.5 text-[#EA580C] shrink-0" />
+                <span className="truncate max-w-[55px] xs:max-w-[80px] sm:max-w-[130px]">
                   {selectedCity === 'महाराष्ट्र (All)' ? t.allMaharashtra : selectedCity}
                 </span>
                 {detectingCity ? (
@@ -667,7 +594,7 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
 
               {cityDropdownOpen && (
-                <div className="absolute left-0 top-full z-[70] mt-1.5 w-64 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+                <div className="fixed sm:absolute left-3 right-3 sm:left-0 sm:right-auto top-16 sm:top-full z-[70] mt-1.5 sm:w-64 max-w-[calc(100vw-24px)] rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
                   <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-slate-100 mb-1">
                     <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
                       {language === 'mr' ? 'पसंतीचे शहर निवडा' : 'Select City'}
@@ -918,11 +845,11 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* 3-Line Hamburger Menu Button (Desktop & Tablet Only — Hidden on mobile where bottom nav is active) */}
+            {/* 3-Line Hamburger Menu Button (Mobile Responsive View) */}
             <button
               type="button"
               onClick={() => setMobileMenuOpen((o) => !o)}
-              className="hidden md:flex items-center justify-center p-1.5 sm:p-2 rounded-xl border border-slate-200 bg-white hover:bg-orange-50 text-[#141B2B] transition-all cursor-pointer shadow-2xs active:scale-95"
+              className="flex md:hidden items-center justify-center p-1.5 rounded-xl border border-slate-200 bg-white hover:bg-orange-50 text-[#141B2B] transition-all cursor-pointer shadow-2xs active:scale-95 shrink-0"
               aria-label="Toggle Navigation Menu"
               title={language === 'mr' ? 'मेनू उघडा' : 'Toggle Menu'}
             >

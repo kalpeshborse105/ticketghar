@@ -79,7 +79,7 @@ export async function POST(request: Request) {
 
     // Get or create user
     let existingUser = await db
-      .select()
+      .select({ id: users.id })
       .from(users)
       .where(eq(users.email, userEmail.trim().toLowerCase()));
 
@@ -98,7 +98,7 @@ export async function POST(request: Request) {
           preferredLanguage: 'mr',
           city: 'Pune',
         })
-        .returning();
+        .returning({ id: users.id });
       targetUserId = newUser.id;
     }
 

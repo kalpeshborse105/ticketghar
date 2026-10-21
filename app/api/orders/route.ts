@@ -163,15 +163,17 @@ export async function GET(request: Request) {
       return NextResponse.json({ orders: enriched });
     }
 
-    // List user's orders - requires authentication
-    if (!authUser || !authUser.email) {
+    const targetEmail = (email && email.trim()) ? email.trim().toLowerCase() : authUser?.email?.trim().toLowerCase();
+
+    // List user's orders - requires authentication or email parameter
+    if (!targetEmail) {
       return NextResponse.json(
-        { error: 'Authentication required to list orders' },
+        { error: 'Authentication or email required to list orders' },
         { status: 401 }
       );
     }
 
-    const cleanUserEmail = authUser.email.trim().toLowerCase();
+    const cleanUserEmail = targetEmail;
 
     // Find orders for this user by userId or userEmail
     const userOrders = await db
@@ -186,7 +188,7 @@ export async function GET(request: Request) {
       .innerJoin(venues, eq(events.venueId, venues.id))
       .innerJoin(eventSessions, eq(orders.sessionId, eventSessions.id))
       .where(
-        authUser.id && typeof authUser.id === 'number'
+        authUser?.id && typeof authUser.id === 'number'
           ? or(sql`lower(${orders.userEmail}) = ${cleanUserEmail}`, eq(orders.userId, authUser.id))
           : sql`lower(${orders.userEmail}) = ${cleanUserEmail}`
       )

@@ -51,14 +51,15 @@ BEGIN
     ('Ahilyanagar', 'अहिल्यानगर', 10)
   ON CONFLICT (name) DO NOTHING;
 
-  -- Users
+  -- Users (idempotent)
   INSERT INTO public.users (uid, email, full_name, phone_number, role, preferred_language, city)
   VALUES
     ('admin-mahaticket-super', 'admin@mahaticket.in', 'MahaTicket Super Admin', '+91 98200 12345', 'super_admin', 'mr', 'Pune'),
     ('ops-mahaticket-user', 'operations@mahaticket.in', 'Ananya Deshpande', '+91 98200 67890', 'operations', 'mr', 'Mumbai'),
     ('scanner-balgandharva-01', 'gate1@balgandharva.org', 'Ramesh Kulkarni', '+91 98200 54321', 'scanner', 'mr', 'Pune'),
-    ('cust-demo-101', 'sachin.patil@gmail.com', 'Sachin Patil', '+91 98233 44556', 'customer', 'mr', 'Pune');
-
+    ('cust-demo-101', 'sachin.patil@gmail.com', 'Sachin Patil', '+91 98233 44556', 'customer', 'mr', 'Pune')
+  ON CONFLICT (uid) DO NOTHING;
+ 
   SELECT id INTO admin_id FROM public.users WHERE uid = 'admin-mahaticket-super';
   SELECT id INTO customer_id FROM public.users WHERE uid = 'cust-demo-101';
 

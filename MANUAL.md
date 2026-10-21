@@ -1,4 +1,4 @@
-# TicketGhar (तिकीटघर) — Production Manual & Operations Guide
+# MahaTicket (तिकीटघर) — Production Manual & Operations Guide
 **Maharashtra-First Digital Ticket Marketplace & Company Control Center**
 
 ---
@@ -61,7 +61,7 @@ Ensure these are configured in your `.env` or deployment environment:
 If running locally with Docker or local PostgreSQL:
 ```bash
 # 1. Start local PostgreSQL
-docker run --name ticketghar-postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=ai-studio-db -p 5432:5432 -d postgres:16
+docker run --name mahaticket-postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=ai-studio-db -p 5432:5432 -d postgres:16
 
 # 2. Configure .env
 SQL_HOST="127.0.0.1"

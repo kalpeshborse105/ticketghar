@@ -50,7 +50,7 @@ export const translations = {
     payVia: 'पेमेंट करा (UPI / Cards)',
     bookingSuccess: 'अभिनंदन! आपले तिकीट निश्चित झाले आहे',
     orderNumber: 'ऑर्डर क्रमांक',
-    entryQrCode: 'प्रवेश क्युआर कोड (Gate Entry QR)',
+    entryQrCode: 'प्रवेश पास (Entry Pass)',
     showAtGate: 'सभागृहाच्या प्रवेशद्वारावर हा QR कोड दाखवा',
     downloadTicket: 'तिकीट डाउनलोड / प्रिंट करा',
     backToHome: 'मुख्य पृष्ठावर जा',

@@ -27,10 +27,54 @@ export interface SeatItemConfig {
   isBlocked: number;
 }
 
+export interface MiddleGapConfig {
+  enabled: boolean;
+  afterSeat: number; // gap is rendered after this seat number
+}
+
 export interface RowConfig {
   rowLabel: string;
-  aisleAfter: number[]; // e.g. [4, 12] for gaps after seat 4 and seat 12
+  /** Extra aisle gaps (after seat N), in addition to the middle gap. */
+  aisleAfter: number[];
+  /** Per-row middle (center aisle) gap. Persisted in venue layoutConfig. */
+  middleGap: MiddleGapConfig;
   seats: SeatItemConfig[];
+}
+
+const centerAfter = (seatCount: number) => Math.max(1, Math.ceil(seatCount / 2));
+
+/** All gap positions for a row (extra aisles + middle gap), sorted & clamped. */
+export function getRowGaps(row: RowConfig): number[] {
+  const n = row.seats.length;
+  const set = new Set<number>();
+  for (const a of row.aisleAfter) if (a >= 1 && a < n) set.add(a);
+  if (row.middleGap?.enabled && row.middleGap.afterSeat >= 1 && row.middleGap.afterSeat < n) {
+    set.add(row.middleGap.afterSeat);
+  }
+  return Array.from(set).sort((a, b) => a - b);
+}
+
+/** Build a RowConfig-compatible middleGap/aisleAfter pair from persisted data (supports legacy aisleAfter-only rows). */
+function parseGapConfig(raw: any, seatCount: number): { aisleAfter: number[]; middleGap: MiddleGapConfig } {
+  const saved = Array.isArray(raw?.aisleAfter) ? raw.aisleAfter.map(Number).filter((n: number) => Number.isFinite(n)) : [];
+  const mg = raw?.middleGap;
+  if (mg && typeof mg === 'object') {
+    const afterSeat = Number(mg.afterSeat) >= 1 ? Number(mg.afterSeat) : centerAfter(seatCount);
+    return {
+      middleGap: { enabled: !!mg.enabled, afterSeat },
+      aisleAfter: saved.filter((n: number) => !(mg.enabled && n === afterSeat)),
+    };
+  }
+  // Legacy: infer the aisle closest to center as the middle gap
+  if (saved.length === 0) {
+    return { aisleAfter: [], middleGap: { enabled: false, afterSeat: centerAfter(seatCount) } };
+  }
+  const center = seatCount / 2;
+  const middle = saved.reduce((best: number, n: number) => (Math.abs(n - center) < Math.abs(best - center) ? n : best), saved[0]);
+  return {
+    middleGap: { enabled: true, afterSeat: middle },
+    aisleAfter: saved.filter((n: number) => n !== middle),
+  };
 }
 
 export interface SectionConfig {
@@ -71,7 +115,8 @@ const DEFAULT_SECTIONS: SectionConfig[] = [
     walkwayAfterRow: '',
     rows: ['A', 'B', 'C', 'D', 'E', 'F'].map((label, rIdx) => ({
       rowLabel: label,
-      aisleAfter: [4],
+      aisleAfter: [],
+      middleGap: { enabled: true, afterSeat: 4 },
       seats: Array.from({ length: 8 }).map((_, cIdx) => ({
         seatNumber: cIdx + 1,
         tier: 'gold',
@@ -88,7 +133,8 @@ const DEFAULT_SECTIONS: SectionConfig[] = [
     walkwayAfterRow: '',
     rows: ['A', 'B', 'C'].map((label) => ({
       rowLabel: label,
-      aisleAfter: [4],
+      aisleAfter: [],
+      middleGap: { enabled: true, afterSeat: 4 },
       seats: Array.from({ length: 8 }).map((_, cIdx) => ({
         seatNumber: cIdx + 1,
         tier: 'platinum',
@@ -111,24 +157,41 @@ function parseInitialSections(venue: any): SectionConfig[] {
     }
   }
 
-  if (layoutConfig?.sections && Array.isArray(layoutConfig.sections) && layoutConfig.sections.length > 0) {
+  // Saved layoutConfig is only usable if it carries seats (older saves stored rows without seats).
+  const configHasSeats =
+    Array.isArray(layoutConfig?.sections) &&
+    layoutConfig.sections.some((sec: any) => (sec.rows || []).some((r: any) => Array.isArray(r.seats) && r.seats.length > 0));
+
+  // Gap metadata from layoutConfig, keyed by section name + row label (used when rebuilding from DB seats).
+  const savedGapByRow = new Map<string, any>();
+  if (Array.isArray(layoutConfig?.sections)) {
+    for (const sec of layoutConfig.sections) {
+      savedGapByRow.set(`${sec.name}|__walkway`, sec.walkwayAfterRow || '');
+      for (const r of sec.rows || []) savedGapByRow.set(`${sec.name}|${r.rowLabel}`, r);
+    }
+  }
+
+  if (configHasSeats) {
     return layoutConfig.sections.map((sec: any) => ({
       name: sec.name || 'Section',
       nameMr: sec.nameMr || 'विभाग',
       basePrice: Number(sec.basePrice || 350),
       tier: sec.tier || 'gold',
       walkwayAfterRow: sec.walkwayAfterRow || '',
-      rows: (sec.rows || []).map((r: any) => ({
-        rowLabel: r.rowLabel || 'A',
-        aisleAfter: Array.isArray(r.aisleAfter) ? r.aisleAfter : [4],
-        seats: (r.seats || []).map((s: any, sIdx: number) => ({
+      rows: (sec.rows || []).map((r: any) => {
+        const seatsParsed = (r.seats || []).map((s: any, sIdx: number) => ({
           seatNumber: s.seatNumber !== undefined ? Number(s.seatNumber) : sIdx + 1,
           seatCode: s.seatCode,
           tier: s.tier || sec.tier || 'gold',
           isAccessible: Number(s.isAccessible || 0),
           isBlocked: Number(s.isBlocked || 0),
-        })),
-      })),
+        }));
+        return {
+          rowLabel: r.rowLabel || 'A',
+          ...parseGapConfig(r, seatsParsed.length),
+          seats: seatsParsed,
+        };
+      }),
     }));
   }
 
@@ -147,7 +210,8 @@ function parseInitialSections(venue: any): SectionConfig[] {
           walkwayAfterRow: '',
           rows: Array.from({ length: rowsCount }).map((_, rIdx) => ({
             rowLabel: String.fromCharCode(65 + rIdx),
-            aisleAfter: [Math.floor(colsCount / 2)],
+            aisleAfter: [],
+            middleGap: { enabled: true, afterSeat: centerAfter(colsCount) },
             seats: Array.from({ length: colsCount }).map((_, cIdx) => ({
               seatNumber: cIdx + 1,
               tier: 'gold' as const,
@@ -167,9 +231,16 @@ function parseInitialSections(venue: any): SectionConfig[] {
 
       const rows: RowConfig[] = Array.from(rowMap.entries()).map(([rLabel, seatArr]) => {
         const sortedSeats = seatArr.sort((a, b) => a.seatNumber - b.seatNumber);
+        const savedRow = savedGapByRow.get(`${sec.name}|${rLabel}`);
+        const gapCfg = savedRow
+          ? parseGapConfig(savedRow, sortedSeats.length)
+          : {
+              aisleAfter: [] as number[],
+              middleGap: { enabled: true, afterSeat: centerAfter(sortedSeats.length) },
+            };
         return {
           rowLabel: rLabel,
-          aisleAfter: [Math.floor(sortedSeats.length / 2)],
+          ...gapCfg,
           seats: sortedSeats.map((s) => ({
             seatNumber: s.seatNumber,
             seatCode: s.seatCode,
@@ -186,7 +257,7 @@ function parseInitialSections(venue: any): SectionConfig[] {
         nameMr: sec.nameMr,
         basePrice: Math.round((sec.basePrice || 35000) / 100),
         tier: (sec.name.toLowerCase().includes('balcony') || sec.name.toLowerCase().includes('vip') ? 'platinum' : 'gold') as any,
-        walkwayAfterRow: '',
+        walkwayAfterRow: savedGapByRow.get(`${sec.name}|__walkway`) || '',
         rows,
       };
     });
@@ -266,7 +337,8 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
       tier: 'standard',
       rows: ['A', 'B', 'C'].map((label) => ({
         rowLabel: label,
-        aisleAfter: [4],
+        aisleAfter: [],
+        middleGap: { enabled: true, afterSeat: 4 },
         seats: Array.from({ length: 8 }).map((_, cIdx) => ({
           seatNumber: cIdx + 1,
           tier: 'standard',
@@ -318,7 +390,8 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
 
     const newRow: RowConfig = {
       rowLabel: nextLabel,
-      aisleAfter: [4],
+      aisleAfter: [],
+      middleGap: { enabled: true, afterSeat: 4 },
       seats: Array.from({ length: 8 }).map((_, cIdx) => ({
         seatNumber: cIdx + 1,
         tier: currentSection.tier,
@@ -370,10 +443,60 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
       newSeats = targetRow.seats.slice(0, newCount);
     }
 
-    const updatedRows = currentSection.rows.map((row, i) =>
-      i === rowIdx ? { ...row, seats: newSeats } : row
-    );
+    const updatedRows = currentSection.rows.map((row, i) => {
+      if (i !== rowIdx) return row;
+      // Keep a centered middle gap centered; otherwise just clamp it inside the row.
+      const wasCentered = row.middleGap.afterSeat === centerAfter(row.seats.length);
+      const nextAfter = wasCentered
+        ? centerAfter(newCount)
+        : Math.min(row.middleGap.afterSeat, Math.max(1, newCount - 1));
+      return {
+        ...row,
+        seats: newSeats,
+        aisleAfter: row.aisleAfter.filter((a) => a < newCount),
+        middleGap: { ...row.middleGap, afterSeat: nextAfter },
+      };
+    });
     updateCurrentSection({ rows: updatedRows });
+  };
+
+  // MIDDLE GAP (center aisle) controls — persisted per row in layoutConfig
+  const handleSetMiddleGap = (rowIdx: number, patch: Partial<MiddleGapConfig>) => {
+    if (!currentSection) return;
+    const updatedRows = currentSection.rows.map((row, i) => {
+      if (i !== rowIdx) return row;
+      const merged = { ...row.middleGap, ...patch };
+      const maxAfter = Math.max(1, row.seats.length - 1);
+      merged.afterSeat = Math.min(Math.max(1, Math.round(Number(merged.afterSeat) || 1)), maxAfter);
+      return { ...row, middleGap: merged };
+    });
+    updateCurrentSection({ rows: updatedRows });
+  };
+
+  const handleApplyMiddleGapToAllRows = (enabled: boolean) => {
+    if (!currentSection) return;
+    updateCurrentSection({
+      rows: currentSection.rows.map((row) => ({
+        ...row,
+        middleGap: {
+          enabled,
+          afterSeat: Math.min(
+            Math.max(1, row.middleGap.afterSeat || centerAfter(row.seats.length)),
+            Math.max(1, row.seats.length - 1)
+          ),
+        },
+      })),
+    });
+  };
+
+  const handleCenterMiddleGapAllRows = () => {
+    if (!currentSection) return;
+    updateCurrentSection({
+      rows: currentSection.rows.map((row) => ({
+        ...row,
+        middleGap: { enabled: true, afterSeat: Math.min(centerAfter(row.seats.length), Math.max(1, row.seats.length - 1)) },
+      })),
+    });
   };
 
   const handleToggleSeatProperty = (rowIdx: number, seatIdx: number) => {
@@ -411,6 +534,11 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
   const handleToggleAisle = (rowIdx: number, afterSeatNum: number) => {
     if (!currentSection) return;
     const targetRow = currentSection.rows[rowIdx];
+    // Clicking the middle-gap marker switches the middle gap off
+    if (targetRow.middleGap.enabled && targetRow.middleGap.afterSeat === afterSeatNum) {
+      handleSetMiddleGap(rowIdx, { enabled: false });
+      return;
+    }
     const exists = targetRow.aisleAfter.includes(afterSeatNum);
     const updatedAisles = exists
       ? targetRow.aisleAfter.filter((n) => n !== afterSeatNum)
@@ -476,7 +604,9 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
           walkwayAfterRow: sec.walkwayAfterRow || '',
           rows: sec.rows.map((r) => ({
             rowLabel: r.rowLabel,
-            aisleAfter: r.aisleAfter,
+            // effective gaps (extra aisles + middle gap) for consumers that only read aisleAfter
+            aisleAfter: getRowGaps(r),
+            middleGap: { enabled: r.middleGap.enabled, afterSeat: r.middleGap.afterSeat },
             seats: r.seats.map((s) => ({
               seatNumber: s.seatNumber,
               seatCode: `${sec.name.slice(0, 3).toUpperCase()}-${r.rowLabel}-${s.seatNumber.toString().padStart(2, '0')}`,
@@ -854,6 +984,32 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
                         </p>
                       </div>
 
+                      {/* Middle gap — apply to every row of this section */}
+                      <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                        <span className="text-slate-400 text-[11px]">मधला गॅप (सर्व रांगा):</span>
+                        <button
+                          type="button"
+                          onClick={() => handleApplyMiddleGapToAllRows(true)}
+                          className="px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-semibold border border-amber-500/30 transition"
+                        >
+                          सर्व चालू
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleApplyMiddleGapToAllRows(false)}
+                          className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-semibold transition"
+                        >
+                          सर्व बंद
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleCenterMiddleGapAllRows}
+                          className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-semibold transition"
+                        >
+                          मध्यभागी ठेवा
+                        </button>
+                      </div>
+
                       {/* Add Row Button Options */}
                       <div className="flex flex-wrap items-center gap-1.5 text-xs">
                         <button
@@ -914,6 +1070,58 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
                                 className="w-14 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-center font-mono text-white"
                                 title="Number of seats in this row"
                               />
+
+                              {/* MIDDLE GAP (center aisle) control — per row */}
+                              <div
+                                className={`ml-3 flex items-center gap-2 rounded-lg border px-2 py-1 ${
+                                  row.middleGap.enabled
+                                    ? 'border-amber-500/50 bg-amber-500/10'
+                                    : 'border-slate-700 bg-slate-900'
+                                }`}
+                              >
+                                <button
+                                  type="button"
+                                  role="switch"
+                                  aria-checked={row.middleGap.enabled}
+                                  onClick={() => handleSetMiddleGap(rIdx, { enabled: !row.middleGap.enabled })}
+                                  title="Toggle middle gap (center aisle) for this row"
+                                  className={`relative w-8 h-4 rounded-full transition ${
+                                    row.middleGap.enabled ? 'bg-amber-500' : 'bg-slate-700'
+                                  }`}
+                                >
+                                  <span
+                                    className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${
+                                      row.middleGap.enabled ? 'left-4' : 'left-0.5'
+                                    }`}
+                                  />
+                                </button>
+                                <span className="text-[11px] text-slate-300 font-semibold">मधला गॅप</span>
+                                {row.middleGap.enabled && (
+                                  <>
+                                    <span className="text-[11px] text-slate-400">आसन</span>
+                                    <input
+                                      type="number"
+                                      min={1}
+                                      max={Math.max(1, row.seats.length - 1)}
+                                      value={row.middleGap.afterSeat}
+                                      onChange={(e) => handleSetMiddleGap(rIdx, { afterSeat: Number(e.target.value) })}
+                                      className="w-12 bg-slate-900 border border-slate-700 rounded-lg px-1.5 py-0.5 text-center font-mono text-amber-300"
+                                      title="Gap is placed after this seat number"
+                                    />
+                                    <span className="text-[11px] text-slate-400">नंतर</span>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleSetMiddleGap(rIdx, { afterSeat: centerAfter(row.seats.length) })
+                                      }
+                                      className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300"
+                                      title="Center the gap in this row"
+                                    >
+                                      मध्य
+                                    </button>
+                                  </>
+                                )}
+                              </div>
                             </div>
 
                             <button
@@ -929,7 +1137,9 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
                           {/* Visual Row Preview with Seats and Aisle indicators */}
                           <div className="flex flex-wrap items-center gap-1.5 pt-1">
                             {row.seats.map((seat, sIdx) => {
-                              const isAisleGap = row.aisleAfter.includes(seat.seatNumber);
+                              const isAisleGap = getRowGaps(row).includes(seat.seatNumber);
+                              const isMiddleGap =
+                                row.middleGap.enabled && row.middleGap.afterSeat === seat.seatNumber;
 
                               let bgClass = 'bg-slate-800 text-slate-200 border-slate-700 hover:border-amber-400';
                               if (seat.isBlocked === 1) {
@@ -965,8 +1175,14 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
                                   {isAisleGap && (
                                     <div
                                       onClick={() => handleToggleAisle(rIdx, seat.seatNumber)}
-                                      title="Aisle gap active. Click to remove gap."
-                                      className="w-4 h-7 border-x border-dashed border-amber-500/30 flex items-center justify-center cursor-pointer hover:border-red-400"
+                                      title={
+                                        isMiddleGap
+                                          ? 'Middle gap (center aisle). Click to turn off.'
+                                          : 'Aisle gap active. Click to remove gap.'
+                                      }
+                                      className={`h-7 border-x border-dashed flex items-center justify-center cursor-pointer hover:border-red-400 ${
+                                        isMiddleGap ? 'w-6 border-amber-400/70 bg-amber-500/10' : 'w-4 border-amber-500/30'
+                                      }`}
                                     >
                                       <span className="w-1 h-1 rounded-full bg-amber-400" />
                                     </div>
@@ -975,9 +1191,6 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
                               );
                             })}
 
-                            <div className="text-[10px] text-slate-500 pl-2">
-                              (मध्यवर्ती पॅसेजसाठी आसनानंतर गॅप जोडा)
-                            </div>
                           </div>
                         </div>
 
@@ -1092,7 +1305,7 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
 
                                 <div className="flex items-center gap-1.5">
                                   {row.seats.map((seat, sIdx) => {
-                                    const isAisleGap = row.aisleAfter.includes(seat.seatNumber);
+                                    const isAisleGap = getRowGaps(row).includes(seat.seatNumber);
 
                                     let seatClass = 'bg-white text-slate-900 border-slate-300 hover:border-amber-400';
                                     if (seat.isBlocked === 1) {

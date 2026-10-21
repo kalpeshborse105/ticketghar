@@ -12,5 +12,9 @@ android/.gradle/
 android/**/build/
 android/.kotlin/
 .kotlin/
-mobile
+mobile/node_modules/
+mobile/android/app/build/
+mobile/android/.gradle/
+mobile/ios/build/
+mobile/.env
 build_out
