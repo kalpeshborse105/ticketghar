@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { verifyPaymentSignature } from '@/src/lib/payments/razorpay.ts';
+import { verifyPaymentSignatureAsync } from '@/src/lib/payments/razorpay.ts';
 import { confirmBookingOrder, calculatePricing } from '@/src/lib/inventory-engine.ts';
 import { db } from '@/src/db/index.ts';
 import { users, events, seatInventory, ticketTypes } from '@/src/db/schema.ts';
@@ -43,10 +43,14 @@ export async function POST(request: Request) {
       );
     }
 
-    // CRITICAL: Verify payment signature before proceeding
+    // CRITICAL: Verify payment signature before proceeding (DB or env secret)
     let signatureValid = false;
     try {
-      signatureValid = verifyPaymentSignature(razorpay_order_id, razorpay_payment_id, razorpay_signature);
+      signatureValid = await verifyPaymentSignatureAsync(
+        razorpay_order_id,
+        razorpay_payment_id,
+        razorpay_signature
+      );
     } catch (error: any) {
       console.error('Signature verification error:', error);
       return NextResponse.json(
