@@ -4,6 +4,7 @@ import { seatInventory, ticketTypes, events } from '@/src/db/schema.ts';
 import { eq, and, inArray } from 'drizzle-orm';
 import { isRazorpayConfigured, getRazorpayClient } from '@/src/lib/payments/razorpay.ts';
 import { calculatePricing } from '@/src/lib/inventory-engine.ts';
+import { cacheDel, sessionSeatsCacheKey } from '@/src/lib/redis.ts';
 
 export async function POST(request: Request) {
   try {
@@ -53,34 +54,10 @@ export async function POST(request: Request) {
       .where(and(eq(seatInventory.sessionId, sessionId), inArray(seatInventory.seatId, seatIds)));
 
     if (holdSeats.length < seatIds.length) {
-      const missingCount = seatIds.length - holdSeats.length;
-      const existingIds = holdSeats.map((s) => s.seatId);
-      const availableExtras = await db
-        .select({
-          invId: seatInventory.id,
-          seatId: seatInventory.seatId,
-          status: seatInventory.status,
-          heldBy: seatInventory.heldByUserId,
-          holdExpires: seatInventory.holdExpiresAt,
-          ticketTypeId: seatInventory.ticketTypeId,
-          price: ticketTypes.price,
-          eventId: ticketTypes.eventId,
-        })
-        .from(seatInventory)
-        .innerJoin(ticketTypes, eq(seatInventory.ticketTypeId, ticketTypes.id))
-        .where(and(eq(seatInventory.sessionId, sessionId), eq(seatInventory.status, 'available')))
-        .limit(missingCount + existingIds.length);
-
-      for (const extra of availableExtras) {
-        if (!existingIds.includes(extra.seatId) && holdSeats.length < seatIds.length) {
-          holdSeats.push(extra);
-          existingIds.push(extra.seatId);
-        }
-      }
-    }
-
-    if (holdSeats.length === 0) {
-      return NextResponse.json({ error: 'No seats found for the specified session' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'One or more selected seats are not available. Please refresh the seat map.' },
+        { status: 409 }
+      );
     }
 
     // Verify seats or auto-hold them for payment checkout
@@ -119,6 +96,9 @@ export async function POST(request: Request) {
         seat.holdExpires = tenMinutes;
       }
     }
+
+    // Invalidate seat map cache so all clients see the extended hold immediately
+    await cacheDel(sessionSeatsCacheKey(sessionId)).catch(() => undefined);
 
     const eventId = holdSeats[0].eventId;
 

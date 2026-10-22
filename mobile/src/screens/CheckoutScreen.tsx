@@ -22,10 +22,11 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../theme';
 import { api, paise, formatDate } from '../api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useCartStore, useAuthStore } from '../store';
+import { useCartStore, useAuthStore, useUIStore } from '../store';
 import RazorpayCheckout from 'react-native-razorpay';
 import { CommonActions } from '@react-navigation/native';
 import { BackHeader, CountdownTimer, Divider, PriceRow, TicketCardFrame, MTPopupModal } from '../components';
+import { clearSessionSeatsCache } from './SeatSelectionScreen';
 
 function cleanIndianMobile(raw?: string | null): string {
   if (!raw) return '';
@@ -131,6 +132,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
 
   const { user, setAuth } = useAuthStore();
   const { setRazorpayOrder } = useCartStore();
+  const language = useUIStore((s) => s.language);
 
   const sanitizeName = (rawName?: string, rawEmail?: string) => {
     if (!rawName) {
@@ -325,6 +327,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
         await api.releaseHold({ sessionId, holdToken, seatIds });
       }
     } catch { }
+    clearSessionSeatsCache(sessionId);
     navigation.goBack();
   };
 
@@ -563,6 +566,9 @@ export default function CheckoutScreen({ navigation, route }: any) {
           await AsyncStorage.setItem('@tg_my_orders', JSON.stringify(deduped.slice(0, 30)));
         } catch {}
 
+        // Clear session seats cache so refreshed map immediately shows booked seats
+        clearSessionSeatsCache(sessionId);
+
         // Direct reset to BookingConfirmed so checkout is completely unmounted from the background
         navigation.dispatch(
           CommonActions.reset({
@@ -618,13 +624,15 @@ export default function CheckoutScreen({ navigation, route }: any) {
     >
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.bg} />
 
-      <BackHeader title="Checkout" onBack={handleDiscardAndBack} />
+      <BackHeader title={language === 'mr' ? 'तिकीट बुकिंग' : 'Checkout'} onBack={handleDiscardAndBack} />
 
       {/* Professional Session Active Banner */}
       <View style={styles.timerPillBanner}>
         <View style={styles.timerPillBox}>
           <Icon name="clock-outline" size={15} color="#D97706" style={{ marginRight: 6 }} />
-          <Text style={styles.timerPillLabel}>Booking Session Active: </Text>
+          <Text style={styles.timerPillLabel}>
+            {language === 'mr' ? 'आसन आरक्षण वेळ: ' : 'Booking Session Active: '}
+          </Text>
           <CountdownTimer seconds={countdown} />
         </View>
       </View>
@@ -694,8 +702,12 @@ export default function CheckoutScreen({ navigation, route }: any) {
           <View style={styles.cardHeaderRow}>
             <Icon name="account-circle-outline" size={20} color={COLORS.primary} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.modernCardTitle}>Contact & Attendee Details</Text>
-              <Text style={styles.modernCardSubtitle}>E-ticket & SMS will be sent to these details</Text>
+              <Text style={styles.modernCardTitle}>
+                {language === 'mr' ? '१. ग्राहक संपर्क माहिती' : '1. Contact & Attendee Details'}
+              </Text>
+              <Text style={styles.modernCardSubtitle}>
+                {language === 'mr' ? 'तिकीट व एसएमएस या माहितीवर पाठवले जाईल' : 'E-ticket & SMS will be sent to these details'}
+              </Text>
             </View>
           </View>
 
@@ -710,13 +722,15 @@ export default function CheckoutScreen({ navigation, route }: any) {
 
           {/* Name Field */}
           <View style={styles.formFieldBox}>
-            <Text style={styles.formFieldLabel}>FULL NAME</Text>
+            <Text style={styles.formFieldLabel}>
+              {language === 'mr' ? 'पूर्ण नाव' : 'FULL NAME'}
+            </Text>
             <View style={styles.formFieldInputRow}>
               <Icon name="account-outline" size={18} color="#94A3B8" style={{ marginRight: 8 }} />
               <TextInput
                 ref={nameRef}
                 style={[styles.modernTextInput, paying && styles.inputLocked]}
-                placeholder="Attendee full name"
+                placeholder={language === 'mr' ? 'प्रेक्षकाचे पूर्ण नाव' : 'Attendee full name'}
                 placeholderTextColor="#94A3B8"
                 value={name}
                 onChangeText={(t) => {
@@ -735,7 +749,9 @@ export default function CheckoutScreen({ navigation, route }: any) {
 
           {/* Phone Field with Country Code Badge */}
           <View style={styles.formFieldBox}>
-            <Text style={styles.formFieldLabel}>MOBILE NUMBER</Text>
+            <Text style={styles.formFieldLabel}>
+              {language === 'mr' ? 'मोबाईल नंबर' : 'MOBILE NUMBER'}
+            </Text>
             <View style={styles.formFieldInputRow}>
               <View style={styles.countryCodeBadge}>
                 <Text style={styles.countryCodeText}>🇮🇳 +91</Text>
@@ -743,7 +759,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
               <TextInput
                 ref={phoneRef}
                 style={[styles.modernTextInput, paying && styles.inputLocked]}
-                placeholder="10-digit mobile number"
+                placeholder={language === 'mr' ? '१०-अंकी मोबाईल नंबर' : '10-digit mobile number'}
                 placeholderTextColor="#94A3B8"
                 value={phone}
                 onChangeText={(t) => {
@@ -762,15 +778,17 @@ export default function CheckoutScreen({ navigation, route }: any) {
             </View>
           </View>
 
-          {/* Age Field (वय) */}
+          {/* Age Field */}
           <View style={styles.formFieldBox}>
-            <Text style={styles.formFieldLabel}>AGE (वय)</Text>
+            <Text style={styles.formFieldLabel}>
+              {language === 'mr' ? 'वय' : 'AGE'}
+            </Text>
             <View style={styles.formFieldInputRow}>
               <Icon name="calendar-account-outline" size={18} color="#94A3B8" style={{ marginRight: 8 }} />
               <TextInput
                 ref={ageRef}
                 style={[styles.modernTextInput, paying && styles.inputLocked]}
-                placeholder="Attendee age (e.g. 28)"
+                placeholder={language === 'mr' ? 'वय (उदा. २८)' : 'Attendee age (e.g. 28)'}
                 placeholderTextColor="#94A3B8"
                 value={age}
                 onChangeText={setAge}
@@ -786,13 +804,15 @@ export default function CheckoutScreen({ navigation, route }: any) {
 
           {/* Email Field */}
           <View style={styles.formFieldBox}>
-            <Text style={styles.formFieldLabel}>EMAIL ADDRESS (ईमेल)</Text>
+            <Text style={styles.formFieldLabel}>
+              {language === 'mr' ? 'ईमेल पत्ता' : 'EMAIL ADDRESS'}
+            </Text>
             <View style={styles.formFieldInputRow}>
               <Icon name="email-outline" size={18} color="#94A3B8" style={{ marginRight: 8 }} />
               <TextInput
                 ref={emailRef}
                 style={[styles.modernTextInput, paying && styles.inputLocked]}
-                placeholder="For instant PDF pass & booking receipt"
+                placeholder={language === 'mr' ? 'तिकीट व पावतीसाठी ईमेल' : 'For instant PDF pass & booking receipt'}
                 placeholderTextColor="#94A3B8"
                 value={email}
                 onChangeText={(t) => {
@@ -816,38 +836,75 @@ export default function CheckoutScreen({ navigation, route }: any) {
           <View style={styles.cardHeaderRow}>
             <Icon name="ticket-percent-outline" size={20} color={COLORS.primary} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.modernCardTitle}>Offers & Promo Code</Text>
-              <Text style={styles.modernCardSubtitle}>Apply coupon code to save instantly</Text>
+              <Text style={styles.modernCardTitle}>
+                {language === 'mr' ? '२. उपलब्ध ऑफर्स व प्रोमो कोड' : '2. Offers & Promo Code'}
+              </Text>
+              <Text style={styles.modernCardSubtitle}>
+                {language === 'mr' ? 'थेट सवलत मिळवण्यासाठी कूपनवर क्लिक करा किंवा कोड टाका' : 'Tap an offer or enter code to save instantly'}
+              </Text>
             </View>
           </View>
 
-          {/* Quick coupons from GET /api/coupons (same DB as web) */}
-          {availableCoupons.length > 0 ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickCouponRow}>
-              {availableCoupons.slice(0, 6).map((c: any) => (
+          {/* Quick coupons - tap to apply directly */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickCouponRow}>
+            {(availableCoupons.length > 0
+              ? availableCoupons
+              : [
+                  { code: 'NATAK10', description: language === 'mr' ? '१०% सवलत' : '10% off' },
+                  { code: 'MAHA20', description: language === 'mr' ? '२०% विशेष सवलत' : '20% special discount' },
+                  { code: 'MAHA50', description: language === 'mr' ? '₹५० थेट सवलत' : 'Flat ₹50 off' },
+                ]
+            ).map((c: any) => {
+              const isApplied = appliedCoupon === String(c.code);
+              return (
                 <TouchableOpacity
                   key={String(c.id || c.code)}
-                  onPress={() => applyCouponCode(String(c.code))}
-                  style={styles.quickCouponPill}
+                  onPress={() => {
+                    if (!isApplied) {
+                      setCouponInput(String(c.code));
+                      applyCouponCode(String(c.code));
+                    }
+                  }}
+                  style={[styles.quickCouponPill, isApplied && styles.quickCouponPillActive]}
                   disabled={paying}
+                  activeOpacity={0.75}
                 >
-                  <Icon name="tag" size={13} color="#EA580C" style={{ marginRight: 4 }} />
-                  <Text style={styles.quickCouponCode}>{c.code}</Text>
+                  <Icon
+                    name={isApplied ? 'check-circle' : 'tag'}
+                    size={13}
+                    color={isApplied ? '#059669' : '#EA580C'}
+                    style={{ marginRight: 4 }}
+                  />
+                  <Text style={[styles.quickCouponCode, isApplied && styles.quickCouponCodeActive]}>
+                    {c.code}
+                  </Text>
                   {c.description ? (
-                    <Text style={styles.quickCouponSave} numberOfLines={1}>
+                    <Text
+                      style={[styles.quickCouponSave, isApplied && styles.quickCouponSaveActive]}
+                      numberOfLines={1}
+                    >
                       • {c.description}
                     </Text>
                   ) : null}
+                  {isApplied ? (
+                    <Text style={styles.appliedPillBadge}>
+                      {language === 'mr' ? 'लागू झाले' : 'Applied'}
+                    </Text>
+                  ) : null}
                 </TouchableOpacity>
-              ))}
-            </ScrollView>
-          ) : null}
+              );
+            })}
+          </ScrollView>
 
           {appliedCoupon ? (
             <View style={styles.appliedCoupon}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.appliedCouponText}>{appliedCoupon}</Text>
-                <Text style={styles.appliedCouponSub}>Saved {paise(appliedDiscount)}</Text>
+                <Text style={styles.appliedCouponText}>
+                  ✓ {appliedCoupon} {language === 'mr' ? 'लागू झाले' : 'Applied'}
+                </Text>
+                <Text style={styles.appliedCouponSub}>
+                  {language === 'mr' ? `बचत ${paise(appliedDiscount)}` : `Saved ${paise(appliedDiscount)}`}
+                </Text>
               </View>
               <TouchableOpacity onPress={removeCoupon} style={styles.removeCouponChip} disabled={paying}>
                 <Icon name="close-circle" size={18} color={COLORS.danger} />
@@ -858,7 +915,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
               <View style={styles.couponRow}>
                 <TextInput
                   style={[styles.textInput, styles.couponInput, paying && styles.inputLocked]}
-                  placeholder="Enter coupon code"
+                  placeholder={language === 'mr' ? 'कूपन कोड टाका' : 'Enter coupon code'}
                   placeholderTextColor={COLORS.textDim}
                   value={couponInput}
                   onChangeText={(t) => { setCouponInput(t.toUpperCase()); setCouponMsg(null); }}
@@ -876,7 +933,9 @@ export default function CheckoutScreen({ navigation, route }: any) {
                   {couponLoading ? (
                     <ActivityIndicator size="small" color={COLORS.surface} />
                   ) : (
-                    <Text style={styles.offerApplyButtonText}>Apply</Text>
+                    <Text style={styles.offerApplyButtonText}>
+                      {language === 'mr' ? 'लागू करा' : 'Apply'}
+                    </Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -893,23 +952,93 @@ export default function CheckoutScreen({ navigation, route }: any) {
         <View style={styles.modernCard}>
           <View style={styles.cardHeaderRow}>
             <Icon name="receipt-text-outline" size={20} color={COLORS.primary} />
-            <Text style={styles.modernCardTitle}>Price Details</Text>
+            <Text style={styles.modernCardTitle}>
+              {language === 'mr' ? '३. तिकीट दर व आकार' : '3. Price Details'}
+            </Text>
           </View>
-          <PriceRow label={`Tickets (${ticketCount})`} value={paise(faceValue)} />
-          {addonTotal > 0 && <PriceRow label="Add-ons" value={paise(addonTotal)} />}
-          {platformFee > 0 && <PriceRow label={`Convenience fee (${ticketCount})`} value={paise(platformFee)} />}
-          {tax > 0 && <PriceRow label="GST" value={paise(tax)} />}
+          <PriceRow
+            label={language === 'mr' ? `तिकिटे (${ticketCount})` : `Tickets (${ticketCount})`}
+            value={paise(faceValue)}
+          />
+          {addonTotal > 0 && (
+            <PriceRow
+              label={language === 'mr' ? 'अतिरिक्त सेवा' : 'Add-ons'}
+              value={paise(addonTotal)}
+            />
+          )}
+          {platformFee > 0 && (
+            <PriceRow
+              label={language === 'mr' ? `प्लॅटफॉर्म फी (${ticketCount})` : `Convenience fee (${ticketCount})`}
+              value={paise(platformFee)}
+            />
+          )}
+          {tax > 0 && (
+            <PriceRow
+              label={language === 'mr' ? 'जीएसटी (१८%)' : 'GST (18%)'}
+              value={paise(tax)}
+            />
+          )}
           {appliedDiscount > 0 && (
-            <PriceRow label="Discount" value={`-${paise(appliedDiscount)}`} />
+            <PriceRow
+              label={language === 'mr' ? 'सवलत (Discount)' : 'Discount'}
+              value={`-${paise(appliedDiscount)}`}
+            />
           )}
           <Divider />
-          <PriceRow label="Grand Total" value={paise(grandTotal)} highlight />
+          <PriceRow
+            label={language === 'mr' ? 'एकूण देय रक्कम' : 'Grand Total'}
+            value={paise(grandTotal)}
+            highlight
+          />
+        </View>
+
+        {/* 4. Modern Payment Options & Security Card */}
+        <View style={styles.modernCard}>
+          <View style={styles.cardHeaderRow}>
+            <Icon name="credit-card-chip-outline" size={20} color={COLORS.primary} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.modernCardTitle}>
+                {language === 'mr' ? '४. पेमेंट पर्याय' : '4. Payment Options'}
+              </Text>
+              <Text style={styles.modernCardSubtitle}>
+                {language === 'mr' ? 'सर्व सुरक्षित पेमेंट पद्धती समर्थित' : 'All secure payment methods supported'}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.paymentMethodsRow}>
+            <View style={styles.paymentMethodPill}>
+              <Icon name="cellphone-nfc" size={14} color="#7C3AED" style={{ marginRight: 5 }} />
+              <Text style={styles.paymentMethodText}>UPI / GPay / PhonePe</Text>
+            </View>
+            <View style={styles.paymentMethodPill}>
+              <Icon name="credit-card-outline" size={14} color="#0284C7" style={{ marginRight: 5 }} />
+              <Text style={styles.paymentMethodText}>Cards / RuPay</Text>
+            </View>
+            <View style={styles.paymentMethodPill}>
+              <Icon name="bank-outline" size={14} color="#059669" style={{ marginRight: 5 }} />
+              <Text style={styles.paymentMethodText}>NetBanking</Text>
+            </View>
+          </View>
+
+          <View style={styles.secureGatewayNotice}>
+            <Icon name="shield-check" size={15} color="#16A34A" style={{ marginRight: 6 }} />
+            <Text style={styles.secureGatewayNoticeText}>
+              {language === 'mr'
+                ? '256-Bit SSL सुरक्षित पेमेंट • RBI अधिकृत Razorpay गेटवे'
+                : '256-Bit SSL Encrypted • RBI Approved Razorpay Gateway'}
+            </Text>
+          </View>
         </View>
 
         {/* Security Trust Strip */}
         <View style={styles.securityTrustRow}>
           <Icon name="shield-check" size={16} color="#16A34A" style={{ marginRight: 6 }} />
-          <Text style={styles.securityTrustText}>100% Secure Checkout • Powered by Razorpay</Text>
+          <Text style={styles.securityTrustText}>
+            {language === 'mr'
+              ? '१००% सुरक्षित व्यवहार • Razorpay समर्थित'
+              : '100% Secure Checkout • Powered by Razorpay'}
+          </Text>
         </View>
 
         <TouchableOpacity
@@ -918,7 +1047,11 @@ export default function CheckoutScreen({ navigation, route }: any) {
           activeOpacity={0.8}
         >
           <Text style={styles.legalLinkText}>
-            By proceeding, you agree to the <Text style={styles.legalLinkTextStrong}>Terms & Conditions</Text>.
+            {language === 'mr' ? (
+              <>पुढे जाऊन, आपण <Text style={styles.legalLinkTextStrong}>नियम व अटींशी</Text> सहमत आहात.</>
+            ) : (
+              <>By proceeding, you agree to the <Text style={styles.legalLinkTextStrong}>Terms & Conditions</Text>.</>
+            )}
           </Text>
         </TouchableOpacity>
 
@@ -926,10 +1059,12 @@ export default function CheckoutScreen({ navigation, route }: any) {
         <View style={{ height: 16 }} />
       </ScrollView>
 
-      {/* Sticky Bottom Bar with Live Payment Text Swipe */}
+      {/* Sticky Bottom Bar with Live Payment Text */}
       <View style={[styles.ctaBar, { paddingBottom: insets.bottom > 0 ? insets.bottom : 12 }]}>
         <View style={{ marginRight: 14 }}>
-          <Text style={styles.totalLabel}>Grand Total</Text>
+          <Text style={styles.totalLabel}>
+            {language === 'mr' ? 'एकूण रक्कम' : 'Grand Total'}
+          </Text>
           <Text style={styles.totalVal}>{paise(grandTotal)}</Text>
         </View>
         <TouchableOpacity
@@ -946,15 +1081,15 @@ export default function CheckoutScreen({ navigation, route }: any) {
               <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
               <Text style={styles.payBtnLiveText} numberOfLines={1}>
                 {paymentPhase === 'verifying'
-                  ? 'तिकीट तयार होत आहे...'
-                  : 'पेमेंट प्रक्रिया सुरू आहे...'}
+                  ? (language === 'mr' ? 'तिकीट तयार होत आहे...' : 'Confirming ticket...')
+                  : (language === 'mr' ? 'पेमेंट प्रक्रिया सुरू आहे...' : 'Processing payment...')}
               </Text>
             </View>
           ) : (
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Icon name="shield-lock-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
               <Text style={styles.payBtnText}>
-                Pay {paise(grandTotal)}
+                {language === 'mr' ? `पेमेंट करा ${paise(grandTotal)}` : `Pay ${paise(grandTotal)}`}
               </Text>
             </View>
           )}
@@ -1187,6 +1322,61 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     marginLeft: 4,
+  },
+  quickCouponPillActive: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
+  quickCouponCodeActive: {
+    color: '#059669',
+  },
+  quickCouponSaveActive: {
+    color: '#047857',
+  },
+  appliedPillBadge: {
+    backgroundColor: '#059669',
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginLeft: 6,
+  },
+  paymentMethodsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  paymentMethodPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  paymentMethodText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  secureGatewayNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  secureGatewayNoticeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#15803D',
   },
 
   securityTrustRow: {

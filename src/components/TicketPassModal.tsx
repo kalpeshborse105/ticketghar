@@ -274,9 +274,11 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
               orderNumber={order.orderNumber}
               grandTotal={order.grandTotal}
               qrPayload={
-                event?.id && primaryTicket
+                bookingResult.groupQrPayload ||
+                order.groupQrPayload ||
+                (event?.id && primaryTicket
                   ? generateSecureTicketQr(primaryTicket, event.id)
-                  : (ticketUrl || primaryTicket || order.orderNumber)
+                  : (ticketUrl || primaryTicket || order.orderNumber))
               }
               totalTickets={tickets.length}
             />

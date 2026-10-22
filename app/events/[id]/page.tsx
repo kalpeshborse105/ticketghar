@@ -424,6 +424,39 @@ export default function EventDetailPage() {
   const handleBookingConfirmed = (result: any) => {
     setCheckoutOpen(false);
     setConfirmedBooking(result);
+
+    // Immediately deduct booked seats from local session state
+    const bookedCount = result?.tickets?.length || checkoutHoldData?.seatIds?.length || 1;
+    if (event?.sessions && selectedSession) {
+      const updatedSessions = event.sessions.map((s: any) => {
+        if (s.id === selectedSession.id) {
+          const newCount = Math.max(0, (s.availableInventoryCount ?? 50) - bookedCount);
+          return { ...s, availableInventoryCount: newCount };
+        }
+        return s;
+      });
+      setEvent({ ...event, sessions: updatedSessions });
+      setSelectedSession({
+        ...selectedSession,
+        availableInventoryCount: Math.max(0, (selectedSession.availableInventoryCount ?? 50) - bookedCount),
+      });
+    }
+
+    // Refresh fresh authoritative data from server in background
+    if (eventId) {
+      fetch(`/api/events/${eventId}?fresh=1`, { cache: 'no-store' })
+        .then((res) => res.ok ? res.json() : null)
+        .then((json) => {
+          if (json?.event) {
+            setEvent(json.event);
+            if (json.event.sessions && selectedSession) {
+              const matched = json.event.sessions.find((s: any) => s.id === selectedSession.id);
+              if (matched) setSelectedSession(matched);
+            }
+          }
+        })
+        .catch(() => null);
+    }
   };
 
   const handleShare = async () => {
@@ -891,8 +924,8 @@ export default function EventDetailPage() {
                       type="button"
                       onClick={() => setNotifyMeRegistered(!notifyMeRegistered)}
                       className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-2 cursor-pointer shadow-xs ${notifyMeRegistered
-                          ? 'bg-emerald-600 text-white'
-                          : 'bg-[#EA580C] hover:bg-[#C2410C] text-white'
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-[#EA580C] hover:bg-[#C2410C] text-white'
                         }`}
                     >
                       <span>{notifyMeRegistered ? '✓ नोंदणी झाली! बुकिंग सुरू होताच अलर्ट मिळेल' : '🔔 मला आठवण करा (Notify Me)'}</span>
@@ -976,8 +1009,8 @@ export default function EventDetailPage() {
                         <div
                           key={sess.id}
                           className={`p-4 rounded-xl border transition-all ${isSelected
-                              ? 'bg-orange-50/70 border-[#EA580C] shadow-sm'
-                              : 'bg-white border-[#E5E7EB] hover:shadow-sm'
+                            ? 'bg-orange-50/70 border-[#EA580C] shadow-sm'
+                            : 'bg-white border-[#E5E7EB] hover:shadow-sm'
                             }`}
                         >
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -991,26 +1024,43 @@ export default function EventDetailPage() {
                                 </span>
                               </div>
                               {(() => {
-                                const realAvail = typeof sess.availableSeats === 'number' ? sess.availableSeats : null;
+                                const realAvail = typeof sess.availableSeats === 'number'
+                                  ? sess.availableSeats
+                                  : typeof sess.availableInventoryCount === 'number'
+                                    ? sess.availableInventoryCount
+                                    : null;
+
                                 if (realAvail === 0) {
                                   return (
-                                    <p className="text-[11px] font-semibold flex items-center gap-1 text-rose-600">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-rose-600" />
-                                      {language === 'mr' ? 'हाऊसफुल्ल (Housefull)' : 'Sold Out / Housefull'}
+                                    <p className="text-[11px] font-semibold flex items-center gap-1.5 text-rose-600">
+                                      <span className="w-2 h-2 rounded-full bg-rose-600" />
+                                      <span>{language === 'mr' ? 'हाऊसफुल्ल (Housefull)' : 'Sold Out / Housefull'}</span>
                                     </p>
                                   );
                                 }
-                                const isFillingFast = realAvail !== null && realAvail <= 20;
+
+                                if (realAvail !== null) {
+                                  const isFillingFast = realAvail <= 10;
+                                  return (
+                                    <p className={`text-[11px] font-semibold flex items-center gap-1.5 ${isFillingFast ? 'text-[#F59E0B]' : 'text-[#16A34A]'}`}>
+                                      <span className={`w-2 h-2 rounded-full ${isFillingFast ? 'bg-[#F59E0B]' : 'bg-[#16A34A]'}`} />
+                                      <span>
+                                        {isFillingFast
+                                          ? (language === 'mr'
+                                            ? `लवकर भरत आहे (फक्त ${toMarathiDigits(realAvail)} आसने शिल्लक!)`
+                                            : `Filling Fast (Only ${realAvail} seats left!)`)
+                                          : (language === 'mr'
+                                            ? `उपलब्ध ${toMarathiDigits(realAvail)} आसने`
+                                            : `${realAvail} seats available`)}
+                                      </span>
+                                    </p>
+                                  );
+                                }
+
                                 return (
-                                  <p className={`text-[11px] font-semibold flex items-center gap-1 ${isFillingFast ? 'text-[#F59E0B]' : 'text-[#16A34A]'}`}>
-                                    <span className={`w-1.5 h-1.5 rounded-full ${isFillingFast ? 'bg-[#F59E0B]' : 'bg-[#16A34A]'}`} />
-                                    {realAvail !== null
-                                      ? (isFillingFast
-                                        ? (language === 'mr' ? `लवकर भरत आहे (फक्त ${toMarathiDigits(realAvail)} जागा शिल्लक!)` : `Filling Fast (${realAvail} seats left!)`)
-                                        : (language === 'mr' ? `उपलब्ध (${toMarathiDigits(realAvail)} जागा शिल्लक)` : `Available (${realAvail} seats left)`))
-                                      : (isEvening
-                                        ? (language === 'mr' ? 'लवकर भरत आहे' : 'Filling Fast')
-                                        : (language === 'mr' ? 'उपलब्ध' : 'Available'))}
+                                  <p className="text-[11px] font-medium flex items-center gap-1.5 text-slate-500">
+                                    <span className="w-2 h-2 rounded-full bg-slate-400 animate-pulse" />
+                                    <span>{language === 'mr' ? 'उपलब्धता तपासत आहे...' : 'Checking availability...'}</span>
                                   </p>
                                 );
                               })()}
@@ -1362,11 +1412,9 @@ export default function EventDetailPage() {
               </p>
               <div className="flex items-center gap-2 text-[10px] text-[#64748B]">
                 <span className="truncate">{venueName}</span>
-                <span>•</span>
                 <span className="text-[#A33900] font-bold">
                   {(!event.sessions || event.sessions.length === 0 || (event as any).isInformational)
-                    ? 'प्रयोग व नाट्यगृह लवकरच'
-                    : `दर: ${stickyPriceDisplay}`}
+                    ? 'प्रयोग व नाट्यगृह लवकरच' : ``}
                 </span>
               </div>
             </div>
@@ -1377,8 +1425,8 @@ export default function EventDetailPage() {
               type="button"
               onClick={() => setNotifyMeRegistered(!notifyMeRegistered)}
               className={`px-5 py-3 rounded-xl font-bold text-xs shadow-md transition-all flex items-center gap-2 shrink-0 cursor-pointer active:scale-95 ${notifyMeRegistered
-                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                  : 'bg-amber-500 hover:bg-amber-600 text-white'
+                ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                : 'bg-amber-500 hover:bg-amber-600 text-white'
                 }`}
             >
               <span>{notifyMeRegistered ? 'नोंदणी झाली ✓' : '🔔 मला आठवण करा'}</span>

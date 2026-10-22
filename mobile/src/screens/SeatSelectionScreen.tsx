@@ -33,8 +33,9 @@ import {
   formatTime,
   paise,
 } from '../api';
-import { useCartStore, useAuthStore } from '../store';
+import { useCartStore, useAuthStore, useUIStore } from '../store';
 import { Button, MTPopupModal } from '../components';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const MAP_MIN_SCALE = 1;
@@ -59,12 +60,39 @@ function formatMarathiShowDateTime(dateStr?: string | Date | null): string {
       'जाने', 'फेब्रु', 'मार्च', 'एप्रिल', 'मे', 'जून',
       'जुलै', 'ऑगस्ट', 'सप्टें', 'ऑक्टो', 'नोव्हें', 'डिसें',
     ];
-    const dayOfWeek = dayNames[d.getDay()];
-    const dateNum = d.getDate();
-    const month = monthNames[d.getMonth()];
 
-    const hours = d.getHours();
-    const mins = d.getMinutes();
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: false,
+      weekday: 'short',
+    });
+
+    const parts = formatter.formatToParts(d);
+    let monthIdx = d.getMonth();
+    let dateNum = d.getDate();
+    let hours = d.getHours();
+    let mins = d.getMinutes();
+    let weekdayStr = '';
+
+    parts.forEach((p) => {
+      if (p.type === 'month') monthIdx = parseInt(p.value, 10) - 1;
+      if (p.type === 'day') dateNum = parseInt(p.value, 10);
+      if (p.type === 'hour') hours = parseInt(p.value, 10) % 24;
+      if (p.type === 'minute') mins = parseInt(p.value, 10);
+      if (p.type === 'weekday') weekdayStr = p.value;
+    });
+
+    const weekdayMap: Record<string, string> = {
+      Sun: 'रवि', Mon: 'सोम', Tue: 'मंगळ', Wed: 'बुध', Thu: 'गुरु', Fri: 'शुक्र', Sat: 'शनि',
+    };
+    const dayOfWeek = weekdayMap[weekdayStr] || dayNames[d.getDay()] || 'शनि';
+    const month = monthNames[monthIdx] || 'ऑक्टो';
+
     let period = 'सकाळी';
     if (hours >= 12 && hours < 16) period = 'दुपारी';
     else if (hours >= 16 && hours < 20) period = 'संध्या.';
@@ -85,6 +113,14 @@ const sessionSeatsCache = new Map<
   number,
   { seats: SeatItem[]; sections: any[]; layoutConfig: any; time: number }
 >();
+
+export function clearSessionSeatsCache(sessionId?: number) {
+  if (sessionId) {
+    sessionSeatsCache.delete(sessionId);
+  } else {
+    sessionSeatsCache.clear();
+  }
+}
 
 type SectionView = {
   key: string;
@@ -176,6 +212,7 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
 
   const setHold = useCartStore((s) => s.setHold);
   const user = useAuthStore((s) => s.user);
+  const language = useUIStore((s) => s.language);
 
   const [sessionId, setSessionId] = useState<number>(initSession);
   const [sessions, setSessions] = useState<any[]>(() => {
@@ -513,7 +550,10 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
 
         const rowMap = new Map<string, SeatItem[]>();
         section.seats.forEach((seat) => {
-          const rowKey = seat.rowLabel || '?';
+          let rowKey = seat.rowLabel || '?';
+          if (rowKey.includes('-')) {
+            rowKey = rowKey.split('-').pop() || rowKey;
+          }
           if (!rowMap.has(rowKey)) rowMap.set(rowKey, []);
           rowMap.get(rowKey)!.push(seat);
         });
@@ -730,7 +770,17 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
     if (!selected.length) return;
     try {
       setHolding(true);
-      const userIdStr = user?.id ? String(user.id) : `guest-app-${Date.now()}`;
+      let guestId = '';
+      try {
+        guestId = (await AsyncStorage.getItem('@mahaticket_guest_device_id')) || '';
+        if (!guestId) {
+          guestId = `guest-app-${Math.random().toString(36).slice(2, 10)}-${Date.now()}`;
+          await AsyncStorage.setItem('@mahaticket_guest_device_id', guestId);
+        }
+      } catch {
+        guestId = 'guest-app';
+      }
+      const userIdStr = user?.id ? String(user.id) : guestId;
       let holdToken = `app-hold-${sessionId}-${Date.now()}`;
       let expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
       let lockedFace = subtotal;
@@ -982,7 +1032,11 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
               <View style={styles.legendMiniSeatAvail}>
                 <View style={styles.legendMiniSeatTopAvail} />
               </View>
-              <Text style={styles.legendText}>उपलब्ध ({priceRangeLabel})</Text>
+              <Text style={styles.legendText}>
+                {language === 'mr'
+                  ? `उपलब्ध ${toMarathiDigits(seats.filter((s) => s.status === 'available').length)} आसने (${priceRangeLabel})`
+                  : `${seats.filter((s) => s.status === 'available').length} seats available (${priceRangeLabel})`}
+              </Text>
             </View>
             <View style={styles.legendItem}>
               <View style={styles.legendMiniSeatSelected}>

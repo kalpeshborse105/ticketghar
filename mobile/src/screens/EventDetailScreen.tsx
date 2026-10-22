@@ -1035,15 +1035,15 @@ export default function EventDetailScreen({ navigation, route }: any) {
 
                         const statusLabel = isSoldOut
                           ? language === 'mr'
-                            ? 'हाऊसफुल'
+                            ? 'हाऊसफुल (Sold Out)'
                             : 'SOLD OUT'
                           : isFastFilling
                             ? language === 'mr'
-                              ? `फक्त ${availCount} जागा`
-                              : `${availCount} SEATS LEFT`
+                              ? `फक्त ${availCount} आसने शिल्लक!`
+                              : `Only ${availCount} seats left!`
                             : language === 'mr'
-                              ? `उपलब्ध (${availCount})`
-                              : `AVAILABLE (${availCount})`;
+                              ? `उपलब्ध ${availCount} आसने`
+                              : `${availCount} seats available`;
 
                         return (
                           <TouchableOpacity

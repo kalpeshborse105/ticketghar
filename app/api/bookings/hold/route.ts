@@ -3,12 +3,15 @@ import { db } from '@/src/db/index.ts';
 import { events, eventSessions } from '@/src/db/schema.ts';
 import { eq } from 'drizzle-orm';
 import { createTemporarySeatHold, calculatePricing } from '@/src/lib/inventory-engine.ts';
+import { getCustomerSession } from '@/src/lib/auth-service.ts';
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { sessionId, seatIds, userIdStr, userId, couponCode } = body;
-    const holderId = userIdStr || userId || 'guest-session-' + Date.now();
+    const authHeader = request.headers.get('authorization');
+    const customer = await getCustomerSession(authHeader).catch(() => null);
+    const holderId = userIdStr || userId || (customer?.id ? String(customer.id) : null) || 'guest-session-' + Date.now();
 
     if (!sessionId || !Array.isArray(seatIds) || seatIds.length === 0) {
       return NextResponse.json(

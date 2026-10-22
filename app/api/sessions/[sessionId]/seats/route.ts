@@ -19,25 +19,45 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid session ID' }, { status: 400 });
     }
 
-    // Fast cache (Redis / memory) — short TTL; DB remains authoritative after holds
+    const urlObj = new URL(request.url);
+    const forceFresh = urlObj.searchParams.get('fresh') === '1' || request.headers.get('cache-control')?.includes('no-cache');
+
+    // 1. Authoritative expired holds release executed synchronously before reading inventory
+    await releaseExpiredHolds(sessionId).catch((err) => {
+      console.warn('Hold expiration check notice:', err?.message);
+    });
+
+    // Fast cache (Redis / memory) — short TTL; only use if not forceFresh
     const cacheKey = sessionSeatsCacheKey(sessionId);
-    const cached = await cacheGet(cacheKey);
-    if (cached) {
-      try {
-        return NextResponse.json(JSON.parse(cached), {
-          headers: {
-            'Cache-Control': 'no-store, no-cache, must-revalidate',
-          },
-        });
-      } catch {
-        /* ignore bad cache */
+    if (!forceFresh) {
+      const cached = await cacheGet(cacheKey);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          const nowMs = Date.now();
+          let hasStaleHolds = false;
+          if (Array.isArray(parsed.seats)) {
+            for (const s of parsed.seats) {
+              if (s.status === 'held' && s.holdExpiresAt && new Date(s.holdExpiresAt).getTime() < nowMs) {
+                s.status = 'available';
+                s.heldByUserId = null;
+                s.holdExpiresAt = null;
+                hasStaleHolds = true;
+              }
+            }
+          }
+          if (!hasStaleHolds) {
+            return NextResponse.json(parsed, {
+              headers: {
+                'Cache-Control': 'no-store, no-cache, must-revalidate',
+              },
+            });
+          }
+        } catch {
+          /* ignore bad cache */
+        }
       }
     }
-
-    // 1. Trigger expired holds release in background without blocking initial render
-    releaseExpiredHolds(sessionId).catch((err) => {
-      console.warn('Background hold expiration check warning:', err?.message);
-    });
 
     // 2. Fetch session, ticket types, and inventory concurrently in parallel!
     const [sessionRows, ticketTypesResult, inventoryResult] = await Promise.all([
@@ -169,6 +189,9 @@ export async function GET(
       layoutConfig = null;
     }
 
+    const availableSeatsCount = inventoryRows.filter((s) => s.status === 'available').length;
+    const totalSeatsCount = inventoryRows.length;
+
     const payload = {
       sessionId,
       session,
@@ -178,6 +201,9 @@ export async function GET(
       sections: sectionsWithPricing,
       seats: inventoryRows,
       ticketTypes: ticketTypeList,
+      availableSeatsCount,
+      availableInventoryCount: availableSeatsCount,
+      totalSeatsCount,
     };
 
     // Cache layout briefly for smoother map loads (holds invalidate via redis helpers)

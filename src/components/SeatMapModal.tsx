@@ -48,6 +48,21 @@ const toMarathiDigits = (val: string | number) => {
   return String(val).replace(/[0-9]/g, (d) => map[d] || d);
 };
 
+// Client hold token persistent across same browser tab/session
+function getClientHoldToken(): string {
+  if (typeof window === 'undefined') return 'guest-browser';
+  try {
+    let token = sessionStorage.getItem('mahaticket_browser_hold_token');
+    if (!token) {
+      token = `guest-browser-${Math.random().toString(36).slice(2, 10)}-${Date.now()}`;
+      sessionStorage.setItem('mahaticket_browser_hold_token', token);
+    }
+    return token;
+  } catch {
+    return 'guest-browser';
+  }
+}
+
 export const SeatMapModal: React.FC<SeatMapModalProps> = ({
   event,
   session,
@@ -147,6 +162,15 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
     return () => clearInterval(timer);
   }, []);
 
+  // Auto-dismiss warning banner after 6 seconds
+  useEffect(() => {
+    if (!warningMessage) return;
+    const timer = setTimeout(() => {
+      setWarningMessage(null);
+    }, 6000);
+    return () => clearTimeout(timer);
+  }, [warningMessage]);
+
   const formatCountdown = (secs: number) => {
     const mins = Math.floor(secs / 60);
     const remainingSecs = secs % 60;
@@ -155,32 +179,52 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
   };
 
   // Fetch real-time seat inventory for this session (DB + cache)
-  const fetchSessionSeats = useCallback(async () => {
+  const fetchSessionSeats = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
-      setError(null);
-      const res = await fetch(`/api/sessions/${activeSession.id}/seats`);
-      if (!res.ok) throw new Error('Failed to load seat layout');
+      if (!silent) {
+        setLoading(true);
+        setError(null);
+      }
+      const res = await fetch(`/api/sessions/${activeSession.id}/seats?fresh=1`);
+      if (!res.ok) {
+        if (!silent) throw new Error('Failed to load seat layout');
+        return;
+      }
       const data = await res.json();
       setVenueData(data.venue);
       setLayoutConfig(data.layoutConfig || data.venue?.layoutConfig || null);
-      setSeats(Array.isArray(data.seats) ? data.seats : []);
+      const incomingSeats = Array.isArray(data.seats) ? data.seats : [];
+      setSeats(incomingSeats);
       setSections(Array.isArray(data.sections) ? data.sections : []);
+
+      // If silent background refresh, prune any selected seats that became unavailable
+      if (silent) {
+        setSelectedSeatIds((prev) =>
+          prev.filter((id) => {
+            const matched = incomingSeats.find((s: any) => s.seatId === id);
+            return matched && matched.status === 'available';
+          })
+        );
+      }
     } catch (err: any) {
       console.error(err);
-      setError(err.message || 'Error loading seats');
+      if (!silent) {
+        setError(err.message || 'Error loading seats');
+      }
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   }, [activeSession.id]);
 
   useEffect(() => {
-    fetchSessionSeats();
+    fetchSessionSeats(false);
   }, [fetchSessionSeats]);
 
   // Handle seat click
   const toggleSeatSelection = (seat: any) => {
-    if (seat.status === 'booked' || seat.status === 'held') return;
+    if (seat.status === 'booked' || seat.status === 'held' || seat.status === 'blocked') return;
 
     setWarningMessage(null);
 
@@ -219,7 +263,9 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
 
     try {
       setIsHolding(true);
-      setError(null);
+      setWarningMessage(null);
+
+      const clientToken = getClientHoldToken();
 
       const res = await fetch('/api/bookings/hold', {
         method: 'POST',
@@ -227,13 +273,13 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
         body: JSON.stringify({
           sessionId: activeSession.id,
           seatIds: selectedSeatIds,
-          userIdStr: `guest-browser-${Date.now()}`,
+          userIdStr: clientToken,
         }),
       });
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Seat hold expired or unavailable.');
+        throw new Error(data.error || (language === 'mr' ? 'आसन आरक्षण कालबाह्य किंवा अनुपलब्ध झाले आहे.' : 'Seat hold expired or unavailable.'));
       }
 
       // Direct to checkout — NO food or extra addon screen!
@@ -250,14 +296,23 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
           })),
         faceValueTotal: data.hold?.faceValueTotal || subtotalPaise,
         holdExpiresAt: data.hold?.holdExpiresAt || new Date(Date.now() + 300000).toISOString(),
-        holdToken: data.holdToken || data.hold?.holdToken,
+        holdToken: data.holdToken || data.hold?.holdToken || clientToken,
         addons: [],
       });
     } catch (err: any) {
-      console.error(err);
-      setError(err.message || 'Selected seat(s) became unavailable. Please refresh.');
-      fetchSessionSeats();
-      setSelectedSeatIds([]);
+      console.error('Seat hold notice:', err);
+      const isMarathi = language === 'mr';
+      const isHeld = err.message?.includes('currently held') || err.message?.includes('आरक्षित');
+      const friendlyMsg = isHeld
+        ? (isMarathi
+            ? 'निवडलेले आसन सध्या दुसऱ्या ग्राहकाकडे आरक्षित आहे. कृपया इतर उपलब्ध आसन निवडा.'
+            : (err.message || 'Seat is currently held by another user. Please choose another seat.'))
+        : (err.message || (isMarathi ? 'निवडलेली जागा अनुपलब्ध झाली आहे. कृपया नवीन जागा निवडा.' : 'Selected seat(s) became unavailable. Please select another seat.'));
+
+      // Non-destructive notification: do not replace the seating layout with an error screen
+      setWarningMessage(friendlyMsg);
+      // Silently refresh the seating map so updated DB state reflects on the layout
+      await fetchSessionSeats(true);
     } finally {
       setIsHolding(false);
     }
@@ -363,8 +418,23 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
             </div>
           </div>
 
-          {/* Countdown Timer Pill */}
+          {/* Availability Badge & Countdown Timer Pill */}
           <div className="flex items-center gap-2 shrink-0">
+            {loading ? (
+              <div className="bg-slate-800 border border-slate-700 text-slate-400 px-2.5 py-1 rounded-full flex items-center gap-1.5 text-xs font-semibold">
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-pulse" />
+                <span>{language === 'mr' ? 'तपासत आहे...' : 'Loading...'}</span>
+              </div>
+            ) : (
+              <div className="bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 px-2.5 py-1 rounded-full flex items-center gap-1.5 text-xs font-bold">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                <span>
+                  {language === 'mr'
+                    ? `उपलब्ध ${toMarathiDigits(seats.filter((s: any) => s.status === 'available').length)} आसने`
+                    : `${seats.filter((s: any) => s.status === 'available').length} seats available`}
+                </span>
+              </div>
+            )}
             <div className="bg-orange-500/20 border border-orange-500/40 text-[#EA580C] px-3 py-1 rounded-full flex items-center gap-1.5 text-xs font-bold font-mono">
               <Timer className="w-3.5 h-3.5" />
               <span>{formatCountdown(countdownSeconds)}</span>
@@ -494,7 +564,7 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
               <AlertCircle className="w-10 h-10 text-red-500 mx-auto" />
               <p className="text-sm font-medium text-slate-800">{error}</p>
               <button
-                onClick={fetchSessionSeats}
+                onClick={() => fetchSessionSeats(false)}
                 className="px-4 py-1.5 rounded-lg bg-[#EA580C] text-white text-xs font-bold shadow-sm hover:bg-[#C2410C]"
               >
                 {language === 'mr' ? 'पुन्हा प्रयत्न करा' : 'Try Again'}
@@ -686,9 +756,10 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
   // Helper renderer for individual seat button
   function renderSeatBtn(seat: any) {
     const isSelected = selectedSeatIds.includes(seat.seatId);
-    const isBooked = seat.status === 'booked';
+    const isBooked = seat.status === 'booked' || seat.status === 'blocked';
     const isHeld = seat.status === 'held' && !isSelected;
-    const numDisplay = toMarathiDigits(seat.seatNumber);
+    const rawNum = String(seat.seatNumber ?? seat.seatCode?.replace(/\D/g, '') ?? '');
+    const numDisplay = language === 'mr' ? toMarathiDigits(rawNum) : rawNum;
 
     if (isBooked || isHeld) {
       return (

@@ -351,6 +351,7 @@ export function hasBookableInventory(session: SessionItem | null | undefined): b
 export function formatCardDate(iso: string): string {
   try {
     return new Date(iso).toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
       weekday: 'short',
       day: 'numeric',
       month: 'short',
@@ -1757,10 +1758,11 @@ export function paise(p: number | null | undefined): string {
   return `₹${Math.round(p / 100).toLocaleString('en-IN')}`;
 }
 
-/** Format ISO date for display */
+/** Format ISO date for display in IST */
 export function formatShow(iso: string): string {
   try {
     return new Date(iso).toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
       weekday: 'short',
       day: 'numeric',
       month: 'short',
@@ -1776,6 +1778,7 @@ export function formatShow(iso: string): string {
 export function formatDate(iso: string): string {
   try {
     return new Date(iso).toLocaleDateString('en-IN', {
+      timeZone: 'Asia/Kolkata',
       day: 'numeric',
       month: 'short',
       year: 'numeric',
@@ -1788,6 +1791,7 @@ export function formatDate(iso: string): string {
 export function formatTime(iso: string): string {
   try {
     return new Date(iso).toLocaleTimeString('en-IN', {
+      timeZone: 'Asia/Kolkata',
       hour: '2-digit',
       minute: '2-digit',
       hour12: true,

@@ -2,18 +2,39 @@ import Razorpay from 'razorpay';
 import * as crypto from 'crypto';
 
 /**
- * Check if Razorpay is properly configured with real credentials
- * @returns true if both key ID and secret are set and not placeholder values
+ * Determine the configured Razorpay mode: 'test' or 'live'
  */
-export function isRazorpayConfigured(): boolean {
-  const keyId = process.env.RAZORPAY_KEY_ID;
-  const keySecret = process.env.RAZORPAY_KEY_SECRET;
-
-  if (!keyId || !keySecret) {
-    return false;
+export function getRazorpayMode(): 'test' | 'live' | 'unknown' {
+  const explicitMode = process.env.RAZORPAY_MODE?.trim().toLowerCase();
+  if (explicitMode === 'test' || explicitMode === 'live') {
+    return explicitMode;
   }
+  const keyId = process.env.RAZORPAY_KEY_ID?.trim() || '';
+  if (keyId.startsWith('rzp_test_')) return 'test';
+  if (keyId.startsWith('rzp_live_')) return 'live';
+  return 'unknown';
+}
 
-  // Check for placeholder values that indicate unconfigured state
+/**
+ * Diagnostic helper reporting status of Razorpay configuration safely without leaking secrets
+ */
+export function getRazorpayConfigDiagnostic(): {
+  mode: 'test' | 'live' | 'unknown';
+  isConfigured: boolean;
+  isConsistent: boolean;
+  issues: string[];
+} {
+  const issues: string[] = [];
+  const keyId = process.env.RAZORPAY_KEY_ID?.trim() || '';
+  const keySecret = process.env.RAZORPAY_KEY_SECRET?.trim() || '';
+  const explicitMode = process.env.RAZORPAY_MODE?.trim().toLowerCase();
+
+  const mode = getRazorpayMode();
+
+  if (!keyId) issues.push('RAZORPAY_KEY_ID is missing');
+  if (!keySecret) issues.push('RAZORPAY_KEY_SECRET is missing');
+
+  // Check placeholder values
   const placeholderPatterns = [
     'YourKeyIdHere',
     'your_razorpay',
@@ -22,40 +43,67 @@ export function isRazorpayConfigured(): boolean {
     'placeholder',
     'change_me',
   ];
-
-  const keyIdLower = keyId.toLowerCase();
-  const keySecretLower = keySecret.toLowerCase();
-
   for (const pattern of placeholderPatterns) {
-    if (keyIdLower.includes(pattern.toLowerCase()) || keySecretLower.includes(pattern.toLowerCase())) {
-      return false;
+    if (
+      keyId.toLowerCase().includes(pattern.toLowerCase()) ||
+      keySecret.toLowerCase().includes(pattern.toLowerCase())
+    ) {
+      issues.push(`Credential contains placeholder pattern: "${pattern}"`);
     }
   }
 
-  // Basic format validation for Razorpay keys
-  // Test keys: rzp_test_xxxxx, Live keys: rzp_live_xxxxx
-  if (!keyId.startsWith('rzp_test_') && !keyId.startsWith('rzp_live_')) {
-    return false;
+  // Format validation
+  if (keyId && !keyId.startsWith('rzp_test_') && !keyId.startsWith('rzp_live_')) {
+    issues.push('RAZORPAY_KEY_ID does not match expected prefix (rzp_test_ or rzp_live_)');
   }
 
-  return true;
+  // Consistency between RAZORPAY_MODE and RAZORPAY_KEY_ID
+  let isConsistent = true;
+  if (explicitMode) {
+    if (explicitMode === 'test' && !keyId.startsWith('rzp_test_')) {
+      issues.push('RAZORPAY_MODE is set to "test" but RAZORPAY_KEY_ID does not start with "rzp_test_"');
+      isConsistent = false;
+    } else if (explicitMode === 'live' && !keyId.startsWith('rzp_live_')) {
+      issues.push('RAZORPAY_MODE is set to "live" but RAZORPAY_KEY_ID does not start with "rzp_live_"');
+      isConsistent = false;
+    }
+  }
+
+  const isConfigured = issues.length === 0;
+
+  return {
+    mode,
+    isConfigured,
+    isConsistent: isConsistent && (issues.length === 0 || !issues.some(i => i.includes('does not match expected prefix') || i.includes('RAZORPAY_MODE is set'))),
+    issues,
+  };
+}
+
+/**
+ * Check if Razorpay is properly configured with real credentials and consistent mode
+ * @returns true if both key ID and secret are set and not placeholder values
+ */
+export function isRazorpayConfigured(): boolean {
+  const diag = getRazorpayConfigDiagnostic();
+  return diag.isConfigured && diag.isConsistent;
 }
 
 /**
  * Get configured Razorpay client instance
- * @throws Error if Razorpay is not configured
+ * @throws Error if Razorpay is not configured or inconsistent
  * @returns Razorpay instance
  */
 export function getRazorpayClient(): Razorpay {
-  if (!isRazorpayConfigured()) {
-    throw new Error('Razorpay payment gateway is not configured. Please contact support.');
+  const diag = getRazorpayConfigDiagnostic();
+  if (!diag.isConfigured || !diag.isConsistent) {
+    throw new Error(`Razorpay payment gateway configuration error: ${diag.issues.join('; ')}`);
   }
 
   const keyId = process.env.RAZORPAY_KEY_ID!;
   const keySecret = process.env.RAZORPAY_KEY_SECRET!;
 
-  // Never log secrets - only log that client is being initialized
-  console.log('Initializing Razorpay client');
+  // Never log secrets - only log that client is being initialized with mode
+  console.log(`Initializing Razorpay client in ${diag.mode} mode`);
 
   return new Razorpay({
     key_id: keyId,

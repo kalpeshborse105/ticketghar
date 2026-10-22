@@ -64,8 +64,88 @@ export function decryptSecureTicketQr(rawScanned: string): { ticketCode: string;
         eventId: data.e ? Number(data.e) : undefined,
       };
     }
+    return null;
   } catch (err) {
     console.warn('Failed to decrypt MTSEC token:', err);
+    return null;
+  }
+}
+
+/**
+ * Encrypts an Order Number, Order ID, Event ID, and Seat Count into an authoritative Group QR token.
+ * Used for 1-to-5 seats group entry verification.
+ */
+export function generateSecureGroupOrderQr(
+  orderNumber: string,
+  orderId: number,
+  eventId: number,
+  ticketCount: number
+): string {
+  const secret = getTicketSecret();
+  const iv = crypto.randomBytes(12);
+  const key = crypto.createHash('sha256').update(secret).digest();
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+
+  const payload = JSON.stringify({
+    type: 'GROUP_ORDER',
+    ord: orderNumber,
+    oid: orderId,
+    eid: eventId,
+    cnt: ticketCount,
+    t: Date.now(),
+    nonce: crypto.randomBytes(4).toString('hex'),
+  });
+
+  let encrypted = cipher.update(payload, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  const tag = cipher.getAuthTag().toString('hex');
+
+  return `MTGRP:v1:${iv.toString('hex')}:${tag}:${encrypted}`;
+}
+
+/**
+ * Decrypts and authenticates an MTGRP group order QR token.
+ */
+export function decryptSecureGroupOrderQr(rawScanned: string): {
+  orderNumber: string;
+  orderId: number;
+  eventId: number;
+  ticketCount: number;
+} | null {
+  if (!rawScanned) return null;
+  const trimmed = rawScanned.trim();
+
+  if (!trimmed.startsWith('MTGRP:v1:')) {
+    return null;
+  }
+
+  try {
+    const parts = trimmed.split(':');
+    if (parts.length < 5) return null;
+
+    const iv = Buffer.from(parts[2], 'hex');
+    const tag = Buffer.from(parts[3], 'hex');
+    const ciphertext = parts[4];
+
+    const secret = getTicketSecret();
+    const key = crypto.createHash('sha256').update(secret).digest();
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(tag);
+
+    let decrypted = decipher.update(ciphertext, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+
+    const data = JSON.parse(decrypted);
+    if (data && data.type === 'GROUP_ORDER' && data.ord) {
+      return {
+        orderNumber: String(data.ord),
+        orderId: Number(data.oid),
+        eventId: Number(data.eid),
+        ticketCount: Number(data.cnt),
+      };
+    }
+  } catch (err) {
+    console.warn('Failed to decrypt MTGRP token:', err);
     return null;
   }
 

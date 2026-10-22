@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
-import { events, venues, organizers, eventSessions, ticketTypes, venueSections, seatInventory } from '@/src/db/schema.ts';
+import { events, venues, organizers, eventSessions, ticketTypes, venueSections, seatInventory, seats } from '@/src/db/schema.ts';
 import { eq, and, sql } from 'drizzle-orm';
 
 export async function GET(
@@ -45,9 +45,10 @@ export async function GET(
         const [invCount] = await db
           .select({
             totalSeats: sql<number>`count(*)::int`,
-            availableSeats: sql<number>`count(*) filter (where status = 'available' or (status = 'held' and hold_expires_at < now()))::int`,
+            availableSeats: sql<number>`count(*) filter (where (seat_inventory.status = 'available' or (seat_inventory.status = 'held' and seat_inventory.hold_expires_at < now())) and (seats.is_blocked is null or seats.is_blocked = 0))::int`,
           })
           .from(seatInventory)
+          .leftJoin(seats, eq(seats.id, seatInventory.seatId))
           .where(eq(seatInventory.sessionId, sess.id));
 
         const types = await db
@@ -71,10 +72,11 @@ export async function GET(
           const typeCounts = await db
             .select({
               ticketTypeId: seatInventory.ticketTypeId,
-              avail: sql<number>`count(*) filter (where status = 'available' or (status = 'held' and hold_expires_at < now()))::int`,
+              avail: sql<number>`count(*) filter (where (seat_inventory.status = 'available' or (seat_inventory.status = 'held' and seat_inventory.hold_expires_at < now())) and (seats.is_blocked is null or seats.is_blocked = 0))::int`,
               total: sql<number>`count(*)::int`,
             })
             .from(seatInventory)
+            .leftJoin(seats, eq(seats.id, seatInventory.seatId))
             .where(eq(seatInventory.sessionId, sess.id))
             .groupBy(seatInventory.ticketTypeId);
 
@@ -102,6 +104,7 @@ export async function GET(
           ...sess,
           ticketTypes: syncedTypes,
           availableInventoryCount: realAvailableCount,
+          availableSeats: realAvailableCount,
           totalInventoryCount: invCount && invCount.totalSeats > 0 ? invCount.totalSeats : 0,
         };
       })
@@ -222,6 +225,10 @@ export async function GET(
         galleryImages: fetchedImages,
         castCrewList: parsedCastCrewList,
         isInformational,
+      },
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
       },
     });
   } catch (error: any) {

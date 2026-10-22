@@ -82,12 +82,14 @@ export async function sendBookingTicketEmail(
       : null;
     const showtime = start
       ? start.toLocaleString('en-IN', {
+          timeZone: 'Asia/Kolkata',
           weekday: 'short',
           day: 'numeric',
           month: 'short',
           year: 'numeric',
           hour: '2-digit',
           minute: '2-digit',
+          hour12: true,
         })
       : '—';
 
@@ -152,23 +154,37 @@ export async function sendBookingTicketEmail(
     const emailSubject = `MahaTicket 🎟️ — Booking Confirmed (${ticketRecord.order.orderNumber}): ${eventRecord?.event.titleMr || eventRecord?.event.title || 'Event'}`;
 
     // 4. Try SMTP first if configured
-    const smtpHost = process.env.SMTP_HOST;
+    const smtpHost = process.env.SMTP_HOST?.trim();
     const smtpPort = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : 587;
-    const smtpUser = process.env.SMTP_USER;
+    const smtpUser = process.env.SMTP_USER?.trim();
     const rawPass = process.env.SMTP_PASS || process.env.SMTP_PASSWORD || '';
     const smtpPass = rawPass.trim().replace(/\s+/g, '');
-    const fromAddress = process.env.SMTP_FROM || process.env.EMAIL_FROM || 'MahaTicket <tickets@mahaticket.kalpkrutinfotech.com>';
+    const isGmail = smtpHost?.toLowerCase().includes('gmail.com');
+    const fromAddress = isGmail
+      ? (process.env.SMTP_FROM || `MahaTicket <${smtpUser}>`)
+      : (process.env.SMTP_FROM || process.env.EMAIL_FROM || 'MahaTicket <tickets@mahaticket.kalpkrutinfotech.com>');
 
     if (smtpHost && smtpUser && smtpPass) {
-      const transporter = nodemailer.createTransport({
-        host: smtpHost,
-        port: smtpPort,
-        secure: smtpPort === 465,
-        auth: {
-          user: smtpUser.trim(),
-          pass: smtpPass,
-        },
-      });
+      const transporter = isGmail
+        ? nodemailer.createTransport({
+            service: 'gmail',
+            auth: {
+              user: smtpUser,
+              pass: smtpPass,
+            },
+          })
+        : nodemailer.createTransport({
+            host: smtpHost,
+            port: smtpPort,
+            secure: smtpPort === 465,
+            auth: {
+              user: smtpUser,
+              pass: smtpPass,
+            },
+            tls: {
+              rejectUnauthorized: false,
+            },
+          });
 
       const attachments: any[] = [];
       if (pdfBuffer) {
@@ -188,23 +204,33 @@ export async function sendBookingTicketEmail(
           attachments,
         });
 
-        console.log(`[Email] Sent booking confirmation via SMTP to ${recipient}`);
+        console.log(`[Email] Sent booking confirmation via SMTP to ${recipient} with PDF ticket attached`);
         return {
           success: true,
           sent: true,
           configured: true,
           provider: 'smtp',
           recipient,
-          message: `Booking email sent to ${recipient} via SMTP`,
+          message: `Booking email with PDF ticket sent to ${recipient} via SMTP`,
         };
       } catch (smtpErr: any) {
-        console.warn(`[Email] SMTP authentication or delivery warning (${smtpErr?.message || 'auth error'}). Providing graceful mock fallback for dev/preview:`, recipient);
+        const isAuthErr = smtpErr?.code === 'EAUTH' || smtpErr?.responseCode === 535;
+        if (isAuthErr) {
+          console.warn(
+            `[Email] Gmail SMTP Authentication Note (535 BadCredentials): Gmail requires a 16-character Google App Password (not main account password) generated at https://myaccount.google.com/apppasswords with 2-Step Verification enabled.`
+          );
+        } else {
+          console.warn(`[Email] SMTP delivery warning (${smtpErr?.message || 'error'}):`, recipient);
+        }
         return {
           success: true,
           sent: false,
           configured: false,
           provider: 'smtp',
           recipient,
+          error: isAuthErr
+            ? 'Gmail App Password invalid or revoked. Generate new 16-character App Password at myaccount.google.com/apppasswords'
+            : smtpErr?.message,
           message: `ईमेल पाठवण्याची नोंद झाली (${recipient})`,
         };
       }

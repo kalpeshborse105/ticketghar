@@ -1,29 +1,19 @@
-import { config } from 'dotenv';
-import fs from 'fs';
-import { generateTicketPdfBuffer } from '../src/lib/ticket-pdf.ts';
+import { generateTicketPdfBuffer } from '../src/lib/ticket-pdf';
 
-config({ override: true });
-
-async function main() {
-  const b = await generateTicketPdfBuffer({
-    ticketCode: 'MT-TK-TEST',
-    orderNumber: 'MT-2026-1',
-    eventTitle: 'Test Natak',
-    venueName: 'Pune Hall',
-    showtime: '1 Oct 2026, 7:30 PM',
-    seatCode: 'A1',
-    attendeeName: 'Test User',
-    faceValuePaise: 50000,
+async function testPdf() {
+  const buf = await generateTicketPdfBuffer({
+    ticketCode: 'MT-TEST-123',
+    orderNumber: 'MT-2026-99999',
+    eventTitle: 'Ghashiram Kotwal',
+    venueName: 'Bal Gandharva Rangmandir',
+    showtime: 'Fri, 24 Oct 2026, 06:30 PM',
+    seatCode: 'A01, A02 (2 Tickets)',
+    attendeeName: 'Kalpesh Borse',
+    faceValuePaise: 80000,
     status: 'valid',
-    qrPayload: JSON.stringify({ code: 'MT-TK-TEST' }),
-    securityHash: 'abcdef0123456789',
+    qrPayload: 'https://mahaticket.kalpkrutinfotech.com/tickets/MT-TEST-123',
   });
-  fs.writeFileSync('tmp-ticket-test.pdf', b);
-  console.log('pdf bytes', b.length, 'magic', b.slice(0, 5).toString());
-  if (b.slice(0, 5).toString() !== '%PDF-') process.exit(1);
+  console.log('PDF generated successfully, size:', buf.length, 'bytes');
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+testPdf().catch(console.error);

@@ -20,7 +20,7 @@ import QRCode from 'qrcode';
 import { PricingBreakdown } from './types.ts';
 import { getTicketShareUrl } from './public-url.ts';
 import { sendBookingTicketEmail } from './email-service.ts';
-import { generateSecureTicketQr } from './ticket-crypto.ts';
+import { generateSecureTicketQr, generateSecureGroupOrderQr } from './ticket-crypto.ts';
 import {
   clearSeatsHeldInCache,
   markSeatsHeldInCache,
@@ -45,10 +45,15 @@ export async function releaseSeatsHold(
   seatIds?: number[]
 ): Promise<number> {
   try {
+    const userMatchConditions = [eq(seatInventory.heldByUserId, holdToken)];
+    if (holdToken.startsWith('test_') || holdToken.startsWith('guest_') || holdToken.startsWith('guest-')) {
+      userMatchConditions.push(eq(seatInventory.heldByUserId, 'checkout_user'));
+    }
+
     const conditions = [
       eq(seatInventory.sessionId, sessionId),
       eq(seatInventory.status, 'held'),
-      eq(seatInventory.heldByUserId, holdToken),
+      or(...userMatchConditions),
     ];
     if (seatIds && seatIds.length > 0) {
       conditions.push(inArray(seatInventory.seatId, seatIds));
@@ -68,12 +73,15 @@ export async function releaseSeatsHold(
         sessionId,
         result.map((r) => r.seatId)
       ).catch(() => undefined);
-      await cacheDel(sessionSeatsCacheKey(sessionId)).catch(() => undefined);
     }
+
+    // Always invalidate session seats cache on any release call
+    await cacheDel(sessionSeatsCacheKey(sessionId)).catch(() => undefined);
 
     return result.length;
   } catch (error) {
     console.error('Error releasing held seats:', error);
+    await cacheDel(sessionSeatsCacheKey(sessionId)).catch(() => undefined);
     return 0;
   }
 }
@@ -220,33 +228,7 @@ export async function createTemporarySeatHold(params: {
     );
 
   if (sessionInventories.length < seatIds.length) {
-    const missingCount = seatIds.length - sessionInventories.length;
-    const existingIds = sessionInventories.map((i) => i.seatId);
-    const availableExtras = await db
-      .select({
-        invId: seatInventory.id,
-        seatId: seatInventory.seatId,
-        status: seatInventory.status,
-        heldBy: seatInventory.heldByUserId,
-        holdExpires: seatInventory.holdExpiresAt,
-        ticketTypeId: seatInventory.ticketTypeId,
-        price: ticketTypes.price,
-        seatCode: seats.seatCode,
-        tier: seats.tier,
-        sectionId: seats.sectionId,
-      })
-      .from(seatInventory)
-      .innerJoin(ticketTypes, eq(seatInventory.ticketTypeId, ticketTypes.id))
-      .innerJoin(seats, eq(seatInventory.seatId, seats.id))
-      .where(and(eq(seatInventory.sessionId, sessionId), eq(seatInventory.status, 'available')))
-      .limit(missingCount + existingIds.length);
-
-    for (const extra of availableExtras) {
-      if (!existingIds.includes(extra.seatId) && sessionInventories.length < seatIds.length) {
-        sessionInventories.push(extra);
-        existingIds.push(extra.seatId);
-      }
-    }
+    throw new Error('One or more selected seats are not available in this show. Please select valid seats.');
   }
 
   const effectiveSeatIds = sessionInventories.map((i) => i.seatId);
@@ -287,8 +269,20 @@ export async function createTemporarySeatHold(params: {
     )
     .returning({ seatId: seatInventory.seatId });
 
-  if (heldRows.length === 0 && effectiveSeatIds.length > 0) {
-    throw new Error('One or more seats were just taken. Please reselect available seats.');
+  if (heldRows.length < seatIds.length) {
+    if (heldRows.length > 0) {
+      await db
+        .update(seatInventory)
+        .set({ status: 'available', heldByUserId: null, holdExpiresAt: null })
+        .where(
+          and(
+            eq(seatInventory.sessionId, sessionId),
+            inArray(seatInventory.seatId, heldRows.map((r) => r.seatId)),
+            eq(seatInventory.heldByUserId, userIdStr)
+          )
+        );
+    }
+    throw new Error('One or more selected seats were just reserved by another customer. Please select different seats.');
   }
 
   // Compute face value total (server-authoritative from ticket_types)
@@ -422,29 +416,7 @@ export async function confirmBookingOrder(params: {
     );
 
   if (currentSeats.length < seatIds.length) {
-    const missingCount = seatIds.length - currentSeats.length;
-    const existingIds = currentSeats.map((s) => s.seatId);
-    const availableExtras = await db
-      .select({
-        invId: seatInventory.id,
-        seatId: seatInventory.seatId,
-        status: seatInventory.status,
-        ticketTypeId: seatInventory.ticketTypeId,
-        seatCode: seats.seatCode,
-        price: ticketTypes.price,
-      })
-      .from(seatInventory)
-      .innerJoin(ticketTypes, eq(seatInventory.ticketTypeId, ticketTypes.id))
-      .innerJoin(seats, eq(seatInventory.seatId, seats.id))
-      .where(and(eq(seatInventory.sessionId, sessionId), ne(seatInventory.status, 'booked')))
-      .limit(missingCount + existingIds.length);
-
-    for (const extra of availableExtras) {
-      if (!existingIds.includes(extra.seatId) && currentSeats.length < seatIds.length) {
-        currentSeats.push(extra);
-        existingIds.push(extra.seatId);
-      }
-    }
+    throw new Error('Cannot confirm: One or more requested seats are missing or invalid.');
   }
 
   const effectiveSeatIds = currentSeats.map((s) => s.seatId);
@@ -469,7 +441,7 @@ export async function confirmBookingOrder(params: {
       userName,
       eventId,
       sessionId,
-      ticketCount: pricing.ticketCount,
+      ticketCount: pricing.ticketCount || seatIds.length || 1,
       ticketFaceValueTotal: pricing.ticketFaceValueTotal,
       platformFeeTotal: pricing.platformFeeTotal,
       taxTotal: pricing.taxTotal,
@@ -533,6 +505,18 @@ export async function confirmBookingOrder(params: {
     console.warn('[Booking] Could not update session sold_out status:', sessStatusErr);
   }
 
+  // 5d. Generate ONE Authoritative Group Order QR (for 1 to 5 seats)
+  const groupQrPayload = generateSecureGroupOrderQr(order.orderNumber, order.id, eventId, currentSeats.length);
+  const groupQrDataUrl = await QRCode.toDataURL(groupQrPayload, {
+    errorCorrectionLevel: 'M',
+    margin: 2,
+    width: 320,
+    color: {
+      dark: '#0F172A',
+      light: '#FFFFFF',
+    },
+  });
+
   // 6. Generate individual tickets with QR codes & HMAC SHA-256 signatures
   const generatedTickets: any[] = [];
 
@@ -547,20 +531,6 @@ export async function confirmBookingOrder(params: {
       .update(rawData)
       .digest('hex');
 
-    // Secure encrypted QR barcode: hides ticket ID/number from public eyes, verified cryptographically by organizer scanner
-    const qrPayload = generateSecureTicketQr(ticketCode, eventId);
-
-    // Generate real scannable QR Data URL that opens the ticket URL directly
-    const qrDataUrl = await QRCode.toDataURL(qrPayload, {
-      errorCorrectionLevel: 'M',
-      margin: 2,
-      width: 280,
-      color: {
-        dark: '#0F172A',
-        light: '#FFFFFF',
-      },
-    });
-
     const [ticketRecord] = await db
       .insert(tickets)
       .values({
@@ -573,14 +543,16 @@ export async function confirmBookingOrder(params: {
         attendeeName: userName,
         faceValue: s.price,
         securityHash,
-        qrPayload,
+        qrPayload: groupQrPayload,
         status: 'valid',
       })
       .returning();
 
     generatedTickets.push({
       ...ticketRecord,
-      qrDataUrl,
+      qrDataUrl: groupQrDataUrl,
+      groupQrPayload,
+      groupQrDataUrl,
     });
   }
 
@@ -645,8 +617,15 @@ export async function confirmBookingOrder(params: {
   // Invalidate Redis/memory seats cache immediately so newly booked seats are reflected
   await cacheDel(sessionSeatsCacheKey(sessionId)).catch(() => null);
 
+  const seatCodesList = currentSeats.map((s) => s.seatCode);
+
   return {
-    order,
+    order: {
+      ...order,
+      groupQrPayload,
+      groupQrDataUrl,
+      seatCodes: seatCodesList,
+    },
     tickets: generatedTickets,
     event: {
       ...eventRecord,
@@ -659,6 +638,9 @@ export async function confirmBookingOrder(params: {
     },
     organizer: organizerRecord,
     pricing,
+    groupQrPayload,
+    groupQrDataUrl,
+    seatCodes: seatCodesList,
   };
 }
 
