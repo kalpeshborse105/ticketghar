@@ -72,17 +72,48 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
   const [authMessage, setAuthMessage] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
 
-  // Check active session on mount
+  // Check active session on mount — load immediately from localStorage (0ms), then verify session
   useEffect(() => {
+    const sanitizeName = (rawName?: string, email?: string) => {
+      if (!rawName) {
+        if (email && email.includes('@')) {
+          const prefix = email.split('@')[0];
+          return prefix ? prefix.charAt(0).toUpperCase() + prefix.slice(1) : '';
+        }
+        return '';
+      }
+      if (rawName.includes('@')) {
+        const prefix = rawName.split('@')[0];
+        return prefix ? prefix.charAt(0).toUpperCase() + prefix.slice(1) : '';
+      }
+      return rawName;
+    };
+
+    if (typeof window !== 'undefined') {
+      try {
+        const local = localStorage.getItem('mahaticket_user');
+        if (local) {
+          const u = JSON.parse(local);
+          const cleaned = sanitizeName(u.fullName || u.name, u.email);
+          if (cleaned) setUserName(cleaned);
+          if (u.email) setUserEmail(u.email);
+          if (u.phone || u.phoneNumber) setUserPhone(u.phoneNumber || u.phone);
+        }
+      } catch {}
+    }
+
     (async () => {
       try {
         const res = await fetch('/api/auth/flow/session');
         const data = await res.json();
         if (data?.user) {
           setAuthUser(data.user);
-          setUserName((prev) => prev || data.user.fullName || '');
+          const serverName = sanitizeName(data.user.fullName || data.user.name, data.user.email);
+          setUserName((prev) => (prev && !prev.includes('@') ? prev : serverName));
           setUserEmail((prev) => prev || data.user.email || '');
-          if (data.user.phoneNumber) setUserPhone((prev) => prev || data.user.phoneNumber);
+          if (data.user.phoneNumber || data.user.phone) {
+            setUserPhone((prev) => prev || data.user.phoneNumber || data.user.phone);
+          }
           setIsEmailVerified(true);
         }
       } catch { }
@@ -489,8 +520,37 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
             }
 
             setShowDiscardConfirm(false);
-            // Keep locked while seamlessly transitioning to Ticket Pass
-            onSuccess(verifyData);
+            // Enrich with venue and session metadata for instant pass display
+            const enrichedResult = {
+              ...verifyData,
+              event: {
+                ...(verifyData.event || event),
+                venue: event?.venue || (session as any)?.venue,
+              },
+              session: {
+                ...(verifyData.session || session),
+                venue: (session as any)?.venue || event?.venue,
+              },
+              venue: event?.venue || (session as any)?.venue,
+              seats: holdData.heldSeats,
+            };
+
+            if (typeof window !== 'undefined') {
+              try {
+                localStorage.setItem(
+                  'mahaticket_user',
+                  JSON.stringify({
+                    fullName: userName.trim(),
+                    name: userName.trim(),
+                    email: userEmail.trim().toLowerCase(),
+                    phone: cleanPhone,
+                  })
+                );
+                window.dispatchEvent(new CustomEvent('mahaticket_profile_updated'));
+              } catch {}
+            }
+
+            onSuccess(enrichedResult);
           } catch (err: any) {
             console.error('Payment verification error:', err);
             setErrorMessage(err.message || 'पेमेंट पडताळणी अयशस्वी.');
@@ -504,9 +564,9 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
         setIsProcessing(false);
         setErrorMessage(
           response?.error?.description ||
-            (language === 'mr'
-              ? 'पेमेंट अयशस्वी. कृपया पुन्हा प्रयत्न करा.'
-              : 'Payment failed. Please try again.')
+          (language === 'mr'
+            ? 'पेमेंट अयशस्वी. कृपया पुन्हा प्रयत्न करा.'
+            : 'Payment failed. Please try again.')
         );
       });
       razorpay.open();
@@ -537,13 +597,13 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
               <span>
                 {session?.sessionStartTime
                   ? `${new Date(session.sessionStartTime).toLocaleDateString(language === 'mr' ? 'mr-IN' : 'en-IN', {
-                      weekday: 'short',
-                      day: 'numeric',
-                      month: 'short',
-                    })} • ${new Date(session.sessionStartTime).toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}`
+                    weekday: 'short',
+                    day: 'numeric',
+                    month: 'short',
+                  })} • ${new Date(session.sessionStartTime).toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}`
                   : (language === 'mr' ? 'तारीख व वेळ निश्चित' : 'Date & time confirmed')}
               </span>
               <span className="text-slate-400 font-normal">• {holdData.seatIds.length} {language === 'mr' ? 'जागा' : 'seats'}</span>
@@ -578,9 +638,6 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
               <h3 className="text-xs font-black uppercase tracking-wider text-[#ea580c] flex items-center gap-1.5">
                 <span>१. ग्राहक व तिकीट संपर्क तपशील</span>
               </h3>
-              <span className="text-[10px] text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full font-semibold">
-                थेट बुकिंग (Guest Checkout)
-              </span>
             </div>
 
             {isProcessing && (
@@ -971,11 +1028,10 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
                             handleApplyCoupon(offer.code);
                           }
                         }}
-                        className={`p-2 rounded-xl border transition cursor-pointer text-left flex items-center justify-between ${
-                          isCurrent
+                        className={`p-2 rounded-xl border transition cursor-pointer text-left flex items-center justify-between ${isCurrent
                             ? 'bg-emerald-50 border-emerald-300 shadow-xs'
                             : 'bg-orange-50/50 border-orange-200/70 hover:bg-orange-100/60'
-                        }`}
+                          }`}
                       >
                         <div className="min-w-0 flex-1">
                           <span className="font-mono font-bold text-xs text-[#ea580c] block">
@@ -986,11 +1042,10 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
                           </span>
                         </div>
                         <span
-                          className={`text-[10px] font-black px-2 py-0.5 rounded-lg shrink-0 ml-1.5 ${
-                            isCurrent
+                          className={`text-[10px] font-black px-2 py-0.5 rounded-lg shrink-0 ml-1.5 ${isCurrent
                               ? 'bg-emerald-600 text-white'
                               : 'bg-white text-[#ea580c] border border-orange-300'
-                          }`}
+                            }`}
                         >
                           {isCurrent
                             ? language === 'mr'

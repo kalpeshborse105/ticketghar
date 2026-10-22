@@ -13,11 +13,12 @@ export async function downloadTicketPdf(params: {
   description?: string;
 }): Promise<boolean> {
   const { url, filename, title = 'MahaTicket Pass', description = 'Downloading official admission pass' } = params;
+  const safeFilename = (filename || 'MahaTicket-Pass.pdf').replace(/[^a-zA-Z0-9._-]/g, '_');
 
   if (Platform.OS === 'android' && TicketDownloader?.downloadFile) {
     try {
       ToastAndroid.show('तिकीट PDF डाऊनलोड सुरू झाले... (Download folder)', ToastAndroid.LONG);
-      await TicketDownloader.downloadFile(url, filename, title, description);
+      await TicketDownloader.downloadFile(url, safeFilename, title, description);
       return true;
     } catch (err: any) {
       console.warn('Native DownloadManager error, falling back to browser:', err);

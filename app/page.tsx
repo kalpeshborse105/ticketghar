@@ -178,6 +178,14 @@ export default function HomePage() {
 
     // Instant SWR cache hydration from localStorage for 0ms initial render
     if (typeof window !== 'undefined') {
+      // If landed from Supabase OAuth with ?code=..., forward to callback page for instant exchange
+      const urlParams = new URLSearchParams(window.location.search);
+      const oauthCode = urlParams.get('code');
+      if (oauthCode) {
+        window.location.replace(`/auth/callback?code=${encodeURIComponent(oauthCode)}`);
+        return;
+      }
+
       const savedCity = localStorage.getItem('mahaticket_user_city');
       if (savedCity && savedCity !== 'महाराष्ट्र (All)') {
         setSelectedCity(savedCity);

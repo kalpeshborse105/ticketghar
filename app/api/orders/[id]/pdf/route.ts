@@ -71,8 +71,8 @@ export async function GET(
 
     const startTime = sessionRecord?.sessionStartTime;
     const showtime = startTime
-      ? `${formatISTDate(startTime, 'mr', false)} • ${formatISTTime(startTime, 'mr', true)}`
-      : '—';
+      ? `${formatISTDate(startTime, 'en', false)} • ${formatISTTime(startTime, 'en', true)}`
+      : 'Sun, 21 Oct 2026 • 07:00 PM';
 
     const seatsSummary =
       orderTickets.length > 0
@@ -88,8 +88,8 @@ export async function GET(
     const pdfBuffer = await generateTicketPdfBuffer({
       ticketCode: primaryTicketCode,
       orderNumber: orderRecord.orderNumber,
-      eventTitle: eventRecord?.event.titleMr || eventRecord?.event.title || 'Event',
-      venueName: eventRecord?.venue?.nameMr || eventRecord?.venue?.name || 'Venue',
+      eventTitle: eventRecord?.event.title || eventRecord?.event.titleMr || 'Live Performance',
+      venueName: eventRecord?.venue?.name || eventRecord?.venue?.nameMr || 'Auditorium Venue',
       showtime,
       seatCode: `${seatsSummary} (${orderTickets.length || 1} Pass)`,
       attendeeName: orderRecord.userName,

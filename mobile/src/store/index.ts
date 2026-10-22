@@ -11,8 +11,10 @@ import { api, EventItem, EventCategory } from '../api';
 interface User {
   id: number | string;
   name?: string;
+  fullName?: string;
   email?: string;
   phone?: string;
+  phoneNumber?: string;
   avatarUrl?: string;
   role?: 'customer' | 'organizer' | 'admin';
 }
@@ -25,8 +27,19 @@ interface AuthState {
   setAuth: (user: User, token: string) => Promise<void>;
   clearAuth: () => Promise<void>;
   loadStoredAuth: () => Promise<void>;
+  syncUserProfile: () => Promise<void>;
   updateUser: (updates: Partial<User>) => void;
 }
+
+const normalizeUserName = (u: any): string => {
+  if (u.fullName && u.fullName.trim() && !u.fullName.includes('@')) return u.fullName.trim();
+  if (u.name && u.name.trim() && !u.name.includes('@')) return u.name.trim();
+  if (u.email && u.email.includes('@')) {
+    const prefix = u.email.split('@')[0];
+    return prefix ? prefix.charAt(0).toUpperCase() + prefix.slice(1) : '';
+  }
+  return u.fullName || u.name || '';
+};
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
@@ -34,14 +47,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   loading: true,
   isAuthenticated: false,
 
-  setAuth: async (user, token) => {
+  setAuth: async (rawUser, token) => {
+    const cleanName = normalizeUserName(rawUser);
+    const cleanUser: User = {
+      ...rawUser,
+      name: cleanName,
+      fullName: cleanName,
+      phone: rawUser.phone || rawUser.phoneNumber,
+      phoneNumber: rawUser.phoneNumber || rawUser.phone,
+    };
     await AsyncStorage.multiSet([
-      ['@mahaticket_user', JSON.stringify(user)],
+      ['@mahaticket_user', JSON.stringify(cleanUser)],
       ['@mahaticket_session_token', token],
-      ['@tg_user', JSON.stringify(user)],
+      ['@tg_user', JSON.stringify(cleanUser)],
       ['@tg_session_token', token],
     ]);
-    set({ user, token, isAuthenticated: true });
+    set({ user: cleanUser, token, isAuthenticated: true });
   },
 
   clearAuth: async () => {
@@ -67,16 +88,45 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         ]);
       }
       if (userStr && token) {
-        set({ user: JSON.parse(userStr), token, isAuthenticated: true });
+        const parsed = JSON.parse(userStr);
+        const cleanName = normalizeUserName(parsed);
+        const cleanUser: User = {
+          ...parsed,
+          name: cleanName,
+          fullName: cleanName,
+          phone: parsed.phone || parsed.phoneNumber,
+          phoneNumber: parsed.phoneNumber || parsed.phone,
+        };
+        set({ user: cleanUser, token, isAuthenticated: true });
+        // Background sync with live server session to fetch latest name/phone
+        get().syncUserProfile().catch(() => null);
       }
     } catch {}
     set({ loading: false });
   },
 
+  syncUserProfile: async () => {
+    try {
+      const res = await api.getProfile().catch(() => null);
+      if (res?.user) {
+        const token = res.token || get().token || '';
+        await get().setAuth(res.user, token);
+      }
+    } catch {}
+  },
+
   updateUser: (updates) => {
     const user = get().user;
     if (!user) return;
-    const updated = { ...user, ...updates };
+    const merged = { ...user, ...updates };
+    const cleanName = normalizeUserName(merged);
+    const updated: User = {
+      ...merged,
+      name: cleanName,
+      fullName: cleanName,
+      phone: merged.phone || merged.phoneNumber,
+      phoneNumber: merged.phoneNumber || merged.phone,
+    };
     set({ user: updated });
     AsyncStorage.multiSet([
       ['@mahaticket_user', JSON.stringify(updated)],
@@ -99,6 +149,7 @@ interface EventsState {
   setCity: (city: string) => void;
   setCategory: (cat: EventCategory) => void;
   setSearch: (q: string) => void;
+  loadCachedEvents: () => Promise<void>;
   fetchEvents: (city?: string, category?: EventCategory) => Promise<void>;
   filteredEvents: () => EventItem[];
 }
@@ -116,15 +167,31 @@ export const useEventsStore = create<EventsState>((set, get) => ({
   setCategory: (cat) => set({ selectedCategory: cat }),
   setSearch: (q) => set({ searchQuery: q }),
 
+  loadCachedEvents: async () => {
+    try {
+      const cached = await AsyncStorage.getItem('@tg_cached_events');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          set({ events: parsed, loading: false });
+        }
+      }
+    } catch {}
+  },
+
   fetchEvents: async (city, category) => {
     const c = city || get().selectedCity;
-    set({ loading: true, error: null });
+    const currentEvents = get().events;
+    set({ loading: currentEvents.length === 0, error: null });
     try {
       const data = await api.getEvents({ city: c, category });
       const unique = (data.events || []).filter(
         (e, i, arr) => arr.findIndex((x) => x.id === e.id) === i
       );
       set({ events: unique, lastFetchedCity: c, loading: false, error: null });
+      if (unique.length > 0) {
+        AsyncStorage.setItem('@tg_cached_events', JSON.stringify(unique)).catch(() => null);
+      }
     } catch (err: any) {
       set({ loading: false, error: err?.message || 'Failed to load events' });
     }

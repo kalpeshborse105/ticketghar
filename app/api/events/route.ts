@@ -71,6 +71,32 @@ export async function GET(request: Request) {
           : loadReviewStats(),
       ]);
 
+      const sessionIds = allSessions.map((s) => s.id);
+      const sessionInvMap = new Map<number, { total: number; avail: number }>();
+      if (sessionIds.length > 0) {
+        try {
+          const invRes = await db.execute(sql`
+            SELECT 
+              session_id, 
+              COUNT(*)::int as total,
+              COUNT(*) FILTER (WHERE status = 'available' OR (status = 'held' AND hold_expires_at < NOW()))::int as avail
+            FROM public.seat_inventory
+            WHERE session_id IN (${sql.join(sessionIds.map((id) => sql`${id}`), sql`, `)})
+            GROUP BY session_id
+          `);
+          if (invRes?.rows) {
+            for (const row of invRes.rows as any[]) {
+              sessionInvMap.set(Number(row.session_id), {
+                total: Number(row.total || 0),
+                avail: Number(row.avail || 0),
+              });
+            }
+          }
+        } catch (invErr) {
+          console.warn('[Events API] Seat inventory batch error:', invErr);
+        }
+      }
+
       const ticketTypesBySessionId: Record<number, any[]> = {};
       allTicketTypes.forEach((t) => {
         if (!t.sessionId) return;
@@ -83,14 +109,19 @@ export async function GET(request: Request) {
       allSessions.forEach((s) => {
         if (!sessionsByEventId[s.eventId]) sessionsByEventId[s.eventId] = [];
         const sessionTicketTypes = ticketTypesBySessionId[s.id] || [];
-        const availableInventoryCount = sessionTicketTypes.reduce(
-          (sum, t) => sum + Math.max(0, Number(t.availableQuota || 0)),
-          0
-        );
+        const invCount = sessionInvMap.get(s.id);
+        const availableInventoryCount =
+          invCount && invCount.total > 0
+            ? invCount.avail
+            : sessionTicketTypes.reduce(
+                (sum, t) => sum + Math.max(0, Number(t.availableQuota || 0)),
+                0
+              );
         const enriched = {
           ...s,
           ticketTypes: sessionTicketTypes,
           availableInventoryCount,
+          totalInventoryCount: invCount && invCount.total > 0 ? invCount.total : 0,
           isSoldOut: availableInventoryCount <= 0 || s.status === 'sold_out',
         };
         // Mobile list only needs the next few upcoming shows
@@ -205,7 +236,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json(
       { events: allEventsList },
-      { headers: { 'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=60' } }
+      { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
     );
   } catch (error: any) {
     console.error('Failed to fetch events from database:', error);

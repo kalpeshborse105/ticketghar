@@ -45,7 +45,7 @@ export async function GET(
         const [invCount] = await db
           .select({
             totalSeats: sql<number>`count(*)::int`,
-            availableSeats: sql<number>`count(*) filter (where status = 'available')::int`,
+            availableSeats: sql<number>`count(*) filter (where status = 'available' or (status = 'held' and hold_expires_at < now()))::int`,
           })
           .from(seatInventory)
           .where(eq(seatInventory.sessionId, sess.id));
@@ -71,7 +71,7 @@ export async function GET(
           const typeCounts = await db
             .select({
               ticketTypeId: seatInventory.ticketTypeId,
-              avail: sql<number>`count(*) filter (where status = 'available')::int`,
+              avail: sql<number>`count(*) filter (where status = 'available' or (status = 'held' and hold_expires_at < now()))::int`,
               total: sql<number>`count(*)::int`,
             })
             .from(seatInventory)
@@ -102,7 +102,7 @@ export async function GET(
           ...sess,
           ticketTypes: syncedTypes,
           availableInventoryCount: realAvailableCount,
-          totalInventoryCount: invCount && invCount.totalSeats > 0 ? invCount.totalSeats : sess.totalInventoryCount,
+          totalInventoryCount: invCount && invCount.totalSeats > 0 ? invCount.totalSeats : 0,
         };
       })
     );

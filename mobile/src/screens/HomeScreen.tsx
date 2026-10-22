@@ -718,30 +718,34 @@ export default function HomeScreen({ navigation }: any) {
           </View>
         )}
 
-        {/* ── 4. Maharashtra Mahotsav Festival Banner (Stitch Gradient) ───── */}
-        <View style={styles.festivalBanner}>
+        {/* ── 4. Mahanatya Mahotsav Festival Banner (Stitch Gradient — Parity with Web) ───── */}
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => navigation.navigate('Explore', { category: 'plays' })}
+          style={styles.festivalBanner}
+        >
           <View style={styles.festivalIconBox}>
-            <Icon name="bullhorn" size={24} color={COLORS.primary} />
+            <Icon name="tag-outline" size={24} color={COLORS.primary} />
           </View>
           <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
               <Text style={styles.festivalTag}>
-                {language === 'mr' ? 'मर्यादित ऑफर' : 'Limited Offer'}
+                {language === 'mr' ? 'मर्यादित काळासाठी विशेष ऑफर' : 'Limited Time Offer'}
               </Text>
               <Text style={styles.festivalCoupon}>
-                {language === 'mr' ? 'कोड: MAHA50' : 'Code: MAHA50'}
+                {language === 'mr' ? 'कोड: MAHA20 / MAHA50' : 'Code: MAHA20 / MAHA50'}
               </Text>
             </View>
             <Text style={styles.festivalTitle}>
-              {language === 'mr' ? 'महाराष्ट्र नाट्य महोत्सव २०२६' : 'Maharashtra Theatre Festival 2026'}
+              {language === 'mr' ? 'महानाट्य महोत्सव २०२६' : 'Mahanatya Mahotsav 2026'}
             </Text>
             <Text style={styles.festivalSub}>
               {language === 'mr'
-                ? 'सर्व नाटकांवर थेट ₹५० सूट. आजच आपली मनपसंत जागा आरक्षित करा!'
-                : 'Flat ₹50 off on all plays. Book your favourite seat today!'}
+                ? 'सर्व नाटकांच्या आगाऊ बुकिंगवर २०% पर्यंत भरघोस सूट! आजच आपले आणि आपल्या कुटुंबीयांचे तिकीट आरक्षित करा.'
+                : 'Get up to 20% discount on advance ticket bookings for all Marathi plays across Maharashtra.'}
             </Text>
           </View>
-        </View>
+        </TouchableOpacity>
 
         {/* ── 5. Weekend Planner (विकेंड प्लॅनर • या आठवड्याचे लोकप्रिय कार्यक्रम) ─── */}
         {!loading && (

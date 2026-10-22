@@ -119,15 +119,15 @@ export const MahaTicketCard: React.FC<MahaTicketCardProps> = ({
 
           <div className="col-span-2 flex items-start gap-2 pt-1">
             <MapPin className="w-4 h-4 text-[#EA580C] shrink-0 mt-0.5" />
-            <div className="truncate">
+            <div className="flex-1 min-w-0">
               <span className="text-[10px] font-bold text-[#64748B] uppercase block">
                 सभागृह / Venue
               </span>
-              <span className="font-extrabold text-[#111827] truncate block">
+              <span className="font-extrabold text-[#111827] block leading-snug break-words">
                 {venueName}
               </span>
               {venueCity && (
-                <span className="text-[11px] text-[#64748B]">{venueCity}</span>
+                <span className="text-[11px] text-[#64748B] block mt-0.5">{venueCity}</span>
               )}
             </div>
           </div>

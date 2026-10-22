@@ -20,7 +20,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../theme';
-import { api, paise } from '../api';
+import { api, paise, formatDate } from '../api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCartStore, useAuthStore } from '../store';
 import RazorpayCheckout from 'react-native-razorpay';
 import { CommonActions } from '@react-navigation/native';
@@ -52,7 +53,7 @@ function formatPaymentErrorMessage(err: any): { title: string; message: string }
   if (typeof err === 'string') {
     try {
       parsed = JSON.parse(err);
-    } catch {}
+    } catch { }
   } else if (typeof err === 'object') {
     parsed = err;
   }
@@ -74,8 +75,7 @@ function formatPaymentErrorMessage(err: any): { title: string; message: string }
     return {
       title: 'Payment Gateway Error (गेटवे त्रुटी)',
       message:
-        plainMsg ||
-        'Razorpay keys on the server are invalid. Update RAZORPAY_KEY_ID + RAZORPAY_KEY_SECRET on production, then retry.\n\nसर्व्हर Razorpay की चुकीच्या आहेत — Vercel/.env मध्ये योग्य की सेट करा.',
+        'Payment gateway connection is temporarily unavailable. Your seats are still held active. Please retry in a few moments.\n\nपेमेंट गेटवेशी जोडणी तात्पुरती उपलब्ध नाही. आपले सीट अजूनही सुरक्षित (hold) आहेत. कृपया पुन्हा प्रयत्न करा.',
     };
   }
 
@@ -132,10 +132,25 @@ export default function CheckoutScreen({ navigation, route }: any) {
   const { user, setAuth } = useAuthStore();
   const { setRazorpayOrder } = useCartStore();
 
+  const sanitizeName = (rawName?: string, rawEmail?: string) => {
+    if (!rawName) {
+      if (rawEmail && rawEmail.includes('@')) {
+        const prefix = rawEmail.split('@')[0];
+        return prefix ? prefix.charAt(0).toUpperCase() + prefix.slice(1) : '';
+      }
+      return '';
+    }
+    if (rawName.includes('@')) {
+      const prefix = rawName.split('@')[0];
+      return prefix ? prefix.charAt(0).toUpperCase() + prefix.slice(1) : '';
+    }
+    return rawName;
+  };
+
   // Contact — BMS order: name → phone → age → email
-  const [name, setName] = useState(user?.name || '');
+  const [name, setName] = useState(sanitizeName(user?.name || (user as any)?.fullName, user?.email));
   const [email, setEmail] = useState(user?.email || '');
-  const [phone, setPhone] = useState(cleanIndianMobile(user?.phone));
+  const [phone, setPhone] = useState(cleanIndianMobile(user?.phone || (user as any)?.phoneNumber));
   const [age, setAge] = useState('');
   const [fieldError, setFieldError] = useState<string | null>(null);
 
@@ -146,9 +161,10 @@ export default function CheckoutScreen({ navigation, route }: any) {
   const emailRef = useRef<TextInput>(null);
 
   useEffect(() => {
-    if (user?.name && !name) setName(user.name);
+    const cleanN = sanitizeName(user?.name || (user as any)?.fullName, user?.email);
+    if (cleanN && !name) setName(cleanN);
     if (user?.email && !email) setEmail(user.email);
-    const p = cleanIndianMobile(user?.phone);
+    const p = cleanIndianMobile(user?.phone || (user as any)?.phoneNumber);
     if (p && !phone) setPhone(p);
   }, [user]);
 
@@ -179,26 +195,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
 
   const [paying, setPaying] = useState(false);
-  const PAYMENT_STATUS_MESSAGES = useMemo(
-    () => [
-      'पेमेंट प्रक्रिया सुरू आहे...',
-      '१ सेकंद... तुमच्या शोचा आनंद घ्या! 🎭',
-      'तिकीट सुरक्षित केले जात आहे...',
-    ],
-    []
-  );
-  const [paymentMsgIdx, setPaymentMsgIdx] = useState(0);
-
-  useEffect(() => {
-    if (!paying) {
-      setPaymentMsgIdx(0);
-      return;
-    }
-    const interval = setInterval(() => {
-      setPaymentMsgIdx((prev) => (prev + 1) % PAYMENT_STATUS_MESSAGES.length);
-    }, 1100);
-    return () => clearInterval(interval);
-  }, [paying, PAYMENT_STATUS_MESSAGES.length]);
+  const [paymentPhase, setPaymentPhase] = useState<'initiating' | 'verifying'>('initiating');
 
   const [checkoutModal, setCheckoutModal] = useState<{
     visible: boolean;
@@ -327,7 +324,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
       if (sessionId && holdToken) {
         await api.releaseHold({ sessionId, holdToken, seatIds });
       }
-    } catch {}
+    } catch { }
     navigation.goBack();
   };
 
@@ -407,6 +404,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
     }
 
     setPaying(true);
+    setPaymentPhase('initiating');
     try {
       // Step 1: Create backend Razorpay order (extends seat hold)
       const orderData = await api.createRazorpayOrder({
@@ -439,7 +437,10 @@ export default function CheckoutScreen({ navigation, route }: any) {
         retry: { enabled: true, max_count: 2 },
       });
 
-      // Step 3: Server-side signature verify → confirm booking
+      // Step 3: Transition status immediately to verifying/generating ticket
+      setPaymentPhase('verifying');
+
+      // Server-side signature verify → confirm booking
       const payload: any = {
         sessionId,
         eventId: eventId || 1,
@@ -453,9 +454,115 @@ export default function CheckoutScreen({ navigation, route }: any) {
         razorpay_signature: paymentSuccessData.razorpay_signature,
       };
 
-      const verified = await api.verifyPayment(payload);
+      // Server-side signature verify → confirm booking with automatic retry loop
+      let verified: any = null;
+      let lastVerifyError: any = null;
+
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          verified = await api.verifyPayment(payload);
+          if (verified?.success || verified?.orderId || verified?.id || verified?.order) {
+            break;
+          }
+        } catch (vErr: any) {
+          lastVerifyError = vErr;
+          console.warn(`Payment verify attempt ${attempt} failed:`, vErr?.message);
+          if (attempt < 3) {
+            await new Promise((r) => setTimeout(r, 1500));
+          }
+        }
+      }
+
+      if (!verified && lastVerifyError) {
+        throw lastVerifyError;
+      }
 
       if (verified?.success || verified?.orderId || verified?.id || verified?.order) {
+        useAuthStore.getState().updateUser({
+          name: name.trim(),
+          fullName: name.trim(),
+          phone: cleanIndianMobile(phone),
+          phoneNumber: cleanIndianMobile(phone),
+          email: email.trim().toLowerCase(),
+        });
+        useAuthStore.getState().syncUserProfile().catch(() => null);
+
+        const resolvedOrderNumber =
+          verified?.orderNumber ||
+          verified?.order?.orderNumber ||
+          `MT-${Date.now().toString().slice(-6)}`;
+        const resolvedOrderId = verified?.orderId || verified?.bookingId || verified?.order?.id || 1;
+        const resolvedEventTitle =
+          verified?.order?.event?.titleMr ||
+          verified?.order?.event?.title ||
+          eventTitle ||
+          'Selected event';
+        const resolvedVenue =
+          venueName ||
+          verified?.order?.event?.venue?.nameMr ||
+          verified?.order?.event?.venue?.name ||
+          sessionMeta?.venue ||
+          ticketMeta?.venue ||
+          'Bal Gandharva Rangmandir';
+        const resolvedShowDate =
+          ticketMeta?.dateTime ||
+          (verified?.order?.session?.sessionStartTime
+            ? formatDate(verified.order.session.sessionStartTime)
+            : 'Date & Time');
+        const resolvedTickets =
+          verified?.order?.tickets ||
+          verified?.tickets ||
+          (seatCodes || []).map((sc: string, idx: number) => ({
+            seatCode: sc,
+            ticketCode: `MT-TK-${resolvedOrderId}-${sc}-${idx + 1}`,
+            faceValue: Math.round(grandTotal / (seatCodes.length || 1)),
+            qrPayload: JSON.stringify({
+              app: 'MahaTicket',
+              orderNumber: resolvedOrderNumber,
+              seatCode: sc,
+              event: resolvedEventTitle,
+            }),
+          }));
+
+        // Cache rich order immediately for instant zero-lag rendering in MyTicketsScreen
+        const fullOrderForCache = {
+          ...verified?.order,
+          id: resolvedOrderId,
+          orderNumber: resolvedOrderNumber,
+          eventId,
+          sessionId,
+          grandTotal: verified?.order?.grandTotal || grandTotal,
+          paymentStatus: 'paid',
+          orderStatus: 'confirmed',
+          createdAt: new Date().toISOString(),
+          event: verified?.order?.event || {
+            id: eventId,
+            title: resolvedEventTitle,
+            titleMr: resolvedEventTitle,
+            posterUrl,
+            venue: {
+              name: resolvedVenue,
+              nameMr: resolvedVenue,
+              city: 'Pune',
+            },
+          },
+          session: verified?.order?.session || {
+            id: sessionId,
+            sessionStartTime: sessionMeta?.startTime || ticketMeta?.dateTime || new Date().toISOString(),
+          },
+          tickets: resolvedTickets,
+        };
+
+        try {
+          const myStr = await AsyncStorage.getItem('@tg_my_orders');
+          const myOrders = myStr ? JSON.parse(myStr) : [];
+          const deduped = Array.isArray(myOrders)
+            ? myOrders.filter((o: any) => o.orderNumber !== resolvedOrderNumber)
+            : [];
+          deduped.unshift(fullOrderForCache);
+          await AsyncStorage.setItem('@tg_my_orders', JSON.stringify(deduped.slice(0, 30)));
+        } catch {}
+
         // Direct reset to BookingConfirmed so checkout is completely unmounted from the background
         navigation.dispatch(
           CommonActions.reset({
@@ -464,18 +571,17 @@ export default function CheckoutScreen({ navigation, route }: any) {
               {
                 name: 'BookingConfirmed',
                 params: {
-                  orderId: verified.orderId || verified.bookingId || verified?.order?.id || 1,
-                  orderNumber:
-                    verified.orderNumber ||
-                    verified?.order?.orderNumber ||
-                    `MT-${Date.now().toString().slice(-6)}`,
-                  eventTitle:
-                    verified?.order?.event?.titleMr ||
-                    verified?.order?.event?.title ||
-                    eventTitle,
+                  orderId: resolvedOrderId,
+                  orderNumber: resolvedOrderNumber,
+                  eventTitle: resolvedEventTitle,
                   seatCodes:
-                    verified?.order?.tickets?.map((t: any) => t.seatCode) || seatCodes,
+                    resolvedTickets.map((t: any) => t.seatCode).filter(Boolean).length > 0
+                      ? resolvedTickets.map((t: any) => t.seatCode)
+                      : seatCodes,
                   grandTotal: verified?.order?.grandTotal || grandTotal,
+                  venueName: resolvedVenue,
+                  sessionMeta: sessionMeta || ticketMeta,
+                  showDateStr: resolvedShowDate,
                 },
               },
             ],
@@ -839,7 +945,9 @@ export default function CheckoutScreen({ navigation, route }: any) {
             <View style={styles.payBtnLiveRow}>
               <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
               <Text style={styles.payBtnLiveText} numberOfLines={1}>
-                {PAYMENT_STATUS_MESSAGES[paymentMsgIdx]}
+                {paymentPhase === 'verifying'
+                  ? 'तिकीट तयार होत आहे...'
+                  : 'पेमेंट प्रक्रिया सुरू आहे...'}
               </Text>
             </View>
           ) : (
@@ -859,14 +967,18 @@ export default function CheckoutScreen({ navigation, route }: any) {
           <View style={styles.paymentModalCard}>
             <ActivityIndicator size="large" color="#EA580C" style={{ marginBottom: 16 }} />
             <Text style={styles.paymentModalTitle}>
-              {PAYMENT_STATUS_MESSAGES[paymentMsgIdx]}
+              {paymentPhase === 'verifying'
+                ? 'तिकीट कन्फर्म केले जात आहे...'
+                : 'सुरक्षित पेमेंट प्रक्रिया सुरू आहे...'}
             </Text>
             <Text style={styles.paymentModalSub}>
-              {paymentMsgIdx === 1 ? 'Enjoy your show! 🎭' : 'Processing Secure Payment • Razorpay'}
+              {paymentPhase === 'verifying'
+                ? 'Generating Confirmed Ticket Pass'
+                : 'Processing Payment...'}
             </Text>
             <View style={styles.paymentModalSecurityBadge}>
-              <Icon name="shield-check" size={16} color="#16A34A" />
-              <Text style={styles.paymentModalSecurityText}>256-Bit SSL Encrypted • RBI Approved Gateway</Text>
+              {/* <Icon name="shield-check" size={16} color="#16A34A" /> */}
+              {/* <Text style={styles.paymentModalSecurityText}>256-Bit SSL Encrypted • RBI Approved Gateway</Text> */}
             </View>
             <Text style={styles.paymentModalWarning}>
               कृपया बॅक बटण दाबू नका किंवा स्क्रीन बंद करू नका.

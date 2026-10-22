@@ -141,14 +141,14 @@ export default function ExploreScreen({ navigation }: any) {
       </View>
 
       {/* Results count */}
-      {!loading && (
+      {!loading && !error && filtered.length > 0 && (
         <Text style={styles.resultCount}>
           {filtered.length} {filtered.length === 1 ? 'event' : 'events'} found
         </Text>
       )}
 
       {/* Events List */}
-      {loading ? (
+      {loading && events.length === 0 ? (
         <LoadingLogo fill />
       ) : filtered.length === 0 ? (
         events.length === 0 ? (

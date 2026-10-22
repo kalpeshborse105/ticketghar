@@ -26,7 +26,7 @@ export async function GET(
       try {
         return NextResponse.json(JSON.parse(cached), {
           headers: {
-            'Cache-Control': 'public, max-age=5, stale-while-revalidate=15',
+            'Cache-Control': 'no-store, no-cache, must-revalidate',
           },
         });
       } catch {
@@ -181,11 +181,11 @@ export async function GET(
     };
 
     // Cache layout briefly for smoother map loads (holds invalidate via redis helpers)
-    await cacheSet(cacheKey, JSON.stringify(payload), 15).catch(() => undefined);
+    await cacheSet(cacheKey, JSON.stringify(payload), 4).catch(() => undefined);
 
     return NextResponse.json(payload, {
       headers: {
-        'Cache-Control': 'public, max-age=5, stale-while-revalidate=15',
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
       },
     });
   } catch (error: any) {

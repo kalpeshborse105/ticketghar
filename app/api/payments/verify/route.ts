@@ -78,14 +78,36 @@ export async function POST(request: Request) {
     }
 
     // Get or create user
-    let existingUser = await db
-      .select({ id: users.id })
+    const existingUser = await db
+      .select({
+        id: users.id,
+        fullName: users.fullName,
+        phoneNumber: users.phoneNumber,
+      })
       .from(users)
       .where(eq(users.email, userEmail.trim().toLowerCase()));
 
     let targetUserId: number;
     if (existingUser.length > 0) {
       targetUserId = existingUser[0].id;
+      const currentName = existingUser[0].fullName || '';
+      const isEmailLike =
+        !currentName ||
+        currentName === 'Guest User' ||
+        currentName.includes('@') ||
+        currentName === userEmail.split('@')[0];
+
+      const updates: any = {};
+      if (userName.trim() && (isEmailLike || currentName !== userName.trim())) {
+        updates.fullName = userName.trim();
+      }
+      if (userPhone.trim() && !existingUser[0].phoneNumber) {
+        updates.phoneNumber = userPhone.trim();
+      }
+      if (Object.keys(updates).length > 0) {
+        updates.updatedAt = new Date();
+        await db.update(users).set(updates).where(eq(users.id, targetUserId));
+      }
     } else {
       const [newUser] = await db
         .insert(users)
@@ -134,12 +156,23 @@ export async function POST(request: Request) {
       },
     });
 
+    const richOrder = {
+      ...result.order,
+      event: result.event,
+      venue: result.venue,
+      session: result.session,
+      tickets: result.tickets,
+      pricing: result.pricing,
+    };
+
     return NextResponse.json({
       success: true,
       verified: true,
-      order: result.order,
+      order: richOrder,
       tickets: result.tickets,
       event: result.event,
+      session: result.session,
+      venue: result.venue,
       pricing: result.pricing,
       payment: {
         configured: true,

@@ -83,7 +83,7 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
   const dateGroups = React.useMemo(() => {
     const map = new Map<
       string,
-      { key: string; label: string; day: string; weekday: string; sessions: EventSessionItem[] }
+      { key: string; label: string; day: string; month: string; weekday: string; sessions: EventSessionItem[] }
     >();
     sessions.forEach((s) => {
       const d = new Date(s.sessionStartTime);
@@ -97,6 +97,7 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
             month: 'short',
           }),
           day: d.toLocaleDateString(language === 'mr' ? 'mr-IN' : 'en-IN', { day: 'numeric' }),
+          month: d.toLocaleDateString(language === 'mr' ? 'mr-IN' : 'en-IN', { month: 'short' }),
           weekday: d.toLocaleDateString(language === 'mr' ? 'mr-IN' : 'en-IN', { weekday: 'short' }),
           sessions: [],
         });
@@ -337,7 +338,7 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
       <div className="relative w-full max-w-3xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col h-[94vh] max-h-[840px] border border-slate-200">
-        
+
         {/* Compact Modern Header (Space-efficient) */}
         <header className="bg-[#141B2B] text-white px-4 py-2.5 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3 min-w-0">
@@ -385,15 +386,14 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
                     const first = g.sessions[0];
                     if (first) switchSession(first);
                   }}
-                  className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition whitespace-nowrap ${
-                    selected
-                      ? 'bg-[#EA580C] text-white shadow-xs'
-                      : 'bg-white text-slate-700 border border-orange-100 hover:bg-orange-50'
-                  }`}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition whitespace-nowrap ${selected
+                    ? 'bg-[#EA580C] text-white shadow-xs'
+                    : 'bg-white text-slate-700 border border-orange-100 hover:bg-orange-50'
+                    }`}
                 >
                   <span>{g.weekday}</span>
-                  <span className="text-sm font-extrabold">{g.day}</span>
-                  <span>{g.label.replace(/^\d+\s*/, '')}</span>
+                  <span className="font-extrabold">{g.day}</span>
+                  <span>{g.month}</span>
                 </button>
               );
             })}
@@ -410,11 +410,10 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
                   key={s.id}
                   type="button"
                   onClick={() => switchSession(s)}
-                  className={`rounded-lg px-2.5 py-1 text-xs font-bold transition whitespace-nowrap ${
-                    selected
-                      ? 'bg-[#141B2B] text-white'
-                      : 'bg-white border border-slate-200 text-[#EA580C] hover:border-[#EA580C]'
-                  }`}
+                  className={`rounded-lg px-2.5 py-1 text-xs font-bold transition whitespace-nowrap ${selected
+                    ? 'bg-[#141B2B] text-white'
+                    : 'bg-white border border-slate-200 text-[#EA580C] hover:border-[#EA580C]'
+                    }`}
                 >
                   {timeLabel}
                 </button>
@@ -481,8 +480,8 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
           </div>
         )}
 
-        {/* Interactive Seating Hall (Main Focus: Ample Space for Stage & Seats) */}
-        <div className="flex-1 overflow-y-auto overflow-x-auto p-4 sm:p-6 bg-[#F8FAFC] relative">
+        {/* Interactive Seating Hall (BookMyShow style: unified auditorium canvas) */}
+        <div className="flex-1 overflow-y-auto overflow-x-auto p-4 sm:p-6 bg-[#F8FAFC] relative touch-pan-x touch-pan-y">
           {loading ? (
             <div className="h-full min-h-[300px] flex flex-col items-center justify-center space-y-3 text-slate-500">
               <div className="w-10 h-10 border-3 border-[#EA580C] border-t-transparent rounded-full animate-spin" />
@@ -503,7 +502,7 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
             </div>
           ) : (
             <div
-              className="space-y-6 max-w-xl mx-auto transition-transform duration-150 ease-out origin-top pb-12"
+              className="space-y-6 min-w-max mx-auto transition-transform duration-150 ease-out origin-top pb-12 px-6"
               style={{ transform: `scale(${zoomLevel})` }}
             >
               {/* Curved Theatre Stage Indicator */}
@@ -526,22 +525,20 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
                 return (
                   <div
                     key={sec.id}
-                    className={`rounded-2xl p-4 shadow-xs border ${
-                      isOrangeTheme
-                        ? 'bg-[#FFF7ED] border-orange-100'
-                        : 'bg-white border-slate-200'
-                    }`}
+                    className={`rounded-2xl p-4 shadow-xs border ${isOrangeTheme
+                      ? 'bg-[#FFF7ED] border-orange-100'
+                      : 'bg-white border-slate-200'
+                      }`}
                   >
                     <div className="flex items-center justify-between mb-3 px-1">
                       <span className="font-bold text-xs sm:text-sm text-[#141B2B]">
                         {sec.nameMr}
                       </span>
                       <span
-                        className={`bg-white font-extrabold text-xs px-2.5 py-0.5 rounded-full shadow-2xs border ${
-                          isOrangeTheme
-                            ? 'text-[#EA580C] border-orange-200'
-                            : 'text-slate-700 border-slate-200'
-                        }`}
+                        className={`bg-white font-extrabold text-xs px-2.5 py-0.5 rounded-full shadow-2xs border ${isOrangeTheme
+                          ? 'text-[#EA580C] border-orange-200'
+                          : 'text-slate-700 border-slate-200'
+                          }`}
                       >
                         {language === 'mr'
                           ? `₹${toMarathiDigits(sec.priceRupees)} प्रति आसन`
@@ -557,8 +554,8 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
                         const aisleIndex = Math.floor(sorted.length / 2);
 
                         return (
-                          <div key={rowLabel} className="flex items-center justify-center gap-1 text-xs overflow-x-auto py-0.5">
-                            <span className="w-4 shrink-0 font-bold text-slate-400 text-center text-[11px]">
+                          <div key={rowLabel} className="flex items-center justify-center gap-1.5 text-xs py-0.5 whitespace-nowrap shrink-0">
+                            <span className="w-5 shrink-0 font-bold text-slate-400 text-center text-[11px]">
                               {rowLabel}
                             </span>
                             <div className="flex items-center gap-1.5">
@@ -573,7 +570,7 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
                                 </React.Fragment>
                               ))}
                             </div>
-                            <span className="w-4 shrink-0 font-bold text-slate-400 text-center text-[11px]">
+                            <span className="w-5 shrink-0 font-bold text-slate-400 text-center text-[11px]">
                               {rowLabel}
                             </span>
                           </div>
@@ -604,11 +601,11 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
                   {selectedSeatIds.length > 0
                     ? language === 'mr'
                       ? `${toMarathiDigits(selectedSeatIds.length)} आसने (${selectedSeats
-                          .map((s) => `${s.seatCode} ₹${toMarathiDigits(Math.round(getSeatPricePaise(s) / 100))}`)
-                          .join(', ')})`
+                        .map((s) => `${s.seatCode} ₹${toMarathiDigits(Math.round(getSeatPricePaise(s) / 100))}`)
+                        .join(', ')})`
                       : `${selectedSeatIds.length} seats (${selectedSeats
-                          .map((s) => `${s.seatCode} ₹${Math.round(getSeatPricePaise(s) / 100)}`)
-                          .join(', ')})`
+                        .map((s) => `${s.seatCode} ₹${Math.round(getSeatPricePaise(s) / 100)}`)
+                        .join(', ')})`
                     : language === 'mr'
                       ? 'कोणतेही आसन निवडलेले नाही'
                       : 'No seats selected'}

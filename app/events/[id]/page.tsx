@@ -30,7 +30,23 @@ import { SeatMapModal } from '@/src/components/SeatMapModal';
 import { CheckoutDrawer } from '@/src/components/CheckoutDrawer';
 import { TicketPassModal } from '@/src/components/TicketPassModal';
 import { AuthModal } from '@/src/components/AuthModal';
-import { formatISTDate, formatISTTime } from '@/src/lib/dateUtils';
+import {
+  formatISTDate,
+  formatISTTime,
+  getISTDateParts,
+  MARATHI_DAYS_SHORT,
+  MARATHI_MONTHS_SHORT,
+  ENGLISH_DAYS_SHORT,
+  ENGLISH_MONTHS_SHORT,
+} from '@/src/lib/dateUtils';
+
+const toMarathiDigits = (val: string | number) => {
+  const map: { [key: string]: string } = {
+    '0': '०', '1': '१', '2': '२', '3': '३', '4': '४',
+    '5': '५', '6': '६', '7': '७', '8': '८', '9': '९'
+  };
+  return String(val).replace(/[0-9]/g, (d) => map[d] || d);
+};
 
 
 interface EventDetail {
@@ -152,7 +168,7 @@ export default function EventDetailPage() {
             if (url && !list.includes(url)) list.push(url);
           });
         }
-      } catch {}
+      } catch { }
     }
     if (list.length === 0) {
       if (event.bannerUrl) list.push(event.bannerUrl);
@@ -190,21 +206,35 @@ export default function EventDetailPage() {
     const map = new Map<string, { label: string; day: string; month: string; full: string; sessions: any[] }>();
 
     event.sessions.forEach((s: any) => {
-      const dateObj = new Date(s.sessionStartTime);
-      const dateKey = dateObj.toDateString();
+      const parts = getISTDateParts(s.sessionStartTime);
+      if (!parts) return;
+
+      const dateKey = `${parts.year}-${parts.monthIdx}-${parts.day}`;
 
       if (!map.has(dateKey)) {
-        const isToday = new Date().toDateString() === dateKey;
-        const isTomorrow = new Date(Date.now() + 86400000).toDateString() === dateKey;
+        const nowParts = getISTDateParts(new Date());
+        const isToday = nowParts && parts.year === nowParts.year && parts.monthIdx === nowParts.monthIdx && parts.day === nowParts.day;
+
+        const tomDate = new Date();
+        tomDate.setDate(tomDate.getDate() + 1);
+        const tomParts = getISTDateParts(tomDate);
+        const isTomorrow = tomParts && parts.year === tomParts.year && parts.monthIdx === tomParts.monthIdx && parts.day === tomParts.day;
+
+        const weekday = language === 'mr'
+          ? (MARATHI_DAYS_SHORT[parts.dayOfWeek] || '')
+          : (ENGLISH_DAYS_SHORT[parts.dayOfWeek] || '');
 
         const label = isToday
           ? (language === 'mr' ? 'आज' : 'Today')
           : isTomorrow
-          ? (language === 'mr' ? 'उद्या' : 'Tomorrow')
-          : formatISTDate(s.sessionStartTime, language, true);
+            ? (language === 'mr' ? 'उद्या' : 'Tomorrow')
+            : weekday;
 
-        const day = dateObj.getDate().toString();
-        const month = formatISTDate(s.sessionStartTime, language, true);
+        const day = String(parts.day);
+        const month = language === 'mr'
+          ? (MARATHI_MONTHS_SHORT[parts.monthIdx] || '')
+          : (ENGLISH_MONTHS_SHORT[parts.monthIdx] || '');
+
         const full = formatISTDate(s.sessionStartTime, language, false);
 
         map.set(dateKey, { label, day, month, full, sessions: [] });
@@ -470,6 +500,43 @@ export default function EventDetailPage() {
 
   return (
     <div className="min-h-screen bg-[#FFF7ED] text-[#141B2B] selection:bg-[#EA580C] selection:text-white pb-28">
+      {/* Event Structured Data (JSON-LD for Google Rich Results) */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'TheaterEvent',
+            name: event.titleMr || event.title,
+            alternateName: event.title,
+            description: event.descriptionMr || event.description || `${event.title} - Marathi Event on MahaTicket`,
+            image: event.posterUrl || event.bannerUrl,
+            eventStatus: 'https://schema.org/EventScheduled',
+            eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+            location: {
+              '@type': 'Place',
+              name: venueName,
+              address: {
+                '@type': 'PostalAddress',
+                addressLocality: event.venue?.city || 'Pune',
+                addressRegion: 'Maharashtra',
+                addressCountry: 'IN',
+              },
+            },
+            offers: {
+              '@type': 'AggregateOffer',
+              priceCurrency: 'INR',
+              availability: 'https://schema.org/InStock',
+              url: `https://beats.kalpkrutinfotech.com/events/${event.id}`,
+            },
+            organizer: {
+              '@type': 'Organization',
+              name: 'MahaTicket',
+              url: 'https://beats.kalpkrutinfotech.com',
+            },
+          }),
+        }}
+      />
       <Header language={language} onLanguageChange={setLanguage} />
 
       {/* Dynamic Breadcrumb & Context Bar */}
@@ -823,11 +890,10 @@ export default function EventDetailPage() {
                     <button
                       type="button"
                       onClick={() => setNotifyMeRegistered(!notifyMeRegistered)}
-                      className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-2 cursor-pointer shadow-xs ${
-                        notifyMeRegistered
+                      className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-2 cursor-pointer shadow-xs ${notifyMeRegistered
                           ? 'bg-emerald-600 text-white'
                           : 'bg-[#EA580C] hover:bg-[#C2410C] text-white'
-                      }`}
+                        }`}
                     >
                       <span>{notifyMeRegistered ? '✓ नोंदणी झाली! बुकिंग सुरू होताच अलर्ट मिळेल' : '🔔 मला आठवण करा (Notify Me)'}</span>
                     </button>
@@ -909,11 +975,10 @@ export default function EventDetailPage() {
                       return (
                         <div
                           key={sess.id}
-                          className={`p-4 rounded-xl border transition-all ${
-                            isSelected
+                          className={`p-4 rounded-xl border transition-all ${isSelected
                               ? 'bg-orange-50/70 border-[#EA580C] shadow-sm'
                               : 'bg-white border-[#E5E7EB] hover:shadow-sm'
-                          }`}
+                            }`}
                         >
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                             <div className="space-y-1">
@@ -922,14 +987,33 @@ export default function EventDetailPage() {
                                   {startTime}
                                 </span>
                                 <span className="px-2 py-0.5 rounded-full bg-[#FFF7ED] text-[#A33900] text-[10px] font-bold">
-                                  {dateStr} • {periodLabel}
+                                  {periodLabel}
                                 </span>
                               </div>
-                              <p className="text-xs text-[#64748B]">{venueName}</p>
-                              <p className={`text-[11px] font-semibold flex items-center gap-1 ${isEvening ? 'text-[#F59E0B]' : 'text-[#16A34A]'}`}>
-                                <span className={`w-1.5 h-1.5 rounded-full ${isEvening ? 'bg-[#F59E0B]' : 'bg-[#16A34A]'}`} />
-                                {isEvening ? 'लवकर भरत आहे (फक्त १२ जागा शिल्लक!)' : 'उपलब्ध (७२ जागा शिल्लक)'}
-                              </p>
+                              {(() => {
+                                const realAvail = typeof sess.availableSeats === 'number' ? sess.availableSeats : null;
+                                if (realAvail === 0) {
+                                  return (
+                                    <p className="text-[11px] font-semibold flex items-center gap-1 text-rose-600">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-rose-600" />
+                                      {language === 'mr' ? 'हाऊसफुल्ल (Housefull)' : 'Sold Out / Housefull'}
+                                    </p>
+                                  );
+                                }
+                                const isFillingFast = realAvail !== null && realAvail <= 20;
+                                return (
+                                  <p className={`text-[11px] font-semibold flex items-center gap-1 ${isFillingFast ? 'text-[#F59E0B]' : 'text-[#16A34A]'}`}>
+                                    <span className={`w-1.5 h-1.5 rounded-full ${isFillingFast ? 'bg-[#F59E0B]' : 'bg-[#16A34A]'}`} />
+                                    {realAvail !== null
+                                      ? (isFillingFast
+                                        ? (language === 'mr' ? `लवकर भरत आहे (फक्त ${toMarathiDigits(realAvail)} जागा शिल्लक!)` : `Filling Fast (${realAvail} seats left!)`)
+                                        : (language === 'mr' ? `उपलब्ध (${toMarathiDigits(realAvail)} जागा शिल्लक)` : `Available (${realAvail} seats left)`))
+                                      : (isEvening
+                                        ? (language === 'mr' ? 'लवकर भरत आहे' : 'Filling Fast')
+                                        : (language === 'mr' ? 'उपलब्ध' : 'Available'))}
+                                  </p>
+                                );
+                              })()}
                             </div>
 
                             <div className="flex items-center gap-2">
@@ -1272,8 +1356,8 @@ export default function EventDetailPage() {
                   {(!event.sessions || event.sessions.length === 0 || (event as any).isInformational)
                     ? 'माहितीपर शो'
                     : selectedSession
-                    ? `${new Date(selectedSession.sessionStartTime).toLocaleDateString(language === 'mr' ? 'mr-IN' : 'en-IN', { weekday: 'short', day: 'numeric', month: 'short' })} • ${new Date(selectedSession.sessionStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-                    : (language === 'mr' ? 'शो वेळ निवडा' : 'Select Showtime')}
+                      ? `${new Date(selectedSession.sessionStartTime).toLocaleDateString(language === 'mr' ? 'mr-IN' : 'en-IN', { weekday: 'short', day: 'numeric', month: 'short' })} • ${new Date(selectedSession.sessionStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                      : (language === 'mr' ? 'शो वेळ निवडा' : 'Select Showtime')}
                 </span>
               </p>
               <div className="flex items-center gap-2 text-[10px] text-[#64748B]">
@@ -1292,11 +1376,10 @@ export default function EventDetailPage() {
             <button
               type="button"
               onClick={() => setNotifyMeRegistered(!notifyMeRegistered)}
-              className={`px-5 py-3 rounded-xl font-bold text-xs shadow-md transition-all flex items-center gap-2 shrink-0 cursor-pointer active:scale-95 ${
-                notifyMeRegistered
+              className={`px-5 py-3 rounded-xl font-bold text-xs shadow-md transition-all flex items-center gap-2 shrink-0 cursor-pointer active:scale-95 ${notifyMeRegistered
                   ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                   : 'bg-amber-500 hover:bg-amber-600 text-white'
-              }`}
+                }`}
             >
               <span>{notifyMeRegistered ? 'नोंदणी झाली ✓' : '🔔 मला आठवण करा'}</span>
             </button>

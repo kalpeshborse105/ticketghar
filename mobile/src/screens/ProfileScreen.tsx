@@ -60,6 +60,12 @@ export default function ProfileScreen({ navigation }: any) {
   const isAdmin = userRole === 'admin';
   const isOrganizerOrAdmin = isOrganizer || isAdmin;
 
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      useAuthStore.getState().syncUserProfile().catch(() => null);
+    }
+  }, [isAuthenticated]);
+
   const handleLogout = () => {
     setShowLogoutModal(true);
   };

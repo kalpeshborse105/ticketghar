@@ -326,7 +326,7 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
     let cancelled = false;
     const cached = sessionSeatsCache.get(sessionId);
 
-    if (cached && Date.now() - cached.time < 60000) {
+    if (cached && Date.now() - cached.time < 3000) {
       setSeats(cached.seats);
       setSectionsData(cached.sections || []);
       setLayoutConfig(cached.layoutConfig || null);

@@ -73,7 +73,18 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
 
   const primaryTicket = tickets[0]?.ticketCode;
   const eventTitle = language === 'mr' ? event?.titleMr || event?.title : event?.title;
-  const venueName = language === 'mr' ? event?.venue?.nameMr || event?.venue?.name : event?.venue?.name;
+  const venueObj =
+    event?.venue ||
+    bookingResult?.session?.venue ||
+    bookingResult?.venue ||
+    order?.event?.venue ||
+    order?.session?.venue;
+  const venueName =
+    (language === 'mr' ? venueObj?.nameMr || venueObj?.name : venueObj?.name || venueObj?.nameMr) ||
+    event?.venueName ||
+    bookingResult?.venueName ||
+    (language === 'mr' ? 'बालगंधर्व रंगमंदिर' : 'Bal Gandharva Ranga Mandir');
+  const venueCity = venueObj?.city || event?.venueCity || event?.city || 'पुणे, महाराष्ट्र';
   const seatsList = tickets.map((tk: any) => tk.seatCode).join(', ');
   const ticketUrl = primaryTicket ? getTicketShareUrl(primaryTicket) : '';
 
@@ -248,8 +259,8 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
                   ? event?.categoryMr || 'कार्यक्रम'
                   : event?.category || 'Event'
               }
-              venueName={venueName || 'Venue'}
-              venueCity={event?.venue?.city || 'महाराष्ट्र'}
+              venueName={venueName}
+              venueCity={venueCity}
               showTimeStr={
                 order.sessionStart || bookingResult.session?.sessionStartTime
                   ? formatISTTime(order.sessionStart || bookingResult.session?.sessionStartTime, language, true)

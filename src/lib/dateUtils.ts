@@ -2,13 +2,22 @@
  * Utility for accurate IST (Asia/Kolkata) Date & Time formatting with Marathi period indicators (स., दु., सं., रा.)
  */
 
-const MARATHI_MONTHS_SHORT = [
+export const MARATHI_MONTHS_SHORT = [
   'जाने', 'फेब्रु', 'मार्च', 'एप्रिल', 'मे', 'जून',
-  'जुलै', 'ऑगस्ट', 'सप्टेंबर', 'ऑक्टो', 'नोव्हें', 'डिसें'
+  'जुलै', 'ऑगस्ट', 'सप्टें', 'ऑक्टो', 'नोव्हें', 'डिसें'
 ];
 
-const MARATHI_DAYS_SHORT = [
+export const MARATHI_DAYS_SHORT = [
   'रवि', 'सोम', 'मंगळ', 'बुध', 'गुरु', 'शुक्र', 'शनि'
+];
+
+export const ENGLISH_DAYS_SHORT = [
+  'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'
+];
+
+export const ENGLISH_MONTHS_SHORT = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
 ];
 
 /**

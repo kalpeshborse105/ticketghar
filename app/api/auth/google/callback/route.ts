@@ -83,7 +83,12 @@ export async function GET(request: Request) {
 
     const googleUser = await userRes.json();
     const email = (googleUser.email || '').trim().toLowerCase();
-    const fullName = googleUser.name || googleUser.given_name || email.split('@')[0] || 'User';
+    const googleGivenName = googleUser.given_name || '';
+    const googleFamilyName = googleUser.family_name || '';
+    const combinedGoogleName = [googleGivenName, googleFamilyName].filter(Boolean).join(' ').trim();
+    const cleanGoogleName = googleUser.name || combinedGoogleName || null;
+    const emailFallbackName = email ? email.split('@')[0].replace(/[._\d]+/g, ' ').trim() : 'User';
+    const fullName = cleanGoogleName || (emailFallbackName.charAt(0).toUpperCase() + emailFallbackName.slice(1));
     const avatarUrl = googleUser.picture || null;
     const googleSub = googleUser.id || googleUser.sub || `google-${Date.now()}`;
 
@@ -97,10 +102,17 @@ export async function GET(request: Request) {
       const existing = await db.select().from(users).where(eq(users.email, email)).limit(1);
       if (existing.length > 0) {
         dbUser = existing[0];
+        const isEmailLikeName =
+          !dbUser.fullName ||
+          dbUser.fullName === 'Guest User' ||
+          dbUser.fullName === email.split('@')[0] ||
+          dbUser.fullName.includes('@');
+        const updatedName = cleanGoogleName || (isEmailLikeName ? fullName : dbUser.fullName);
+
         const [updated] = await db
           .update(users)
           .set({
-            fullName: dbUser.fullName && dbUser.fullName !== 'Guest User' ? dbUser.fullName : fullName,
+            fullName: updatedName,
             avatarUrl: avatarUrl || dbUser.avatarUrl,
             status: 'active',
             updatedAt: new Date(),
@@ -142,7 +154,7 @@ export async function GET(request: Request) {
       avatarUrl: dbUser.avatarUrl || avatarUrl,
     };
 
-    // 5. Set customer session cookie
+    // 5. Set customer session cookie & sign token
     await setCustomerSessionCookie(customerUser);
     const sessionToken = signSessionToken(customerUser);
 
@@ -158,7 +170,23 @@ export async function GET(request: Request) {
       );
     }
 
-    return NextResponse.redirect(`${origin}${destination.startsWith('/') ? destination : '/'}`);
+    const redirectUrl = `${origin}${destination.startsWith('/') ? destination : '/'}`;
+    const res = NextResponse.redirect(redirectUrl, 307);
+    res.cookies.set('mahaticket_customer_session', sessionToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 24 * 30,
+    });
+    res.cookies.set('mahaticket_logged_in', '1', {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 24 * 30,
+    });
+    return res;
   } catch (error: any) {
     console.error('Google OAuth callback unhandled exception:', error);
     const origin = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';

@@ -172,6 +172,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalMessage, setAuthModalMessage] = useState<string | undefined>();
+  const [mounted, setMounted] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
@@ -250,6 +251,7 @@ export const Header: React.FC<HeaderProps> = ({
 
       if (!res.ok) {
         setUser(null);
+        if (typeof window !== 'undefined') localStorage.removeItem('mahaticket_user');
         return;
       }
 
@@ -262,14 +264,23 @@ export const Header: React.FC<HeaderProps> = ({
         if (localAvatar && !u.avatarUrl) {
           u = { ...u, avatarUrl: localAvatar };
         }
+        localStorage.setItem('mahaticket_user', JSON.stringify(u));
       }
       setUser(u);
     } catch {
-      setUser(null);
+      // Keep previous local user on temporary network blips
     }
   };
 
   useEffect(() => {
+    setMounted(true);
+    try {
+      const stored = localStorage.getItem('mahaticket_user');
+      if (stored) {
+        setUser(JSON.parse(stored));
+      }
+    } catch {}
+
     checkUserSession();
 
     const handleProfileUpdate = (e: any) => {
@@ -771,7 +782,7 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
 
             {/* User Profile Avatar / Menu */}
-            {user ? (
+            {mounted && user ? (
               <div ref={userMenuRef} className="relative hidden md:block">
                 <button
                   type="button"
@@ -911,7 +922,7 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
 
             {/* Login only when not authenticated */}
-            {!user && (
+            {mounted && !user && (
               <button
                 type="button"
                 onClick={() => {

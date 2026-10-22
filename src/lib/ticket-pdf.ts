@@ -25,16 +25,29 @@ function collectPdf(doc: PDFKit.PDFDocument): Promise<Buffer> {
   });
 }
 
+function toSafePdfString(str: string | null | undefined, fallback: string): string {
+  if (!str) return fallback;
+  // Standard Helvetica only supports WinAnsi / Latin-1. Filter out unsupported characters
+  const cleaned = str.replace(/[^\x20-\x7E]/g, ' ').replace(/\s+/g, ' ').trim();
+  return cleaned || fallback;
+}
+
 /**
  * Generate a high-fidelity BookMyShow-style M-Ticket PDF pass
  */
 export async function generateTicketPdfBuffer(input: TicketPdfInput): Promise<Buffer> {
+  const safeTitle = toSafePdfString(input.eventTitle, 'Live Show Admission');
+  const safeVenue = toSafePdfString(input.venueName, 'Auditorium Venue');
+  const safeAttendee = toSafePdfString(input.attendeeName, 'Valued Customer');
+  const safeShowtime = toSafePdfString(input.showtime, 'Show Time as Scheduled');
+  const safeSeat = toSafePdfString(input.seatCode, 'General / Reserved');
+
   const doc = new PDFDocument({
     size: 'A4',
     margin: 36,
     info: {
       Title: `MahaTicket Admission Pass - ${input.orderNumber}`,
-      Author: 'MahaTicket (महाटिकिट)',
+      Author: 'MahaTicket',
       Subject: 'Official Admission M-Ticket Pass',
       Keywords: 'ticket, bookmyshow, mahaticket, m-ticket, admission',
     },
@@ -62,7 +75,7 @@ export async function generateTicketPdfBuffer(input: TicketPdfInput): Promise<Bu
     .fillColor('#FED7AA')
     .fontSize(9)
     .font('Helvetica')
-    .text('Maharashtra First Event & Cultural Ticket Marketplace', margin + 18, margin + 35);
+    .text('Maharashtra Premier Event & Cultural Ticket Marketplace', margin + 18, margin + 35);
 
   // 2. Ticket Body Card Background
   const cardTop = margin + 54;
@@ -86,7 +99,7 @@ export async function generateTicketPdfBuffer(input: TicketPdfInput): Promise<Bu
     .fillColor('#0F172A')
     .fontSize(18)
     .font('Helvetica-Bold')
-    .text(input.eventTitle, margin + 20, currentY, { width: contentWidth - 40 });
+    .text(safeTitle, margin + 20, currentY, { width: contentWidth - 40 });
 
   currentY += 28;
 
@@ -108,13 +121,13 @@ export async function generateTicketPdfBuffer(input: TicketPdfInput): Promise<Bu
 
   const leftRows: [string, string][] = [
     ['Booking ID', input.orderNumber],
-    ['Show Date & Time', input.showtime],
-    ['Venue', input.venueName],
+    ['Show Date & Time', safeShowtime],
+    ['Venue', safeVenue],
   ];
 
   const rightRows: [string, string][] = [
-    ['Attendee Name', input.attendeeName || 'Guest Attendee'],
-    ['Seats Assigned', input.seatCode],
+    ['Attendee Name', safeAttendee],
+    ['Seats Assigned', safeSeat],
     ['Total Amount', `INR ${(input.faceValuePaise / 100).toFixed(2)} (PAID)`],
   ];
 

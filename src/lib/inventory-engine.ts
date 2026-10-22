@@ -12,6 +12,7 @@ import {
   coupons,
   auditLogs,
   eventSessions,
+  venues,
 } from '../db/schema.ts';
 import { eq, and, sql, inArray, lt, or, ne } from 'drizzle-orm';
 import crypto from 'crypto';
@@ -67,6 +68,7 @@ export async function releaseSeatsHold(
         sessionId,
         result.map((r) => r.seatId)
       ).catch(() => undefined);
+      await cacheDel(sessionSeatsCacheKey(sessionId)).catch(() => undefined);
     }
 
     return result.length;
@@ -97,6 +99,10 @@ export async function releaseExpiredHolds(sessionId: number): Promise<number> {
         )
       )
       .returning({ id: seatInventory.id });
+
+    if (result.length > 0) {
+      await cacheDel(sessionSeatsCacheKey(sessionId)).catch(() => undefined);
+    }
 
     return result.length;
   } catch (error) {
@@ -380,6 +386,12 @@ export async function confirmBookingOrder(params: {
     throw new Error(`Event #${eventId} not found.`);
   }
 
+  let venueRecord: any = null;
+  if (eventRecord.venueId) {
+    const [v] = await db.select().from(venues).where(eq(venues.id, eventRecord.venueId));
+    venueRecord = v;
+  }
+
   let organizerRecord = eventRecord.organizerId 
     ? (await db.select().from(organizers).where(eq(organizers.id, eventRecord.organizerId)))[0]
     : null;
@@ -488,6 +500,38 @@ export async function confirmBookingOrder(params: {
         inArray(seatInventory.seatId, effectiveSeatIds.length > 0 ? effectiveSeatIds : seatIds)
       )
     );
+
+  // 5b. Deduct available_quota in ticket_types for each booked seat
+  for (const s of currentSeats) {
+    if (s.ticketTypeId) {
+      try {
+        await db
+          .update(ticketTypes)
+          .set({
+            availableQuota: sql`GREATEST(0, ${ticketTypes.availableQuota} - 1)`,
+          })
+          .where(eq(ticketTypes.id, s.ticketTypeId));
+      } catch (quotaErr) {
+        console.warn('[Booking] Could not deduct ticket type quota:', quotaErr);
+      }
+    }
+  }
+
+  // 5c. Sync event session status if all seats in session are sold out
+  try {
+    const [availCheck] = await db
+      .select({ count: sql<number>`COUNT(*)::int` })
+      .from(seatInventory)
+      .where(and(eq(seatInventory.sessionId, sessionId), eq(seatInventory.status, 'available')));
+    if (availCheck && Number(availCheck.count) === 0) {
+      await db
+        .update(eventSessions)
+        .set({ status: 'sold_out' })
+        .where(eq(eventSessions.id, sessionId));
+    }
+  } catch (sessStatusErr) {
+    console.warn('[Booking] Could not update session sold_out status:', sessStatusErr);
+  }
 
   // 6. Generate individual tickets with QR codes & HMAC SHA-256 signatures
   const generatedTickets: any[] = [];
@@ -598,10 +642,21 @@ export async function confirmBookingOrder(params: {
     });
   }
 
+  // Invalidate Redis/memory seats cache immediately so newly booked seats are reflected
+  await cacheDel(sessionSeatsCacheKey(sessionId)).catch(() => null);
+
   return {
     order,
     tickets: generatedTickets,
-    event: eventRecord,
+    event: {
+      ...eventRecord,
+      venue: venueRecord,
+    },
+    venue: venueRecord,
+    session: {
+      id: sessionId,
+      venue: venueRecord,
+    },
     organizer: organizerRecord,
     pricing,
   };

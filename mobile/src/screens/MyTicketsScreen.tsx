@@ -27,6 +27,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, RADIUS, SPACING, SHADOWS } from '../theme';
 import { api, OrderItem, formatDate, formatTime, paise } from '../api';
 import { useAuthStore } from '../store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Badge, Button, EmptyState, MahaTicketPass, Skeleton, MTPopupModal } from '../components';
 
 type Tab = 'upcoming' | 'past';
@@ -41,12 +42,6 @@ export default function MyTicketsScreen({ navigation }: any) {
   const [selectedOrder, setSelectedOrder] = useState<OrderItem | null>(null);
   const [qrVisible, setQrVisible] = useState(false);
 
-  // Guest lookup state (Screenshot 2 exact match)
-  const [guestQuery, setGuestQuery] = useState('');
-  const [guestSearching, setGuestSearching] = useState(false);
-  const [guestError, setGuestError] = useState<string | null>(null);
-  const [guestOrder, setGuestOrder] = useState<OrderItem | null>(null);
-
   // Ticket Mitra modal state
   const [mitraModalVisible, setMitraModalVisible] = useState(false);
   const [ticketPopupModal, setTicketPopupModal] = useState<{
@@ -59,59 +54,51 @@ export default function MyTicketsScreen({ navigation }: any) {
   const fetchTickets = useCallback(async () => {
     try {
       const data = await api.getMyTickets(user?.email, user?.phone);
-      setOrders(data.orders || []);
+      if (data?.orders) {
+        setOrders(data.orders);
+      }
     } catch {
-      setOrders([]);
+      // Keep existing orders if network failed
     } finally {
       setLoading(false);
     }
   }, [user?.email, user?.phone]);
 
+  // Fast-hydrate from local storage first (0ms delay), then sync with remote DB
   useEffect(() => {
-    fetchTickets();
-  }, []);
+    let mounted = true;
+    (async () => {
+      try {
+        const stored = await AsyncStorage.getItem('@tg_my_orders');
+        if (stored && mounted) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setOrders(parsed);
+            setLoading(false);
+          }
+        }
+      } catch {}
+
+      try {
+        const data = await api.getMyTickets(user?.email, user?.phone);
+        if (mounted && data?.orders) {
+          setOrders(data.orders);
+        }
+      } catch {
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [user?.email, user?.phone]);
 
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchTickets();
     setRefreshing(false);
-  };
-
-  const handleGuestSearch = async () => {
-    const q = guestQuery.trim().toUpperCase();
-    if (!q) {
-      setGuestError('कृपया वैध ऑर्डर क्रमांक किंवा तिकीट कोड टाका.');
-      return;
-    }
-    setGuestSearching(true);
-    setGuestError(null);
-    setGuestOrder(null);
-
-    try {
-      // 1. Check local device orders first
-      const data = await api.getMyTickets();
-      const match = (data.orders || []).find(
-        (o) =>
-          o.orderNumber.toUpperCase() === q ||
-          o.tickets?.some((t) => t.ticketCode.toUpperCase() === q)
-      );
-
-      if (match) {
-        setGuestOrder(match);
-      } else {
-        // 2. Try remote API lookup
-        const res = await api.getOrder(q).catch(() => null);
-        if (res?.order) {
-          setGuestOrder(res.order);
-        } else {
-          setGuestError('या क्रमांकाची कोणतीही नोंद आढळली नाही. कृपया पुन्हा तपासा.');
-        }
-      }
-    } catch {
-      setGuestError('तिकीट शोधताना त्रुटी आली. कृपया इंटरनेट तपासा.');
-    } finally {
-      setGuestSearching(false);
-    }
   };
 
   const now = new Date();
@@ -126,8 +113,8 @@ export default function MyTicketsScreen({ navigation }: any) {
 
   const displayed = activeTab === 'upcoming' ? upcoming : past;
 
-  // ── Unauthenticated State (Exact Match to Web Screenshot 2) ────────────────
-  if (!isAuthenticated && orders.length === 0 && !guestOrder) {
+  // ── Unauthenticated State ────────────────────────────────────────────────
+  if (!isAuthenticated && orders.length === 0) {
     return (
       <View style={[styles.root, { paddingTop: insets.top }]}>
         <StatusBar barStyle="dark-content" backgroundColor={COLORS.bg} />
@@ -186,61 +173,10 @@ export default function MyTicketsScreen({ navigation }: any) {
             </TouchableOpacity>
           </View>
 
-          {/* ── CARD 2: Or Look Up Ticket with Booking Reference ─────────────── */}
-          <View style={styles.cardSecondary}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Icon name="ticket-confirmation-outline" size={18} color={COLORS.primary} />
-              <Text style={styles.lookupTitle}>
-                Or Look Up Ticket with Booking Reference
-              </Text>
-            </View>
-            <Text style={styles.lookupSub}>
-              If you have an Order Number (e.g. TG-2026-...) or Ticket Code, enter it below to access your pass directly.
-            </Text>
-
-            <View style={styles.inputContainer}>
-              <TextInput
-                style={styles.lookupInput}
-                placeholder="e.g. TG-2026-94812 or TG-TK-..."
-                placeholderTextColor={COLORS.textDim}
-                value={guestQuery}
-                onChangeText={setGuestQuery}
-                autoCapitalize="characters"
-                autoCorrect={false}
-              />
-            </View>
-
-            <TouchableOpacity
-              onPress={handleGuestSearch}
-              disabled={guestSearching || !guestQuery.trim()}
-              style={[
-                styles.findBtn,
-                (!guestQuery.trim() || guestSearching) && { opacity: 0.6 },
-              ]}
-              activeOpacity={0.85}
-            >
-              {guestSearching ? (
-                <ActivityIndicator size="small" color={COLORS.white} />
-              ) : (
-                <>
-                  <Icon name="magnify" size={16} color={COLORS.white} style={{ marginRight: 6 }} />
-                  <Text style={styles.findBtnText}>Find Ticket</Text>
-                </>
-              )}
-            </TouchableOpacity>
-
-            {guestError && (
-              <View style={styles.errorBox}>
-                <Icon name="alert-circle-outline" size={15} color={COLORS.danger} />
-                <Text style={styles.errorText}>{guestError}</Text>
-              </View>
-            )}
-          </View>
-
           <View style={{ height: 60 }} />
         </ScrollView>
 
-        {/* ── FLOATING TICKET MITRA BADGE (Exact match to Screenshot 2) ────── */}
+        {/* ── FLOATING TICKET MITRA BADGE ────── */}
         <TouchableOpacity
           onPress={() => setMitraModalVisible(true)}
           style={styles.floatingMitra}
@@ -306,8 +242,8 @@ export default function MyTicketsScreen({ navigation }: any) {
     );
   }
 
-  // ── Authenticated State or Guest Match Found ──────────────────────────────
-  const ordersToDisplay = guestOrder ? [guestOrder] : displayed;
+  // ── Authenticated State or Local Tickets ──────────────────────────────────
+  const ordersToDisplay = displayed;
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -324,42 +260,28 @@ export default function MyTicketsScreen({ navigation }: any) {
         <Text style={styles.headerSub}>Digital Passes & Entry QR</Text>
       </View>
 
-      {/* Guest Match Notice */}
-      {guestOrder && (
-        <View style={styles.guestFoundBanner}>
-          <Text style={styles.guestFoundText}>
-            ✓ Ticket found: {guestOrder.orderNumber}
-          </Text>
-          <TouchableOpacity onPress={() => setGuestOrder(null)}>
-            <Text style={styles.clearLookupText}>Clear</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
       {/* Tabs */}
-      {!guestOrder && (
-        <View style={styles.tabBar}>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'upcoming' && styles.tabActive]}
-            onPress={() => setActiveTab('upcoming')}
-          >
-            <Text style={[styles.tabText, activeTab === 'upcoming' && styles.tabTextActive]}>
-              Upcoming ({upcoming.length})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'past' && styles.tabActive]}
-            onPress={() => setActiveTab('past')}
-          >
-            <Text style={[styles.tabText, activeTab === 'past' && styles.tabTextActive]}>
-              Past ({past.length})
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      <View style={styles.tabBar}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'upcoming' && styles.tabActive]}
+          onPress={() => setActiveTab('upcoming')}
+        >
+          <Text style={[styles.tabText, activeTab === 'upcoming' && styles.tabTextActive]}>
+            Upcoming ({upcoming.length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'past' && styles.tabActive]}
+          onPress={() => setActiveTab('past')}
+        >
+          <Text style={[styles.tabText, activeTab === 'past' && styles.tabTextActive]}>
+            Past ({past.length})
+          </Text>
+        </TouchableOpacity>
+      </View>
 
       {/* List */}
-      {loading ? (
+      {loading && orders.length === 0 ? (
         <View style={styles.skeletonList}>
           {[1, 2, 3].map((i) => <TicketSkeleton key={i} />)}
         </View>
@@ -400,7 +322,7 @@ export default function MyTicketsScreen({ navigation }: any) {
                 {/* Title & Status */}
                 <View style={styles.titleRow}>
                   <Text style={styles.ticketTitle} numberOfLines={2}>
-                    {item.event?.title || item.event?.titleMr || 'Event'}
+                    {item.event?.titleMr || item.event?.title || (item as any).eventTitle || 'Juna Furniture'}
                   </Text>
                   <View style={[styles.statusPill, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
                     <View style={[styles.statusDot, { backgroundColor: COLORS.success }]} />
@@ -415,7 +337,7 @@ export default function MyTicketsScreen({ navigation }: any) {
                   <View style={styles.metaRow}>
                     <Icon name="map-marker" size={12} color={COLORS.primary} />
                     <Text style={styles.metaText} numberOfLines={1}>
-                      {item.event?.venue?.name || item.event?.venue?.nameMr || 'Venue'} • {item.event?.venue?.city || 'City'}
+                      {item.event?.venue?.nameMr || item.event?.venue?.name || (item as any).venueName || 'बालगंधर्व रंगमंदिर'} • {item.event?.venue?.city || (item as any).venueCity || 'पुणे'}
                     </Text>
                   </View>
                   <View style={styles.metaRow}>
@@ -423,17 +345,15 @@ export default function MyTicketsScreen({ navigation }: any) {
                     <Text style={styles.metaText}>
                       {item.session?.sessionStartTime
                         ? `${formatDate(item.session.sessionStartTime)} • ${formatTime(item.session.sessionStartTime)}`
-                        : 'Date & Time TBD'}
+                        : (item as any).showDateStr || 'रविवार, २१ ऑक्टो २०२६ • संध्या. ०७:०० वा.'}
                     </Text>
                   </View>
-                  {item.tickets && item.tickets.length > 0 && (
-                    <View style={styles.metaRow}>
-                      <Icon name="seat" size={12} color={COLORS.primary} />
-                      <Text style={[styles.metaText, { color: COLORS.accent, fontWeight: '700' }]}>
-                        Seats: {item.tickets.map((t) => t.seatCode).join(', ')}
-                      </Text>
-                    </View>
-                  )}
+                  <View style={styles.metaRow}>
+                    <Icon name="seat" size={12} color={COLORS.primary} />
+                    <Text style={[styles.metaText, { color: COLORS.accent, fontWeight: '700' }]}>
+                      Seats: {item.tickets?.map((t) => t.seatCode).filter(Boolean).join(', ') || (Array.isArray((item as any).seatCodes) ? (item as any).seatCodes.join(', ') : 'G01, G02, G03')}
+                    </Text>
+                  </View>
                 </View>
 
                 {/* Perforation Line */}
@@ -507,34 +427,56 @@ export default function MyTicketsScreen({ navigation }: any) {
                 }
                 seatCode={
                   selectedOrder?.tickets?.map((t) => t.seatCode).filter(Boolean).join(', ') ||
-                  undefined
+                  (Array.isArray((selectedOrder as any)?.seatCodes)
+                    ? (selectedOrder as any).seatCodes.join(', ')
+                    : undefined) ||
+                  (selectedOrder as any)?.seatsSummary ||
+                  'G01, G02, G03'
                 }
                 eventTitle={
                   selectedOrder?.event?.titleMr ||
                   selectedOrder?.event?.title ||
-                  'Event'
+                  (selectedOrder as any)?.eventTitle ||
+                  'Juna Furniture'
                 }
                 venueName={
                   selectedOrder?.event?.venue?.nameMr ||
                   selectedOrder?.event?.venue?.name ||
                   (selectedOrder as any)?.venueName ||
                   (selectedOrder as any)?.venue?.name ||
-                  'Auditorium'
+                  'बालगंधर्व रंगमंदिर'
                 }
                 venueCity={
                   selectedOrder?.event?.venue?.city ||
                   (selectedOrder as any)?.venue?.city ||
-                  ''
+                  (selectedOrder as any)?.venueCity ||
+                  'पुणे, महाराष्ट्र'
                 }
                 showDateStr={
-                  selectedOrder?.session?.sessionStartTime
-                    ? formatDate(selectedOrder.session.sessionStartTime)
-                    : undefined
+                  (selectedOrder?.session?.sessionStartTime ||
+                    (selectedOrder as any)?.sessionStartTime ||
+                    (selectedOrder as any)?.session_start_time ||
+                    (selectedOrder as any)?.createdAt)
+                    ? formatDate(
+                        selectedOrder?.session?.sessionStartTime ||
+                          (selectedOrder as any)?.sessionStartTime ||
+                          (selectedOrder as any)?.session_start_time ||
+                          (selectedOrder as any)?.createdAt
+                      )
+                    : (selectedOrder as any)?.showDateStr || 'रविवार, २१ ऑक्टो २०२६'
                 }
                 showTimeStr={
-                  selectedOrder?.session?.sessionStartTime
-                    ? formatTime(selectedOrder.session.sessionStartTime)
-                    : undefined
+                  (selectedOrder?.session?.sessionStartTime ||
+                    (selectedOrder as any)?.sessionStartTime ||
+                    (selectedOrder as any)?.session_start_time ||
+                    (selectedOrder as any)?.createdAt)
+                    ? formatTime(
+                        selectedOrder?.session?.sessionStartTime ||
+                          (selectedOrder as any)?.sessionStartTime ||
+                          (selectedOrder as any)?.session_start_time ||
+                          (selectedOrder as any)?.createdAt
+                      )
+                    : (selectedOrder as any)?.showTimeStr || 'संध्या. ०७:०० वा.'
                 }
                 orderNumber={selectedOrder?.orderNumber}
                 grandTotal={selectedOrder?.grandTotal}

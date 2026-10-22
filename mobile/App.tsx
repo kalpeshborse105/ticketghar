@@ -11,10 +11,13 @@ import Toast from 'react-native-toast-message';
 import RootNavigator from './src/navigation';
 import { COLORS } from './src/theme/colors';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
-import { useAuthStore } from './src/store';
+import { useAuthStore, useEventsStore } from './src/store';
 
 export default function App() {
   useEffect(() => {
+    // 0ms instant startup cache hydration
+    useAuthStore.getState().loadStoredAuth().catch(() => null);
+    useEventsStore.getState().loadCachedEvents().catch(() => null);
     const handleUrl = (event: { url: string }) => {
       const url = event?.url;
       if (!url || !url.startsWith('mahaticket://')) return;

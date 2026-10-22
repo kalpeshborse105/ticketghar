@@ -473,6 +473,9 @@ async function seed() {
 
   // 10. Initial Settlement Record in Ledger
   console.log('Seeding settlement ledger...');
+  const ticketFaceVal = 100000;
+  const platFee = 4000;
+  const tax = 720;
   const orgComm = Math.round((ticketFaceVal * orgNatyasampada.commissionRate) / 10000); // 5% = ₹50
   const netPayable = ticketFaceVal - orgComm; // ₹950
 

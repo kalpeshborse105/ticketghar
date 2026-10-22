@@ -735,6 +735,10 @@ async function refreshEventsCacheFromSupabase(): Promise<EventItem[]> {
 
 // ─── API Methods ─────────────────────────────────────────────────────────────
 
+// Fast In-Memory Query Caching (Instant screen loads, zero network delay on revisit)
+const eventsQueryCache = new Map<string, { data: EventItem[]; expires: number }>();
+const singleEventCache = new Map<number, { data: EventItem; expires: number }>();
+
 export const api = {
   // Health
   health: () => request<{ status: string }>('/api/health'),
@@ -746,18 +750,26 @@ export const api = {
     search?: string;
     limit?: number;
   }): Promise<{ events: EventItem[] }> => {
-    // Prefer live API, then in-memory / disk cache (no demo/static catalog)
+    const parts: string[] = [];
+    if (params?.city && !isAllCitiesValue(params.city)) parts.push(`city=${encodeURIComponent(params.city)}`);
+    if (params?.category && params.category !== 'all') parts.push(`category=${encodeURIComponent(params.category)}`);
+    if (params?.search?.trim()) parts.push(`search=${encodeURIComponent(params.search.trim())}`);
+    if (params?.limit) parts.push(`limit=${encodeURIComponent(String(params.limit))}`);
+    const cacheKey = parts.join('&');
+
+    // Instant return if queried recently (12s TTL)
+    const now = Date.now();
+    const cached = eventsQueryCache.get(cacheKey);
+    if (cached && cached.expires > now && cached.data.length > 0) {
+      return { events: cached.data };
+    }
+
     try {
-      const qs = new URLSearchParams();
-      if (params?.city && !isAllCitiesValue(params.city)) qs.set('city', params.city);
-      if (params?.category && params.category !== 'all') qs.set('category', params.category);
-      if (params?.search?.trim()) qs.set('search', params.search.trim());
-      if (params?.limit) qs.set('limit', String(params.limit));
-      const q = qs.toString();
-      const res = await request<{ events: EventItem[] }>(`/api/events${q ? `?${q}` : ''}`);
+      const res = await request<{ events: EventItem[] }>(`/api/events${cacheKey ? `?${cacheKey}` : ''}`);
       if (Array.isArray(res?.events) && res.events.length > 0) {
         const mapped = res.events.map(normalizeEvent);
         inMemoryEvents = mapped;
+        eventsQueryCache.set(cacheKey, { data: mapped, expires: now + 12000 });
         AsyncStorage.setItem(CACHE_EVENTS_KEY, JSON.stringify(mapped)).catch(() => null);
         return { events: mapped };
       }
@@ -821,11 +833,19 @@ export const api = {
   },
 
   getEvent: async (id: number): Promise<{ event: EventItem }> => {
+    const now = Date.now();
+    const cached = singleEventCache.get(id);
+    if (cached && cached.expires > now) {
+      return { event: cached.data };
+    }
+
     // 1. Try real server API endpoint first (full PostgreSQL join with sessions, ticket types, venue)
     try {
       const res = await request<{ event: EventItem }>(`/api/events/${id}`);
       if (res?.event?.id) {
-        return { event: normalizeEvent(res.event) };
+        const norm = normalizeEvent(res.event);
+        singleEventCache.set(id, { data: norm, expires: now + 12000 });
+        return { event: norm };
       }
     } catch {}
 
@@ -1210,9 +1230,14 @@ export const api = {
       try {
         const myStr = await AsyncStorage.getItem('@tg_my_orders');
         const myOrders = myStr ? JSON.parse(myStr) : [];
-        myOrders.unshift(orderPayload);
-        await AsyncStorage.setItem('@tg_my_orders', JSON.stringify(myOrders.slice(0, 30)));
+        const orderKey = String(orderPayload.orderNumber || orderPayload.id);
+        const filtered = Array.isArray(myOrders)
+          ? myOrders.filter((o: any) => String(o.orderNumber || o.id) !== orderKey)
+          : [];
+        filtered.unshift(orderPayload);
+        await AsyncStorage.setItem('@tg_my_orders', JSON.stringify(filtered.slice(0, 30)));
       } catch {}
+      eventsQueryCache.clear();
       return res;
     }
     throw new Error(res?.error || 'Payment verification failed');
@@ -1243,6 +1268,11 @@ export const api = {
       return res;
     }
     throw new Error(res?.error || 'Booking confirmation failed');
+  },
+
+  // User Profile
+  getProfile: async (): Promise<{ user?: any; token?: string }> => {
+    return request<{ user?: any; token?: string }>('/api/auth/flow/session');
   },
 
   // Orders / Tickets
@@ -1703,8 +1733,6 @@ export const api = {
       '/api/auth/otp/verify',
       { method: 'POST', body: JSON.stringify({ phone, otp }) }
     ),
-
-  getProfile: () => request<{ user: any }>('/api/auth/me'),
 
   logout: () =>
     request<{ success: boolean }>('/api/auth/logout', { method: 'POST' }),
