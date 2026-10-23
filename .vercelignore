@@ -1,0 +1,7 @@
+mobile
+.next
+.next_prod
+*.apk
+agent-transcripts
+scripts/_vercel-push-env.mjs
+scripts/_ensure-rzp-secrets.mjs

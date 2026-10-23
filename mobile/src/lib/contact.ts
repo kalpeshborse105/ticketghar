@@ -4,7 +4,7 @@
  */
 import { Linking, Platform, ToastAndroid } from 'react-native';
 
-export const WEB_ORIGIN = 'https://mahaticket.kalpkrutinfotech.com';
+export const WEB_ORIGIN = 'https://mahaticket.vercel.app';
 export const WEB_CONTACT_URL = `${WEB_ORIGIN}/contact`;
 export const WEB_ADMIN_URL = `${WEB_ORIGIN}/admin`;
 export const PARTNER_API_URL = `${WEB_ORIGIN}/api/partner-with-us`;

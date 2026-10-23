@@ -964,7 +964,7 @@ export default function HomeScreen({ navigation }: any) {
                 : 'Reach theatre lovers across Maharashtra. Zero setup fee.'}
             </Text>
             <TouchableOpacity
-              onPress={() => Linking.openURL('https://mahaticket.kalpkrutinfotech.com/contact').catch(() => null)}
+              onPress={() => Linking.openURL('https://mahaticket.vercel.app/contact').catch(() => null)}
               style={styles.organizerBtn}
             >
               <Text style={styles.organizerBtnText}>

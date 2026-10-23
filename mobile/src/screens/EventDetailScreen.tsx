@@ -227,7 +227,7 @@ export default function EventDetailScreen({ navigation, route }: any) {
   const handleShare = async () => {
     if (!event) return;
     try {
-      const shareUrl = `https://mahaticket.kalpkrutinfotech.com/events/${event.id}`;
+      const shareUrl = `https://mahaticket.vercel.app/events/${event.id}`;
       await Share.share({
         title: displayTitle(event),
         message: `🎭 महाटिकिट वरून "${displayTitle(event)}" तपासा आणि आपली तिकिटे बुक करा:\n${shareUrl}`,

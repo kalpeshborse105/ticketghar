@@ -13,7 +13,8 @@ const SUPABASE_ANON_KEY =
 
 // ─── Base URL Resolution (Dev server fallback) ───────────────────────────────
 
-const PROD_API_URL = 'https://mahaticket.kalpkrutinfotech.com';
+// Live API (Vercel production with working Razorpay keys + ticket session payload)
+const PROD_API_URL = 'https://mahaticket.vercel.app';
 const DEV_URLS = [
   PROD_API_URL,
   'http://192.168.31.154:3000',
@@ -29,17 +30,27 @@ export async function resolveApiBase(): Promise<string> {
   const stored =
     (await AsyncStorage.getItem(STORAGE_KEY).catch(() => null)) ||
     (await AsyncStorage.getItem('@tg_api_base').catch(() => null));
-  if (stored) {
+  // Migrate away from legacy host with broken Razorpay env
+  const storedOk =
+    stored &&
+    !/kalpkrutinfotech\.com/i.test(stored) &&
+    stored.replace(/\/$/, '') !== PROD_API_URL
+      ? stored
+      : null;
+  if (storedOk) {
     try {
       const ctrl = new AbortController();
       const t = setTimeout(() => ctrl.abort(), 1200);
-      const res = await fetch(`${stored}/api/health`, { signal: ctrl.signal });
+      const res = await fetch(`${storedOk}/api/health`, { signal: ctrl.signal });
       clearTimeout(t);
       if (res.ok) {
-        resolvedBase = stored;
-        return stored;
+        resolvedBase = storedOk;
+        return storedOk;
       }
     } catch {}
+  } else if (stored && /kalpkrutinfotech\.com/i.test(stored)) {
+    await AsyncStorage.removeItem(STORAGE_KEY).catch(() => null);
+    await AsyncStorage.removeItem('@tg_api_base').catch(() => null);
   }
 
   for (const url of DEV_URLS) {
