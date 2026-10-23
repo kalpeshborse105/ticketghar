@@ -14,7 +14,7 @@ import {
   eventSessions,
   venues,
 } from '../db/schema.ts';
-import { eq, and, sql, inArray, lt, or, ne } from 'drizzle-orm';
+import { eq, and, sql, inArray, lt, or, ne, isNull, gte } from 'drizzle-orm';
 import crypto from 'crypto';
 import QRCode from 'qrcode';
 import { PricingBreakdown } from './types.ts';
@@ -34,7 +34,14 @@ function getTicketSecret(): string {
 
 const TICKET_SECRET = getTicketSecret();
 const HOLD_DURATION_MINUTES = 5;
+export const CHECKOUT_HOLD_EXTENSION_MINUTES = 10;
 const MAX_SEATS_PER_BOOKING = 5;
+export {
+  generateSecureHoldToken,
+  isValidHoldTokenFormat,
+  HOLD_TOKEN_PREFIX,
+} from './hold-token.ts';
+import { generateSecureHoldToken } from './hold-token.ts';
 
 /**
  * Immediately release held seats for a user session/token on back/cancel/discard
@@ -45,15 +52,14 @@ export async function releaseSeatsHold(
   seatIds?: number[]
 ): Promise<number> {
   try {
-    const userMatchConditions = [eq(seatInventory.heldByUserId, holdToken)];
-    if (holdToken.startsWith('test_') || holdToken.startsWith('guest_') || holdToken.startsWith('guest-')) {
-      userMatchConditions.push(eq(seatInventory.heldByUserId, 'checkout_user'));
+    if (!holdToken || !String(holdToken).trim()) {
+      return 0;
     }
 
     const conditions = [
       eq(seatInventory.sessionId, sessionId),
       eq(seatInventory.status, 'held'),
-      or(...userMatchConditions),
+      eq(seatInventory.heldByUserId, String(holdToken)),
     ];
     if (seatIds && seatIds.length > 0) {
       conditions.push(inArray(seatInventory.seatId, seatIds));
@@ -183,134 +189,238 @@ export async function calculatePricing(
 }
 
 /**
- * Atomically create a temporary reservation/hold for selected seats
+ * Atomically create a temporary reservation/hold for selected seats (single DB transaction).
  */
 export async function createTemporarySeatHold(params: {
   sessionId: number;
   seatIds: number[];
-  userIdStr: string;
+  /** @deprecated Ignored — hold ownership is the server-issued holdToken only */
+  userIdStr?: string;
 }) {
-  const { sessionId, seatIds, userIdStr } = params;
+  const { sessionId, seatIds } = params;
 
   if (!seatIds || seatIds.length === 0) {
     throw new Error('Please select at least one seat.');
   }
 
-  if (seatIds.length > MAX_SEATS_PER_BOOKING) {
+  const sortedSeatIds = [...seatIds].sort((a, b) => a - b);
+
+  if (sortedSeatIds.length > MAX_SEATS_PER_BOOKING) {
     throw new Error(`Maximum ${MAX_SEATS_PER_BOOKING} seats allowed per booking. Please select up to 5 seats.`);
   }
 
-  // 1. First sweep away expired holds for this session
-  await releaseExpiredHolds(sessionId);
-
-  // 2. Fetch target event and session details
-  const sessionInventories = await db
-    .select({
-      invId: seatInventory.id,
-      seatId: seatInventory.seatId,
-      status: seatInventory.status,
-      heldBy: seatInventory.heldByUserId,
-      holdExpires: seatInventory.holdExpiresAt,
-      ticketTypeId: seatInventory.ticketTypeId,
-      price: ticketTypes.price,
-      seatCode: seats.seatCode,
-      tier: seats.tier,
-      sectionId: seats.sectionId,
-    })
-    .from(seatInventory)
-    .innerJoin(ticketTypes, eq(seatInventory.ticketTypeId, ticketTypes.id))
-    .innerJoin(seats, eq(seatInventory.seatId, seats.id))
-    .where(
-      and(
-        eq(seatInventory.sessionId, sessionId),
-        inArray(seatInventory.seatId, seatIds)
-      )
-    );
-
-  if (sessionInventories.length < seatIds.length) {
-    throw new Error('One or more selected seats are not available in this show. Please select valid seats.');
-  }
-
-  const effectiveSeatIds = sessionInventories.map((i) => i.seatId);
-
-  // 3. Concurrency check: Ensure none of the seats are booked or held by another user
+  const holdToken = generateSecureHoldToken();
+  const expiresAt = new Date(Date.now() + HOLD_DURATION_MINUTES * 60 * 1000);
   const now = new Date();
-  for (const inv of sessionInventories) {
-    if (inv.status === 'booked') {
-      throw new Error(`Seat ${inv.seatCode} is already booked.`);
+
+  const txResult = await db.transaction(async (tx) => {
+    await tx
+      .update(seatInventory)
+      .set({
+        status: 'available',
+        heldByUserId: null,
+        holdExpiresAt: null,
+      })
+      .where(
+        and(
+          eq(seatInventory.sessionId, sessionId),
+          eq(seatInventory.status, 'held'),
+          lt(seatInventory.holdExpiresAt, now)
+        )
+      );
+
+    const sessionInventories = await tx
+      .select({
+        invId: seatInventory.id,
+        seatId: seatInventory.seatId,
+        status: seatInventory.status,
+        heldBy: seatInventory.heldByUserId,
+        holdExpires: seatInventory.holdExpiresAt,
+        ticketTypeId: seatInventory.ticketTypeId,
+        price: ticketTypes.price,
+        seatCode: seats.seatCode,
+        tier: seats.tier,
+        sectionId: seats.sectionId,
+      })
+      .from(seatInventory)
+      .innerJoin(ticketTypes, eq(seatInventory.ticketTypeId, ticketTypes.id))
+      .innerJoin(seats, eq(seatInventory.seatId, seats.id))
+      .where(
+        and(
+          eq(seatInventory.sessionId, sessionId),
+          inArray(seatInventory.seatId, sortedSeatIds)
+        )
+      );
+
+    if (sessionInventories.length < sortedSeatIds.length) {
+      throw new Error('One or more selected seats are not available in this show. Please select valid seats.');
     }
-    if (inv.status === 'held' && inv.heldBy !== userIdStr) {
-      if (inv.holdExpires && new Date(inv.holdExpires) > now) {
-        throw new Error(`Seat ${inv.seatCode} is currently held by another user.`);
+
+    for (const inv of sessionInventories) {
+      if (inv.status === 'booked') {
+        throw new Error(`Seat ${inv.seatCode} is already booked.`);
+      }
+      if (inv.status === 'held' && inv.heldBy !== holdToken) {
+        if (inv.holdExpires && new Date(inv.holdExpires) > now) {
+          throw new Error(`Seat ${inv.seatCode} is currently held by another user.`);
+        }
       }
     }
-  }
 
-  // 4. Race-safe hold: only transition available → held (or re-hold own expired/active hold)
-  const expiresAt = new Date(Date.now() + HOLD_DURATION_MINUTES * 60 * 1000);
-
-  const heldRows = await db
-    .update(seatInventory)
-    .set({
-      status: 'held',
-      heldByUserId: userIdStr,
-      holdExpiresAt: expiresAt,
-    })
-    .where(
-      and(
-        eq(seatInventory.sessionId, sessionId),
-        inArray(seatInventory.seatId, effectiveSeatIds),
-        or(
-          eq(seatInventory.status, 'available'),
-          lt(seatInventory.holdExpiresAt, now),
-          and(eq(seatInventory.status, 'held'), eq(seatInventory.heldByUserId, userIdStr))
+    const heldRows = await tx
+      .update(seatInventory)
+      .set({
+        status: 'held',
+        heldByUserId: holdToken,
+        holdExpiresAt: expiresAt,
+      })
+      .where(
+        and(
+          eq(seatInventory.sessionId, sessionId),
+          inArray(seatInventory.seatId, sortedSeatIds),
+          or(
+            eq(seatInventory.status, 'available'),
+            lt(seatInventory.holdExpiresAt, now),
+            and(eq(seatInventory.status, 'held'), eq(seatInventory.heldByUserId, holdToken))
+          ),
+          ne(seatInventory.status, 'booked')
         )
       )
-    )
-    .returning({ seatId: seatInventory.seatId });
+      .returning({ seatId: seatInventory.seatId });
 
-  if (heldRows.length < seatIds.length) {
-    if (heldRows.length > 0) {
-      await db
-        .update(seatInventory)
-        .set({ status: 'available', heldByUserId: null, holdExpiresAt: null })
-        .where(
-          and(
-            eq(seatInventory.sessionId, sessionId),
-            inArray(seatInventory.seatId, heldRows.map((r) => r.seatId)),
-            eq(seatInventory.heldByUserId, userIdStr)
-          )
-        );
+    if (heldRows.length < sortedSeatIds.length) {
+      throw new Error(
+        'One or more selected seats were just reserved by another customer. Please select different seats.'
+      );
     }
-    throw new Error('One or more selected seats were just reserved by another customer. Please select different seats.');
-  }
 
-  // Compute face value total (server-authoritative from ticket_types)
-  const faceValueTotal = sessionInventories.reduce((sum, item) => sum + item.price, 0);
+    const faceValueTotal = sessionInventories.reduce((sum, item) => sum + item.price, 0);
 
-  // Fast path cache (Redis / memory) — DB remains authoritative
-  const heldIds = heldRows.map((r) => r.seatId);
-  await markSeatsHeldInCache(
-    sessionId,
-    heldIds.length > 0 ? heldIds : effectiveSeatIds,
-    userIdStr,
-    HOLD_DURATION_MINUTES * 60
-  ).catch(() => undefined);
+    return {
+      heldSeatIds: heldRows.map((r) => r.seatId).sort((a, b) => a - b),
+      heldSeats: sessionInventories.map((i) => ({
+        seatId: i.seatId,
+        seatCode: i.seatCode,
+        price: i.price,
+        tier: i.tier,
+      })),
+      faceValueTotal,
+    };
+  });
+
+  const heldIds = txResult.heldSeatIds;
+  await markSeatsHeldInCache(sessionId, heldIds, holdToken, HOLD_DURATION_MINUTES * 60).catch(
+    () => undefined
+  );
   await cacheDel(sessionSeatsCacheKey(sessionId)).catch(() => undefined);
 
   return {
-    holdToken: userIdStr,
-    heldSeatIds: heldIds.length > 0 ? heldIds : effectiveSeatIds,
-    heldSeats: sessionInventories.map((i) => ({
-      seatId: i.seatId,
-      seatCode: i.seatCode,
-      price: i.price,
-      tier: i.tier,
-    })),
+    holdToken,
+    heldSeatIds: heldIds,
+    heldSeats: txResult.heldSeats,
     holdExpiresAt: expiresAt.toISOString(),
     expiresInSeconds: HOLD_DURATION_MINUTES * 60,
-    faceValueTotal,
+    faceValueTotal: txResult.faceValueTotal,
   };
+}
+
+/**
+ * Extend checkout hold and bind seats to a pending platform order (transactional, token-gated).
+ */
+export async function extendHoldForCheckout(params: {
+  sessionId: number;
+  seatIds: number[];
+  holdToken: string;
+  pendingOrderId: number;
+}): Promise<{ extendedCount: number; holdExpiresAt: Date }> {
+  const { sessionId, holdToken, pendingOrderId } = params;
+  const sortedSeatIds = [...params.seatIds].sort((a, b) => a - b);
+  const now = new Date();
+  const holdExpiresAt = new Date(Date.now() + CHECKOUT_HOLD_EXTENSION_MINUTES * 60 * 1000);
+
+  const extendedCount = await db.transaction(async (tx) => {
+    await tx
+      .update(seatInventory)
+      .set({
+        status: 'available',
+        heldByUserId: null,
+        holdExpiresAt: null,
+      })
+      .where(
+        and(
+          eq(seatInventory.sessionId, sessionId),
+          eq(seatInventory.status, 'held'),
+          lt(seatInventory.holdExpiresAt, now)
+        )
+      );
+
+    const rows = await tx
+      .select({
+        seatId: seatInventory.seatId,
+        status: seatInventory.status,
+        heldBy: seatInventory.heldByUserId,
+        holdExpires: seatInventory.holdExpiresAt,
+      })
+      .from(seatInventory)
+      .where(
+        and(
+          eq(seatInventory.sessionId, sessionId),
+          inArray(seatInventory.seatId, sortedSeatIds)
+        )
+      );
+
+    if (rows.length < sortedSeatIds.length) {
+      throw new Error('One or more selected seats are not available. Please refresh the seat map.');
+    }
+
+    for (const seat of rows) {
+      if (seat.status === 'booked') {
+        throw new Error('One or more seats are already booked');
+      }
+      const isExpired = seat.holdExpires && new Date(seat.holdExpires) < now;
+      if (seat.status === 'held' && !isExpired && seat.heldBy !== holdToken) {
+        throw new Error('One or more seats are currently held by another customer');
+      }
+      if (seat.status === 'available') {
+        throw new Error('Seat hold expired or missing. Please select seats again.');
+      }
+    }
+
+    const updated = await tx
+      .update(seatInventory)
+      .set({
+        status: 'held',
+        heldByUserId: holdToken,
+        holdExpiresAt,
+        orderId: pendingOrderId,
+      })
+      .where(
+        and(
+          eq(seatInventory.sessionId, sessionId),
+          inArray(seatInventory.seatId, sortedSeatIds),
+          eq(seatInventory.status, 'held'),
+          eq(seatInventory.heldByUserId, holdToken),
+          or(isNull(seatInventory.holdExpiresAt), gte(seatInventory.holdExpiresAt, now))
+        )
+      )
+      .returning({ id: seatInventory.id });
+
+    if (updated.length < sortedSeatIds.length) {
+      throw new Error('One or more seats are currently held by another customer');
+    }
+
+    return updated.length;
+  });
+
+  await markSeatsHeldInCache(
+    sessionId,
+    sortedSeatIds,
+    holdToken,
+    CHECKOUT_HOLD_EXTENSION_MINUTES * 60
+  ).catch(() => undefined);
+  await cacheDel(sessionSeatsCacheKey(sessionId)).catch(() => undefined);
+
+  return { extendedCount, holdExpiresAt };
 }
 
 /**
@@ -510,8 +620,8 @@ export async function confirmBookingOrder(params: {
     order = newOrder;
   }
 
-  // 5. Update seat inventory to 'booked' and attach orderId
-  await db
+  // 5. Update seat inventory to 'booked' (never overwrite seats booked by another order)
+  const bookedSeatUpdate = await db
     .update(seatInventory)
     .set({
       status: 'booked',
@@ -522,9 +632,18 @@ export async function confirmBookingOrder(params: {
     .where(
       and(
         eq(seatInventory.sessionId, sessionId),
-        inArray(seatInventory.seatId, effectiveSeatIds.length > 0 ? effectiveSeatIds : seatIds)
+        inArray(seatInventory.seatId, effectiveSeatIds.length > 0 ? effectiveSeatIds : seatIds),
+        or(
+          ne(seatInventory.status, 'booked'),
+          eq(seatInventory.orderId, order.id)
+        )
       )
-    );
+    )
+    .returning({ seatId: seatInventory.seatId });
+
+  if (bookedSeatUpdate.length < (effectiveSeatIds.length || seatIds.length)) {
+    throw new Error('Cannot confirm: one or more seats are no longer available.');
+  }
 
   // 5b. Deduct available_quota in ticket_types for each booked seat
   for (const s of currentSeats) {

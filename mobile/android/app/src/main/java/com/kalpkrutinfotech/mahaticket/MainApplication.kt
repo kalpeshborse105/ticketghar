@@ -1,4 +1,4 @@
-package com.mahaticket
+package com.kalpkrutinfotech.mahaticket
 
 import android.app.Application
 import com.facebook.react.PackageList

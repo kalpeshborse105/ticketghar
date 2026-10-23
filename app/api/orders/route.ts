@@ -1,37 +1,29 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
-import { orders, events, venues, eventSessions, tickets, ticketTypes, users } from '@/src/db/schema.ts';
-import { eq, desc, and, or, sql } from 'drizzle-orm';
-import QRCode from 'qrcode';
-import { createClient } from '@/src/lib/supabase/server.ts';
-import { getCustomerSession } from '@/src/lib/auth-service';
+import { orders, events, venues, eventSessions, tickets } from '@/src/db/schema.ts';
+import { eq, desc } from 'drizzle-orm';
+import {
+  resolveAuthCustomer,
+  customerOwnsOrder,
+  mintOrderPdfToken,
+} from '@/src/lib/order-access';
 
+/**
+ * Authenticated customer's orders only.
+ * email / phone / orderNumber / ticketCode query params are NOT authorization.
+ */
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const orderNumber = searchParams.get('orderNumber');
-    const email = searchParams.get('email');
-    const ticketCode = searchParams.get('ticketCode');
-
-    // Get authenticated user via cookie session or Supabase
-    const customerSession = await getCustomerSession();
-    let authUser: { id: string | number; email?: string } | null = customerSession;
-
-    if (!authUser) {
-      try {
-        const supabase = await createClient();
-        const {
-          data: { user: supaUser },
-        } = await supabase.auth.getUser();
-        if (supaUser) {
-          authUser = { id: supaUser.id, email: supaUser.email };
-        }
-      } catch {
-        // non-blocking
-      }
+    const customer = await resolveAuthCustomer(request);
+    if (!customer) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
-    // Guest ticket lookup by order number or ticket code (public access)
+    const { searchParams } = new URL(request.url);
+    const orderNumber = searchParams.get('orderNumber');
+    const ticketCode = searchParams.get('ticketCode');
+
+    // Single-order lookup — still requires ownership
     if (orderNumber || ticketCode) {
       let orderRows;
 
@@ -47,9 +39,9 @@ export async function GET(request: Request) {
           .innerJoin(events, eq(orders.eventId, events.id))
           .innerJoin(venues, eq(events.venueId, venues.id))
           .innerJoin(eventSessions, eq(orders.sessionId, eventSessions.id))
-          .where(eq(orders.orderNumber, orderNumber));
+          .where(eq(orders.orderNumber, orderNumber))
+          .limit(1);
       } else if (ticketCode) {
-        // Look up order by ticket code
         const ticketRows = await db
           .select()
           .from(tickets)
@@ -57,7 +49,7 @@ export async function GET(request: Request) {
           .limit(1);
 
         if (ticketRows.length === 0) {
-          return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
+          return NextResponse.json({ error: 'Not found' }, { status: 404 });
         }
 
         orderRows = await db
@@ -71,33 +63,26 @@ export async function GET(request: Request) {
           .innerJoin(events, eq(orders.eventId, events.id))
           .innerJoin(venues, eq(events.venueId, venues.id))
           .innerJoin(eventSessions, eq(orders.sessionId, eventSessions.id))
-          .where(eq(orders.id, ticketRows[0].orderId));
+          .where(eq(orders.id, ticketRows[0].orderId))
+          .limit(1);
       }
 
       if (!orderRows || orderRows.length === 0) {
-        return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+        return NextResponse.json({ error: 'Not found' }, { status: 404 });
       }
 
       const item = orderRows[0];
+      if (!customerOwnsOrder(customer, item.order)) {
+        // Do not reveal that another customer's order exists
+        return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      }
+
       const ticketList = await db
         .select()
         .from(tickets)
         .where(eq(tickets.orderId, item.order.id));
 
-      const ticketsWithQr = await Promise.all(
-        ticketList.map(async (tk) => {
-          const qrDataUrl = await QRCode.toDataURL(tk.qrPayload, {
-            errorCorrectionLevel: 'M',
-            margin: 2,
-            width: 280,
-            color: { dark: '#0F172A', light: '#FFFFFF' },
-          });
-          return {
-            ...tk,
-            qrDataUrl,
-          };
-        })
-      );
+      const pdfToken = mintOrderPdfToken(item.order.id, item.order.userId);
 
       return NextResponse.json({
         order: {
@@ -105,62 +90,13 @@ export async function GET(request: Request) {
           event: item.event,
           venue: item.venue,
           session: item.session,
-          tickets: ticketsWithQr,
+          tickets: ticketList,
+          pdfDownloadToken: pdfToken,
         },
       });
     }
 
-    const phone = searchParams.get('phone');
-    if (phone && phone.trim()) {
-      const cleanPhone = phone.trim();
-      const phoneOrders = await db
-        .select({
-          order: orders,
-          event: events,
-          venue: venues,
-          session: eventSessions,
-        })
-        .from(orders)
-        .innerJoin(events, eq(orders.eventId, events.id))
-        .innerJoin(venues, eq(events.venueId, venues.id))
-        .innerJoin(eventSessions, eq(orders.sessionId, eventSessions.id))
-        .where(eq(orders.userPhone, cleanPhone))
-        .orderBy(desc(orders.createdAt))
-        .limit(50);
-
-      const enriched = await Promise.all(
-        phoneOrders.map(async (row) => {
-          const ticketList = await db
-            .select()
-            .from(tickets)
-            .where(eq(tickets.orderId, row.order.id));
-
-          return {
-            ...row.order,
-            event: { ...row.event, venue: row.venue },
-            venue: row.venue,
-            session: row.session,
-            tickets: ticketList,
-          };
-        })
-      );
-
-      return NextResponse.json({ orders: enriched });
-    }
-
-    const targetEmail = (email && email.trim()) ? email.trim().toLowerCase() : authUser?.email?.trim().toLowerCase();
-
-    // List user's orders - requires authentication or email parameter
-    if (!targetEmail) {
-      return NextResponse.json(
-        { error: 'Authentication or email required to list orders' },
-        { status: 401 }
-      );
-    }
-
-    const cleanUserEmail = targetEmail;
-
-    // Find orders for this user by userId or userEmail
+    // List: canonical ownership by application userId only (ignore email/phone query)
     const userOrders = await db
       .select({
         order: orders,
@@ -172,16 +108,10 @@ export async function GET(request: Request) {
       .innerJoin(events, eq(orders.eventId, events.id))
       .innerJoin(venues, eq(events.venueId, venues.id))
       .innerJoin(eventSessions, eq(orders.sessionId, eventSessions.id))
-      .where(
-        authUser?.id && typeof authUser.id === 'number'
-          ? or(sql`lower(${orders.userEmail}) = ${cleanUserEmail}`, eq(orders.userId, authUser.id))
-          : sql`lower(${orders.userEmail}) = ${cleanUserEmail}`
-      )
+      .where(eq(orders.userId, customer.id))
       .orderBy(desc(orders.createdAt))
       .limit(50);
 
-    // List endpoint: skip heavy QR data-URL generation (pass screen generates QR client-side).
-    // This removes the multi-second "empty → tickets" flash on My Tickets.
     const enriched = await Promise.all(
       userOrders.map(async (row) => {
         const ticketList = await db
@@ -195,13 +125,14 @@ export async function GET(request: Request) {
           venue: row.venue,
           session: row.session,
           tickets: ticketList,
+          pdfDownloadToken: mintOrderPdfToken(row.order.id, row.order.userId),
         };
       })
     );
 
     return NextResponse.json({ orders: enriched });
-  } catch (error: any) {
-    console.error('Error fetching orders:', error);
+  } catch (error: unknown) {
+    console.error('Error fetching orders:', error instanceof Error ? error.message : 'unknown');
     return NextResponse.json({ error: 'Failed to fetch orders' }, { status: 500 });
   }
 }

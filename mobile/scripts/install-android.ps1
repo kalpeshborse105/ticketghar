@@ -23,5 +23,5 @@ if ($LASTEXITCODE -ne 0) {
   Write-Host "Xiaomi: enable Install via USB / Security USB debugging"
   exit 1
 }
-adb shell monkey -p com.MahaTicket -c android.intent.category.LAUNCHER 1 | Out-Null
+adb shell monkey -p com.kalpkrutinfotech.mahaticket -c android.intent.category.LAUNCHER 1 | Out-Null
 Write-Host "Done. Keep Next :3002 + Metro running."

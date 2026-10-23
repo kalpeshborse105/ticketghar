@@ -142,7 +142,9 @@ export default function EventDetailScreen({ navigation, route }: any) {
           const sorted = [...upcoming].sort(
             (a, b) => new Date(a.sessionStartTime).getTime() - new Date(b.sessionStartTime).getTime()
           );
+          const homeId = (d.event as any)?.homeSessionId as number | null | undefined;
           const firstAvailable =
+            (homeId && sorted.find((s) => Number(s.id) === Number(homeId))) ||
             sorted.find((s) => getSessionAvailableCount(s) > 0 && s.status !== 'sold_out' && !s.isSoldOut) ||
             sorted[0];
           // Prefer detailed payload session (same id), never keep stale list-cache object
@@ -466,12 +468,14 @@ export default function EventDetailScreen({ navigation, route }: any) {
       setSelectedDateKey(homeGroup.dateKey);
       if (
         !selectedSession ||
-        !homeGroup.sessions.some((s) => s.id === selectedSession.id)
+        !homeGroup.sessions.some((s: { id: number }) => s.id === selectedSession.id)
       ) {
         const preferred =
-          (homeId && homeGroup.sessions.find((s) => Number(s.id) === Number(homeId))) ||
+          (homeId &&
+            homeGroup.sessions.find((s: { id: number }) => Number(s.id) === Number(homeId))) ||
           homeGroup.sessions.find(
-            (s) => getSessionAvailableCount(s) > 0 && s.status !== 'sold_out'
+            (s: { id: number; status?: string }) =>
+              getSessionAvailableCount(s as any) > 0 && s.status !== 'sold_out'
           ) ||
           homeGroup.sessions[0];
         setSelectedSession(preferred);

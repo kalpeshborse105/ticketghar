@@ -21,6 +21,7 @@ import { COLORS, RADIUS, SPACING, SHADOWS } from '../theme';
 import { useAuthStore, useUIStore } from '../store';
 import { Button, Divider, MTPopupModal } from '../components';
 import { WEB_ADMIN_URL, openUrl, openPlayStoreListing } from '../lib/contact';
+import { openGoogleAuthInApp } from '../lib/openGoogleAuth';
 
 interface MenuItemProps {
   iconName: string;
@@ -79,7 +80,6 @@ export default function ProfileScreen({ navigation }: any) {
 
   const handleGoogleLogin = async () => {
     try {
-      const { openGoogleAuthInApp } = await import('../lib/openGoogleAuth');
       await openGoogleAuthInApp();
     } catch {
       navigation.navigate('Login');

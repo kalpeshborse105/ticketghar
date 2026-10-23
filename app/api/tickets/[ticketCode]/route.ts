@@ -3,9 +3,18 @@ import { db } from '@/src/db/index';
 import { tickets, orders, events, venues, eventSessions } from '@/src/db/schema';
 import { eq } from 'drizzle-orm';
 import { getTicketShareUrl } from '@/src/lib/public-url';
+import {
+  resolveAuthCustomer,
+  customerOwnsOrder,
+  mintOrderPdfToken,
+} from '@/src/lib/order-access';
 
+/**
+ * Public ticket pass (share / gate display): event, venue, session, seat, validity.
+ * Private PII, payment totals, sibling tickets, and PDF links require ownership.
+ */
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ ticketCode: string }> }
 ) {
   try {
@@ -25,7 +34,6 @@ export async function GET(
       .limit(1);
 
     if (!ticketRecord) {
-      // Support direct order reference lookup
       [ticketRecord] = await db
         .select({
           ticket: tickets,
@@ -40,14 +48,8 @@ export async function GET(
     }
 
     if (!ticketRecord) {
-      return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
-
-    // Fetch all tickets in the order to show complete booking pass
-    const allOrderTickets = await db
-      .select()
-      .from(tickets)
-      .where(eq(tickets.orderId, ticketRecord.order.id));
 
     const [eventRecord] = await db
       .select({ event: events, venue: venues })
@@ -56,48 +58,23 @@ export async function GET(
       .where(eq(events.id, ticketRecord.order.eventId))
       .limit(1);
 
-    // Mask sensitive contact details for public verification
-    const maskedEmail = ticketRecord.order.userEmail
-      ? ticketRecord.order.userEmail.replace(/(.{2})(.*)(@.*)/, '$1***$3')
-      : '';
-    const maskedPhone = ticketRecord.order.userPhone
-      ? ticketRecord.order.userPhone.replace(/(\d{2})(\d+)(\d{2})/, '$1****$3')
-      : '';
-
     const publicUrl = getTicketShareUrl(ticketRecord.ticket.ticketCode);
-    const seatsList = allOrderTickets.map((t) => t.seatCode);
-    const seatsSummary = seatsList.join(', ');
+    const customer = await resolveAuthCustomer(req);
+    const isOwner = customer ? customerOwnsOrder(customer, ticketRecord.order) : false;
 
-    return NextResponse.json({
+    const publicPayload = {
       valid:
         ticketRecord.ticket.status === 'valid' || ticketRecord.ticket.status === 'used',
       ticket: {
         ticketCode: ticketRecord.ticket.ticketCode,
         seatCode: ticketRecord.ticket.seatCode,
-        attendeeName: ticketRecord.ticket.attendeeName,
         status: ticketRecord.ticket.status,
-        faceValue: ticketRecord.ticket.faceValue,
         qrPayload: publicUrl,
       },
       order: {
-        id: ticketRecord.order.id,
         orderNumber: ticketRecord.order.orderNumber,
-        email: maskedEmail,
-        phone: maskedPhone,
-        userName: ticketRecord.order.userName,
-        paymentStatus: ticketRecord.order.paymentStatus,
         orderStatus: ticketRecord.order.orderStatus,
-        ticketCount: allOrderTickets.length,
-        grandTotal: ticketRecord.order.grandTotal,
-        seats: seatsList,
-        seatsSummary,
-        tickets: allOrderTickets.map((t) => ({
-          ticketCode: t.ticketCode,
-          seatCode: t.seatCode,
-          attendeeName: t.attendeeName,
-          status: t.status,
-          faceValue: t.faceValue,
-        })),
+        ticketCount: ticketRecord.order.ticketCount,
       },
       event: {
         id: eventRecord?.event.id,
@@ -125,15 +102,65 @@ export async function GET(
         start: ticketRecord.session.sessionStartTime,
         end: ticketRecord.session.sessionEndTime,
       },
-      downloadPdfUrl: `/api/tickets/${ticketRecord.ticket.ticketCode}/pdf?download=1`,
-      viewPdfUrl: `/api/tickets/${ticketRecord.ticket.ticketCode}/pdf`,
       publicShareUrl: publicUrl,
-    });
-  } catch (error) {
-    console.error('Error fetching ticket:', error);
+      owner: false as boolean,
+    };
+
+    if (!isOwner || !customer) {
+      return NextResponse.json(publicPayload, {
+        headers: {
+          'Cache-Control': 'private, no-store, max-age=0',
+        },
+      });
+    }
+
+    const allOrderTickets = await db
+      .select()
+      .from(tickets)
+      .where(eq(tickets.orderId, ticketRecord.order.id));
+
+    const seatsList = allOrderTickets.map((t) => t.seatCode);
+    const pdfToken = mintOrderPdfToken(ticketRecord.order.id, ticketRecord.order.userId);
+
     return NextResponse.json(
-      { error: 'Failed to fetch ticket details' },
-      { status: 500 }
+      {
+        ...publicPayload,
+        owner: true,
+        ticket: {
+          ...publicPayload.ticket,
+          attendeeName: ticketRecord.ticket.attendeeName,
+          faceValue: ticketRecord.ticket.faceValue,
+        },
+        order: {
+          id: ticketRecord.order.id,
+          orderNumber: ticketRecord.order.orderNumber,
+          userName: ticketRecord.order.userName,
+          paymentStatus: ticketRecord.order.paymentStatus,
+          orderStatus: ticketRecord.order.orderStatus,
+          ticketCount: allOrderTickets.length,
+          grandTotal: ticketRecord.order.grandTotal,
+          seats: seatsList,
+          seatsSummary: seatsList.join(', '),
+          tickets: allOrderTickets.map((t) => ({
+            ticketCode: t.ticketCode,
+            seatCode: t.seatCode,
+            attendeeName: t.attendeeName,
+            status: t.status,
+            faceValue: t.faceValue,
+          })),
+        },
+        downloadPdfUrl: `/api/tickets/${ticketRecord.ticket.ticketCode}/pdf?download=1&t=${encodeURIComponent(pdfToken)}`,
+        viewPdfUrl: `/api/tickets/${ticketRecord.ticket.ticketCode}/pdf?t=${encodeURIComponent(pdfToken)}`,
+        pdfDownloadToken: pdfToken,
+      },
+      {
+        headers: {
+          'Cache-Control': 'private, no-store, max-age=0',
+        },
+      }
     );
+  } catch (error) {
+    console.error('Error fetching ticket:', error instanceof Error ? error.message : error);
+    return NextResponse.json({ error: 'Failed to fetch ticket details' }, { status: 500 });
   }
 }

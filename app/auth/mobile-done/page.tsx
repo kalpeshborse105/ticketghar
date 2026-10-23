@@ -28,7 +28,7 @@ function MobileAuthDoneInner() {
   const androidIntent = useMemo(() => {
     if (!deepLink) return null;
     const q = deepLink.split('?')[1] || '';
-    return `intent://auth/callback?${q}#Intent;scheme=mahaticket;package=com.mahaticket;end`;
+    return `intent://auth/callback?${q}#Intent;scheme=mahaticket;package=com.kalpkrutinfotech.mahaticket;end`;
   }, [deepLink]);
 
   const openApp = () => {

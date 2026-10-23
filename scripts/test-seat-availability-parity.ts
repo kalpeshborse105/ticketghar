@@ -58,12 +58,12 @@ async function runAvailabilityTests() {
     console.warn('Skipping hold test due to insufficient available seats');
   } else {
     const seatToHold = availableSeats[0];
-    const holdToken = `test_avail_hold_${Date.now()}`;
-    await createTemporarySeatHold({
+    // Server issues holdToken — do not invent client holder IDs
+    const holdResult = await createTemporarySeatHold({
       sessionId,
       seatIds: [seatToHold.seatId],
-      userIdStr: holdToken,
     });
+    const holdToken = holdResult.holdToken;
 
     const rowsDuringHold = await db
       .select({

@@ -161,8 +161,24 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
       setIsDownloading(true);
       setDownloadSuccess(false);
 
-      const downloadEndpoint = `/api/tickets/${primaryTicket}/pdf?download=1`;
-      const res = await fetch(downloadEndpoint);
+      const token =
+        (order as any)?.pdfDownloadToken ||
+        (typeof window !== 'undefined' ? localStorage.getItem('mahaticket_token') : null);
+      const qs = new URLSearchParams({ download: '1' });
+      // Prefer short-lived PDF token when present on the order payload
+      if ((order as any)?.pdfDownloadToken) {
+        qs.set('t', String((order as any).pdfDownloadToken));
+      }
+      const downloadEndpoint = `/api/tickets/${primaryTicket}/pdf?${qs.toString()}`;
+      const headers: Record<string, string> = {};
+      if (token && String(token).includes('.') && !(order as any)?.pdfDownloadToken) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+      const res = await fetch(downloadEndpoint, {
+        credentials: 'include',
+        cache: 'no-store',
+        headers,
+      });
       if (!res.ok) {
         throw new Error('PDF route failed');
       }
@@ -181,8 +197,6 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
       setTimeout(() => setDownloadSuccess(false), 4000);
     } catch (err) {
       console.error('PDF download error:', err);
-      // Fallback: direct window.open
-      window.open(`/api/tickets/${primaryTicket}/pdf`, '_blank');
     } finally {
       setIsDownloading(false);
     }

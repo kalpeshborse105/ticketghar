@@ -2,7 +2,17 @@ import { NextResponse } from 'next/server';
 import { verifyPaymentSignatureAsync } from '@/src/lib/payments/razorpay.ts';
 import { confirmBookingOrder, calculatePricing } from '@/src/lib/inventory-engine.ts';
 import { db } from '@/src/db/index.ts';
-import { users, events, seatInventory, ticketTypes, orders, tickets, venues, eventSessions } from '@/src/db/schema.ts';
+import {
+  users,
+  events,
+  seatInventory,
+  ticketTypes,
+  orders,
+  tickets,
+  venues,
+  eventSessions,
+  auditLogs,
+} from '@/src/db/schema.ts';
 import { eq, and, inArray } from 'drizzle-orm';
 import { cacheDel, sessionSeatsCacheKey } from '@/src/lib/redis.ts';
 
@@ -157,6 +167,66 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: 'No seats associated with this pending order' },
         { status: 400 }
+      );
+    }
+
+    const seatStateRows = await db
+      .select({
+        seatId: seatInventory.seatId,
+        status: seatInventory.status,
+        orderId: seatInventory.orderId,
+      })
+      .from(seatInventory)
+      .where(
+        and(
+          eq(seatInventory.sessionId, authoritativeSessionId),
+          inArray(seatInventory.seatId, effectiveSeatIds)
+        )
+      );
+
+    const soldToAnotherOrder = seatStateRows.filter(
+      (s) => s.status === 'booked' && s.orderId != null && s.orderId !== pendingOrder.id
+    );
+    if (soldToAnotherOrder.length > 0) {
+      await db
+        .update(orders)
+        .set({
+          paymentStatus: 'captured',
+          orderStatus: 'pending',
+          razorpayPaymentId: razorpay_payment_id,
+          updatedAt: new Date(),
+        })
+        .where(eq(orders.id, pendingOrder.id));
+
+      try {
+        await db.insert(auditLogs).values({
+          actorId: `user-${pendingOrder.userId}`,
+          actorRole: 'customer',
+          action: 'PAYMENT_RECONCILIATION_REQUIRED',
+          entityType: 'order',
+          entityId: pendingOrder.orderNumber,
+          details: JSON.stringify({
+            razorpayOrderId: razorpay_order_id,
+            razorpayPaymentId: razorpay_payment_id,
+            conflictingSeatIds: soldToAnotherOrder.map((s) => s.seatId),
+            reason: 'late_payment_seats_already_sold',
+          }),
+        });
+      } catch (auditErr) {
+        console.warn('[Verify] Reconciliation audit log notice:', auditErr);
+      }
+
+      await cacheDel(sessionSeatsCacheKey(authoritativeSessionId)).catch(() => undefined);
+
+      return NextResponse.json(
+        {
+          success: false,
+          verified: true,
+          reconciliationRequired: true,
+          error:
+            'Payment received but seats are no longer available. Our team will reconcile your payment.',
+        },
+        { status: 409 }
       );
     }
 

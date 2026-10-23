@@ -21,26 +21,27 @@ import { MahaTicketCard } from '@/src/components/ui/MahaTicketCard';
 
 interface TicketData {
   valid: boolean;
+  owner?: boolean;
   ticket: {
     ticketCode: string;
     seatCode: string;
-    attendeeName: string;
+    attendeeName?: string;
     status: string;
-    faceValue: number;
+    faceValue?: number;
     qrPayload: string;
   };
   order: {
-    id: number;
+    id?: number;
     orderNumber: string;
-    email: string;
-    phone: string;
-    userName: string;
-    paymentStatus: string;
+    email?: string;
+    phone?: string;
+    userName?: string;
+    paymentStatus?: string;
     orderStatus: string;
     ticketCount: number;
-    grandTotal: number;
-    seats: string[];
-    seatsSummary: string;
+    grandTotal?: number;
+    seats?: string[];
+    seatsSummary?: string;
   };
   event: {
     id: number;
@@ -64,9 +65,10 @@ interface TicketData {
     sessionStartTime: string;
     sessionEndTime?: string;
   };
-  downloadPdfUrl: string;
-  viewPdfUrl: string;
+  downloadPdfUrl?: string;
+  viewPdfUrl?: string;
   publicShareUrl: string;
+  pdfDownloadToken?: string;
 }
 
 export default function PublicTicketPage() {
@@ -84,7 +86,10 @@ export default function PublicTicketPage() {
 
     const fetchTicket = async () => {
       try {
-        const res = await fetch(`/api/tickets/${encodeURIComponent(ticketCode)}`);
+        const res = await fetch(`/api/tickets/${encodeURIComponent(ticketCode)}`, {
+          credentials: 'include',
+          cache: 'no-store',
+        });
         if (!res.ok) {
           if (res.status === 404) {
             setError('Ticket not found or invalid booking reference.');
@@ -108,14 +113,24 @@ export default function PublicTicketPage() {
 
   const handleDownloadPdf = async () => {
     if (!ticketCode || !data) return;
+    if (!data.owner && !data.downloadPdfUrl && !data.pdfDownloadToken) {
+      setError('PDF डाउनलोडसाठी लॉगिन आवश्यक आहे (Sign in required to download PDF).');
+      return;
+    }
     try {
       setIsDownloading(true);
       setDownloadSuccess(false);
 
-      const downloadEndpoint = `/api/tickets/${encodeURIComponent(ticketCode)}/pdf?download=1`;
-      
-      // Use direct anchor download pattern with fallback to window.open
-      const response = await fetch(downloadEndpoint);
+      const downloadEndpoint =
+        data.downloadPdfUrl ||
+        `/api/tickets/${encodeURIComponent(ticketCode)}/pdf?download=1${
+          data.pdfDownloadToken ? `&t=${encodeURIComponent(data.pdfDownloadToken)}` : ''
+        }`;
+
+      const response = await fetch(downloadEndpoint, {
+        credentials: 'include',
+        cache: 'no-store',
+      });
       if (!response.ok) {
         throw new Error('Failed to generate PDF pass');
       }
@@ -134,8 +149,7 @@ export default function PublicTicketPage() {
       setTimeout(() => setDownloadSuccess(false), 4000);
     } catch (err) {
       console.error('PDF download error:', err);
-      // Fallback: open directly in new tab so browser native viewer handles download/print
-      window.open(`/api/tickets/${encodeURIComponent(ticketCode)}/pdf`, '_blank');
+      setError('PDF डाउनलोड अयशस्वी. कृपया लॉगिन करून पुन्हा प्रयत्न करा.');
     } finally {
       setIsDownloading(false);
     }

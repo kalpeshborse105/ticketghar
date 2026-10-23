@@ -44,6 +44,8 @@ export interface MahaTicketPassProps {
   onClose?: () => void;
   onHome?: () => void;
   style?: ViewStyle;
+  /** Short-lived server token for authorized PDF download */
+  pdfDownloadToken?: string | null;
 }
 
 export function MahaTicketPass({
@@ -64,6 +66,7 @@ export function MahaTicketPass({
   onClose,
   onHome,
   style,
+  pdfDownloadToken,
 }: MahaTicketPassProps) {
   const resolvedOrderNum = orderNumber || ticketCode || 'MT-PASS';
   const resolvedTotal = grandTotal !== undefined && grandTotal !== null && Number(grandTotal) > 0
@@ -92,15 +95,15 @@ export function MahaTicketPass({
   const ticketWebUrl = `${WEB_ORIGIN}/tickets/${encodeURIComponent(ticketCode || resolvedOrderNum)}`;
 
   const handleDownloadPdf = async () => {
-    // Native DownloadManager with ASCII filename — avoids "Waiting to retry" / 0B failures
     const ok = await downloadTicketPdf({
-      url: `${pdfUrl}?download=1`,
+      url: pdfUrl,
       filename: `MahaTicket-${resolvedOrderNum}.pdf`,
       title: 'MahaTicket Pass',
       description: `Order ${resolvedOrderNum}`,
+      pdfToken: pdfDownloadToken,
     });
-    if (!ok) {
-      await Linking.openURL(`${pdfUrl}?download=1`).catch(() => null);
+    if (!ok && Platform.OS === 'android') {
+      // Toast already shown by downloader; avoid opening unauthenticated public URL
     }
   };
 
@@ -113,8 +116,7 @@ export function MahaTicketPass({
       `📍 *सभागृह:* ${venueName}, ${venueCity}\n` +
       `💺 *आसन क्रमांक:* ${seatCode || 'General'}\n` +
       `🎟️ *ऑर्डर क्रमांक:* #${resolvedOrderNum}\n\n` +
-      `🌐 *तिकीट ऑनलाइन पहा:* \n${ticketWebUrl}\n\n` +
-      `📥 *थेट PDF डाउनलोड करा:* \n${pdfUrl}\n\n` +
+      `🌐 *अॅपमध्ये तिकीट पहा (लॉगिन आवश्यक):*\n${ticketWebUrl}\n\n` +
       `प्रवेशद्वारावर डिजिटल क्यूआर कोड दाखवा. सुलभ तिकीट बुकिंग - MahaTicket!`;
 
     try {
@@ -134,8 +136,7 @@ export function MahaTicketPass({
       `📍 *सभागृह:* ${venueName}, ${venueCity}\n` +
       `💺 *आसने:* ${seatCode || 'General'}\n` +
       `🎟️ *ऑर्डर:* #${resolvedOrderNum}\n\n` +
-      `🌐 *तिकीट पहा:* ${ticketWebUrl}\n` +
-      `📥 *PDF डाउनलोड:* ${pdfUrl}`
+      `🌐 *तिकीट पहा (लॉगिन आवश्यक):* ${ticketWebUrl}`
     );
     Linking.openURL(`whatsapp://send?text=${text}`).catch(() => {
       handleShare();

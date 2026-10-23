@@ -1,4 +1,4 @@
-package com.mahaticket
+package com.kalpkrutinfotech.mahaticket
 
 import android.app.DownloadManager
 import android.content.Context
@@ -13,7 +13,25 @@ class DownloadModule(reactContext: ReactApplicationContext) : ReactContextBaseJa
     override fun getName(): String = "TicketDownloader"
 
     @ReactMethod
-    fun downloadFile(url: String, filename: String, title: String, description: String, promise: Promise) {
+    fun downloadFile(
+        url: String,
+        filename: String,
+        title: String,
+        description: String,
+        promise: Promise
+    ) {
+        downloadFileWithAuth(url, filename, title, description, null, promise)
+    }
+
+    @ReactMethod
+    fun downloadFileWithAuth(
+        url: String,
+        filename: String,
+        title: String,
+        description: String,
+        authHeader: String?,
+        promise: Promise
+    ) {
         try {
             val safeFilename = filename.replace(Regex("[^a-zA-Z0-9._-]"), "_")
             val request = DownloadManager.Request(Uri.parse(url))
@@ -24,6 +42,10 @@ class DownloadModule(reactContext: ReactApplicationContext) : ReactContextBaseJa
             request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, safeFilename)
             request.setAllowedOverMetered(true)
             request.setAllowedOverRoaming(true)
+
+            if (!authHeader.isNullOrBlank()) {
+                request.addRequestHeader("Authorization", authHeader)
+            }
 
             val manager = reactApplicationContext.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
             val downloadId = manager.enqueue(request)
