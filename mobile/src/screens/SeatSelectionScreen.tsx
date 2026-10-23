@@ -51,11 +51,26 @@ export function toMarathiDigits(val: number | string): string {
   return String(val).replace(/[0-9]/g, (d) => MARATHI_DIGITS[Number(d)] ?? d);
 }
 
+function parseToISTDate(raw?: string | Date | null): Date | null {
+  if (!raw) return null;
+  if (raw instanceof Date) return isNaN(raw.getTime()) ? null : raw;
+  const clean = String(raw).trim();
+  if (!clean || clean === 'null' || clean === 'undefined' || clean === '—') return null;
+  let normalized = clean;
+  if (!normalized.includes('T') && normalized.includes(' ')) {
+    normalized = normalized.replace(' ', 'T');
+  }
+  if (!normalized.endsWith('Z') && !/[+-]\d{2}(:\d{2})?$/.test(normalized)) {
+    normalized = `${normalized}+05:30`;
+  }
+  const d = new Date(normalized);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 function formatMarathiShowDateTime(dateStr?: string | Date | null): string {
-  if (!dateStr) return 'शनि २२ ऑक्टो • संध्या. ०५:००';
+  const d = parseToISTDate(dateStr);
+  if (!d) return 'तारीख व वेळ उपलब्ध नाही';
   try {
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return 'शनि २२ ऑक्टो • संध्या. ०५:००';
     const dayNames = ['रवि', 'सोम', 'मंगळ', 'बुध', 'गुरु', 'शुक्र', 'शनि'];
     const monthNames = [
       'जाने', 'फेब्रु', 'मार्च', 'एप्रिल', 'मे', 'जून',
@@ -106,7 +121,7 @@ function formatMarathiShowDateTime(dateStr?: string | Date | null): string {
 
     return `${dayOfWeek} ${toMarathiDigits(dateNum)} ${month} • ${timeFormatted}`;
   } catch {
-    return 'शनि २२ ऑक्टो • संध्या. ०५:००';
+    return 'तारीख व वेळ उपलब्ध नाही';
   }
 }
 
@@ -287,6 +302,8 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const selectedRef = useRef<number[]>([]);
   selectedRef.current = selected;
+  const abortCtrlRef = useRef<AbortController | null>(null);
+  const isFetchingRef = useRef(false);
 
   const handleBackPress = useCallback(() => {
     if (selected.length > 0) {
@@ -307,23 +324,30 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
       api
         .getEvent(eventId)
         .then((d) => {
-          const upcoming = filterUpcomingSessions(d.event?.sessions);
-          setSessions(upcoming);
-          if (upcoming.length && !upcoming.some((s) => s.id === sessionId)) {
-            setSessionId(upcoming[0].id);
+          const list = Array.isArray(d.event?.sessions) ? d.event.sessions : [];
+          setSessions(list);
+          if (sessionId && !list.some((s: any) => s.id === sessionId)) {
+            setError(
+              'निवडलेला प्रयोग या कार्यक्रमासाठी उपलब्ध नाही. कृपया मागे जाऊन वैध प्रयोग निवडा.\n(Selected show is not available for this event. Please go back and pick a show.)'
+            );
           }
         })
         .catch(() => null);
     }
   }, [eventId, sessionId, sessions.length]);
 
+  // Authoritative session: strictly the selected sessionId. Never silently substitute sessions[0].
   const activeSession =
-    sessions.find((s) => s.id === sessionId) || routeSelectedSession || sessions[0];
-  const sessionStartTime = activeSession?.sessionStartTime || routeSelectedSession?.sessionStartTime;
+    sessions.find((s) => s.id === sessionId) ||
+    (routeSelectedSession?.id === sessionId ? routeSelectedSession : null);
+  const sessionStartTime =
+    activeSession?.sessionStartTime ||
+    (routeSelectedSession?.id === sessionId ? routeSelectedSession.sessionStartTime : null);
 
   const fetchSeats = useCallback(async (fresh = true) => {
-    if (!sessionId) return;
+    if (!sessionId || isFetchingRef.current) return;
     try {
+      isFetchingRef.current = true;
       const data = await api.getSessionSeats(sessionId, {
         fresh,
         timeoutMs: fresh ? 18000 : 22000,
@@ -371,25 +395,32 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
       });
 
       if (!liveSeats.length) {
-        setError('No seats available for this show right now.');
+        setError('या प्रयोगासाठी कोणतीही आसने उपलब्ध नाहीत. (No seats available for this show.)');
       }
     } catch {
       // Background poll failure is silent — never treat network abort as hold expiry
+    } finally {
+      isFetchingRef.current = false;
     }
   }, [sessionId]);
 
-  useEffect(() => {
+  const loadSeats = useCallback(async () => {
     if (!sessionId) {
       setLoading(false);
-      setError('No upcoming show selected. Please go back and pick a show time.');
+      setError('कोणताही प्रयोग निवडलेला नाही. कृपया मागे जाऊन प्रयोग निवडा. (No show selected. Please go back and select a show.)');
       return;
     }
 
-    let cancelled = false;
+    if (abortCtrlRef.current) {
+      abortCtrlRef.current.abort();
+    }
+    abortCtrlRef.current = new AbortController();
+    const signal = abortCtrlRef.current.signal;
+
     const cached = sessionSeatsCache.get(sessionId);
 
-    // Show cached map immediately (up to 12s) so UI is not stuck on spinner
-    if (cached && Date.now() - cached.time < 12000) {
+    // Show cached map provisionally so UI is not stuck on spinner, but revalidate immediately
+    if (cached && Date.now() - cached.time < 15000) {
       setSeats(cached.seats);
       setSectionsData(cached.sections || []);
       setLayoutConfig(cached.layoutConfig || null);
@@ -403,67 +434,57 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
     setSecondsLeft(HOLD_SECONDS);
     setError(null);
 
-    const loadSeats = async () => {
-      try {
-        const data = await api.getSessionSeats(sessionId, { fresh: true, timeoutMs: 22000 });
-        if (cancelled) return;
-        const liveSeats = data.seats || [];
-        setSeats(liveSeats);
-        setSectionsData(Array.isArray(data.sections) ? data.sections : []);
-        setLayoutConfig(data.layoutConfig || null);
-        sessionSeatsCache.set(sessionId, {
-          seats: liveSeats,
-          sections: data.sections || [],
-          layoutConfig: data.layoutConfig || null,
-          time: Date.now(),
-        });
-        if (!liveSeats.length) {
-          setError('No seats available for this show right now.');
-        } else {
-          setError(null);
-        }
-      } catch (e: any) {
-        if (cancelled) return;
-        const msg = String(e?.message || '');
-        if (/session not found/i.test(msg) && eventId) {
-          try {
-            const d = await api.getEvent(eventId);
-            const upcoming = filterUpcomingSessions(d.event?.sessions);
-            setSessions(upcoming);
-            const next =
-              upcoming.find((s: any) => s.id === sessionId) ||
-              upcoming.find((s: any) => s.status !== 'sold_out') ||
-              upcoming[0];
-            if (next && next.id !== sessionId) {
-              setSessionId(next.id);
-              setError(null);
-              setLoading(false);
-              return;
-            }
-            setError('Session not found for this show. Please pick another time.');
-          } catch {
-            setError('Session not found. Please go back and open the event again.');
-          }
-        } else if (!cached) {
-          setError(
-            /timed out|timeout|slow|network/i.test(msg)
-              ? 'Seat map is taking longer than usual. Tap Retry seats.'
-              : msg || 'Seat map unavailable. Tap Retry seats.'
-          );
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
+    try {
+      isFetchingRef.current = true;
+      const data = await api.getSessionSeats(sessionId, {
+        fresh: true,
+        timeoutMs: 22000,
+        signal,
+      });
+      if (signal.aborted) return;
+      const liveSeats = data.seats || [];
+      setSeats(liveSeats);
+      setSectionsData(Array.isArray(data.sections) ? data.sections : []);
+      setLayoutConfig(data.layoutConfig || null);
+      sessionSeatsCache.set(sessionId, {
+        seats: liveSeats,
+        sections: data.sections || [],
+        layoutConfig: data.layoutConfig || null,
+        time: Date.now(),
+      });
+      if (!liveSeats.length) {
+        setError('या प्रयोगासाठी कोणतीही आसने उपलब्ध नाहीत. (No seats available for this show.)');
+      } else {
+        setError(null);
       }
-    };
+    } catch (e: any) {
+      if (signal.aborted || e?.status === 499) return;
+      const msg = String(e?.message || '');
+      if (e?.status === 404 || /session not found/i.test(msg)) {
+        setError(
+          'हा प्रयोग उपलब्ध नाही. कृपया मागे जाऊन वैध प्रयोग निवडा.\n(This show session was not found. Please go back and pick a show.)'
+        );
+      } else if (!cached) {
+        setError(
+          /timed out|timeout|slow|network/i.test(msg)
+            ? 'आसन नकाशा लोड होण्यास वेळ लागत आहे. कृपया "पुन्हा प्रयत्न करा" दाबा. (Seat map load is slow. Tap Retry seats.)'
+            : msg || 'आसन नकाशा उपलब्ध नाही. कृपया पुन्हा प्रयत्न करा.'
+        );
+      }
+    } finally {
+      isFetchingRef.current = false;
+      if (!signal.aborted) setLoading(false);
+    }
+  }, [sessionId]);
 
+  useEffect(() => {
     loadSeats();
-
     pollRef.current = setInterval(() => fetchSeats(true), POLL_INTERVAL);
     return () => {
-      cancelled = true;
-      clearInterval(pollRef.current);
+      if (abortCtrlRef.current) abortCtrlRef.current.abort();
+      if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [fetchSeats, sessionId, eventId]);
+  }, [loadSeats, fetchSeats]);
 
   const sectionViews = useMemo<SectionView[]>(() => {
     const layoutSections = Array.isArray(layoutConfig?.sections) ? layoutConfig.sections : [];
@@ -795,6 +816,10 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
 
   const finishHold = async () => {
     if (!selected.length || holding) return;
+    if (!sessionId || !sessionStartTime) {
+      setError('शोची तारीख व वेळ उपलब्ध नाही. कृपया सत्र पुन्हा निवडा (Showtime not available. Please reselect session).');
+      return;
+    }
     try {
       setHolding(true);
       setError(null);
@@ -986,7 +1011,13 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
 
             <View style={styles.dateTimeRow}>
               <Text style={styles.dateTimeCalendarIcon}>📅</Text>
-              <Text style={styles.dateTimeText} numberOfLines={1}>
+              <Text
+                style={[
+                  styles.dateTimeText,
+                  !sessionStartTime && { color: '#EF4444', fontWeight: '700' },
+                ]}
+                numberOfLines={1}
+              >
                 {formatMarathiShowDateTime(sessionStartTime)}
               </Text>
             </View>
@@ -1380,10 +1411,10 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
           <TouchableOpacity
             style={[
               styles.proceedButton,
-              // Match web: stay orange while holding; only grey when nothing selected
-              !selected.length && styles.proceedButtonDisabled,
+              // Match web: stay orange while holding; only grey when nothing selected or no showtime
+              (!selected.length || !sessionStartTime) && styles.proceedButtonDisabled,
             ]}
-            disabled={!selected.length || holding}
+            disabled={!selected.length || holding || !sessionStartTime}
             onPress={finishHold}
             activeOpacity={0.85}
           >
@@ -1397,15 +1428,19 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
                 <Text
                   style={[
                     styles.proceedButtonText,
-                    !selected.length && styles.proceedButtonTextDisabled,
+                    (!selected.length || !sessionStartTime) && styles.proceedButtonTextDisabled,
                   ]}
                 >
-                  {selected.length > 0 ? 'पुढे जा' : 'आसने निवडा'}
+                  {!sessionStartTime
+                    ? 'तारीख निवडा'
+                    : selected.length > 0
+                    ? 'पुढे जा'
+                    : 'आसने निवडा'}
                 </Text>
                 <Icon
-                  name={selected.length > 0 ? 'arrow-right' : 'seat-outline'}
+                  name={selected.length > 0 && sessionStartTime ? 'arrow-right' : 'seat-outline'}
                   size={16}
-                  color={selected.length > 0 ? '#FFFFFF' : '#64748B'}
+                  color={selected.length > 0 && sessionStartTime ? '#FFFFFF' : '#64748B'}
                   style={{ marginLeft: 5 }}
                 />
               </View>

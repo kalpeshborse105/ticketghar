@@ -74,15 +74,15 @@ export const MahaTicketCard: React.FC<MahaTicketCardProps> = ({
 
   const resolvedTimeStr = React.useMemo(() => {
     if (sessionStartTime) {
-      return formatISTTime(sessionStartTime, language, true);
+      return formatISTTime(sessionStartTime, language, false);
     }
     if (showTimeStr && (showTimeStr.includes('T') || (showTimeStr.includes('-') && showTimeStr.includes(':')))) {
-      const formatted = formatISTTime(showTimeStr, language, true);
+      const formatted = formatISTTime(showTimeStr, language, false);
       if (formatted && formatted !== 'वेळ उपलब्ध नाही' && formatted !== 'Show time unavailable') {
         return formatted;
       }
     }
-    if (showTimeStr && showTimeStr !== '7:00 PM') {
+    if (showTimeStr && showTimeStr) {
       return showTimeStr;
     }
     return language === 'mr' ? 'वेळ उपलब्ध नाही' : 'Show time unavailable';

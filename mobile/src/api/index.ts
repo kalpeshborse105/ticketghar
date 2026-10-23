@@ -43,8 +43,8 @@ export async function resolveApiBase(): Promise<string> {
 
   const storedOk =
     stored &&
-    !/vercel\.app/i.test(stored) &&
-    stored.replace(/\/$/, '') !== PROD_API_URL
+      !/vercel\.app/i.test(stored) &&
+      stored.replace(/\/$/, '') !== PROD_API_URL
       ? stored.replace(/\/$/, '')
       : null;
 
@@ -178,19 +178,30 @@ async function getAuthHeader(): Promise<Record<string, string>> {
     if (token && token.includes('.') && !token.startsWith('mt-tok') && !token.startsWith('mt-token')) {
       return { Authorization: `Bearer ${token}` };
     }
-  } catch {}
+  } catch { }
   return {};
 }
 
 async function request<T>(
   path: string,
-  init?: RequestInit & { timeout?: number }
+  init?: RequestInit & { timeout?: number; correlationId?: string; signal?: AbortSignal }
 ): Promise<T> {
+  const correlationId =
+    init?.correlationId || `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const startTime = Date.now();
   const base = await resolveApiBase();
   const ctrl = new AbortController();
   const timeout = init?.timeout ?? 15000;
   const timer = setTimeout(() => ctrl.abort(), timeout);
   const authHeaders = await getAuthHeader();
+
+  if (init?.signal) {
+    if (init.signal.aborted) {
+      clearTimeout(timer);
+      throw new ApiError('Request cancelled', 499, { correlationId, cancelled: true });
+    }
+    init.signal.addEventListener('abort', () => ctrl.abort(), { once: true });
+  }
 
   try {
     const res = await fetch(`${base}${path}`, {
@@ -201,11 +212,13 @@ async function request<T>(
         'Content-Type': 'application/json',
         'X-App-Platform': 'android',
         'X-App-Version': '1.0.0',
+        'X-Correlation-Id': correlationId,
         ...authHeaders,
         ...(init?.headers || {}),
       },
     });
     clearTimeout(timer);
+    const elapsedMs = Date.now() - startTime;
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       const errMsg = (data as any)?.error || `HTTP ${res.status}`;
@@ -213,15 +226,19 @@ async function request<T>(
       throw new ApiError(
         details ? `${errMsg}: ${details}` : errMsg,
         res.status,
-        data
+        { ...data, correlationId, elapsedMs }
       );
     }
     return data as T;
   } catch (err: any) {
     clearTimeout(timer);
+    const elapsedMs = Date.now() - startTime;
+    const isAborted = err?.name === 'AbortError' || init?.signal?.aborted;
     if (err instanceof ApiError) throw err;
-    if (err?.name === 'AbortError') throw new ApiError('Request timed out', 408);
-    throw new ApiError(`Network error: ${err?.message}`, 0);
+    if (isAborted) {
+      throw new ApiError('Request timed out', 408, { correlationId, elapsedMs, aborted: true });
+    }
+    throw new ApiError(`Network error: ${err?.message}`, 0, { correlationId, elapsedMs });
   }
 }
 
@@ -416,8 +433,8 @@ export function pickHomeSession(
       : null;
   const nextBookable = hasInventoryData
     ? upcoming.find(
-        (s) => getSessionAvailableCount(s) > 0 && s.status !== 'sold_out' && !s.isSoldOut
-      ) || null
+      (s) => getSessionAvailableCount(s) > 0 && s.status !== 'sold_out' && !s.isSoldOut
+    ) || null
     : upcoming[0] || null;
   const nextUpcoming = upcoming[0] || null;
   return {
@@ -634,15 +651,19 @@ export function parseCastCrew(raw: unknown): CastMember[] {
   return [];
 }
 
-/** Session is bookable only if start time is still in the future (5 min buffer). */
+/** Session is bookable only if active and not long expired. */
 export function isUpcomingSession(
-  session: { sessionStartTime?: string; status?: string } | null | undefined
+  session: { sessionStartTime?: string; sessionEndTime?: string; status?: string } | null | undefined
 ): boolean {
   if (!session?.sessionStartTime) return false;
   if (session.status === 'cancelled' || session.status === 'completed') return false;
   const t = new Date(session.sessionStartTime).getTime();
   if (Number.isNaN(t)) return false;
-  return t > Date.now() + 5 * 60 * 1000;
+  if (session.sessionEndTime) {
+    const endT = new Date(session.sessionEndTime).getTime();
+    if (!Number.isNaN(endT) && endT < Date.now()) return false;
+  }
+  return t > Date.now() - 30 * 60 * 1000;
 }
 
 export function filterUpcomingSessions<T extends { sessionStartTime?: string; status?: string }>(
@@ -729,18 +750,18 @@ async function refreshEventsCacheFromSupabase(): Promise<EventItem[]> {
         showDateStr: e.show_date_str || null,
         venue: venue
           ? {
-              id: venue.id,
-              name: venue.name,
-              nameMr: venue.name_mr || venue.name,
-              address: venue.address,
-              city: venue.city,
-              state: venue.state,
-              pincode: venue.pincode,
-              latitude: venue.latitude != null ? String(venue.latitude) : null,
-              longitude: venue.longitude != null ? String(venue.longitude) : null,
-              totalCapacity: venue.total_capacity || 800,
-              hasSeatLayout: venue.has_seat_layout ?? 1,
-            }
+            id: venue.id,
+            name: venue.name,
+            nameMr: venue.name_mr || venue.name,
+            address: venue.address,
+            city: venue.city,
+            state: venue.state,
+            pincode: venue.pincode,
+            latitude: venue.latitude != null ? String(venue.latitude) : null,
+            longitude: venue.longitude != null ? String(venue.longitude) : null,
+            totalCapacity: venue.total_capacity || 800,
+            hasSeatLayout: venue.has_seat_layout ?? 1,
+          }
           : null,
         sessions: filterUpcomingSessions(
           evtSessions.map((s) => ({
@@ -813,7 +834,7 @@ export const api = {
         AsyncStorage.setItem(CACHE_EVENTS_KEY, JSON.stringify(mapped)).catch(() => null);
         return { events: mapped };
       }
-    } catch {}
+    } catch { }
 
     let baseList: EventItem[] = inMemoryEvents || [];
 
@@ -827,7 +848,7 @@ export const api = {
             baseList = parsed;
           }
         }
-      } catch {}
+      } catch { }
     }
 
     refreshEventsCacheFromSupabase().catch(() => null);
@@ -920,7 +941,7 @@ export const api = {
           })),
         };
       }
-    } catch {}
+    } catch { }
 
     return {
       announcements: [
@@ -946,25 +967,34 @@ export const api = {
   // Sessions & Seats — same as web: GET /api/sessions/:id/seats (?fresh=1 for live holds)
   getSessionSeats: async (
     sessionId: number,
-    opts?: { fresh?: boolean; timeoutMs?: number }
+    opts?: { fresh?: boolean; timeoutMs?: number; signal?: AbortSignal; correlationId?: string }
   ): Promise<{
     seats: SeatItem[];
     sections: any[];
     layoutConfig?: SeatLayoutConfig;
+    traceId?: string;
+    latencyMs?: number;
   }> => {
     if (!sessionId || Number.isNaN(Number(sessionId))) {
-      throw new Error('Session not found');
+      throw new ApiError('Session not found', 404);
     }
     const q = opts?.fresh ? '?fresh=1' : '';
     const timeout = opts?.timeoutMs ?? 22000;
+    const correlationId = opts?.correlationId || `seat_${sessionId}_${Date.now()}`;
     try {
       const data = await request<{
         seats: SeatItem[];
         sections: any[];
         layoutConfig?: SeatLayoutConfig;
         venue?: any;
+        traceId?: string;
+        latencyMs?: number;
         error?: string;
-      }>(`/api/sessions/${sessionId}/seats${q}`, { timeout });
+      }>(`/api/sessions/${sessionId}/seats${q}`, {
+        timeout,
+        signal: opts?.signal,
+        correlationId,
+      });
       if (!data || data.error) {
         throw new ApiError(data?.error || 'Failed to load seat layout', 400, data);
       }
@@ -972,19 +1002,25 @@ export const api = {
         seats: Array.isArray(data.seats) ? data.seats : [],
         sections: Array.isArray(data.sections) ? data.sections : [],
         layoutConfig: data.layoutConfig || data.venue?.layoutConfig || undefined,
+        traceId: data.traceId,
+        latencyMs: data.latencyMs,
       };
     } catch (e: any) {
+      if (e?.status === 499 || e?.message === 'Request cancelled') {
+        throw e;
+      }
       if (e?.status === 404 || /session not found/i.test(String(e?.message || ''))) {
         throw new ApiError('Session not found', 404, e?.data);
       }
       const msg = String(e?.message || '');
-      if (/timed out|timeout|network/i.test(msg) || e?.status === 408 || e?.status === 0) {
+      if (/timed out|timeout/i.test(msg) || e?.status === 408) {
         throw new ApiError(
-          'Seat map load is slow. Please retry — your show session is still valid.',
-          408
+          'Seat map load is slow. Please tap Retry seats.',
+          408,
+          e?.data
         );
       }
-      throw e instanceof Error ? e : new Error('Failed to load seat layout');
+      throw e instanceof ApiError ? e : new ApiError(msg || 'Failed to load seat layout', e?.status || 500, e?.data);
     }
   },
 
@@ -1036,7 +1072,7 @@ export const api = {
       }
       throw new Error(
         raw ||
-          'Selected seats could not be held. They may have been taken — please refresh the map.'
+        'Selected seats could not be held. They may have been taken — please refresh the map.'
       );
     }
   },
@@ -1130,59 +1166,77 @@ export const api = {
     userEmail?: string;
     userName?: string;
     userPhone?: string;
+    idempotencyKey?: string;
+    correlationId?: string;
   }) => {
+    const correlationId = body.correlationId || `ord_${body.sessionId}_${Date.now()}`;
     try {
       const res = await request<any>('/api/payments/create-order', {
         method: 'POST',
         body: JSON.stringify(body),
         timeout: 45000,
+        correlationId,
       });
       if (res?.orderId && res?.keyId) {
         return res;
       }
-      throw new Error(
+      throw new ApiError(
         res?.error ||
-          'पेमेंट ऑर्डर तयार झाली नाही. आसने DB मध्ये सापडली नाहीत — कृपया आसने पुन्हा निवडा.'
+        'Payment order creation failed — please select seats again.',
+        400,
+        res
       );
     } catch (e: any) {
+      if (e instanceof ApiError) throw e;
       const detail = e?.data?.details || e?.message || '';
       if (/authenti/i.test(String(detail))) {
-        throw new Error(
-          'Razorpay server keys invalid (Authentication failed). Production needs matching RAZORPAY_KEY_ID + RAZORPAY_KEY_SECRET.\n\nसर्व्हरवरील Razorpay की चुकीच्या आहेत — पेमेंट सुरू होऊ शकत नाही.'
+        throw new ApiError(
+          'Razorpay server keys invalid (Authentication failed). Production needs matching RAZORPAY_KEY_ID + RAZORPAY_KEY_SECRET.\n\nसर्व्हरवरील Razorpay की चुकीच्या आहेत — पेमेंट सुरू होऊ शकत नाही.',
+          401,
+          e?.data
         );
       }
-      throw e instanceof Error ? e : new Error(String(detail || 'Payment order failed'));
+      throw new ApiError(String(detail || 'Payment order failed'), e?.status || 500, e?.data);
     }
   },
 
-  verifyPayment: async (body: any) => {
+  verifyPayment: async (body: any, opts?: { correlationId?: string }) => {
+    const correlationId = opts?.correlationId || `ver_${body.sessionId}_${Date.now()}`;
     const res = await request<any>('/api/payments/verify', {
       method: 'POST',
       body: JSON.stringify(body),
       timeout: 30000,
+      correlationId,
     });
+
+    // Check if reconciliation is required (e.g. late payment, conflict)
+    if (res?.reconciliationRequired) {
+      return res;
+    }
+
     if (res && (res.success || res.orderNumber || res.order)) {
       const orderPayload = res.order || res;
-      try {
-        const existingStr = await AsyncStorage.getItem('@tg_offline_orders');
-        const existing = existingStr ? JSON.parse(existingStr) : [];
-        existing.unshift(orderPayload);
-        await AsyncStorage.setItem('@tg_offline_orders', JSON.stringify(existing.slice(0, 30)));
-      } catch {}
-      try {
-        const myStr = await AsyncStorage.getItem('@tg_my_orders');
-        const myOrders = myStr ? JSON.parse(myStr) : [];
-        const orderKey = String(orderPayload.orderNumber || orderPayload.id);
-        const filtered = Array.isArray(myOrders)
-          ? myOrders.filter((o: any) => String(o.orderNumber || o.id) !== orderKey)
-          : [];
-        filtered.unshift(orderPayload);
-        await AsyncStorage.setItem('@tg_my_orders', JSON.stringify(filtered.slice(0, 30)));
-      } catch {}
+      // Only cache authoritative orders with server-generated tickets into My Tickets
+      if (
+        (orderPayload.orderStatus === 'confirmed' || orderPayload.paymentStatus === 'captured') &&
+        Array.isArray(orderPayload.tickets) &&
+        orderPayload.tickets.length > 0
+      ) {
+        try {
+          const myStr = await AsyncStorage.getItem('@tg_my_orders');
+          const myOrders = myStr ? JSON.parse(myStr) : [];
+          const orderKey = String(orderPayload.orderNumber || orderPayload.id);
+          const filtered = Array.isArray(myOrders)
+            ? myOrders.filter((o: any) => String(o.orderNumber || o.id) !== orderKey)
+            : [];
+          filtered.unshift(orderPayload);
+          await AsyncStorage.setItem('@tg_my_orders', JSON.stringify(filtered.slice(0, 30)));
+        } catch { }
+      }
       eventsQueryCache.clear();
       return res;
     }
-    throw new Error(res?.error || 'Payment verification failed');
+    throw new ApiError(res?.error || 'Payment verification failed', 400, res);
   },
 
   confirmBooking: async (body: {
@@ -1206,7 +1260,7 @@ export const api = {
         const existing = existingStr ? JSON.parse(existingStr) : [];
         existing.unshift(res.order || res);
         await AsyncStorage.setItem('@tg_offline_orders', JSON.stringify(existing.slice(0, 30)));
-      } catch {}
+      } catch { }
       return res;
     }
     throw new Error(res?.error || 'Booking confirmation failed');
@@ -1264,7 +1318,7 @@ export const api = {
       try {
         const parsed = JSON.parse(cleanCode);
         cleanCode = parsed.ticketCode || parsed.code || cleanCode;
-      } catch {}
+      } catch { }
     }
 
     if (!scope?.targetEventId && !scope?.targetSessionId) {
@@ -1304,12 +1358,12 @@ export const api = {
         message: serverRes.message || (serverRes.valid ? 'प्रवेश मंजूर!' : 'अवैध तिकीट!'),
         ticket: serverRes.ticket
           ? {
-              ticketCode: serverRes.ticket.code || cleanCode,
-              seatCode: serverRes.ticket.seat,
-              attendeeName: serverRes.ticket.attendee,
-              eventTitle: serverRes.ticket.eventMr || serverRes.ticket.event,
-              showtime: serverRes.ticket.showtime,
-            }
+            ticketCode: serverRes.ticket.code || cleanCode,
+            seatCode: serverRes.ticket.seat,
+            attendeeName: serverRes.ticket.attendee,
+            eventTitle: serverRes.ticket.eventMr || serverRes.ticket.event,
+            showtime: serverRes.ticket.showtime,
+          }
           : undefined,
       };
     }
@@ -1360,7 +1414,7 @@ export const api = {
       if (res && typeof res.totalCount === 'number') {
         return res;
       }
-    } catch {}
+    } catch { }
 
     // 2. Direct Supabase fallback
     try {
@@ -1387,7 +1441,7 @@ export const api = {
           breakdown: { five: 80, four: 15, three: 5, two: 0, one: 0 },
         };
       }
-    } catch {}
+    } catch { }
 
     // Authentic fallback with Marathi theatre audience reviews
     return {
@@ -1483,7 +1537,7 @@ export const api = {
       if (inserted && inserted.length > 0) {
         return { success: true, message: 'आपले परीक्षण यशस्वीपणे नोंदवले गेले!', review: inserted[0] };
       }
-    } catch {}
+    } catch { }
 
     return { success: true, message: 'आपले परीक्षण नोंदवले गेले!' };
   },

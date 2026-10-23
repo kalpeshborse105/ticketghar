@@ -60,6 +60,8 @@ function formatPaymentErrorMessage(err: any): { title: string; message: string }
   }
 
   const rzp = parsed?.error || parsed;
+  const reason = rzp?.reason;
+  const desc = rzp?.description || parsed?.data?.details;
   const isCancelled =
     rzp?.code === 2 ||
     /cancel|dismiss|back pressed|back_pressed/i.test(rawStr) ||
@@ -80,8 +82,13 @@ function formatPaymentErrorMessage(err: any): { title: string; message: string }
     };
   }
 
-  const reason = rzp?.reason;
-  const desc = rzp?.description || parsed?.data?.details;
+  if (/timeout|timed out|network|slow|econnreset|aborterror/i.test(plainMsg + rawStr)) {
+    return {
+      title: 'नेटवर्क विलंबाची त्रुटी (Connection Timeout)',
+      message:
+        'नेटवर्क विलंबाने विनंती पूर्ण होऊ शकली नाही. आपले सीट अजूनही सुरक्षित (hold) आहेत. कृपया पुन्हा प्रयत्न करा.\n\n(Request timed out. Your seats are still held active. Please retry.)',
+    };
+  }
 
   if (plainMsg && plainMsg.length > 8 && !plainMsg.startsWith('{') && !/Network error/i.test(plainMsg)) {
     return {
@@ -197,8 +204,24 @@ export default function CheckoutScreen({ navigation, route }: any) {
   const [appliedDiscount, setAppliedDiscount] = useState(0);
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
 
-  const [paying, setPaying] = useState(false);
-  const [paymentPhase, setPaymentPhase] = useState<'initiating' | 'verifying'>('initiating');
+  type CheckoutStage =
+    | 'idle'
+    | 'validating_hold'
+    | 'creating_order'
+    | 'opening_gateway'
+    | 'verifying_payment'
+    | 'confirming_booking'
+    | 'reconciliation_pending';
+
+  const [stage, setStage] = useState<CheckoutStage>('idle');
+  const paying = stage !== 'idle' && stage !== 'reconciliation_pending';
+  const paymentPhase =
+    stage === 'verifying_payment' || stage === 'confirming_booking'
+      ? 'verifying'
+      : 'initiating';
+
+  // Track successful payment so beforeRemove and countdown do NOT release booked seats
+  const paymentDoneRef = useRef(false);
 
   const [checkoutModal, setCheckoutModal] = useState<{
     visible: boolean;
@@ -240,11 +263,11 @@ export default function CheckoutScreen({ navigation, route }: any) {
     [seatCodes]
   );
 
-  // Authoritative hold countdown
+  // Authoritative hold countdown — never resets to 300 if expired
   const [countdown, setCountdown] = useState(() => {
     if (!expiresAt) return 300;
-    const diff = Math.max(0, Math.round((new Date(expiresAt).getTime() - Date.now()) / 1000));
-    return diff > 0 ? diff : 300;
+    const diff = Math.round((new Date(expiresAt).getTime() - Date.now()) / 1000);
+    return Math.max(0, diff);
   });
 
   const countdownRef = useRef<ReturnType<typeof setInterval>>();
@@ -260,28 +283,59 @@ export default function CheckoutScreen({ navigation, route }: any) {
       .catch(() => null);
   }, []);
 
-  // Countdown timer ticking
+  // Countdown timer ticking — guarded by paymentDoneRef
   useEffect(() => {
     countdownRef.current = setInterval(() => {
       setCountdown((c) => {
         if (c <= 1) {
-          setCheckoutModal({
-            visible: true,
-            type: 'warning',
-            title: 'आसन आरक्षण वेळ संपली (Hold Expired)',
-            message: 'तुमच्या तात्पुरत्या आसन आरक्षणाची वेळ संपली आहे. कृपया पुन्हा आसने निवडा. (Your temporary seat hold has expired.)',
-            primaryButtonText: 'आसने निवडा (Select Seats)',
-            onPrimaryPress: () => {
-              setCheckoutModal(null);
-              handleDiscardAndBack();
-            },
-          });
+          if (!paymentDoneRef.current) {
+            setCheckoutModal({
+              visible: true,
+              type: 'warning',
+              title: 'आसन आरक्षण वेळ संपली (Hold Expired)',
+              message:
+                'तुमच्या तात्पुरत्या आसन आरक्षणाची वेळ संपली आहे. कृपया पुन्हा आसने निवडा. (Your temporary seat hold has expired.)',
+              primaryButtonText: 'आसने निवडा (Select Seats)',
+              onPrimaryPress: () => {
+                setCheckoutModal(null);
+                handleDiscardAndBack();
+              },
+            });
+          }
           return 0;
         }
         return c - 1;
       });
     }, 1000);
     return () => clearInterval(countdownRef.current);
+  }, []);
+
+  // Check pending payment reconciliation on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const pendingStr = await AsyncStorage.getItem('@tg_pending_payment_reconciliation');
+        if (pendingStr) {
+          const rec = JSON.parse(pendingStr);
+          if (rec?.razorpay_payment_id) {
+            paymentDoneRef.current = true;
+            setCheckoutModal({
+              visible: true,
+              type: 'info',
+              title: 'प्रलंबित पेमेंट पडताळणी (Pending Verification)',
+              message: `तुमच्या मागील व्यवहाराची (ID: ${rec.razorpay_payment_id}) पडताळणी शिल्लक आहे. कृपया स्थिती तपासा.`,
+              primaryButtonText: 'स्थिती तपासा (Check Status)',
+              onPrimaryPress: () => {
+                setCheckoutModal(null);
+                checkPendingReconciliation(rec);
+              },
+              secondaryButtonText: 'रद्द करा (Dismiss)',
+              onSecondaryPress: () => setCheckoutModal(null),
+            });
+          }
+        }
+      } catch {}
+    })();
   }, []);
 
   const ticketMeta = useMemo(() => {
@@ -336,9 +390,6 @@ export default function CheckoutScreen({ navigation, route }: any) {
     clearSessionSeatsCache(sessionId);
     navigation.goBack();
   };
-
-  // Track successful payment so beforeRemove does NOT release booked seats
-  const paymentDoneRef = useRef(false);
 
   // Hardware / gesture back must also release server hold (cancel only)
   useEffect(() => {
@@ -440,11 +491,10 @@ export default function CheckoutScreen({ navigation, route }: any) {
       return;
     }
 
-    setPaying(true);
-    setPaymentPhase('initiating');
+    setStage('validating_hold');
     try {
       // Step 1: Create backend Razorpay order (extends seat hold)
-      // Must send booking contact — create-order requires session OR valid email (no guest firstCust bypass).
+      setStage('creating_order');
       const orderData = await api.createRazorpayOrder({
         sessionId,
         seatIds,
@@ -453,6 +503,8 @@ export default function CheckoutScreen({ navigation, route }: any) {
         userEmail: email.trim().toLowerCase(),
         userName: name.trim(),
         userPhone: cleanPhone,
+        idempotencyKey: holdToken ? `ord_${holdToken}` : undefined,
+        correlationId: `chk_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       });
 
       if (!orderData?.orderId || !orderData?.keyId) {
@@ -462,6 +514,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
       setRazorpayOrder(orderData.orderId, 0);
 
       // Step 2: Open native Razorpay Checkout
+      setStage('opening_gateway');
       const paymentSuccessData = await RazorpayCheckout.open({
         key: orderData.keyId,
         amount: Number(orderData.amount ?? grandTotal),
@@ -478,10 +531,37 @@ export default function CheckoutScreen({ navigation, route }: any) {
         retry: { enabled: true, max_count: 2 },
       });
 
-      // Step 3: Transition status immediately to verifying/generating ticket
-      setPaymentPhase('verifying');
+      // CRITICAL: Customer money debited by Razorpay! Immediately mark paymentDoneRef so back/discard NEVER releases seats.
+      paymentDoneRef.current = true;
 
-      // Server-side signature verify → confirm booking
+      // Persist reconciliation snapshot to AsyncStorage
+      const reconciliationRecord = {
+        sessionId,
+        eventId,
+        seatIds,
+        seatCodes: displayedSeatCodes,
+        userName: name.trim(),
+        userEmail: email.trim().toLowerCase(),
+        userPhone: cleanPhone,
+        couponCode: appliedCoupon || null,
+        razorpay_order_id: paymentSuccessData.razorpay_order_id,
+        razorpay_payment_id: paymentSuccessData.razorpay_payment_id,
+        razorpay_signature: paymentSuccessData.razorpay_signature,
+        amount: Number(orderData.amount ?? grandTotal),
+        createdAt: new Date().toISOString(),
+        eventTitle,
+        venueName,
+        sessionStartTime: routeSessionStartTime || null,
+        sessionMeta,
+      };
+      await AsyncStorage.setItem(
+        '@tg_pending_payment_reconciliation',
+        JSON.stringify(reconciliationRecord)
+      );
+
+      // Step 3: Transition status to verifying
+      setStage('verifying_payment');
+
       const payload: any = {
         sessionId,
         eventId,
@@ -495,7 +575,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
         razorpay_signature: paymentSuccessData.razorpay_signature,
       };
 
-      // Server-side signature verify → confirm booking with automatic retry loop
+      // Server-side signature verify → confirm booking with retry loop
       let verified: any = null;
       let lastVerifyError: any = null;
 
@@ -519,6 +599,11 @@ export default function CheckoutScreen({ navigation, route }: any) {
       }
 
       if (verified?.success || verified?.orderId || verified?.id || verified?.order) {
+        setStage('confirming_booking');
+
+        // Verification succeeded on server! Clear pending reconciliation
+        await AsyncStorage.removeItem('@tg_pending_payment_reconciliation');
+
         useAuthStore.getState().updateUser({
           name: name.trim(),
           fullName: name.trim(),
@@ -553,20 +638,22 @@ export default function CheckoutScreen({ navigation, route }: any) {
         const resolvedShowDate = bookedSessionStart
           ? `${formatDate(bookedSessionStart)} • ${formatTime(bookedSessionStart)}`
           : ticketMeta?.dateTime || sessionMeta?.dateTime || null;
-        const resolvedTickets =
+
+        let resolvedTickets =
           verified?.order?.tickets ||
-          verified?.tickets ||
-          (seatCodes || []).map((sc: string, idx: number) => ({
-            seatCode: sc,
-            ticketCode: `MT-TK-${resolvedOrderId}-${sc}-${idx + 1}`,
-            faceValue: Math.round(grandTotal / (seatCodes.length || 1)),
-            qrPayload: JSON.stringify({
-              app: 'MahaTicket',
-              orderNumber: resolvedOrderNumber,
-              seatCode: sc,
-              event: resolvedEventTitle,
-            }),
-          }));
+          verified?.tickets;
+
+        if (!resolvedTickets || !resolvedTickets.length) {
+          try {
+            const lookup = await api.getOrder(resolvedOrderNumber || resolvedOrderId);
+            if (lookup?.order?.tickets?.length) {
+              resolvedTickets = lookup.order.tickets;
+            }
+          } catch {}
+        }
+
+        // Never synthesize fake tickets — use authoritative server tickets only
+        const finalTickets = Array.isArray(resolvedTickets) ? resolvedTickets : [];
 
         // Cache rich order immediately for instant zero-lag rendering in MyTicketsScreen
         const fullOrderForCache = {
@@ -596,14 +683,13 @@ export default function CheckoutScreen({ navigation, route }: any) {
               verified?.session?.id ||
               verified?.order?.session?.id ||
               sessionId,
-            // Always prefer resolved showtime last so partial verify payloads cannot wipe it
             sessionStartTime:
               bookedSessionStart ||
               verified?.session?.sessionStartTime ||
               verified?.order?.session?.sessionStartTime ||
               null,
           },
-          tickets: resolvedTickets,
+          tickets: finalTickets,
           pdfDownloadToken:
             verified?.pdfDownloadToken ||
             verified?.order?.pdfDownloadToken ||
@@ -623,9 +709,6 @@ export default function CheckoutScreen({ navigation, route }: any) {
         // Clear session seats cache so refreshed map immediately shows booked seats
         clearSessionSeatsCache(sessionId);
 
-        // Prevent beforeRemove from releasing seats after successful payment
-        paymentDoneRef.current = true;
-
         // Direct reset to BookingConfirmed so checkout is completely unmounted from the background
         navigation.dispatch(
           CommonActions.reset({
@@ -638,15 +721,15 @@ export default function CheckoutScreen({ navigation, route }: any) {
                   orderNumber: resolvedOrderNumber,
                   eventTitle: resolvedEventTitle,
                   seatCodes:
-                    resolvedTickets.map((t: any) => t.seatCode).filter(Boolean).length > 0
-                      ? resolvedTickets.map((t: any) => t.seatCode)
-                      : seatCodes,
+                    finalTickets.map((t: any) => t.seatCode).filter(Boolean).length > 0
+                      ? finalTickets.map((t: any) => t.seatCode)
+                      : displayedSeatCodes,
                   grandTotal: verified?.order?.grandTotal || grandTotal,
                   venueName: resolvedVenue,
                   sessionMeta: sessionMeta || ticketMeta,
                   sessionStartTime: bookedSessionStart,
                   showDateStr: resolvedShowDate,
-                  tickets: resolvedTickets,
+                  tickets: finalTickets,
                 },
               },
             ],
@@ -656,12 +739,39 @@ export default function CheckoutScreen({ navigation, route }: any) {
         throw new Error(verified?.message || verified?.error || 'Payment confirmation failed');
       }
     } catch (err: any) {
+      if (paymentDoneRef.current) {
+        // Customer was charged! Never display "Payment Failed"
+        setStage('reconciliation_pending');
+        setCheckoutModal({
+          visible: true,
+          type: 'warning',
+          title: 'पेमेंट प्राप्त झाले — तिकीट पडताळणी प्रलंबित (Payment Received)',
+          message:
+            'तुमचे पेमेंट यशस्वीरित्या कापले गेले आहे. नेटवर्क विलंबाने सर्व्हरकडून तिकीट पुष्टी मिळणे बाकी आहे. तुमचे पैसे पूर्णपणे सुरक्षित आहेत.\n\nकृपया खालील बटण दाबून तिकीट पडताळणी पूर्ण करा.',
+          primaryButtonText: 'स्थिती तपासा (Check Status)',
+          onPrimaryPress: () => {
+            setCheckoutModal(null);
+            checkPendingReconciliation();
+          },
+          secondaryButtonText: 'माझी तिकिटे (My Tickets)',
+          onSecondaryPress: () => {
+            setCheckoutModal(null);
+            navigation.navigate('MyTickets');
+          },
+        });
+        return;
+      }
+
+      // Normal failure BEFORE customer was charged
+      setStage('idle');
       const { title, message } = formatPaymentErrorMessage(err);
       setCheckoutModal({
         visible: true,
         type: 'error',
         title: title || 'पेमेंट त्रुटी (Payment Error)',
-        message: message || 'पेमेंट पूर्ण करताना त्रुटी आली. आपले सीट सुरक्षित आहेत, कृपया पुन्हा प्रयत्न करा.',
+        message:
+          message ||
+          'पेमेंट पूर्ण करताना त्रुटी आली. आपले सीट सुरक्षित आहेत, कृपया पुन्हा प्रयत्न करा.',
         primaryButtonText: 'पुन्हा प्रयत्न करा (Retry)',
         onPrimaryPress: () => setCheckoutModal(null),
         secondaryButtonText: 'मागे जा (Go to Seats)',
@@ -671,7 +781,137 @@ export default function CheckoutScreen({ navigation, route }: any) {
         },
       });
     } finally {
-      setPaying(false);
+      if (!paymentDoneRef.current) {
+        setStage('idle');
+      }
+    }
+  };
+
+  const checkPendingReconciliation = async (customRec?: any) => {
+    let rec = customRec;
+    if (!rec) {
+      try {
+        const raw = await AsyncStorage.getItem('@tg_pending_payment_reconciliation');
+        if (raw) rec = JSON.parse(raw);
+      } catch {}
+    }
+    if (!rec?.razorpay_payment_id) {
+      setCheckoutModal({
+        visible: true,
+        type: 'info',
+        title: 'माहिती उपलब्ध नाही',
+        message: 'कोणतीही प्रलंबित पेमेंट नोंद आढळली नाही.',
+        primaryButtonText: 'OK',
+        onPrimaryPress: () => setCheckoutModal(null),
+      });
+      return;
+    }
+
+    setStage('verifying_payment');
+    try {
+      const verified = await api.verifyPayment({
+        sessionId: rec.sessionId,
+        eventId: rec.eventId,
+        seatIds: rec.seatIds,
+        userName: rec.userName,
+        userEmail: rec.userEmail,
+        userPhone: rec.userPhone,
+        couponCode: rec.couponCode,
+        razorpay_order_id: rec.razorpay_order_id,
+        razorpay_payment_id: rec.razorpay_payment_id,
+        razorpay_signature: rec.razorpay_signature,
+      });
+
+      if (verified?.success || verified?.orderId || verified?.id || verified?.order) {
+        await AsyncStorage.removeItem('@tg_pending_payment_reconciliation');
+        paymentDoneRef.current = true;
+        clearSessionSeatsCache(rec.sessionId);
+
+        let finalTickets = verified?.order?.tickets || verified?.tickets;
+        let finalOrder = verified?.order || verified;
+        const resolvedOrderId = verified?.orderId || verified?.bookingId || verified?.order?.id;
+        const resolvedOrderNumber =
+          verified?.orderNumber || verified?.order?.orderNumber || rec.razorpay_order_id;
+
+        if (!finalTickets || !finalTickets.length) {
+          try {
+            const lookup = await api.getOrder(resolvedOrderNumber || resolvedOrderId);
+            if (lookup?.order?.tickets?.length) {
+              finalTickets = lookup.order.tickets;
+              finalOrder = lookup.order;
+            }
+          } catch {}
+        }
+
+        const validTickets = Array.isArray(finalTickets) ? finalTickets : [];
+
+        if (validTickets.length > 0) {
+          const fullOrderForCache = {
+            ...finalOrder,
+            id: resolvedOrderId,
+            orderNumber: resolvedOrderNumber,
+            eventId: rec.eventId,
+            sessionId: rec.sessionId,
+            grandTotal: finalOrder?.grandTotal || rec.amount,
+            paymentStatus: 'paid',
+            orderStatus: 'confirmed',
+            createdAt: finalOrder?.createdAt || new Date().toISOString(),
+            tickets: validTickets,
+          };
+          try {
+            const myStr = await AsyncStorage.getItem('@tg_my_orders');
+            const myOrders = myStr ? JSON.parse(myStr) : [];
+            const deduped = Array.isArray(myOrders)
+              ? myOrders.filter((o: any) => o.orderNumber !== resolvedOrderNumber)
+              : [];
+            deduped.unshift(fullOrderForCache);
+            await AsyncStorage.setItem('@tg_my_orders', JSON.stringify(deduped.slice(0, 30)));
+          } catch {}
+        }
+
+        navigation.dispatch(
+          CommonActions.reset({
+            index: 0,
+            routes: [
+              {
+                name: 'BookingConfirmed',
+                params: {
+                  orderId: resolvedOrderId,
+                  orderNumber: resolvedOrderNumber,
+                  eventTitle: rec.eventTitle,
+                  seatCodes: rec.seatCodes,
+                  grandTotal: rec.amount,
+                  venueName: rec.venueName,
+                  sessionMeta: rec.sessionMeta,
+                  sessionStartTime: rec.sessionStartTime,
+                  tickets: validTickets,
+                },
+              },
+            ],
+          })
+        );
+      } else {
+        throw new Error(verified?.message || 'Verification incomplete');
+      }
+    } catch (vErr: any) {
+      setStage('reconciliation_pending');
+      setCheckoutModal({
+        visible: true,
+        type: 'warning',
+        title: 'पडताळणी प्रलंबित (Verification Pending)',
+        message:
+          'सर्व्हरकडून अद्याप पुष्टी मिळालेली नाही. तुमचे पैसे सुरक्षित आहेत. काही क्षणात पुन्हा तपासा.',
+        primaryButtonText: 'पुन्हा तपासा (Check Again)',
+        onPrimaryPress: () => {
+          setCheckoutModal(null);
+          checkPendingReconciliation(rec);
+        },
+        secondaryButtonText: 'माझी तिकिटे (My Tickets)',
+        onSecondaryPress: () => {
+          setCheckoutModal(null);
+          navigation.navigate('MyTickets');
+        },
+      });
     }
   };
 
@@ -1100,8 +1340,10 @@ export default function CheckoutScreen({ navigation, route }: any) {
             <View style={styles.payBtnLiveRow}>
               <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
               <Text style={styles.payBtnLiveText} numberOfLines={1}>
-                {paymentPhase === 'verifying'
+                {stage === 'verifying_payment' || stage === 'confirming_booking'
                   ? (language === 'mr' ? 'तिकीट तयार होत आहे...' : 'Confirming ticket...')
+                  : stage === 'opening_gateway'
+                  ? (language === 'mr' ? 'गेटवे उघडत आहे...' : 'Opening gateway...')
                   : (language === 'mr' ? 'पेमेंट प्रक्रिया सुरू आहे...' : 'Processing payment...')}
               </Text>
             </View>
@@ -1122,13 +1364,17 @@ export default function CheckoutScreen({ navigation, route }: any) {
           <View style={styles.paymentModalCard}>
             <ActivityIndicator size="large" color="#EA580C" style={{ marginBottom: 16 }} />
             <Text style={styles.paymentModalTitle}>
-              {paymentPhase === 'verifying'
+              {stage === 'verifying_payment' || stage === 'confirming_booking'
                 ? 'तिकीट कन्फर्म केले जात आहे...'
+                : stage === 'opening_gateway'
+                ? 'पेमेंट गेटवे उघडत आहे...'
                 : 'सुरक्षित पेमेंट प्रक्रिया सुरू आहे...'}
             </Text>
             <Text style={styles.paymentModalSub}>
-              {paymentPhase === 'verifying'
+              {stage === 'verifying_payment' || stage === 'confirming_booking'
                 ? 'Generating Confirmed Ticket Pass'
+                : stage === 'opening_gateway'
+                ? 'Connecting to Secure Gateway'
                 : 'Processing Payment...'}
             </Text>
             <Text style={styles.paymentModalWarning}>

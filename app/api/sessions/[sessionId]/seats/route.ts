@@ -9,6 +9,12 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ sessionId: string }> }
 ) {
+  const startMs = performance.now();
+  const traceId =
+    request.headers.get('x-correlation-id') ||
+    request.headers.get('x-trace-id') ||
+    `seat_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+
   let rawSessionId = '101';
   try {
     const resolvedParams = await params;
@@ -16,14 +22,25 @@ export async function GET(
     const sessionId = parseInt(rawSessionId, 10);
 
     if (isNaN(sessionId)) {
-      return NextResponse.json({ error: 'Invalid session ID' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Invalid session ID' },
+        {
+          status: 400,
+          headers: {
+            'X-Trace-Id': traceId,
+            'X-Response-Time-Ms': String(Math.round(performance.now() - startMs)),
+          },
+        }
+      );
     }
 
     const urlObj = new URL(request.url);
-    const forceFresh = urlObj.searchParams.get('fresh') === '1' || request.headers.get('cache-control')?.includes('no-cache');
+    const forceFresh =
+      urlObj.searchParams.get('fresh') === '1' ||
+      request.headers.get('cache-control')?.includes('no-cache');
 
-    // 1. Authoritative expired holds release executed synchronously before reading inventory
-    await releaseExpiredHolds(sessionId).catch((err) => {
+    // Run DB releaseExpiredHolds concurrently with inventory fetching (in-memory filters guarantee fresh status)
+    const holdReleasePromise = releaseExpiredHolds(sessionId).catch((err) => {
       console.warn('Hold expiration check notice:', err?.message);
     });
 
@@ -50,6 +67,9 @@ export async function GET(
             return NextResponse.json(parsed, {
               headers: {
                 'Cache-Control': 'no-store, no-cache, must-revalidate',
+                'X-Trace-Id': traceId,
+                'X-Response-Time-Ms': String(Math.round(performance.now() - startMs)),
+                'X-Cache': 'HIT',
               },
             });
           }
@@ -59,7 +79,7 @@ export async function GET(
       }
     }
 
-    // 2. Fetch session, ticket types, and inventory concurrently in parallel!
+    // 2. Fetch session, ticket types, inventory, and release holds in parallel!
     const [sessionRows, ticketTypesResult, inventoryResult] = await Promise.all([
       db
         .select({
@@ -97,6 +117,7 @@ export async function GET(
         .innerJoin(seats, eq(seatInventory.seatId, seats.id))
         .innerJoin(ticketTypes, eq(seatInventory.ticketTypeId, ticketTypes.id))
         .where(eq(seatInventory.sessionId, sessionId)),
+      holdReleasePromise,
     ]);
 
     if (sessionRows.length === 0) {
@@ -212,13 +233,21 @@ export async function GET(
     return NextResponse.json(payload, {
       headers: {
         'Cache-Control': 'no-store, no-cache, must-revalidate',
+        'X-Trace-Id': traceId,
+        'X-Response-Time-Ms': String(Math.round(performance.now() - startMs)),
       },
     });
   } catch (error: any) {
     console.error('Error fetching seats for session from database:', error);
     return NextResponse.json(
       { error: 'Failed to load session seating layout. Please try again.', details: error.message },
-      { status: 500 }
+      {
+        status: 500,
+        headers: {
+          'X-Trace-Id': traceId,
+          'X-Response-Time-Ms': String(Math.round(performance.now() - startMs)),
+        },
+      }
     );
   }
 }
