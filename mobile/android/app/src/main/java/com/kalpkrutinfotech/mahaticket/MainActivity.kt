@@ -1,4 +1,4 @@
-package com.mahaticket
+package com.kalpkrutinfotech.mahaticket
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate

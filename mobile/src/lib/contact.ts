@@ -9,15 +9,15 @@ export const WEB_CONTACT_URL = `${WEB_ORIGIN}/contact`;
 export const WEB_ADMIN_URL = `${WEB_ORIGIN}/admin`;
 export const PARTNER_API_URL = `${WEB_ORIGIN}/api/partner-with-us`;
 
-export const ANDROID_PACKAGE = 'com.mahaticket';
+export const ANDROID_PACKAGE = 'com.kalpkrutinfotech.mahaticket';
 export const PLAY_MARKET_URL = `market://details?id=${ANDROID_PACKAGE}`;
 export const PLAY_STORE_URL = `https://play.google.com/store/apps/details?id=${ANDROID_PACKAGE}`;
 
 export const CONTACT = {
   emails: {
-    support: 'support@mahaticket.in',
-    bookings: 'bookings@mahaticket.in',
-    partners: 'partners@mahaticket.in',
+    support: 'support.mahaticket@gmail.com',
+    bookings: 'bookings.mahaticket@gmail.com',
+    partners: 'partners.mahaticket@gmail.com',
   },
   // Web page currently shows a placeholder number; leave empty until a real line is published.
   phone: '',

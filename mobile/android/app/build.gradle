@@ -77,13 +77,13 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace "com.mahaticket"
+    namespace "com.kalpkrutinfotech.mahaticket"
     defaultConfig {
-        applicationId "com.mahaticket"
+        applicationId "com.kalpkrutinfotech.mahaticket"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 10
-        versionName "1.0.9"
+        versionCode 11
+        versionName "1.0.10"
         ndk {
             abiFilters "arm64-v8a", "armeabi-v7a"
         }
@@ -95,15 +95,39 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        release {
+            // Load from mobile/android/keystore.properties (gitignored) or MAHATICKET_UPLOAD_* props.
+            def keystorePropertiesFile = rootProject.file('keystore.properties')
+            def keystoreProperties = new Properties()
+            if (keystorePropertiesFile.exists()) {
+                keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+            }
+            def uploadStoreFile = keystoreProperties['storeFile'] ?: project.findProperty('MAHATICKET_UPLOAD_STORE_FILE')
+            def uploadStorePassword = keystoreProperties['storePassword'] ?: project.findProperty('MAHATICKET_UPLOAD_STORE_PASSWORD')
+            def uploadKeyAlias = keystoreProperties['keyAlias'] ?: project.findProperty('MAHATICKET_UPLOAD_KEY_ALIAS')
+            def uploadKeyPassword = keystoreProperties['keyPassword'] ?: project.findProperty('MAHATICKET_UPLOAD_KEY_PASSWORD')
+            if (uploadStoreFile && uploadStorePassword && uploadKeyAlias && uploadKeyPassword
+                    && uploadStorePassword != 'REPLACE_ME' && uploadKeyPassword != 'REPLACE_ME') {
+                storeFile file(uploadStoreFile)
+                storePassword uploadStorePassword
+                keyAlias uploadKeyAlias
+                keyPassword uploadKeyPassword
+            }
+        }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            // Fail closed for Play builds: require real upload keystore (no silent debug signing).
+            if (signingConfigs.release.storeFile == null) {
+                throw new GradleException(
+                    "Release signing not configured. Create mobile/android/keystore.properties " +
+                    "(see keystore.properties.example) with your mahaticket-upload.keystore passwords."
+                )
+            }
+            signingConfig signingConfigs.release
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
