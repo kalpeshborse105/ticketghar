@@ -437,7 +437,9 @@ async function runPhase41SecurityTests() {
     };
 
     // First acquire hold for seat 1 with userHoldToken
-    const userHoldToken = `hold_token_customer_${Date.now()}`;
+    // Match production format (hold_ + 64 hex) so create-order / release paths stay realistic
+    const { generateSecureHoldToken } = await import('../src/lib/hold-token.ts');
+    const userHoldToken = generateSecureHoldToken();
     await client.query(`
       UPDATE seat_inventory
       SET status = 'held', held_by_user_id = $1, hold_expires_at = NOW() + INTERVAL '5 minutes'
@@ -478,7 +480,7 @@ async function runPhase41SecurityTests() {
     // -------------------------------------------------------------------------
     // TEST 11: Other customer cannot hijack active hold in create-order
     // -------------------------------------------------------------------------
-    const attackerToken = `hold_token_attacker_${Date.now()}`;
+    const attackerToken = generateSecureHoldToken();
     const req11 = new Request('http://localhost/api/payments/create-order', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

@@ -52,74 +52,61 @@ export default function MyTicketsScreen({ navigation }: any) {
     message: string;
   } | null>(null);
 
-  const fetchTickets = useCallback(async () => {
-    try {
-      const data = await api.getMyTickets(user?.email, user?.phone);
-      if (data?.orders) {
-        setOrders(data.orders);
+  const fetchTickets = useCallback(
+    async (generation: { current: number }) => {
+      const myGen = ++generation.current;
+      if (!isAuthenticated) {
+        if (myGen === generation.current) {
+          setOrders([]);
+          setSelectedOrder(null);
+          setLoading(false);
+        }
+        return;
       }
-    } catch {
-      // Keep existing orders if network failed
-    } finally {
-      setLoading(false);
-    }
-  }, [user?.email, user?.phone]);
-
-  // Fast-hydrate from local storage first (never flash empty), then sync with remote DB
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      let cached: OrderItem[] = [];
+      setLoading(true);
       try {
-        const stored = await AsyncStorage.getItem('@tg_my_orders');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            const email = String(user?.email || '').toLowerCase().trim();
-            cached = email
-              ? parsed.filter(
-                  (o: any) =>
-                    !email ||
-                    String(o?.userEmail || o?.email || '').toLowerCase().trim() === email ||
-                    !o?.userEmail
-                )
-              : parsed;
-            if (mounted && cached.length > 0) {
-              setOrders(cached);
-              setLoading(false);
-            }
-          }
-        }
-      } catch {}
-
-      try {
-        const data = await api.getMyTickets(user?.email, user?.phone);
-        if (mounted && data?.orders) {
-          // Prefer network list when non-empty; keep cache if network empty (guest / slow)
-          if (data.orders.length > 0) {
-            setOrders(data.orders);
-            await AsyncStorage.setItem('@tg_my_orders', JSON.stringify(data.orders.slice(0, 30))).catch(
-              () => null
-            );
-          } else if (cached.length === 0) {
-            setOrders([]);
-          }
-        }
+        const data = await api.getMyTickets();
+        if (myGen !== generation.current) return;
+        const list = Array.isArray(data?.orders) ? data.orders : [];
+        setOrders(list);
+        await AsyncStorage.setItem('@tg_my_orders', JSON.stringify(list.slice(0, 30))).catch(
+          () => null
+        );
       } catch {
-        /* keep cache */
+        if (myGen !== generation.current) return;
+        // Authenticated but network failed — do not restore another user's cache
+        setOrders([]);
       } finally {
-        if (mounted) setLoading(false);
+        if (myGen === generation.current) setLoading(false);
       }
-    })();
+    },
+    [isAuthenticated]
+  );
 
+  // Session-first: never render cached private tickets before auth is known
+  useEffect(() => {
+    const generation = { current: 0 };
+    setOrders([]);
+    setSelectedOrder(null);
+    setLoading(true);
+
+    if (!isAuthenticated) {
+      AsyncStorage.removeItem('@tg_my_orders').catch(() => null);
+      setLoading(false);
+      return () => {
+        generation.current += 1;
+      };
+    }
+
+    fetchTickets(generation);
     return () => {
-      mounted = false;
+      generation.current += 1;
     };
-  }, [user?.email, user?.phone]);
+  }, [isAuthenticated, user?.email, user?.id, fetchTickets]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchTickets();
+    await fetchTickets({ current: 0 });
     setRefreshing(false);
   };
 
@@ -135,8 +122,8 @@ export default function MyTicketsScreen({ navigation }: any) {
 
   const displayed = activeTab === 'upcoming' ? upcoming : past;
 
-  // ── Unauthenticated State ────────────────────────────────────────────────
-  if (!isAuthenticated && orders.length === 0) {
+  // ── Unauthenticated State (never show cached private tickets) ────────────
+  if (!isAuthenticated) {
     return (
       <View style={[styles.root, { paddingTop: insets.top }]}>
         <StatusBar barStyle="dark-content" backgroundColor={COLORS.bg} />
@@ -492,6 +479,7 @@ export default function MyTicketsScreen({ navigation }: any) {
                 }
                 ticketIndex={1}
                 totalTickets={selectedOrder?.tickets?.length || selectedOrder?.ticketCount}
+                pdfDownloadToken={(selectedOrder as any)?.pdfDownloadToken}
                 onClose={() => setQrVisible(false)}
                 onHome={() => {
                   setQrVisible(false);
@@ -521,7 +509,7 @@ export default function MyTicketsScreen({ navigation }: any) {
 
 function TicketSkeleton() {
   return (
-    <View style={[styles.ticketCard, { marginBottom: SPACING.sm }]}>
+    <View style={[styles.webTicketCard, { marginBottom: SPACING.sm }]}>
       <View style={{ padding: SPACING.md, gap: 10 }}>
         <Skeleton height={20} width={220} />
         <Skeleton height={14} width={160} />

@@ -71,6 +71,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       '@mahaticket_session_token',
       '@tg_user',
       '@tg_session_token',
+      '@tg_my_orders',
+      '@tg_offline_orders',
     ]);
     set({ user: null, token: null, isAuthenticated: false });
   },

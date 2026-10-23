@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import PDFDocument from 'pdfkit';
 import QRCode from 'qrcode';
 import { getTicketShareUrl } from './public-url';
@@ -16,6 +18,26 @@ export type TicketPdfInput = {
   securityHash?: string;
 };
 
+const DEVANAGARI_FONT_CANDIDATES = [
+  // Unhinted / variable build — works with pdfkit+fontkit for complex Devanagari
+  path.join(process.cwd(), 'assets', 'fonts', 'NotoSansDevanagari-unhinted.ttf'),
+  path.join(process.cwd(), 'assets', 'fonts', 'NotoSansDevanagari-Regular.ttf'),
+  path.join(process.cwd(), 'public', 'fonts', 'NotoSansDevanagari-unhinted.ttf'),
+];
+
+const UNICODE_FONT_NAME = 'MahaTicketUnicode';
+
+function resolveDevanagariFontPath(): string | null {
+  for (const candidate of DEVANAGARI_FONT_CANDIDATES) {
+    try {
+      if (fs.existsSync(candidate)) return candidate;
+    } catch {
+      /* ignore */
+    }
+  }
+  return null;
+}
+
 function collectPdf(doc: PDFKit.PDFDocument): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -25,21 +47,27 @@ function collectPdf(doc: PDFKit.PDFDocument): Promise<Buffer> {
   });
 }
 
-function toSafePdfString(str: string | null | undefined, fallback: string): string {
+/** Preserve Marathi/Devanagari; only normalize whitespace. Never strip non-ASCII. */
+export function toSafePdfString(str: string | null | undefined, fallback: string): string {
   if (!str) return fallback;
-  // Standard Helvetica only supports WinAnsi / Latin-1. Filter out unsupported characters
-  const cleaned = str.replace(/[^\x20-\x7E]/g, ' ').replace(/\s+/g, ' ').trim();
+  const cleaned = String(str).replace(/\s+/g, ' ').trim();
   return cleaned || fallback;
+}
+
+function hasDevanagari(text: string): boolean {
+  return /[\u0900-\u097F]/.test(text);
 }
 
 /**
  * Generate a high-fidelity BookMyShow-style M-Ticket PDF pass
+ * Uses Noto Sans Devanagari (OFL) when available so Marathi text is not stripped.
+ * Note: pdfkit does not apply full Indic shaping; conjunct forms may be imperfect.
  */
 export async function generateTicketPdfBuffer(input: TicketPdfInput): Promise<Buffer> {
   const safeTitle = toSafePdfString(input.eventTitle, 'Live Show Admission');
   const safeVenue = toSafePdfString(input.venueName, 'Auditorium Venue');
   const safeAttendee = toSafePdfString(input.attendeeName, 'Valued Customer');
-  const safeShowtime = toSafePdfString(input.showtime, 'Show Time as Scheduled');
+  const safeShowtime = toSafePdfString(input.showtime, 'Show time unavailable');
   const safeSeat = toSafePdfString(input.seatCode, 'General / Reserved');
 
   const doc = new PDFDocument({
@@ -54,6 +82,28 @@ export async function generateTicketPdfBuffer(input: TicketPdfInput): Promise<Bu
   });
 
   const done = collectPdf(doc);
+
+  const unicodeFontPath = resolveDevanagariFontPath();
+  let bodyFont = 'Helvetica';
+  let bodyFontBold = 'Helvetica-Bold';
+  if (unicodeFontPath) {
+    try {
+      doc.registerFont(UNICODE_FONT_NAME, unicodeFontPath);
+      bodyFont = UNICODE_FONT_NAME;
+      bodyFontBold = UNICODE_FONT_NAME;
+    } catch (err) {
+      console.error('[ticket-pdf] Failed to register Devanagari font:', err);
+    }
+  } else {
+    console.warn('[ticket-pdf] NotoSansDevanagari-Regular.ttf missing; Marathi glyphs may not render');
+  }
+
+  const pickFont = (text: string, bold = false) => {
+    if (hasDevanagari(text) || bodyFont === UNICODE_FONT_NAME) {
+      return bold ? bodyFontBold : bodyFont;
+    }
+    return bold ? 'Helvetica-Bold' : 'Helvetica';
+  };
 
   const pageWidth = doc.page.width;
   const margin = 36;
@@ -98,7 +148,7 @@ export async function generateTicketPdfBuffer(input: TicketPdfInput): Promise<Bu
   doc
     .fillColor('#0F172A')
     .fontSize(18)
-    .font('Helvetica-Bold')
+    .font(pickFont(safeTitle, true))
     .text(safeTitle, margin + 20, currentY, { width: contentWidth - 40 });
 
   currentY += 28;
@@ -135,14 +185,20 @@ export async function generateTicketPdfBuffer(input: TicketPdfInput): Promise<Bu
   doc.fontSize(10);
   for (const [label, val] of leftRows) {
     doc.fillColor('#64748B').font('Helvetica').text(label, col1X, leftY, { width: labelWidth });
-    doc.fillColor('#0F172A').font('Helvetica-Bold').text(val, col1X + labelWidth, leftY, { width: valueWidth });
+    doc
+      .fillColor('#0F172A')
+      .font(pickFont(val, true))
+      .text(val, col1X + labelWidth, leftY, { width: valueWidth });
     leftY += 26;
   }
 
   let rightY = currentY;
   for (const [label, val] of rightRows) {
     doc.fillColor('#64748B').font('Helvetica').text(label, col2X, rightY, { width: labelWidth });
-    doc.fillColor(label === 'Seats Assigned' ? '#ea580c' : '#0F172A').font('Helvetica-Bold').text(val, col2X + labelWidth, rightY, { width: valueWidth });
+    doc
+      .fillColor(label === 'Seats Assigned' ? '#ea580c' : '#0F172A')
+      .font(pickFont(val, true))
+      .text(val, col2X + labelWidth, rightY, { width: valueWidth });
     rightY += 26;
   }
 

@@ -269,7 +269,6 @@ async function runPhase4Tests() {
     const holdForCancel = await createTemporarySeatHold({
       sessionId: testSessionId,
       seatIds: [testSeats[0].seat_id],
-      userIdStr: `user_cancel_${Date.now()}`,
     });
 
     // Seat remains in 'held' state or returns to 'available'; order is NOT created
@@ -413,7 +412,6 @@ async function runPhase4Tests() {
     const userHoldExp = await createTemporarySeatHold({
       sessionId: testSessionId,
       seatIds: [seatForExpiry],
-      userIdStr: `exp_user_${Date.now()}`,
     });
 
     // Artificially expire the hold

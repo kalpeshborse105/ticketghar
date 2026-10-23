@@ -8,18 +8,84 @@ import {
   getDbRazorpayCreds,
   clientFromCreds,
 } from '@/src/lib/payments/razorpay.ts';
-import { calculatePricing } from '@/src/lib/inventory-engine.ts';
+import {
+  calculatePricing,
+  extendHoldForCheckout,
+  CHECKOUT_HOLD_EXTENSION_MINUTES,
+} from '@/src/lib/inventory-engine.ts';
 import { cacheDel, sessionSeatsCacheKey } from '@/src/lib/redis.ts';
+import { getCustomerSession } from '@/src/lib/auth-service.ts';
+
+async function findIdempotentPendingOrder(params: {
+  sessionId: number;
+  seatIds: number[];
+  holdToken: string;
+}) {
+  const { sessionId, seatIds, holdToken } = params;
+  const sortedSeatIds = [...seatIds].sort((a, b) => a - b);
+
+  const bound = await db
+    .select({
+      seatId: seatInventory.seatId,
+      orderId: seatInventory.orderId,
+      heldBy: seatInventory.heldByUserId,
+      status: seatInventory.status,
+    })
+    .from(seatInventory)
+    .where(
+      and(
+        eq(seatInventory.sessionId, sessionId),
+        inArray(seatInventory.seatId, sortedSeatIds),
+        eq(seatInventory.heldByUserId, holdToken)
+      )
+    );
+
+  if (bound.length !== sortedSeatIds.length) {
+    return null;
+  }
+
+  const orderIds = new Set(bound.map((b) => b.orderId).filter((id): id is number => id != null));
+  if (orderIds.size !== 1) {
+    return null;
+  }
+
+  const platformOrderId = [...orderIds][0];
+  const [pendingOrder] = await db
+    .select()
+    .from(orders)
+    .where(
+      and(
+        eq(orders.id, platformOrderId),
+        eq(orders.sessionId, sessionId),
+        eq(orders.orderStatus, 'pending'),
+        eq(orders.paymentStatus, 'pending')
+      )
+    )
+    .limit(1);
+
+  if (!pendingOrder?.razorpayOrderId) {
+    return null;
+  }
+
+  return pendingOrder;
+}
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { sessionId, seatIds, couponCode } = body;
+    const { sessionId, seatIds, couponCode, holdToken: bodyHoldToken } = body;
+    const holdToken = String(bodyHoldToken || body.userIdStr || '').trim();
 
-    // Validate required fields
     if (!sessionId || !Array.isArray(seatIds) || seatIds.length === 0) {
       return NextResponse.json(
         { error: 'Missing required fields: sessionId and seatIds' },
+        { status: 400 }
+      );
+    }
+
+    if (!holdToken) {
+      return NextResponse.json(
+        { error: 'Missing holdToken. Reserve seats before checkout.' },
         { status: 400 }
       );
     }
@@ -31,7 +97,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // Warm credentials (env or DB app_secrets). Soft-fail only if both missing.
+    const sortedSeatIds = [...seatIds].map(Number).sort((a, b) => a - b);
+
     try {
       await getRazorpayClientAsync();
     } catch {
@@ -46,7 +113,33 @@ export async function POST(request: Request) {
       }
     }
 
-    // Verify the hold exists and get event details
+    const existingPending = await findIdempotentPendingOrder({
+      sessionId,
+      seatIds: sortedSeatIds,
+      holdToken,
+    });
+
+    if (existingPending) {
+      let publicKeyId = process.env.RAZORPAY_KEY_ID || '';
+      try {
+        const { keyId } = await getRazorpayClientAsync();
+        publicKeyId = keyId;
+      } catch {
+        /* use env fallback */
+      }
+
+      return NextResponse.json({
+        orderId: existingPending.razorpayOrderId,
+        platformOrderId: existingPending.id,
+        orderNumber: existingPending.orderNumber,
+        amount: existingPending.grandTotal,
+        currency: 'INR',
+        keyId: publicKeyId,
+        idempotent: true,
+        holdExpiresAt: existingPending.holdExpiresAt?.toISOString?.() || null,
+      });
+    }
+
     const holdSeats = await db
       .select({
         invId: seatInventory.id,
@@ -60,76 +153,166 @@ export async function POST(request: Request) {
       })
       .from(seatInventory)
       .innerJoin(ticketTypes, eq(seatInventory.ticketTypeId, ticketTypes.id))
-      .where(and(eq(seatInventory.sessionId, sessionId), inArray(seatInventory.seatId, seatIds)));
+      .where(
+        and(eq(seatInventory.sessionId, sessionId), inArray(seatInventory.seatId, sortedSeatIds))
+      );
 
-    if (holdSeats.length < seatIds.length) {
+    if (holdSeats.length < sortedSeatIds.length) {
       return NextResponse.json(
         { error: 'One or more selected seats are not available. Please refresh the seat map.' },
         { status: 409 }
       );
     }
 
-    // Verify seats or auto-hold them for payment checkout
     const now = new Date();
-    const tenMinutes = new Date(Date.now() + 10 * 60 * 1000);
-    const userHoldToken = body.holdToken || body.userIdStr;
-
     for (const seat of holdSeats) {
       if (seat.status === 'booked') {
         return NextResponse.json({ error: 'One or more seats are already booked' }, { status: 409 });
       }
-
       const isExpired = seat.holdExpires && new Date(seat.holdExpires) < now;
-
-      // Reject if held by a different active customer
-      if (seat.status === 'held' && !isExpired) {
-        if (!userHoldToken || (seat.heldBy && seat.heldBy !== userHoldToken)) {
-          return NextResponse.json(
-            { error: 'One or more seats are currently held by another customer' },
-            { status: 409 }
-          );
-        }
+      if (seat.status === 'held' && !isExpired && seat.heldBy !== holdToken) {
+        return NextResponse.json(
+          { error: 'One or more seats are currently held by another customer' },
+          { status: 409 }
+        );
       }
-
-      // Extend or acquire hold for checkout
-      if (seat.status === 'available' || isExpired || (seat.status === 'held' && (!seat.heldBy || seat.heldBy === userHoldToken))) {
-        await db
-          .update(seatInventory)
-          .set({
-            status: 'held',
-            heldByUserId: userHoldToken || seat.heldBy || 'checkout_user',
-            holdExpiresAt: tenMinutes,
-          })
-          .where(eq(seatInventory.id, seat.invId));
-        seat.status = 'held';
-        seat.holdExpires = tenMinutes;
+      if (seat.status === 'available' || isExpired) {
+        return NextResponse.json(
+          { error: 'Seat hold expired or missing. Please select seats again.' },
+          { status: 409 }
+        );
+      }
+      if (seat.status === 'held' && seat.heldBy !== holdToken) {
+        return NextResponse.json(
+          { error: 'One or more seats are currently held by another customer' },
+          { status: 409 }
+        );
       }
     }
 
-    // Invalidate seat map cache so all clients see the extended hold immediately
-    await cacheDel(sessionSeatsCacheKey(sessionId)).catch(() => undefined);
-
     const eventId = holdSeats[0].eventId;
-
-    // Get event details for pricing calculation
     const [eventRecord] = await db.select().from(events).where(eq(events.id, eventId));
 
     if (!eventRecord) {
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
     }
 
-    // Calculate server-authoritative pricing from DB
     const faceValueTotal = holdSeats.reduce((sum, seat) => sum + seat.price, 0);
-    const pricing = await calculatePricing(eventRecord, seatIds.length, faceValueTotal, couponCode);
+    const pricing = await calculatePricing(
+      eventRecord,
+      sortedSeatIds.length,
+      faceValueTotal,
+      couponCode
+    );
 
-    // Amount must be in paise (smallest currency unit)
     const amountInPaise = pricing.grandTotal;
-
     if (amountInPaise <= 0) {
       return NextResponse.json({ error: 'Invalid order amount' }, { status: 400 });
     }
 
-    const receiptId = `rcpt_${sessionId}_${Date.now()}`;
+    const authHeader = request.headers.get('authorization');
+    const customer = await getCustomerSession(authHeader).catch(() => null);
+
+    let targetUserId: number | null = customer?.id ?? null;
+    let targetUserEmail = body.userEmail ? String(body.userEmail).trim().toLowerCase() : '';
+    let targetUserName = body.userName ? String(body.userName).trim() : '';
+    let targetUserPhone = body.userPhone ? String(body.userPhone).trim() : '';
+
+    if (customer) {
+      targetUserId = customer.id;
+      if (!targetUserEmail) targetUserEmail = customer.email?.toLowerCase() || '';
+      if (!targetUserName) targetUserName = customer.fullName || '';
+      if (!targetUserPhone && customer.phoneNumber) targetUserPhone = String(customer.phoneNumber);
+    }
+
+    if (targetUserEmail) {
+      const existingUser = await db
+        .select({ id: users.id, fullName: users.fullName, phoneNumber: users.phoneNumber })
+        .from(users)
+        .where(eq(users.email, targetUserEmail))
+        .limit(1);
+
+      if (existingUser.length > 0) {
+        targetUserId = existingUser[0].id;
+        if (!targetUserName && existingUser[0].fullName) targetUserName = existingUser[0].fullName;
+        if (!targetUserPhone && existingUser[0].phoneNumber) {
+          targetUserPhone = existingUser[0].phoneNumber;
+        }
+      } else if (!targetUserId) {
+        const [newUser] = await db
+          .insert(users)
+          .values({
+            uid: `cust-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            email: targetUserEmail,
+            fullName: targetUserName || 'Customer',
+            phoneNumber: targetUserPhone || null,
+            role: 'customer',
+            preferredLanguage: 'mr',
+            city: 'Pune',
+          })
+          .returning({ id: users.id });
+        targetUserId = newUser.id;
+      }
+    }
+
+    if (!targetUserId) {
+      return NextResponse.json(
+        {
+          error:
+            'Customer account required. Sign in or provide a valid booking email to continue.',
+        },
+        { status: 401 }
+      );
+    }
+
+    const checkoutHoldExpiresAt = new Date(
+      Date.now() + CHECKOUT_HOLD_EXTENSION_MINUTES * 60 * 1000
+    );
+    const randomSuffix = Math.floor(10000 + Math.random() * 90000);
+    const orderNumber = `MT-${new Date().getFullYear()}-${randomSuffix}`;
+
+    const [pendingOrder] = await db
+      .insert(orders)
+      .values({
+        orderNumber,
+        userId: targetUserId,
+        userEmail: targetUserEmail || 'guest@mahaticket.kalpkrutinfotech.com',
+        userPhone: targetUserPhone || '',
+        userName: targetUserName || 'Customer',
+        eventId,
+        sessionId,
+        ticketCount: sortedSeatIds.length,
+        ticketFaceValueTotal: pricing.ticketFaceValueTotal,
+        platformFeeTotal: pricing.platformFeeTotal,
+        taxTotal: pricing.taxTotal,
+        gatewayCostEstimate: pricing.gatewayCostEstimate || 0,
+        discountTotal: pricing.discountTotal || 0,
+        grandTotal: pricing.grandTotal,
+        currency: 'INR',
+        paymentStatus: 'pending',
+        orderStatus: 'pending',
+        idempotencyKey: body.idempotencyKey || `order_${sessionId}_${holdToken.slice(-16)}_${sortedSeatIds.join('-')}`,
+        holdExpiresAt: checkoutHoldExpiresAt,
+      })
+      .returning();
+
+    let holdExpiresAt: Date;
+    try {
+      const extended = await extendHoldForCheckout({
+        sessionId,
+        seatIds: sortedSeatIds,
+        holdToken,
+        pendingOrderId: pendingOrder.id,
+      });
+      holdExpiresAt = extended.holdExpiresAt;
+    } catch (holdErr: any) {
+      await db.delete(orders).where(eq(orders.id, pendingOrder.id));
+      const msg = holdErr?.message || 'Unable to reserve seats for checkout';
+      const status = /held by another|already booked|expired|missing/i.test(msg) ? 409 : 500;
+      return NextResponse.json({ error: msg }, { status });
+    }
+
+    const receiptId = `rcpt_${sessionId}_${pendingOrder.id}`;
     const orderPayload = {
       amount: amountInPaise,
       currency: 'INR' as const,
@@ -137,12 +320,12 @@ export async function POST(request: Request) {
       notes: {
         session_id: sessionId.toString(),
         event_id: eventId.toString(),
-        seat_count: seatIds.length.toString(),
-        hold_token: userHoldToken || '',
+        seat_count: sortedSeatIds.length.toString(),
+        hold_token: holdToken,
+        platform_order_id: String(pendingOrder.id),
       },
     };
 
-    // Env keys first; on Authentication failed, retry with DB app_secrets (prod mismatch fix)
     let { client: razorpayClient, keyId: publicKeyId, source } = await getRazorpayClientAsync();
     let razorpayOrder: any;
     try {
@@ -164,101 +347,20 @@ export async function POST(request: Request) {
         throw firstErr;
       }
     }
-    console.log('[OrderCreated] Razorpay order via', source, razorpayOrder?.id);
 
-    // 1. Resolve customer identity for persisted platform order
-    let targetUserId = 1;
-    let targetUserEmail = body.userEmail ? String(body.userEmail).trim().toLowerCase() : '';
-    let targetUserName = body.userName ? String(body.userName).trim() : '';
-    let targetUserPhone = body.userPhone ? String(body.userPhone).trim() : '';
-
-    if (targetUserEmail) {
-      const existingUser = await db
-        .select({ id: users.id, fullName: users.fullName, phoneNumber: users.phoneNumber })
-        .from(users)
-        .where(eq(users.email, targetUserEmail))
-        .limit(1);
-
-      if (existingUser.length > 0) {
-        targetUserId = existingUser[0].id;
-        if (!targetUserName && existingUser[0].fullName) targetUserName = existingUser[0].fullName;
-        if (!targetUserPhone && existingUser[0].phoneNumber) targetUserPhone = existingUser[0].phoneNumber;
-      } else {
-        const [newUser] = await db
-          .insert(users)
-          .values({
-            uid: `cust-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-            email: targetUserEmail,
-            fullName: targetUserName || 'Customer',
-            phoneNumber: targetUserPhone || null,
-            role: 'customer',
-            preferredLanguage: 'mr',
-            city: 'Pune',
-          })
-          .returning({ id: users.id });
-        targetUserId = newUser.id;
-      }
-    } else {
-      // Find default or first customer
-      const [firstCust] = await db.select({ id: users.id, email: users.email }).from(users).limit(1);
-      if (firstCust) {
-        targetUserId = firstCust.id;
-        targetUserEmail = targetUserEmail || firstCust.email;
-      }
-    }
-
-    // 2. Persist authoritative pending platform order with unique order number & idempotency key
-    const randomSuffix = Math.floor(10000 + Math.random() * 90000);
-    const orderNumber = `MT-${new Date().getFullYear()}-${randomSuffix}`;
-
-    const [pendingOrder] = await db
-      .insert(orders)
-      .values({
-        orderNumber,
-        userId: targetUserId,
-        userEmail: targetUserEmail || 'guest@mahaticket.kalpkrutinfotech.com',
-        userPhone: targetUserPhone || '',
-        userName: targetUserName || 'Customer',
-        eventId,
-        sessionId,
-        ticketCount: seatIds.length,
-        ticketFaceValueTotal: pricing.ticketFaceValueTotal,
-        platformFeeTotal: pricing.platformFeeTotal,
-        taxTotal: pricing.taxTotal,
-        gatewayCostEstimate: pricing.gatewayCostEstimate || 0,
-        discountTotal: pricing.discountTotal || 0,
-        grandTotal: pricing.grandTotal,
-        currency: 'INR',
-        paymentStatus: 'pending',
-        orderStatus: 'pending',
+    await db
+      .update(orders)
+      .set({
         razorpayOrderId: razorpayOrder.id,
         idempotencyKey: `order_rzp_${razorpayOrder.id}`,
-        holdExpiresAt: tenMinutes,
+        holdExpiresAt,
+        updatedAt: new Date(),
       })
-      .returning();
+      .where(eq(orders.id, pendingOrder.id));
 
-    // 3. Bind the seat inventory rows directly to this pending order
-    await db
-      .update(seatInventory)
-      .set({
-        status: 'held',
-        heldByUserId: userHoldToken || seatInventory.heldByUserId,
-        holdExpiresAt: tenMinutes,
-        orderId: pendingOrder.id,
-      })
-      .where(
-        and(
-          eq(seatInventory.sessionId, sessionId),
-          inArray(seatInventory.seatId, seatIds)
-        )
-      );
+    await cacheDel(sessionSeatsCacheKey(sessionId)).catch(() => undefined);
 
-    console.log('[OrderCreated] Bound Razorpay order to DB order:', {
-      orderId: razorpayOrder.id,
-      platformOrderId: pendingOrder.id,
-      orderNumber: pendingOrder.orderNumber,
-      amount: amountInPaise,
-    });
+    console.log('[OrderCreated] Razorpay order via', source, razorpayOrder?.id);
 
     return NextResponse.json({
       orderId: razorpayOrder.id,
@@ -268,13 +370,12 @@ export async function POST(request: Request) {
       currency: 'INR',
       keyId: publicKeyId,
       receipt: receiptId,
-      holdExpiresAt: tenMinutes.toISOString(),
+      holdExpiresAt: holdExpiresAt.toISOString(),
       pricing,
     });
   } catch (error: any) {
     console.error('Create order error:', error);
 
-    // Handle Razorpay-specific errors
     if (error.statusCode) {
       const details = error.error?.description || error.message || 'Payment gateway error';
       return NextResponse.json(

@@ -3,15 +3,11 @@ import { db } from '@/src/db/index.ts';
 import { events, eventSessions } from '@/src/db/schema.ts';
 import { eq } from 'drizzle-orm';
 import { createTemporarySeatHold, calculatePricing } from '@/src/lib/inventory-engine.ts';
-import { getCustomerSession } from '@/src/lib/auth-service.ts';
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { sessionId, seatIds, userIdStr, userId, couponCode } = body;
-    const authHeader = request.headers.get('authorization');
-    const customer = await getCustomerSession(authHeader).catch(() => null);
-    const holderId = userIdStr || userId || (customer?.id ? String(customer.id) : null) || 'guest-session-' + Date.now();
+    const { sessionId, seatIds, couponCode } = body;
 
     if (!sessionId || !Array.isArray(seatIds) || seatIds.length === 0) {
       return NextResponse.json(
@@ -27,7 +23,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // 1. Fetch Session and Event
     const sessionRows = await db
       .select({
         session: eventSessions,
@@ -43,14 +38,12 @@ export async function POST(request: Request) {
 
     const { event } = sessionRows[0];
 
-    // 2. Perform atomic hold in DB
+    // Server-issued hold token only — client userIdStr is ignored
     const holdResult = await createTemporarySeatHold({
       sessionId,
       seatIds,
-      userIdStr: holderId,
     });
 
-    // 3. Compute itemized pricing
     const pricing = await calculatePricing(
       event,
       seatIds.length,
@@ -60,18 +53,14 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      holdToken: holdResult.holdToken || holderId,
-      hold: {
-        ...holdResult,
-        holdToken: holdResult.holdToken || holderId,
-      },
+      holdToken: holdResult.holdToken,
+      hold: holdResult,
       pricing,
     });
-  } catch (error: any) {
-    console.error('Seat hold error:', error);
-    return NextResponse.json(
-      { error: error.message || 'Unable to reserve seats. Please try different seats.' },
-      { status: 409 }
-    );
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error ? error.message : 'Unable to reserve seats. Please try different seats.';
+    console.error('Seat hold error:', message);
+    return NextResponse.json({ error: message }, { status: 409 });
   }
 }

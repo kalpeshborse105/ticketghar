@@ -6,6 +6,10 @@ import { generateTicketPdfBuffer } from '@/src/lib/ticket-pdf';
 import { getTicketShareUrl } from '@/src/lib/public-url';
 import { formatISTDate, formatISTTime } from '@/src/lib/dateUtils';
 import { generateSecureTicketQr } from '@/src/lib/ticket-crypto';
+import {
+  authorizeOrderPdfAccess,
+  PRIVATE_PDF_HEADERS,
+} from '@/src/lib/order-access';
 
 export async function GET(
   req: NextRequest,
@@ -29,7 +33,6 @@ export async function GET(
       .limit(1);
 
     if (!ticketRecord) {
-      // Direct order number fallback
       [ticketRecord] = await db
         .select({
           ticket: tickets,
@@ -44,7 +47,6 @@ export async function GET(
     }
 
     if (!ticketRecord && /^\d+$/.test(ticketCode)) {
-      // Numeric order ID fallback
       [ticketRecord] = await db
         .select({
           ticket: tickets,
@@ -59,10 +61,14 @@ export async function GET(
     }
 
     if (!ticketRecord) {
-      return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    // 2. Fetch all tickets for this booking so all seats are aggregated on the single pass
+    const access = await authorizeOrderPdfAccess(req, ticketRecord.order);
+    if (!access.ok) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+
     const allOrderTickets = await db
       .select()
       .from(tickets)
@@ -76,6 +82,14 @@ export async function GET(
       .limit(1);
 
     const startTime = ticketRecord.session.sessionStartTime;
+    if (!startTime) {
+      console.error(
+        '[PDF] Missing sessionStartTime for ticket',
+        ticketRecord.ticket.ticketCode,
+        'session',
+        ticketRecord.session.id
+      );
+    }
     const showtime = startTime
       ? `${formatISTDate(startTime, 'en', false)} • ${formatISTTime(startTime, 'en', true)}`
       : 'Show time unavailable';
@@ -93,8 +107,14 @@ export async function GET(
     const pdfBuffer = await generateTicketPdfBuffer({
       ticketCode: ticketRecord.ticket.ticketCode,
       orderNumber: ticketRecord.order.orderNumber,
-      eventTitle: eventRecord?.event.title || eventRecord?.event.titleMr || 'Live Performance',
-      venueName: eventRecord?.venue?.name || eventRecord?.venue?.nameMr || 'Auditorium Venue',
+      eventTitle:
+        eventRecord?.event.titleMr ||
+        eventRecord?.event.title ||
+        'Live Performance',
+      venueName:
+        eventRecord?.venue?.nameMr ||
+        eventRecord?.venue?.name ||
+        'Auditorium Venue',
       showtime,
       seatCode: seatsSummary,
       attendeeName: ticketRecord.ticket.attendeeName || ticketRecord.order.userName,
@@ -113,11 +133,14 @@ export async function GET(
         'Content-Type': 'application/pdf',
         'Content-Disposition': `${dispositionType}; filename="${filename}"`,
         'Content-Length': String(pdfBuffer.length),
-        'Cache-Control': 'public, max-age=60',
+        ...PRIVATE_PDF_HEADERS,
       },
     });
-  } catch (error) {
-    console.error('PDF generation error:', error);
+  } catch (error: unknown) {
+    console.error(
+      'PDF generation error:',
+      error instanceof Error ? error.message : error
+    );
     return NextResponse.json(
       { error: 'Something went wrong while generating ticket PDF. Please try again.' },
       { status: 500 }

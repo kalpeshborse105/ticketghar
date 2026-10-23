@@ -516,6 +516,8 @@ export interface OrderItem {
   event?: EventItem;
   session?: SessionItem;
   tickets?: TicketDetailItem[];
+  /** Short-lived server token for authorized PDF download */
+  pdfDownloadToken?: string;
 }
 
 export interface TicketDetailItem {
@@ -871,6 +873,10 @@ export const api = {
     return { events: mapped };
   },
 
+  /**
+   * Booking-critical event detail — canonical production API only.
+   * No silent Supabase / stale-cache booking decisions.
+   */
   getEvent: async (id: number): Promise<{ event: EventItem }> => {
     const now = Date.now();
     const cached = singleEventCache.get(id);
@@ -878,145 +884,24 @@ export const api = {
       return { event: cached.data };
     }
 
-    // 1. Try real server API endpoint first (full PostgreSQL join with sessions, ticket types, venue)
-    try {
-      const res = await request<{ event: EventItem }>(`/api/events/${id}`);
-      if (res?.event?.id) {
-        const norm = normalizeEvent(res.event);
-        singleEventCache.set(id, { data: norm, expires: now + 12000 });
-        return { event: norm };
-      }
-    } catch {}
-
-    try {
-      if (!resolvedBase) {
-        await resolveApiBase().catch(() => null);
-      }
-      const [eventsRaw, venuesRaw, sessionsRaw, pricesRaw] = await Promise.all([
-        supabaseFetch<any[]>(`events?id=eq.${id}`),
-        supabaseFetch<any[]>('venues?select=*'),
-        supabaseFetch<any[]>(`event_sessions?event_id=eq.${id}&status=eq.active`),
-        supabaseFetch<any[]>(`ticket_types?event_id=eq.${id}`),
-      ]);
-
-      if (!eventsRaw.length) {
-        throw new Error('Event not found');
-      }
-
-      const e = eventsRaw[0];
-      const venuesMap = Object.fromEntries(venuesRaw.map((v) => [v.id, v]));
-      const venue = venuesMap[e.venue_id] || null;
-      const minPrice = pricesRaw.length ? Math.min(...pricesRaw.map((p) => p.price)) : 0;
-      const posterUrl =
-        absoluteMediaUrl(e.poster_url) ||
-        absoluteMediaUrl(e.banner_url) ||
-        fallbackPosterUrl(e.id);
-      const bannerUrl =
-        absoluteMediaUrl(e.banner_url) ||
-        absoluteMediaUrl(e.poster_url) ||
-        posterUrl;
-
-      const event: EventItem = normalizeEvent({
-        id: e.id,
-        title: e.title,
-        titleMr: e.title_mr || e.title,
-        slug: e.slug,
-        category: e.category,
-        categoryMr: e.category_mr || e.category,
-        language: e.language || 'मराठी',
-        durationMinutes: e.duration_minutes || 150,
-        ageGuidance: e.age_guidance || 'U',
-        description: e.description,
-        descriptionMr: e.description_mr,
-        posterUrl,
-        bannerUrl,
-        status: e.status,
-        featured: e.featured === 1 ? 1 : 0,
-        isPromoted: e.featured === 1,
-        isInformational: !!e.is_informational,
-        interestedCount: e.interested_count || 0,
-        tag: e.tag || (e.featured === 1 ? 'Featured' : null),
-        cast:
-          typeof e.cast_crew === 'string' && !String(e.cast_crew).trim().startsWith('[')
-            ? e.cast_crew
-            : null,
-        castCrewList: parseCastCrew(e.cast_crew),
-        minPrice,
-        rating: e.rating != null ? Number(e.rating) : null,
-        ratingCountStr: e.rating_count_str || null,
-        showDateStr: e.show_date_str || null,
-        venue: venue
-          ? {
-              id: venue.id,
-              name: venue.name,
-              nameMr: venue.name_mr || venue.name,
-              address: venue.address,
-              city: venue.city,
-              state: venue.state,
-              pincode: venue.pincode,
-              latitude: venue.latitude != null ? String(venue.latitude) : null,
-              longitude: venue.longitude != null ? String(venue.longitude) : null,
-              totalCapacity: venue.total_capacity || 800,
-              hasSeatLayout: venue.has_seat_layout ?? 1,
-            }
-          : null,
-        sessions: filterUpcomingSessions(
-          sessionsRaw.map((s) => ({
-            id: s.id,
-            eventId: s.event_id,
-            sessionStartTime: s.session_start_time,
-            sessionEndTime: s.session_end_time,
-            status: s.status,
-            ticketTypes: pricesRaw
-              .filter((p) => p.session_id === s.id || !p.session_id)
-              .map((p) => ({
-                id: p.id,
-                name: p.name,
-                nameMr: p.name_mr,
-                price: p.price,
-                totalQuota: p.total_quota,
-                availableQuota: p.available_quota,
-                isSeated: p.is_seated,
-              })),
-          }))
-        ),
-      });
-
-      return { event };
-    } catch {
-      const res = await request<{ event: EventItem }>(`/api/events/${id}`);
-      if (!res?.event?.id) throw new Error('Event not found');
-      return { event: normalizeEvent(res.event) };
-    }
-  },
-
-  // Venues
-  getVenues: async (city?: string): Promise<{ venues: VenueItem[] }> => {
-    try {
-      const q =
-        city && !isAllCitiesValue(city)
-          ? `venues?city=eq.${encodeURIComponent(city)}`
-          : 'venues?select=*';
-      const rows = await supabaseFetch<any[]>(q);
-      const venues: VenueItem[] = rows.map((v) => ({
-        id: v.id,
-        name: v.name,
-        nameMr: v.name_mr || v.name,
-        address: v.address,
-        city: v.city,
-        state: v.state,
-        pincode: v.pincode,
-        totalCapacity: v.total_capacity || 800,
-        hasSeatLayout: v.has_seat_layout ?? 1,
-      }));
-      return { venues };
-    } catch {
-      return request<{ venues: VenueItem[] }>(
-        city && !isAllCitiesValue(city)
-          ? `/api/venues?city=${encodeURIComponent(city)}`
-          : '/api/venues'
+    const res = await request<{ event: EventItem }>(`/api/events/${id}`);
+    if (!res?.event?.id) {
+      throw new Error(
+        'कार्यक्रम लोड करता आला नाही. कृपया पुन्हा प्रयत्न करा. (Could not load event — retry)'
       );
     }
+    const norm = normalizeEvent(res.event);
+    singleEventCache.set(id, { data: norm, expires: now + 12000 });
+    return { event: norm };
+  },
+
+  // Venues — prefer shared API (same DB as web)
+  getVenues: async (city?: string): Promise<{ venues: VenueItem[] }> => {
+    return request<{ venues: VenueItem[] }>(
+      city && !isAllCitiesValue(city)
+        ? `/api/venues?city=${encodeURIComponent(city)}`
+        : '/api/venues'
+    );
   },
 
   // Announcements
@@ -1108,7 +993,8 @@ export const api = {
   hold: async (body: {
     sessionId: number;
     seatIds: number[];
-    userIdStr: string;
+    /** @deprecated Ignored by server — ownership is the returned holdToken */
+    userIdStr?: string;
   }): Promise<HoldResult> => {
     try {
       const res = await request<any>('/api/bookings/hold', {
@@ -1116,7 +1002,6 @@ export const api = {
         body: JSON.stringify({
           sessionId: body.sessionId,
           seatIds: body.seatIds,
-          userIdStr: body.userIdStr,
         }),
         timeout: 45000,
       });
@@ -1162,15 +1047,16 @@ export const api = {
     holdToken: string;
     seatIds?: number[];
   }) => {
-    try {
-      return await request<any>('/api/bookings/release', {
-        method: 'POST',
-        body: JSON.stringify(params),
-        timeout: 12000,
-      });
-    } catch {
-      return { success: true, releasedCount: params.seatIds?.length || 0 };
-    }
+    return await request<{
+      success?: boolean;
+      releasedCount?: number;
+      message?: string;
+      error?: string;
+    }>('/api/bookings/release', {
+      method: 'POST',
+      body: JSON.stringify(params),
+      timeout: 12000,
+    });
   },
 
   // Coupons — same as web CheckoutDrawer: GET/POST /api/coupons
@@ -1325,66 +1211,19 @@ export const api = {
   },
 
   getOrder: async (orderNumber: string): Promise<{ order: OrderItem }> => {
-    try {
-      const stored = await AsyncStorage.getItem('@tg_my_orders');
-      if (stored) {
-        const orders: OrderItem[] = JSON.parse(stored);
-        const found = orders.find((o) => o.orderNumber === orderNumber);
-        if (found) return { order: found };
-      }
-    } catch {}
-    return request<{ order: OrderItem }>(`/api/orders/${orderNumber}`);
+    return request<{ order: OrderItem }>(
+      `/api/orders?orderNumber=${encodeURIComponent(orderNumber)}`
+    );
   },
 
-  getMyTickets: async (userEmail?: string, userPhone?: string): Promise<{ orders: OrderItem[] }> => {
-    const isDemoOrder = (ord: any) => {
-      const num = String(ord?.orderNumber || ord?.id || '');
-      if (num === 'MT-2026-88192' || num.toLowerCase().includes('demo')) return true;
-      if (Array.isArray(ord?.tickets)) {
-        if (ord.tickets.some((t: any) => String(t?.ticketCode || '').includes('88192') || String(t?.ticketCode || '').toLowerCase().includes('demo'))) {
-          return true;
-        }
-      }
-      return false;
-    };
-
-    let localOrders: OrderItem[] = [];
-    try {
-      const stored = await AsyncStorage.getItem('@tg_my_orders');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
-          localOrders = parsed.filter((o) => !isDemoOrder(o));
-          if (localOrders.length !== parsed.length) {
-            await AsyncStorage.setItem('@tg_my_orders', JSON.stringify(localOrders)).catch(() => null);
-          }
-        }
-      }
-    } catch {}
-
-    // Check remote DB orders if user has email or phone
-    const cleanEmail = userEmail?.trim();
-    const cleanPhone = userPhone?.trim();
-    if (cleanEmail || cleanPhone) {
-      try {
-        const query = cleanEmail ? `email=${encodeURIComponent(cleanEmail)}` : `phone=${encodeURIComponent(cleanPhone!)}`;
-        const res = await request<{ orders: OrderItem[] }>(`/api/orders?${query}`).catch(() => null);
-        if (res?.orders && Array.isArray(res.orders)) {
-          const seen = new Set<string>();
-          const merged: OrderItem[] = [];
-          for (const ord of [...res.orders, ...localOrders]) {
-            if (isDemoOrder(ord)) continue;
-            const key = String(ord.orderNumber || ord.id);
-            if (!seen.has(key)) {
-              seen.add(key);
-              merged.push(ord);
-            }
-          }
-          return { orders: merged };
-        }
-      } catch {}
-    }
-    return { orders: localOrders.filter((o) => !isDemoOrder(o)) };
+  /**
+   * Authenticated My Tickets — server session / Bearer only.
+   * Does not accept email/phone as authorization and does not return cache as proof of ownership.
+   */
+  getMyTickets: async (_userEmail?: string, _userPhone?: string): Promise<{ orders: OrderItem[] }> => {
+    const res = await request<{ orders: OrderItem[] }>('/api/orders');
+    const orders = Array.isArray(res?.orders) ? res.orders : [];
+    return { orders };
   },
 
   // Live UI Home Sections Customization (Admin controlled)

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Language, translations } from '../lib/i18n.ts';
 import { MTEmptyState } from './ui/MTEmptyState';
 import { AuthModal } from './AuthModal';
@@ -42,53 +42,18 @@ export const MyTicketsView: React.FC<MyTicketsViewProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [authModalOpen, setAuthModalOpen] = useState(false);
 
-  const readCachedOrdersForEmail = (email: string): any[] => {
-    if (typeof window === 'undefined' || !email) return [];
-    const userEmailLower = email.toLowerCase().trim();
-    const buckets = ['mahaticket_offline_orders', 'mahaticket_my_orders'];
-    const out: any[] = [];
-    for (const key of buckets) {
-      try {
-        const cached = localStorage.getItem(key);
-        if (!cached) continue;
-        const parsed = JSON.parse(cached);
-        if (!Array.isArray(parsed)) continue;
-        for (const o of parsed) {
-          const oe = String(o?.userEmail || o?.email || '').toLowerCase().trim();
-          if (oe && oe === userEmailLower) out.push(o);
-        }
-      } catch {
-        /* ignore */
-      }
-    }
-    return out;
-  };
+  const loadGeneration = useRef(0);
 
   /**
-   * Guest checkout writes mahaticket_user (email) without always having a cookie session.
-   * Always hydrate cache first, then fetch /api/orders?email=… so list never flashes empty.
+   * Private tickets require a verified server session.
+   * localStorage / email alone is never authorization.
    */
-  const checkAuthAndLoadTickets = async () => {
-    let currentUser: any | null = null;
-
-    // 1) Instant identity from localStorage (guest booking + logged-in)
-    if (typeof window !== 'undefined') {
-      try {
-        const local = localStorage.getItem('mahaticket_user');
-        if (local) {
-          currentUser = JSON.parse(local);
-          if (currentUser?.email) {
-            setUser(currentUser);
-            const cached = readCachedOrdersForEmail(currentUser.email);
-            if (cached.length > 0) {
-              setOrders(cached);
-            }
-            setLoading(true);
-            setAuthChecking(false);
-          }
-        }
-      } catch {}
-    }
+  const checkAuthAndLoadTickets = useCallback(async () => {
+    const myId = ++loadGeneration.current;
+    setAuthChecking(true);
+    setLoading(true);
+    // Clear private UI until identity is proven (prevents account-switch / logout leaks)
+    setOrders([]);
 
     const token = typeof window !== 'undefined' ? localStorage.getItem('mahaticket_token') : null;
     const authHeaders: Record<string, string> = {};
@@ -96,6 +61,7 @@ export const MyTicketsView: React.FC<MyTicketsViewProps> = ({
       authHeaders['Authorization'] = `Bearer ${token}`;
     }
 
+    let currentUser: any | null = null;
     try {
       const sessionRes = await fetch('/api/auth/flow/session', {
         method: 'GET',
@@ -106,47 +72,50 @@ export const MyTicketsView: React.FC<MyTicketsViewProps> = ({
 
       if (sessionRes.ok) {
         const sessionData = await sessionRes.json();
-        if (sessionData?.user) {
+        if (sessionData?.user?.email) {
           currentUser = sessionData.user;
-          setUser(currentUser);
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('mahaticket_user', JSON.stringify(currentUser));
-          }
         }
-      } else if (!currentUser?.email) {
-        currentUser = null;
-        setUser(null);
       }
     } catch (e) {
       console.warn('Session verification error:', e);
-    } finally {
-      setAuthChecking(false);
     }
 
-    // Guest / logged-in both need an email on the booking profile
-    if (!currentUser || !currentUser.email) {
+    if (myId !== loadGeneration.current) return;
+
+    if (!currentUser) {
+      setUser(null);
       setOrders([]);
+      setAuthChecking(false);
       setLoading(false);
       return;
     }
 
-    setLoading(true);
+    setUser(currentUser);
+    setAuthChecking(false);
 
-    // Keep showing cache while network runs (stale-while-revalidate)
-    const cachedOrders = readCachedOrdersForEmail(currentUser.email);
-    if (cachedOrders.length > 0) {
-      setOrders((prev) => (prev.length > 0 ? prev : cachedOrders));
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('mahaticket_user', JSON.stringify(currentUser));
+      }
+    } catch {
+      /* ignore */
     }
 
     let onlineOrders: any[] = [];
     try {
-      const emailQ = encodeURIComponent(String(currentUser.email).trim().toLowerCase());
-      const res = await fetch(`/api/orders?email=${emailQ}`, {
+      const res = await fetch('/api/orders', {
         method: 'GET',
         cache: 'no-store',
         credentials: 'include',
         headers: authHeaders,
       });
+      if (res.status === 401) {
+        if (myId === loadGeneration.current) {
+          setUser(null);
+          setOrders([]);
+        }
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
         onlineOrders = data.orders || [];
@@ -155,28 +124,22 @@ export const MyTicketsView: React.FC<MyTicketsViewProps> = ({
       console.warn('Error fetching online orders:', e);
     }
 
-    const orderMap = new Map<string, any>();
-    for (const o of onlineOrders) {
-      if (o.orderNumber) orderMap.set(o.orderNumber, o);
-    }
-    for (const c of cachedOrders) {
-      if (c.orderNumber && !orderMap.has(c.orderNumber)) {
-        orderMap.set(c.orderNumber, c);
+    if (myId !== loadGeneration.current) return;
+
+    setOrders(onlineOrders);
+    if (typeof window !== 'undefined' && onlineOrders.length > 0) {
+      try {
+        localStorage.setItem(
+          'mahaticket_my_orders',
+          JSON.stringify(onlineOrders.slice(0, 40))
+        );
+      } catch {
+        /* ignore */
       }
     }
 
-    const merged = Array.from(orderMap.values());
-    setOrders(merged);
-
-    // Persist merged list for next visit (prevents empty flash on profile ↔ tickets)
-    if (typeof window !== 'undefined' && merged.length > 0) {
-      try {
-        localStorage.setItem('mahaticket_my_orders', JSON.stringify(merged.slice(0, 40)));
-      } catch {}
-    }
-
     setLoading(false);
-  };
+  }, []);
 
   useEffect(() => {
     checkAuthAndLoadTickets();
@@ -187,10 +150,9 @@ export const MyTicketsView: React.FC<MyTicketsViewProps> = ({
 
     const handleStorageChange = (e: StorageEvent) => {
       if (
-        e.key === 'mahaticket_user' ||
         e.key === 'mahaticket_token' ||
         e.key === 'mahaticket_customer_session' ||
-        e.key === 'mahaticket_lang'
+        e.key === null
       ) {
         checkAuthAndLoadTickets();
       }
@@ -201,11 +163,12 @@ export const MyTicketsView: React.FC<MyTicketsViewProps> = ({
     window.addEventListener('storage', handleStorageChange);
 
     return () => {
+      loadGeneration.current += 1;
       window.removeEventListener('mahaticket_profile_updated', handleProfileUpdate);
       window.removeEventListener('auth_changed', handleProfileUpdate);
       window.removeEventListener('storage', handleStorageChange);
     };
-  }, []);
+  }, [checkAuthAndLoadTickets]);
 
 
   const getCleanDisplayName = (u: any) => {
