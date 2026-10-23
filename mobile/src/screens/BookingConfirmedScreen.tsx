@@ -209,6 +209,7 @@ export default function BookingConfirmedScreen({ navigation, route }: any) {
       filename: `MahaTicket-${resolvedOrderNum}.pdf`,
       title: `${resolvedEventTitle} - Ticket Pass`,
       description: `Seats: ${formattedSeats} • Order #${resolvedOrderNum}`,
+      pdfToken: (order as any)?.pdfDownloadToken || (route.params as any)?.pdfDownloadToken || (route.params as any)?.order?.pdfDownloadToken,
     });
   };
 

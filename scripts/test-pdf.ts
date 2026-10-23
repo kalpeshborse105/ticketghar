@@ -1,19 +1,31 @@
-import { generateTicketPdfBuffer } from '../src/lib/ticket-pdf';
+import 'dotenv/config';
+import fs from 'fs';
+import path from 'path';
+import PDFDocument from 'pdfkit';
 
-async function testPdf() {
-  const buf = await generateTicketPdfBuffer({
-    ticketCode: 'MT-TEST-123',
-    orderNumber: 'MT-2026-99999',
-    eventTitle: 'Ghashiram Kotwal',
-    venueName: 'Bal Gandharva Rangmandir',
-    showtime: 'Fri, 24 Oct 2026, 06:30 PM',
-    seatCode: 'A01, A02 (2 Tickets)',
-    attendeeName: 'Kalpesh Borse',
-    faceValuePaise: 80000,
-    status: 'valid',
-    qrPayload: 'https://mahaticket.kalpkrutinfotech.com/tickets/MT-TEST-123',
+async function testMissingFont() {
+  console.log('Testing PDF with NO devanagari font registered...');
+  const doc = new PDFDocument({ size: 'A4' });
+  const chunks: Buffer[] = [];
+  
+  const done = new Promise<Buffer>((resolve, reject) => {
+    doc.on('data', (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', (err) => {
+      console.log('Doc error event:', err);
+      reject(err);
+    });
   });
-  console.log('PDF generated successfully, size:', buf.length, 'bytes');
+
+  try {
+    doc.font('Helvetica-Bold');
+    doc.text('जर तर ची गोष्ट');
+    doc.end();
+    const buf = await done;
+    console.log('Success without font? Buf length:', buf.length);
+  } catch (err: any) {
+    console.error('CRASHED WITH ERROR:', err.message, err.stack);
+  }
 }
 
-testPdf().catch(console.error);
+testMissingFont();

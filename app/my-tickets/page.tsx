@@ -30,7 +30,7 @@ export default function MyTicketsPage() {
         onOpenMyTickets={() => {}}
       />
 
-      <main className="py-6 sm:py-8">
+      <main className="py-6 sm:py-8 pb-24 min-h-[calc(100vh-80px)]">
         <MyTicketsView
           language={language}
           onBack={() => router.push('/')}

@@ -19,10 +19,12 @@ export type TicketPdfInput = {
 };
 
 const DEVANAGARI_FONT_CANDIDATES = [
-  // Unhinted / variable build — works with pdfkit+fontkit for complex Devanagari
-  path.join(process.cwd(), 'assets', 'fonts', 'NotoSansDevanagari-unhinted.ttf'),
-  path.join(process.cwd(), 'assets', 'fonts', 'NotoSansDevanagari-Regular.ttf'),
+  path.join(process.cwd(), 'public', 'fonts', 'NotoSansDevanagari-Regular.ttf'),
   path.join(process.cwd(), 'public', 'fonts', 'NotoSansDevanagari-unhinted.ttf'),
+  path.join(process.cwd(), 'assets', 'fonts', 'NotoSansDevanagari-Regular.ttf'),
+  path.join(process.cwd(), 'assets', 'fonts', 'NotoSansDevanagari-unhinted.ttf'),
+  path.resolve(__dirname, '../../public/fonts/NotoSansDevanagari-Regular.ttf'),
+  path.resolve(__dirname, '../../assets/fonts/NotoSansDevanagari-Regular.ttf'),
 ];
 
 const UNICODE_FONT_NAME = 'MahaTicketUnicode';

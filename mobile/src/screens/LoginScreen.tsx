@@ -7,7 +7,7 @@
  *    - If no password / new booking -> Auto-sends OTP -> Verifies OTP -> Sets new password
  * 3. Supports Google Sign-In and Continue as Guest
  */
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -48,6 +48,20 @@ export default function LoginScreen({ navigation, route }: any) {
   const [verifiedSessionToken, setVerifiedSessionToken] = useState<string>('');
 
   const setAuth = useAuthStore((s) => s.setAuth);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      if (route.params?.onSuccess) {
+        route.params.onSuccess();
+        navigation.goBack();
+      } else if (navigation.canGoBack()) {
+        navigation.goBack();
+      } else {
+        navigation.replace('Main', { screen: 'Tickets' });
+      }
+    }
+  }, [isAuthenticated, navigation, route.params]);
 
   const slideX = useRef(new Animated.Value(0)).current;
   const otpRef = useRef<TextInput>(null);

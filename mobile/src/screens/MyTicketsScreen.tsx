@@ -30,6 +30,8 @@ import { api, OrderItem, formatDate, formatTime, paise } from '../api';
 import { useAuthStore } from '../store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Badge, Button, EmptyState, MahaTicketPass, Skeleton, MTPopupModal } from '../components';
+import { downloadTicketPdf } from '../lib/downloader';
+import { WEB_ORIGIN } from '../lib/contact';
 
 type Tab = 'upcoming' | 'past';
 
@@ -82,6 +84,48 @@ export default function MyTicketsScreen({ navigation }: any) {
     },
     [isAuthenticated]
   );
+
+  const handleDownloadOrderPdf = async (order: OrderItem) => {
+    const resolvedOrderNum = order.orderNumber || String(order.id);
+    const pdfUrl = `${WEB_ORIGIN}/api/orders/${encodeURIComponent(resolvedOrderNum)}/pdf`;
+    await downloadTicketPdf({
+      url: `${pdfUrl}?download=1`,
+      filename: `MahaTicket-${resolvedOrderNum}.pdf`,
+      title: `${order.event?.titleMr || order.event?.title || 'MahaTicket'} - Ticket Pass`,
+      description: `Order #${resolvedOrderNum}`,
+      pdfToken: (order as any)?.pdfDownloadToken,
+    });
+  };
+
+  const handleShareOrder = async (order: OrderItem) => {
+    const resolvedOrderNum = order.orderNumber || String(order.id);
+    const primaryTicketCode = order.tickets?.[0]?.ticketCode || resolvedOrderNum;
+    const ticketWebUrl = `${WEB_ORIGIN}/tickets/${encodeURIComponent(primaryTicketCode)}`;
+    const eventName = order.event?.titleMr || order.event?.title || (order as any).eventTitle || 'कार्यक्रम';
+    const venueName = order.event?.venue?.nameMr || order.event?.venue?.name || (order as any).venueName || 'सभागृह';
+    const when = order.session?.sessionStartTime
+      ? `${formatDate(order.session.sessionStartTime)} • ${formatTime(order.session.sessionStartTime)}`
+      : (order as any).showDateStr || '';
+    const seats =
+      order.tickets?.map((t) => t.seatCode).filter(Boolean).join(', ') ||
+      (Array.isArray((order as any).seatCodes) ? (order as any).seatCodes.join(', ') : 'General');
+
+    const msg =
+      `🎭 *MahaTicket (महाटिकिट) - ई-तिकीट पास*\n\n` +
+      `📌 *कार्यक्रम:* ${eventName}\n` +
+      (when ? `📅 *तारीख व वेळ:* ${when}\n` : '') +
+      `📍 *सभागृह:* ${venueName}\n` +
+      `💺 *आसन क्रमांक:* ${seats}\n` +
+      `🎟️ *ऑर्डर क्रमांक:* #${resolvedOrderNum}\n\n` +
+      `🌐 *तिकीट ऑनलाइन पहा:* ${ticketWebUrl}\n\n` +
+      `प्रवेशद्वारावर डिजिटल क्यूआर कोड दाखवा. सुलभ तिकीट बुकिंग - MahaTicket!`;
+
+    await Share.share({
+      title: `${eventName} - MahaTicket Pass`,
+      message: msg,
+      url: ticketWebUrl,
+    });
+  };
 
   // Session-first: never render cached private tickets before auth is known
   useEffect(() => {
@@ -260,12 +304,7 @@ export default function MyTicketsScreen({ navigation }: any) {
 
       {/* Header */}
       <View style={styles.header}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Text style={styles.headerTitle}>My Tickets</Text>
-          <View style={styles.ticketCountBadge}>
-            <Text style={styles.ticketCountText}>{ordersToDisplay.length}</Text>
-          </View>
-        </View>
+        <Text style={styles.headerTitle}>My Tickets</Text>
         <Text style={styles.headerSub}>Digital Passes & Entry QR</Text>
       </View>
 
@@ -276,7 +315,7 @@ export default function MyTicketsScreen({ navigation }: any) {
           onPress={() => setActiveTab('upcoming')}
         >
           <Text style={[styles.tabText, activeTab === 'upcoming' && styles.tabTextActive]}>
-            Upcoming ({upcoming.length})
+            Upcoming
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -284,7 +323,7 @@ export default function MyTicketsScreen({ navigation }: any) {
           onPress={() => setActiveTab('past')}
         >
           <Text style={[styles.tabText, activeTab === 'past' && styles.tabTextActive]}>
-            Past ({past.length})
+            Past
           </Text>
         </TouchableOpacity>
       </View>
@@ -362,16 +401,39 @@ export default function MyTicketsScreen({ navigation }: any) {
                     </Text>
                   </View>
                 </View>
-                <TouchableOpacity
-                  onPress={() => {
-                    setSelectedOrder(item);
-                    setQrVisible(true);
-                  }}
-                  style={styles.webViewPassBtn}
-                  activeOpacity={0.88}
-                >
-                  <Text style={styles.webViewPassText}>पास उघडा / View Pass</Text>
-                </TouchableOpacity>
+                <View style={styles.webActionButtonsRow}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setSelectedOrder(item);
+                      setQrVisible(true);
+                    }}
+                    style={styles.webViewPassBtn}
+                    activeOpacity={0.88}
+                  >
+                    <Icon name="ticket-confirmation" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                    <Text style={styles.webViewPassText}>पास उघडा / View Pass</Text>
+                  </TouchableOpacity>
+
+                  <View style={styles.webSecondaryActionsRow}>
+                    <TouchableOpacity
+                      onPress={() => handleDownloadOrderPdf(item)}
+                      style={styles.webDownloadPdfBtn}
+                      activeOpacity={0.85}
+                    >
+                      <Icon name="file-pdf-box" size={16} color="#EA580C" style={{ marginRight: 4 }} />
+                      <Text style={styles.webDownloadPdfText}>Download PDF</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => handleShareOrder(item)}
+                      style={styles.webShareBtn}
+                      activeOpacity={0.85}
+                    >
+                      <Icon name="share-variant" size={16} color="#0F172A" style={{ marginRight: 4 }} />
+                      <Text style={styles.webShareText}>Share</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
               </View>
             );
           }}
@@ -808,13 +870,55 @@ const styles = StyleSheet.create({
   },
   webSeatsText: { fontSize: 12, fontWeight: '800', color: COLORS.primary },
   webTotal: { marginTop: 8, fontSize: 13, fontWeight: '900', color: COLORS.text },
+  webActionButtonsRow: {
+    marginTop: 12,
+    gap: 8,
+  },
   webViewPassBtn: {
     backgroundColor: COLORS.primary,
     borderRadius: 12,
-    paddingVertical: 11,
+    paddingVertical: 10,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   webViewPassText: { color: COLORS.white, fontSize: 13, fontWeight: '800' },
+  webSecondaryActionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  webDownloadPdfBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    borderRadius: 10,
+    paddingVertical: 8,
+  },
+  webDownloadPdfText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#EA580C',
+  },
+  webShareBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    paddingVertical: 8,
+  },
+  webShareText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
 
   modalBg: { flex: 1, backgroundColor: 'rgba(15,23,42,0.96)' },
   fullScreenTicket: {

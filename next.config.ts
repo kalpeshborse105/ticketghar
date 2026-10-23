@@ -29,6 +29,10 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  serverExternalPackages: ['pdfkit'],
+  outputFileTracingIncludes: {
+    '/api/**/*': ['./assets/fonts/**/*', './public/fonts/**/*'],
+  },
   output: process.env.NEXT_OUTPUT_STANDALONE === 'true' ? 'standalone' : undefined,
   transpilePackages: ['motion'],
   webpack: (config, {dev}) => {

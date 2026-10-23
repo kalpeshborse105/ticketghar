@@ -623,35 +623,37 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
                     </div>
 
                     <div className="space-y-2 text-center">
-                      {Object.entries(sec.rows).map(([rowLabel, rowSeats]: [string, any]) => {
-                        const sorted = [...rowSeats].sort(
-                          (a, b) => Number(a.seatNumber) - Number(b.seatNumber)
-                        );
-                        const aisleIndex = Math.floor(sorted.length / 2);
+                      {Object.entries(sec.rows)
+                        .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }))
+                        .map(([rowLabel, rowSeats]: [string, any]) => {
+                          const sorted = [...rowSeats].sort(
+                            (a, b) => Number(a.seatNumber) - Number(b.seatNumber)
+                          );
+                          const aisleIndex = Math.floor(sorted.length / 2);
 
-                        return (
-                          <div key={rowLabel} className="flex items-center justify-center gap-1.5 text-xs py-0.5 whitespace-nowrap shrink-0">
-                            <span className="w-5 shrink-0 font-bold text-slate-400 text-center text-[11px]">
-                              {rowLabel}
-                            </span>
-                            <div className="flex items-center gap-1.5">
-                              {sorted.map((seat, seatIdx) => (
-                                <React.Fragment key={seat.seatId}>
-                                  {renderSeatBtn(seat)}
-                                  {seatIdx === aisleIndex - 1 && sorted.length > 5 && (
-                                    <div className="w-3 sm:w-4 shrink-0 text-slate-300 text-[10px] font-mono select-none" title="Aisle">
-                                      ║
-                                    </div>
-                                  )}
-                                </React.Fragment>
-                              ))}
+                          return (
+                            <div key={rowLabel} className="flex items-center justify-center gap-1.5 text-xs py-0.5 whitespace-nowrap shrink-0">
+                              <span className="w-5 shrink-0 font-bold text-slate-400 text-center text-[11px]">
+                                {rowLabel}
+                              </span>
+                              <div className="flex items-center gap-1.5">
+                                {sorted.map((seat, seatIdx) => (
+                                  <React.Fragment key={seat.seatId}>
+                                    {renderSeatBtn(seat)}
+                                    {sorted.length >= 6 && seatIdx === aisleIndex - 1 && (
+                                      <div className="w-3 sm:w-4 shrink-0 text-slate-300 text-[10px] font-mono select-none" title="Aisle">
+                                        ║
+                                      </div>
+                                    )}
+                                  </React.Fragment>
+                                ))}
+                              </div>
+                              <span className="w-5 shrink-0 font-bold text-slate-400 text-center text-[11px]">
+                                {rowLabel}
+                              </span>
                             </div>
-                            <span className="w-5 shrink-0 font-bold text-slate-400 text-center text-[11px]">
-                              {rowLabel}
-                            </span>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
                     </div>
                   </div>
                 );

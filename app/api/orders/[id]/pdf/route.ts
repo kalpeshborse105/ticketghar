@@ -104,8 +104,8 @@ export async function GET(
       ticketCode: primaryTicketCode,
       orderNumber: orderRecord.orderNumber,
       eventTitle:
-        eventRecord?.event.titleMr ||
-        eventRecord?.event.title ||
+        eventRecord?.event?.titleMr ||
+        eventRecord?.event?.title ||
         'Live Performance',
       venueName:
         eventRecord?.venue?.nameMr ||

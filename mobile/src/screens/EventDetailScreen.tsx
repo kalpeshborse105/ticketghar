@@ -71,7 +71,7 @@ function toLocalDateKey(dateInput: string | Date): string {
 
 export default function EventDetailScreen({ navigation, route }: any) {
   const insets = useSafeAreaInsets();
-  const { eventId } = route.params;
+  const { eventId, sessionId: routeSessionId } = route.params || {};
   const { user, isAuthenticated, setAuth } = useAuthStore();
   const language = useUIStore((s) => s.language);
 
@@ -143,8 +143,9 @@ export default function EventDetailScreen({ navigation, route }: any) {
             (a, b) => new Date(a.sessionStartTime).getTime() - new Date(b.sessionStartTime).getTime()
           );
           const homeId = (d.event as any)?.homeSessionId as number | null | undefined;
+          const targetSessionId = routeSessionId || homeId;
           const firstAvailable =
-            (homeId && sorted.find((s) => Number(s.id) === Number(homeId))) ||
+            (targetSessionId && sorted.find((s) => Number(s.id) === Number(targetSessionId))) ||
             sorted.find((s) => getSessionAvailableCount(s) > 0 && s.status !== 'sold_out' && !s.isSoldOut) ||
             sorted[0];
           // Prefer detailed payload session (same id), never keep stale list-cache object
@@ -152,12 +153,13 @@ export default function EventDetailScreen({ navigation, route }: any) {
             if (prev) {
               const match = sorted.find((s) => s.id === prev.id);
               if (match && getSessionAvailableCount(match) > 0 && match.status !== 'sold_out') {
+                setSelectedDateKey(toLocalDateKey(match.sessionStartTime));
                 return match;
               }
             }
+            setSelectedDateKey(toLocalDateKey(firstAvailable.sessionStartTime));
             return firstAvailable;
           });
-          setSelectedDateKey(toLocalDateKey(firstAvailable.sessionStartTime));
         } else {
           setSelectedSession(null);
           setSelectedDateKey('');

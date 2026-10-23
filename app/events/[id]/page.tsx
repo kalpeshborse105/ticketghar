@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -199,13 +199,28 @@ export default function EventDetailPage() {
     return '₹३०० - ₹६००';
   }, [selectedSession, event]);
 
-  // Dynamic Date grouping from database-backed event sessions
+  // Dynamic Date grouping from database-backed event sessions (harmonized upcoming filter)
+  const isUpcomingSession = useCallback((s: any) => {
+    if (s.status && s.status !== 'active') return false;
+    if (!s.sessionStartTime) return false;
+    const t = new Date(s.sessionStartTime).getTime();
+    if (Number.isNaN(t)) return false;
+    if (s.sessionEndTime) {
+      const endT = new Date(s.sessionEndTime).getTime();
+      if (!Number.isNaN(endT) && endT < Date.now()) return false;
+    }
+    return t > Date.now() - 30 * 60 * 1000;
+  }, []);
+
   const datesList = React.useMemo(() => {
     if (!event?.sessions || event.sessions.length === 0) return [];
 
+    const upcoming = event.sessions.filter(isUpcomingSession);
+    const candidateSessions = upcoming.length > 0 ? upcoming : event.sessions;
+
     const map = new Map<string, { label: string; day: string; month: string; full: string; sessions: any[] }>();
 
-    event.sessions.forEach((s: any) => {
+    candidateSessions.forEach((s: any) => {
       const parts = getISTDateParts(s.sessionStartTime);
       if (!parts) return;
 
@@ -244,7 +259,7 @@ export default function EventDetailPage() {
     });
 
     return Array.from(map.values());
-  }, [event?.sessions, language]);
+  }, [event?.sessions, isUpcomingSession, language]);
 
   const fetchReviews = async () => {
     if (!eventId) return;
@@ -364,8 +379,23 @@ export default function EventDetailPage() {
           if (json.event) {
             setEvent(json.event);
             if (json.event.sessions && json.event.sessions.length > 0) {
-              const activeS = json.event.sessions.find((s: any) => s.status === 'active') || json.event.sessions[0];
-              setSelectedSession(activeS);
+              const qs = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+              const querySessionId = qs?.get('session') || qs?.get('sessionId');
+              const queryMatch = querySessionId
+                ? json.event.sessions.find((s: any) => String(s.id) === String(querySessionId))
+                : null;
+
+              if (queryMatch) {
+                setSelectedSession(queryMatch);
+              } else {
+                const upcoming = json.event.sessions.filter(isUpcomingSession);
+                const activeS =
+                  upcoming.find((s: any) => s.status === 'active') ||
+                  upcoming[0] ||
+                  json.event.sessions.find((s: any) => s.status === 'active') ||
+                  json.event.sessions[0];
+                setSelectedSession(activeS);
+              }
             }
             return;
           }

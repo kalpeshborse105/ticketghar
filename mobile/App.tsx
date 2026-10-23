@@ -24,8 +24,21 @@ export default function App() {
         if (!payloadPart) return null;
         const padded = payloadPart + '='.repeat((4 - (payloadPart.length % 4)) % 4);
         const b64 = padded.replace(/-/g, '+').replace(/_/g, '/');
-        // atob is available in Hermes; payload is UTF-8 JSON
-        const json = typeof atob === 'function' ? atob(b64) : Buffer.from(b64, 'base64').toString('utf8');
+        let json = '';
+        if (typeof Buffer !== 'undefined') {
+          json = Buffer.from(b64, 'base64').toString('utf8');
+        } else if (typeof atob === 'function') {
+          const binary = atob(b64);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+          }
+          if (typeof TextDecoder !== 'undefined') {
+            json = new TextDecoder().decode(bytes);
+          } else {
+            json = decodeURIComponent(escape(binary));
+          }
+        }
         const data = JSON.parse(json);
         if (!data?.email || !data?.id) return null;
         if (data.exp && Date.now() > Number(data.exp)) return null;
@@ -70,6 +83,9 @@ export default function App() {
                   },
                   token
                 )
+                .then(() => {
+                  useAuthStore.getState().syncUserProfile().catch(() => null);
+                })
                 .catch(() => null);
               Toast.show({
                 type: 'success',

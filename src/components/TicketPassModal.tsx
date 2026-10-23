@@ -463,7 +463,7 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
         ) : null}
 
         {/* Bottom Actions: Circular icon buttons for WhatsApp, Share, Download + My Tickets CTA */}
-        <div className="p-3.5 sm:p-4 border-t border-slate-200 bg-white flex items-center justify-between gap-3">
+        <div className="p-3 sm:p-4 border-t border-slate-200 bg-white flex flex-wrap sm:flex-nowrap items-center justify-between gap-2.5 sm:gap-3 shrink-0 pb-[max(env(safe-area-inset-bottom),0.875rem)]">
           {/* Circular Icon Action Buttons */}
           <div className="flex items-center gap-2.5">
             {/* WhatsApp Icon Button */}
