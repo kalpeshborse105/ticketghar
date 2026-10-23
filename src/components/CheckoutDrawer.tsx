@@ -127,6 +127,42 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
   const [couponDiscount, setCouponDiscount] = useState<number>(0);
   const [couponMessage, setCouponMessage] = useState<string | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
+  const [availableOffers, setAvailableOffers] = useState<
+    { code: string; descMr: string; descEn: string }[]
+  >([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/coupons', { cache: 'no-store' });
+        const data = await res.json().catch(() => ({}));
+        if (cancelled || !res.ok) return;
+        const list = Array.isArray(data?.coupons) ? data.coupons : [];
+        setAvailableOffers(
+          list.slice(0, 6).map((c: any) => {
+            const type = c.discountType || c.discount_type;
+            const value = c.discountValue ?? c.discount_value ?? 0;
+            const max = c.maxDiscount ?? c.max_discount ?? 0;
+            const desc =
+              type === 'percentage'
+                ? `${value / 100}% off (up to ₹${max / 100})`
+                : `Flat ₹${value / 100} off`;
+            return {
+              code: String(c.code || '').toUpperCase(),
+              descEn: desc,
+              descMr: desc,
+            };
+          }).filter((o: { code: string }) => o.code)
+        );
+      } catch {
+        /* keep empty — manual code entry still works */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -322,6 +358,12 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'अवैध OTP कोड.');
+      if (typeof window !== 'undefined' && data.token) {
+        localStorage.setItem('mahaticket_token', data.token);
+        if (data.user) {
+          localStorage.setItem('mahaticket_user', JSON.stringify(data.user));
+        }
+      }
       if (data.needsPasswordSetup) {
         setAuthStep('set_password');
         setAuthMessage(
@@ -353,14 +395,23 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
     setAuthLoading(true);
     setAuthError(null);
     try {
-      const cleanEmail = userEmail.trim().toLowerCase();
+      const sessionToken =
+        typeof window !== 'undefined' ? localStorage.getItem('mahaticket_token') : null;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (sessionToken && sessionToken.includes('.')) {
+        headers.Authorization = `Bearer ${sessionToken}`;
+      }
       const res = await fetch('/api/auth/flow/set-password', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: cleanEmail, password: authPassword }),
+        credentials: 'include',
+        headers,
+        body: JSON.stringify({ password: authPassword }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'पासवर्ड जतन करता आला नाही.');
+      if (typeof window !== 'undefined' && data.token) {
+        localStorage.setItem('mahaticket_token', data.token);
+      }
       setIsEmailVerified(true);
       setAuthStep('idle');
       setAuthMessage(language === 'mr' ? 'खाते व पासवर्ड तयार झाले! आता पेमेंट करा.' : 'Account created! Proceed to payment.');
@@ -441,6 +492,9 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
           seatIds: holdData.seatIds,
           couponCode: couponInput || null,
           holdToken: holdData.holdToken,
+          userEmail: userEmail.trim().toLowerCase(),
+          userName: userName.trim(),
+          userPhone: cleanPhone,
         }),
       });
 
@@ -1007,23 +1061,16 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
                   <span>{language === 'mr' ? 'उपलब्ध ऑफर्स व सवलती' : 'Available Offers'}</span>
                 </span>
                 <div className="grid grid-cols-1 xs:grid-cols-2 gap-2">
-                  {[
-                    {
-                      code: 'NATAK10',
-                      descMr: '१०% सवलत (कमाल ₹१०० पर्यंत)',
-                      descEn: '10% off (up to ₹100)',
-                    },
-                    {
-                      code: 'MAHA20',
-                      descMr: '२०% सवलत (मर्यादित ऑफर)',
-                      descEn: '20% festive discount',
-                    },
-                    {
-                      code: 'MAHA50',
-                      descMr: '₹५० थेट सवलत (किमान ₹३००)',
-                      descEn: 'Flat ₹50 off on ₹300+',
-                    },
-                  ].map((offer) => {
+                  {(availableOffers.length > 0
+                    ? availableOffers
+                    : [
+                        {
+                          code: 'NATAK10',
+                          descMr: '१०% सवलत (कमाल ₹१०० पर्यंत)',
+                          descEn: '10% off (up to ₹100)',
+                        },
+                      ]
+                  ).map((offer) => {
                     const isCurrent = couponApplied === offer.code;
                     return (
                       <div

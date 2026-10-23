@@ -35,9 +35,19 @@ export async function GET(request: Request) {
 
     const origin = getOrigin(request);
 
+    const isMobileFlow = state?.source === 'mobile';
+    const failRedirect = (msg: string) => {
+      if (isMobileFlow) {
+        const bridge = new URL(`${origin}/auth/mobile-done`);
+        bridge.searchParams.set('error', msg);
+        return NextResponse.redirect(bridge.toString(), 307);
+      }
+      return NextResponse.redirect(`${origin}/?auth_error=${encodeURIComponent(msg)}`);
+    };
+
     if (error || !code) {
       console.error('Google OAuth callback error:', error);
-      return NextResponse.redirect(`${origin}/?auth_error=${encodeURIComponent(error || 'Google login cancelled')}`);
+      return failRedirect(error || 'Google login cancelled');
     }
 
     const clientId = process.env.GOOGLE_CLIENT_ID || process.env.Client_ID;
@@ -46,7 +56,7 @@ export async function GET(request: Request) {
 
     if (!clientId || !clientSecret) {
       console.error('Missing Google OAuth client credentials in environment');
-      return NextResponse.redirect(`${origin}/?auth_error=Missing+Google+credentials`);
+      return failRedirect('Missing Google credentials');
     }
 
     // 1. Exchange authorization code for tokens
@@ -64,8 +74,8 @@ export async function GET(request: Request) {
 
     if (!tokenRes.ok) {
       const errText = await tokenRes.text();
-      console.error('Failed to exchange code for tokens:', errText);
-      return NextResponse.redirect(`${origin}/?auth_error=Token+exchange+failed`);
+      console.error('Failed to exchange code for tokens:', errText.slice(0, 200));
+      return failRedirect('Token exchange failed');
     }
 
     const tokenData = await tokenRes.json();
@@ -78,7 +88,7 @@ export async function GET(request: Request) {
 
     if (!userRes.ok) {
       console.error('Failed to fetch userinfo from Google');
-      return NextResponse.redirect(`${origin}/?auth_error=Failed+to+fetch+user+profile`);
+      return failRedirect('Failed to fetch user profile');
     }
 
     const googleUser = await userRes.json();
@@ -93,7 +103,7 @@ export async function GET(request: Request) {
     const googleSub = googleUser.id || googleUser.sub || `google-${Date.now()}`;
 
     if (!email) {
-      return NextResponse.redirect(`${origin}/?auth_error=No+email+returned+from+Google`);
+      return failRedirect('No email returned from Google');
     }
 
     // 3. Upsert user into database
@@ -136,11 +146,9 @@ export async function GET(request: Request) {
           .returning();
         dbUser = inserted;
       }
-    } catch (dbErr: any) {
-      console.error('DB upsert error on Google auth:', dbErr?.message);
-      return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL || 'https://mahaticket.kalpkrutinfotech.com'}/?authError=db`
-      );
+    } catch (dbErr: unknown) {
+      console.error('DB upsert error on Google auth:', dbErr instanceof Error ? dbErr.message : 'unknown');
+      return failRedirect('Account sync failed');
     }
 
     // 4. Create verified customer session user
@@ -164,22 +172,9 @@ export async function GET(request: Request) {
 
     if (isMobile) {
       // Chrome blocks direct custom-scheme redirects after OAuth.
-      // Land on a bridge page that opens mahaticket:// (with a fallback button).
+      // Bridge page opens mahaticket:// with token only (short URL; app decodes user).
       const bridge = new URL(`${origin}/auth/mobile-done`);
       bridge.searchParams.set('token', sessionToken);
-      bridge.searchParams.set(
-        'user',
-        JSON.stringify({
-          id: customerUser.id,
-          uid: customerUser.uid,
-          email: customerUser.email,
-          fullName: customerUser.fullName,
-          name: customerUser.fullName,
-          phone: customerUser.phoneNumber,
-          avatarUrl: customerUser.avatarUrl,
-          role: customerUser.role,
-        })
-      );
       return NextResponse.redirect(bridge.toString(), 307);
     }
 
@@ -202,7 +197,23 @@ export async function GET(request: Request) {
     return res;
   } catch (error: any) {
     console.error('Google OAuth callback unhandled exception:', error);
-    const origin = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const origin = getOrigin(request);
+    // Best-effort mobile bridge when state is unavailable
+    try {
+      const url = new URL(request.url);
+      const stateRaw = url.searchParams.get('state');
+      let state: any = {};
+      if (stateRaw) {
+        state = JSON.parse(Buffer.from(stateRaw, 'base64url').toString('utf8'));
+      }
+      if (state?.source === 'mobile') {
+        const bridge = new URL(`${origin}/auth/mobile-done`);
+        bridge.searchParams.set('error', 'Internal OAuth error');
+        return NextResponse.redirect(bridge.toString(), 307);
+      }
+    } catch {
+      /* fall through */
+    }
     return NextResponse.redirect(`${origin}/?auth_error=Internal+OAuth+error`);
   }
 }

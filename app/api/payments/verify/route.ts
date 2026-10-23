@@ -106,6 +106,9 @@ export async function POST(request: Request) {
 
       console.log('[Verify] Idempotent return: order already captured and confirmed:', pendingOrder.orderNumber);
 
+      const { mintOrderPdfToken } = await import('@/src/lib/order-access');
+      const pdfDownloadToken = mintOrderPdfToken(pendingOrder.id, pendingOrder.userId);
+
       return NextResponse.json({
         success: true,
         verified: true,
@@ -116,11 +119,13 @@ export async function POST(request: Request) {
           session: existingSession,
           venue: existingVenue,
           tickets: existingTickets,
+          pdfDownloadToken,
         },
         tickets: existingTickets,
         event: existingEvent,
         session: existingSession,
         venue: existingVenue,
+        pdfDownloadToken,
         payment: {
           configured: true,
           mode: 'razorpay',
@@ -301,6 +306,9 @@ export async function POST(request: Request) {
     // Invalidate seat map cache so all clients see the booked seats
     await cacheDel(sessionSeatsCacheKey(authoritativeSessionId)).catch(() => undefined);
 
+    const { mintOrderPdfToken } = await import('@/src/lib/order-access');
+    const pdfDownloadToken = mintOrderPdfToken(result.order.id, result.order.userId);
+
     const richOrder = {
       ...result.order,
       event: result.event,
@@ -308,6 +316,7 @@ export async function POST(request: Request) {
       session: result.session,
       tickets: result.tickets,
       pricing: result.pricing,
+      pdfDownloadToken,
     };
 
     console.log('[Verify] Booking confirmed successfully for order:', result.order?.orderNumber);
@@ -321,6 +330,7 @@ export async function POST(request: Request) {
       session: result.session,
       venue: result.venue,
       pricing: result.pricing,
+      pdfDownloadToken,
       payment: {
         configured: true,
         mode: 'razorpay',

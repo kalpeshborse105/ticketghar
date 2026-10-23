@@ -23,51 +23,50 @@ const DEV_URLS = [
 const STORAGE_KEY = '@mahaticket_api_base';
 
 let resolvedBase: string | null = null;
+let _couponsCache: any[] | null = null;
+let _couponsCacheAt = 0;
+const COUPONS_CACHE_TTL_MS = 5 * 60 * 1000;
 
 export async function resolveApiBase(): Promise<string> {
   if (resolvedBase) return resolvedBase;
 
+  // Instant path for release: prefer official prod so checkout/coupons are not blocked
+  // by sequential health probes (was adding ~1–3s before every first API call).
   const stored =
     (await AsyncStorage.getItem(STORAGE_KEY).catch(() => null)) ||
     (await AsyncStorage.getItem('@tg_api_base').catch(() => null));
-  // Drop stale vercel.app / LAN cache so release always prefers official prod
-  const storedOk =
-    stored &&
-    !/vercel\.app/i.test(stored) &&
-    stored.replace(/\/$/, '') !== PROD_API_URL
-      ? stored
-      : null;
-  if (storedOk) {
-    try {
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 1200);
-      const res = await fetch(`${storedOk}/api/health`, { signal: ctrl.signal });
-      clearTimeout(t);
-      if (res.ok) {
-        resolvedBase = storedOk;
-        return storedOk;
-      }
-    } catch {}
-  } else if (stored && /vercel\.app/i.test(stored)) {
+
+  if (stored && /vercel\.app/i.test(stored)) {
     await AsyncStorage.removeItem(STORAGE_KEY).catch(() => null);
     await AsyncStorage.removeItem('@tg_api_base').catch(() => null);
   }
 
-  for (const url of DEV_URLS) {
-    try {
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 1200);
-      const res = await fetch(`${url}/api/health`, { signal: ctrl.signal });
-      clearTimeout(t);
-      if (res.ok) {
-        resolvedBase = url;
-        await AsyncStorage.setItem(STORAGE_KEY, url).catch(() => null);
-        return url;
-      }
-    } catch {}
+  const storedOk =
+    stored &&
+    !/vercel\.app/i.test(stored) &&
+    stored.replace(/\/$/, '') !== PROD_API_URL
+      ? stored.replace(/\/$/, '')
+      : null;
+
+  // Use cached non-prod only if it responded recently; otherwise go straight to prod.
+  if (storedOk) {
+    resolvedBase = storedOk;
+    // Background re-validate — do not block callers
+    fetch(`${storedOk}/api/health`)
+      .then((res) => {
+        if (!res.ok) {
+          resolvedBase = PROD_API_URL;
+          AsyncStorage.setItem(STORAGE_KEY, PROD_API_URL).catch(() => null);
+        }
+      })
+      .catch(() => {
+        resolvedBase = PROD_API_URL;
+      });
+    return storedOk;
   }
 
   resolvedBase = PROD_API_URL;
+  AsyncStorage.setItem(STORAGE_KEY, PROD_API_URL).catch(() => null);
   return PROD_API_URL;
 }
 
@@ -1062,24 +1061,34 @@ export const api = {
   // Coupons — same as web CheckoutDrawer: GET/POST /api/coupons
   getCoupons: async () => {
     try {
-      const res = await request<{ coupons?: any[]; error?: string }>('/api/coupons');
+      if (
+        _couponsCache &&
+        Date.now() - _couponsCacheAt < COUPONS_CACHE_TTL_MS &&
+        _couponsCache.length > 0
+      ) {
+        return { coupons: _couponsCache };
+      }
+      const res = await request<{ coupons?: any[]; error?: string }>('/api/coupons', {
+        timeout: 8000,
+      });
       const list = Array.isArray(res?.coupons) ? res.coupons : [];
-      return {
-        coupons: list.map((c) => ({
-          id: c.id,
-          code: c.code,
-          discountType: c.discountType || c.discount_type,
-          discountValue: c.discountValue ?? c.discount_value,
-          minOrderValue: c.minOrderValue ?? c.min_order_value,
-          maxDiscount: c.maxDiscount ?? c.max_discount,
-          description:
-            (c.discountType || c.discount_type) === 'percentage'
-              ? `${(c.discountValue ?? c.discount_value) / 100}% off up to ₹${(c.maxDiscount ?? c.max_discount) / 100}`
-              : `Flat ₹${(c.discountValue ?? c.discount_value) / 100} off`,
-        })),
-      };
+      const coupons = list.map((c) => ({
+        id: c.id,
+        code: c.code,
+        discountType: c.discountType || c.discount_type,
+        discountValue: c.discountValue ?? c.discount_value,
+        minOrderValue: c.minOrderValue ?? c.min_order_value,
+        maxDiscount: c.maxDiscount ?? c.max_discount,
+        description:
+          (c.discountType || c.discount_type) === 'percentage'
+            ? `${(c.discountValue ?? c.discount_value) / 100}% off up to ₹${(c.maxDiscount ?? c.max_discount) / 100}`
+            : `Flat ₹${(c.discountValue ?? c.discount_value) / 100} off`,
+      }));
+      _couponsCache = coupons;
+      _couponsCacheAt = Date.now();
+      return { coupons };
     } catch {
-      return { coupons: [] };
+      return { coupons: _couponsCache || [] };
     }
   },
 
@@ -1118,6 +1127,9 @@ export const api = {
     seatIds: number[];
     couponCode?: string | null;
     holdToken?: string;
+    userEmail?: string;
+    userName?: string;
+    userPhone?: string;
   }) => {
     try {
       const res = await request<any>('/api/payments/create-order', {
@@ -1567,11 +1579,17 @@ export const api = {
 
   setEmailPassword: async (
     email: string,
-    password: string
+    password: string,
+    sessionToken?: string
   ): Promise<{ success: boolean; user?: any; token?: string; message?: string }> => {
+    const headers: Record<string, string> = {};
+    if (sessionToken && sessionToken.includes('.')) {
+      headers.Authorization = `Bearer ${sessionToken}`;
+    }
     const res = await request<any>('/api/auth/flow/set-password', {
       method: 'POST',
-      body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+      headers,
+      body: JSON.stringify({ password }),
       timeout: 15000,
     });
     if (res && (res.success || res.user)) {

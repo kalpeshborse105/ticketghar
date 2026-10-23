@@ -44,6 +44,8 @@ export default function LoginScreen({ navigation, route }: any) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
+  /** Session token from OTP verify — required before set-password (server rejects email-only). */
+  const [verifiedSessionToken, setVerifiedSessionToken] = useState<string>('');
 
   const setAuth = useAuthStore((s) => s.setAuth);
 
@@ -160,7 +162,11 @@ export default function LoginScreen({ navigation, route }: any) {
       const res = await api.verifyEmailOtp(email, cleanOtp);
       if (res.success && res.user) {
         if (res.needsPasswordSetup) {
-          // User needs to set a permanent password
+          // Persist OTP session so set-password can authorize by Bearer (not email alone)
+          if (res.token && res.token.includes('.')) {
+            setVerifiedSessionToken(res.token);
+            await setAuth(res.user, res.token);
+          }
           setInfo('पडताळणी यशस्वी! आता कायमस्वरूपी पासवर्ड तयार करा.');
           transitionTo('set_password');
         } else {
@@ -189,9 +195,9 @@ export default function LoginScreen({ navigation, route }: any) {
     setLoading(true);
     setError('');
     try {
-      const res = await api.setEmailPassword(email, password);
+      const res = await api.setEmailPassword(email, password, verifiedSessionToken || undefined);
       if (res.success && res.user) {
-        await finishAuth(res.user, res.token);
+        await finishAuth(res.user, res.token || verifiedSessionToken);
       } else {
         setError(res.message || 'पासवर्ड जतन करता आला नाही.');
       }

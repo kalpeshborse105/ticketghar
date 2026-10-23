@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
-import { seatInventory, ticketTypes, events, orders, users } from '@/src/db/schema.ts';
+import { seatInventory, ticketTypes, events, orders, users, eventSessions } from '@/src/db/schema.ts';
 import { eq, and, inArray } from 'drizzle-orm';
 import {
   isRazorpayConfigured,
@@ -140,6 +140,28 @@ export async function POST(request: Request) {
       });
     }
 
+    // Authoritative session → event binding (do not trust client eventId)
+    const [sessionRow] = await db
+      .select({
+        id: eventSessions.id,
+        eventId: eventSessions.eventId,
+        status: eventSessions.status,
+        sessionStartTime: eventSessions.sessionStartTime,
+      })
+      .from(eventSessions)
+      .where(eq(eventSessions.id, Number(sessionId)))
+      .limit(1);
+
+    if (!sessionRow) {
+      return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+    }
+    if (['cancelled', 'completed', 'sold_out'].includes(String(sessionRow.status || ''))) {
+      return NextResponse.json(
+        { error: 'This show session is not open for booking.' },
+        { status: 409 }
+      );
+    }
+
     const holdSeats = await db
       .select({
         invId: seatInventory.id,
@@ -160,6 +182,15 @@ export async function POST(request: Request) {
     if (holdSeats.length < sortedSeatIds.length) {
       return NextResponse.json(
         { error: 'One or more selected seats are not available. Please refresh the seat map.' },
+        { status: 409 }
+      );
+    }
+
+    // Seats / ticket types must belong to the same event as the session
+    const mismatched = holdSeats.some((s) => Number(s.eventId) !== Number(sessionRow.eventId));
+    if (mismatched) {
+      return NextResponse.json(
+        { error: 'Selected seats do not belong to this event session.' },
         { status: 409 }
       );
     }
@@ -225,7 +256,7 @@ export async function POST(request: Request) {
       if (!targetUserPhone && customer.phoneNumber) targetUserPhone = String(customer.phoneNumber);
     }
 
-    if (targetUserEmail) {
+    if (targetUserEmail && targetUserEmail.includes('@')) {
       const existingUser = await db
         .select({ id: users.id, fullName: users.fullName, phoneNumber: users.phoneNumber })
         .from(users)

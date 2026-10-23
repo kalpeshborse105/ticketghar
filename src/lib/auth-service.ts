@@ -202,20 +202,29 @@ export async function sendOtpEmail(email: string, otp: string): Promise<boolean>
     </html>
   `;
 
+  // OTP must be delivered via the same SMTP channel that stores otpCode in DB.
+  // Do NOT fall back to Supabase Auth OTP — those codes are not the DB otpCode and break verify.
   if (smtpHost && smtpUser && smtpPass) {
     try {
-      const transporter = nodemailer.createTransport({
-        host: smtpHost,
-        port: smtpPort,
-        secure: process.env.SMTP_SECURE === 'true' || smtpPort === 465,
-        auth: { user: smtpUser, pass: smtpPass },
-        connectionTimeout: 7000,
-        greetingTimeout: 5000,
-        socketTimeout: 10000,
-        tls: {
-          rejectUnauthorized: false,
-        },
-      });
+      const cleanedPass = String(smtpPass).trim().replace(/\s+/g, '');
+      const isGmail = smtpHost.toLowerCase().includes('gmail.com');
+      const transporter = isGmail
+        ? nodemailer.createTransport({
+            service: 'gmail',
+            auth: { user: smtpUser, pass: cleanedPass },
+            connectionTimeout: 7000,
+            greetingTimeout: 5000,
+            socketTimeout: 10000,
+          })
+        : nodemailer.createTransport({
+            host: smtpHost,
+            port: smtpPort,
+            secure: process.env.SMTP_SECURE === 'true' || smtpPort === 465,
+            auth: { user: smtpUser, pass: cleanedPass },
+            connectionTimeout: 7000,
+            greetingTimeout: 5000,
+            socketTimeout: 10000,
+          });
       await transporter.sendMail({
         from: fromAddress,
         to: email,
@@ -225,29 +234,11 @@ export async function sendOtpEmail(email: string, otp: string): Promise<boolean>
       console.log(`[AUTH-OTP] Sent OTP via SMTP to ${email}`);
       return true;
     } catch (err) {
-      console.error('[AUTH-OTP] SMTP delivery failed, trying Supabase fallback:', err);
-    }
-  }
-
-  // Fallback to Supabase Auth OTP delivery if configured
-  const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supaKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (supaUrl && supaKey) {
-    try {
-      const supaRes = await fetch(`${supaUrl}/auth/v1/otp`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          apikey: supaKey,
-        },
-        body: JSON.stringify({ email, create_user: true }),
-      });
-      if (supaRes.ok) {
-        console.log(`[AUTH-OTP] Sent OTP via Supabase Auth email service to ${email}`);
-        return true;
-      }
-    } catch (supaErr) {
-      console.warn('[AUTH-OTP] Supabase OTP fallback failed:', supaErr);
+      console.error(
+        '[AUTH-OTP] SMTP delivery failed:',
+        err instanceof Error ? err.message : 'unknown'
+      );
+      return false;
     }
   }
 

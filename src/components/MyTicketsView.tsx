@@ -21,6 +21,7 @@ import {
   AlertCircle,
   Loader2,
 } from 'lucide-react';
+import { formatISTDate, formatISTTime } from '../lib/dateUtils';
 
 interface MyTicketsViewProps {
   language: Language;
@@ -401,10 +402,11 @@ export const MyTicketsView: React.FC<MyTicketsViewProps> = ({
                       <span className="flex items-center gap-1 font-medium">
                         <Calendar className="w-3.5 h-3.5 text-[#ea580c] shrink-0" />
                         <span>
-                          {new Date(ord.createdAt).toLocaleDateString(
-                            language === 'mr' ? 'mr-IN' : 'en-IN',
-                            { day: 'numeric', month: 'short', year: 'numeric' }
-                          )}
+                          {ord.session?.sessionStartTime
+                            ? `${formatISTDate(ord.session.sessionStartTime, language, false)} · ${formatISTTime(ord.session.sessionStartTime, language, true)}`
+                            : language === 'mr'
+                              ? 'तारीख उपलब्ध नाही'
+                              : 'Date unavailable'}
                         </span>
                       </span>
 

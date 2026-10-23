@@ -18,6 +18,8 @@ export interface EmailDispatchResult {
   success: boolean;
   status: EmailDeliveryStatus;
   sent: boolean;
+  /** True when a PDF buffer was attached to the outgoing message. */
+  attached?: boolean;
   configured: boolean;
   provider?: 'smtp' | 'resend';
   recipient?: string;
@@ -136,24 +138,30 @@ export async function sendBookingTicketEmail(
       .replace(/\{\{QR_DATA_URL\}\}/g, '')
       .replace(/\{\{TICKET_LINK\}\}/g, ticketLink);
 
-    // 3. Generate PDF pass attachment
+    // 3. Generate PDF pass attachment (retry once — do not silently drop attachment)
     let pdfBuffer: Buffer | null = null;
-    try {
-      pdfBuffer = await generateTicketPdfBuffer({
-        ticketCode: ticketRecord.ticket.ticketCode,
-        orderNumber: ticketRecord.order.orderNumber,
-        eventTitle: eventRecord?.event.titleMr || eventRecord?.event.title || 'Event',
-        venueName: eventRecord?.venue?.nameMr || eventRecord?.venue?.name || 'Venue',
-        showtime,
-        seatCode: `${seatsList} (${allOrderTickets.length} Tickets)`,
-        attendeeName: ticketRecord.ticket.attendeeName || ticketRecord.order.userName,
-        faceValuePaise: ticketRecord.order.grandTotal,
-        status: ticketRecord.ticket.status,
-        qrPayload: ticketLink,
-        securityHash: ticketRecord.ticket.securityHash,
-      });
-    } catch (pdfErr) {
-      console.warn('PDF pass generation for email attachment skipped:', pdfErr);
+    const pdfPayload = {
+      ticketCode: ticketRecord.ticket.ticketCode,
+      orderNumber: ticketRecord.order.orderNumber,
+      eventTitle: eventRecord?.event.titleMr || eventRecord?.event.title || 'Event',
+      venueName: eventRecord?.venue?.nameMr || eventRecord?.venue?.name || 'Venue',
+      showtime,
+      seatCode: `${seatsList} (${allOrderTickets.length} Tickets)`,
+      attendeeName: ticketRecord.ticket.attendeeName || ticketRecord.order.userName,
+      faceValuePaise: ticketRecord.order.grandTotal,
+      status: ticketRecord.ticket.status,
+      qrPayload: ticketLink,
+      securityHash: ticketRecord.ticket.securityHash,
+    };
+    for (let attempt = 1; attempt <= 2 && !pdfBuffer; attempt++) {
+      try {
+        pdfBuffer = await generateTicketPdfBuffer(pdfPayload);
+      } catch (pdfErr) {
+        console.warn(`PDF pass generation attempt ${attempt} failed:`, pdfErr);
+        if (attempt < 2) {
+          await new Promise((r) => setTimeout(r, 400));
+        }
+      }
     }
 
     const emailSubject = `MahaTicket 🎟️ — Booking Confirmed (${ticketRecord.order.orderNumber}): ${eventRecord?.event.titleMr || eventRecord?.event.title || 'Event'}`;
@@ -209,15 +217,21 @@ export async function sendBookingTicketEmail(
           attachments,
         });
 
-        console.log(`[Email] Sent booking confirmation via SMTP to ${recipient} with PDF ticket attached`);
+        console.log(
+          `[Email] Sent booking confirmation via SMTP to ${recipient}` +
+            (pdfBuffer ? ' with PDF ticket attached' : ' (HTML only — PDF attach failed)')
+        );
         return {
           success: true,
           status: 'sent',
           sent: true,
+          attached: Boolean(pdfBuffer),
           configured: true,
           provider: 'smtp',
           recipient,
-          message: `Booking email with PDF ticket sent to ${recipient} via SMTP`,
+          message: pdfBuffer
+            ? `Booking email with PDF ticket sent to ${recipient} via SMTP`
+            : `Booking email sent to ${recipient} (PDF attachment could not be generated)`,
         };
       } catch (smtpErr: any) {
         const isAuthErr = smtpErr?.code === 'EAUTH' || smtpErr?.responseCode === 535;
@@ -286,10 +300,14 @@ export async function sendBookingTicketEmail(
         };
       }
 
-      console.log(`[Email] Sent booking confirmation via Resend to ${recipient}`);
+      console.log(
+        `[Email] Sent booking confirmation via Resend to ${recipient}` +
+          (pdfBuffer ? ' with PDF' : ' (no PDF attach)')
+      );
       return {
         success: true,
         status: 'sent',
+        attached: Boolean(pdfBuffer),
         sent: true,
         configured: true,
         provider: 'resend',

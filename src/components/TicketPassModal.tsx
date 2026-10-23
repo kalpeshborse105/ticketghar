@@ -45,6 +45,7 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
   const [emailMessage, setEmailMessage] = useState('');
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState(false);
 
   // Save to offline cache (localStorage)
@@ -86,31 +87,61 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
     (language === 'mr' ? venueObj?.nameMr || venueObj?.name : venueObj?.name || venueObj?.nameMr) ||
     event?.venueName ||
     bookingResult?.venueName ||
-    (language === 'mr' ? 'बालगंधर्व रंगमंदिर' : 'Bal Gandharva Ranga Mandir');
-  const venueCity = venueObj?.city || event?.venueCity || event?.city || 'पुणे, महाराष्ट्र';
+    (language === 'mr' ? 'सभागृह उपलब्ध नाही' : 'Venue unavailable');
+  const venueCity = venueObj?.city || event?.venueCity || event?.city || '';
   const seatsList = tickets.map((tk: any) => tk.seatCode).join(', ');
   const ticketUrl = primaryTicket ? getTicketShareUrl(primaryTicket) : '';
 
-  // Auto-email verification on mount
+  // Auto-email on mount (server also sends on confirm). Requires session or pdfDownloadToken.
   useEffect(() => {
     if (!primaryTicket || !order?.userEmail) return;
     let cancelled = false;
     (async () => {
+      const pdfToken =
+        (order as any)?.pdfDownloadToken ||
+        (bookingResult as any)?.pdfDownloadToken ||
+        (bookingResult as any)?.order?.pdfDownloadToken ||
+        null;
+      const sessionToken =
+        typeof window !== 'undefined' ? localStorage.getItem('mahaticket_token') : null;
+      if (!pdfToken && !sessionToken) {
+        setEmailStatus('pending');
+        setEmailMessage(
+          language === 'mr'
+            ? 'तिकीट निश्चित. ईमेल सर्व्हरवरून पाठवला जाईल.'
+            : 'Booking confirmed. Email will be sent by the server.'
+        );
+        return;
+      }
       setEmailStatus('sending');
       try {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (sessionToken && sessionToken.includes('.')) {
+          headers.Authorization = `Bearer ${sessionToken}`;
+        }
         const res = await fetch(`/api/tickets/${primaryTicket}/email`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: order.userEmail }),
+          credentials: 'include',
+          headers,
+          body: JSON.stringify({
+            email: order.userEmail,
+            ...(pdfToken ? { pdfDownloadToken: pdfToken } : {}),
+          }),
         });
         const data = await res.json();
         if (cancelled) return;
         if (data.sent) {
           setEmailStatus('sent');
+          const attachNote =
+            data.attached === false
+              ? language === 'mr'
+                ? ' (PDF जोडले नाही — पुन्हा प्रयत्न करा)'
+                : ' (sent without PDF — retry)'
+              : '';
           setEmailMessage(
             language === 'mr'
-              ? `ईमेल पाठवला: ${data.recipient || order.userEmail}`
-              : `Email sent to ${data.recipient || order.userEmail}`
+              ? `ईमेल पाठवला: ${data.recipient || order.userEmail}${attachNote}`
+              : `Email sent to ${data.recipient || order.userEmail}${attachNote}`
           );
         } else if (data.configured === false) {
           setEmailStatus('pending');
@@ -128,21 +159,25 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
       } catch {
         if (!cancelled) {
           setEmailStatus('failed');
-          setEmailMessage(
-            language === 'mr' ? 'तिकीट निश्चित.' : 'Booking confirmed.'
-          );
+          setEmailMessage(language === 'mr' ? 'तिकीट निश्चित.' : 'Booking confirmed.');
         }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [primaryTicket, order?.userEmail, language]);
+  }, [primaryTicket, order?.userEmail, language, bookingResult, order]);
 
   const handleWhatsApp = () => {
     if (!primaryTicket) return;
-    const dateTime = order?.sessionStart
-      ? new Date(order.sessionStart).toLocaleString('en-IN')
+    const showStart =
+      bookingResult?.session?.sessionStartTime ||
+      order?.session?.sessionStartTime ||
+      order?.sessionStartTime ||
+      order?.sessionStart ||
+      null;
+    const dateTime = showStart
+      ? `${formatISTDate(showStart, 'en', false)} · ${formatISTTime(showStart, 'en', true)}`
       : 'See ticket';
     const message = buildBookingWhatsAppMessage({
       eventTitle: eventTitle || 'Event',
@@ -156,47 +191,117 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
   };
 
   const handleDownloadPDF = async () => {
-    if (!primaryTicket) return;
+    if (isDownloading) return;
+    if (!primaryTicket && !order?.orderNumber) return;
     try {
       setIsDownloading(true);
       setDownloadSuccess(false);
+      setDownloadError(null);
 
-      const token =
+      const pdfToken =
         (order as any)?.pdfDownloadToken ||
-        (typeof window !== 'undefined' ? localStorage.getItem('mahaticket_token') : null);
+        (bookingResult as any)?.pdfDownloadToken ||
+        (bookingResult as any)?.order?.pdfDownloadToken ||
+        null;
+      const sessionToken =
+        typeof window !== 'undefined' ? localStorage.getItem('mahaticket_token') : null;
+
+      if (!pdfToken && !sessionToken) {
+        setDownloadError(
+          language === 'mr'
+            ? 'PDF डाउनलोडसाठी लॉगिन आवश्यक आहे किंवा पास पुन्हा उघडा.'
+            : 'Sign in or reopen your pass to download the PDF.'
+        );
+        return;
+      }
+
       const qs = new URLSearchParams({ download: '1' });
-      // Prefer short-lived PDF token when present on the order payload
-      if ((order as any)?.pdfDownloadToken) {
-        qs.set('t', String((order as any).pdfDownloadToken));
-      }
-      const downloadEndpoint = `/api/tickets/${primaryTicket}/pdf?${qs.toString()}`;
+      if (pdfToken) qs.set('t', String(pdfToken));
+
       const headers: Record<string, string> = {};
-      if (token && String(token).includes('.') && !(order as any)?.pdfDownloadToken) {
-        headers.Authorization = `Bearer ${token}`;
+      if (sessionToken && String(sessionToken).includes('.')) {
+        headers.Authorization = `Bearer ${sessionToken}`;
       }
-      const res = await fetch(downloadEndpoint, {
-        credentials: 'include',
-        cache: 'no-store',
-        headers,
-      });
-      if (!res.ok) {
-        throw new Error('PDF route failed');
+
+      const candidates = [
+        primaryTicket
+          ? `/api/tickets/${encodeURIComponent(primaryTicket)}/pdf?${qs.toString()}`
+          : null,
+        order?.orderNumber
+          ? `/api/orders/${encodeURIComponent(order.orderNumber)}/pdf?${qs.toString()}`
+          : null,
+        order?.id ? `/api/orders/${encodeURIComponent(String(order.id))}/pdf?${qs.toString()}` : null,
+      ].filter(Boolean) as string[];
+
+      let res: Response | null = null;
+      let lastStatus = 0;
+      let lastErrorHint = '';
+      for (const endpoint of candidates) {
+        res = await fetch(endpoint, {
+          credentials: 'include',
+          cache: 'no-store',
+          headers,
+        });
+        lastStatus = res.status;
+        if (res.ok) break;
+        const ct = res.headers.get('content-type') || '';
+        if (ct.includes('application/json')) {
+          const body = await res.json().catch(() => ({}));
+          lastErrorHint = String((body as any)?.error || '').slice(0, 120);
+        }
+      }
+
+      if (!res || !res.ok) {
+        const hint =
+          lastStatus === 401 || lastStatus === 403 || lastStatus === 404
+            ? language === 'mr'
+              ? 'अनधिकृत किंवा कालबाह्य लिंक. लॉगिन करून My Tickets मधून पुन्हा प्रयत्न करा.'
+              : 'Unauthorized or expired link. Sign in and retry from My Tickets.'
+            : language === 'mr'
+              ? `PDF तयार करता आली नाही (${lastStatus || 'network'}).`
+              : `Could not generate PDF (${lastStatus || 'network'}).`;
+        console.warn('[PDF] download failed', { status: lastStatus, hint: lastErrorHint || undefined });
+        setDownloadError(hint);
+        return;
+      }
+
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/pdf')) {
+        setDownloadError(
+          language === 'mr'
+            ? 'सर्व्हरने PDF ऐवजी चुकीचा प्रतिसाद दिला.'
+            : 'Server returned a non-PDF response.'
+        );
+        return;
       }
 
       const blob = await res.blob();
+      if (!blob || blob.size < 100) {
+        setDownloadError(
+          language === 'mr' ? 'PDF रिकामी किंवा अवैध आहे.' : 'PDF file is empty or invalid.'
+        );
+        return;
+      }
+
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `MahaTicket-${order.orderNumber}.pdf`;
+      a.download = `MahaTicket-${order.orderNumber || primaryTicket}.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+      // Delay revoke so the browser can finish starting the download
+      setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
 
       setDownloadSuccess(true);
       setTimeout(() => setDownloadSuccess(false), 4000);
     } catch (err) {
-      console.error('PDF download error:', err);
+      console.warn('[PDF] download error', err instanceof Error ? err.message : 'unknown');
+      setDownloadError(
+        language === 'mr'
+          ? 'PDF डाउनलोड अयशस्वी. कृपया पुन्हा प्रयत्न करा.'
+          : 'PDF download failed. Please try again.'
+      );
     } finally {
       setIsDownloading(false);
     }
@@ -212,16 +317,39 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
     if (!primaryTicket) return;
     setEmailStatus('sending');
     try {
+      const pdfToken =
+        (order as any)?.pdfDownloadToken ||
+        (bookingResult as any)?.pdfDownloadToken ||
+        (bookingResult as any)?.order?.pdfDownloadToken ||
+        null;
+      const sessionToken =
+        typeof window !== 'undefined' ? localStorage.getItem('mahaticket_token') : null;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (sessionToken && sessionToken.includes('.')) {
+        headers.Authorization = `Bearer ${sessionToken}`;
+      }
       const res = await fetch(`/api/tickets/${primaryTicket}/email`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: order.userEmail }),
+        credentials: 'include',
+        headers,
+        body: JSON.stringify({
+          email: order.userEmail,
+          ...(pdfToken ? { pdfDownloadToken: pdfToken } : {}),
+        }),
       });
       const data = await res.json();
       if (res.ok && data.sent) {
         setEmailStatus('sent');
+        const attachNote =
+          data.attached === false
+            ? language === 'mr'
+              ? ' (PDF जोडले नाही)'
+              : ' (without PDF)'
+            : '';
         setEmailMessage(
-          language === 'mr' ? `ईमेल पाठवला: ${data.recipient}` : `Email sent to ${data.recipient}`
+          language === 'mr'
+            ? `ईमेल पाठवला: ${data.recipient}${attachNote}`
+            : `Email sent to ${data.recipient}${attachNote}`
         );
       } else if (data.status === 'not_configured') {
         setEmailStatus('pending');
@@ -403,6 +531,11 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
               )}
             </button>
           </div>
+          {downloadError ? (
+            <p className="mt-2 text-center text-xs font-semibold text-red-600 px-2" role="alert">
+              {downloadError}
+            </p>
+          ) : null}
 
           {/* Primary View My Tickets Redirect Button */}
           <button

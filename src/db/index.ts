@@ -17,6 +17,8 @@ function resolveConnectionString(): string | null {
 }
 
 function buildPoolConfig(): ConstructorParameters<typeof Pool>[0] {
+  // Prefer DATABASE_URL when set. Next.js expands `$` inside .env values (dotenv-expand),
+  // which truncates SQL_PASSWORD containing `$`. URL-encoded passwords (%24) stay intact.
   const connectionString = resolveConnectionString();
   if (connectionString) {
     return {
@@ -27,24 +29,27 @@ function buildPoolConfig(): ConstructorParameters<typeof Pool>[0] {
     };
   }
 
-  const host = process.env.SQL_HOST;
-  if (!host) {
-    throw new Error('Database not configured: set DATABASE_URL or SQL_HOST');
+  const host = process.env.SQL_HOST?.trim();
+  const user = process.env.SQL_USER?.trim();
+  const password = process.env.SQL_PASSWORD;
+  if (host && user && password != null && String(password).length > 0) {
+    const port = process.env.SQL_PORT ? Number(process.env.SQL_PORT) : 5432;
+    return {
+      host,
+      user,
+      password,
+      database: process.env.SQL_DB_NAME || 'postgres',
+      port,
+      max: 10,
+      connectionTimeoutMillis: 20000,
+      ssl:
+        process.env.SQL_SSL === 'true' || host.includes('supabase')
+          ? { rejectUnauthorized: false }
+          : undefined,
+    };
   }
 
-  return {
-    host,
-    user: process.env.SQL_USER,
-    password: process.env.SQL_PASSWORD,
-    database: process.env.SQL_DB_NAME || 'postgres',
-    port: process.env.SQL_PORT ? Number(process.env.SQL_PORT) : 5432,
-    max: 10,
-    connectionTimeoutMillis: 20000,
-    ssl:
-      process.env.SQL_SSL === 'true' || host.includes('supabase')
-        ? { rejectUnauthorized: false }
-        : undefined,
-  };
+  throw new Error('Database not configured: set DATABASE_URL or SQL_HOST/SQL_USER/SQL_PASSWORD');
 }
 
 export const createPool = () => {

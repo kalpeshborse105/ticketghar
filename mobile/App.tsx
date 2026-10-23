@@ -18,6 +18,23 @@ export default function App() {
     // 0ms instant startup cache hydration
     useAuthStore.getState().loadStoredAuth().catch(() => null);
     useEventsStore.getState().loadCachedEvents().catch(() => null);
+    const decodeTokenUser = (token: string): any | null => {
+      try {
+        const payloadPart = token.split('.')[0];
+        if (!payloadPart) return null;
+        const padded = payloadPart + '='.repeat((4 - (payloadPart.length % 4)) % 4);
+        const b64 = padded.replace(/-/g, '+').replace(/_/g, '/');
+        // atob is available in Hermes; payload is UTF-8 JSON
+        const json = typeof atob === 'function' ? atob(b64) : Buffer.from(b64, 'base64').toString('utf8');
+        const data = JSON.parse(json);
+        if (!data?.email || !data?.id) return null;
+        if (data.exp && Date.now() > Number(data.exp)) return null;
+        return data;
+      } catch {
+        return null;
+      }
+    };
+
     const handleUrl = (event: { url: string }) => {
       const url = event?.url;
       if (!url || !url.startsWith('mahaticket://')) return;
@@ -30,7 +47,14 @@ export default function App() {
             const token = decodeURIComponent(matchToken[1]);
             let userObj: any = null;
             if (matchUser && matchUser[1]) {
-              userObj = JSON.parse(decodeURIComponent(matchUser[1]));
+              try {
+                userObj = JSON.parse(decodeURIComponent(matchUser[1]));
+              } catch {
+                userObj = null;
+              }
+            }
+            if (!userObj) {
+              userObj = decodeTokenUser(token);
             }
             if (userObj && token && token.includes('.')) {
               useAuthStore

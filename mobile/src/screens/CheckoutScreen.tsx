@@ -444,11 +444,15 @@ export default function CheckoutScreen({ navigation, route }: any) {
     setPaymentPhase('initiating');
     try {
       // Step 1: Create backend Razorpay order (extends seat hold)
+      // Must send booking contact — create-order requires session OR valid email (no guest firstCust bypass).
       const orderData = await api.createRazorpayOrder({
         sessionId,
         seatIds,
         couponCode: appliedCoupon || null,
         holdToken,
+        userEmail: email.trim().toLowerCase(),
+        userName: name.trim(),
+        userPhone: cleanPhone,
       });
 
       if (!orderData?.orderId || !orderData?.keyId) {
@@ -587,14 +591,23 @@ export default function CheckoutScreen({ navigation, route }: any) {
             },
           },
           session: {
+            ...(verified?.session || verified?.order?.session || {}),
             id:
               verified?.session?.id ||
               verified?.order?.session?.id ||
               sessionId,
-            sessionStartTime: bookedSessionStart,
-            ...(verified?.session || verified?.order?.session || {}),
+            // Always prefer resolved showtime last so partial verify payloads cannot wipe it
+            sessionStartTime:
+              bookedSessionStart ||
+              verified?.session?.sessionStartTime ||
+              verified?.order?.session?.sessionStartTime ||
+              null,
           },
           tickets: resolvedTickets,
+          pdfDownloadToken:
+            verified?.pdfDownloadToken ||
+            verified?.order?.pdfDownloadToken ||
+            null,
         };
 
         try {
@@ -1038,21 +1051,6 @@ export default function CheckoutScreen({ navigation, route }: any) {
           />
         </View>
 
-        {/* 4. Payment Gateway Card */}
-        <View style={styles.modernCard}>
-          <View style={styles.cardHeaderRow}>
-            <Icon name="credit-card-chip-outline" size={20} color={COLORS.primary} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.modernCardTitle}>
-                {language === 'mr' ? '४. पेमेंट' : '4. Payment'}
-              </Text>
-              <Text style={styles.modernCardSubtitle}>
-                {language === 'mr' ? 'सुरक्षित ऑनलाइन पेमेंट (Razorpay)' : 'Secure Online Payment (Razorpay)'}
-              </Text>
-            </View>
-          </View>
-        </View>
-
         {/* Security Trust Strip */}
         <View style={styles.securityTrustRow}>
           <Icon name="shield-check" size={16} color="#16A34A" style={{ marginRight: 6 }} />
@@ -1133,10 +1131,6 @@ export default function CheckoutScreen({ navigation, route }: any) {
                 ? 'Generating Confirmed Ticket Pass'
                 : 'Processing Payment...'}
             </Text>
-            <View style={styles.paymentModalSecurityBadge}>
-              {/* <Icon name="shield-check" size={16} color="#16A34A" /> */}
-              {/* <Text style={styles.paymentModalSecurityText}>256-Bit SSL Encrypted • RBI Approved Gateway</Text> */}
-            </View>
             <Text style={styles.paymentModalWarning}>
               कृपया बॅक बटण दाबू नका किंवा स्क्रीन बंद करू नका.
             </Text>

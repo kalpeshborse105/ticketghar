@@ -418,7 +418,7 @@ export default function MyTicketsScreen({ navigation }: any) {
                 ticketCode={
                   selectedOrder?.tickets?.[0]?.ticketCode ||
                   selectedOrder?.orderNumber ||
-                  'MT-PASS'
+                  '—'
                 }
                 seatCode={
                   selectedOrder?.tickets?.map((t) => t.seatCode).filter(Boolean).join(', ') ||
@@ -426,26 +426,26 @@ export default function MyTicketsScreen({ navigation }: any) {
                     ? (selectedOrder as any).seatCodes.join(', ')
                     : undefined) ||
                   (selectedOrder as any)?.seatsSummary ||
-                  'G01, G02, G03'
+                  '—'
                 }
                 eventTitle={
                   selectedOrder?.event?.titleMr ||
                   selectedOrder?.event?.title ||
                   (selectedOrder as any)?.eventTitle ||
-                  'Juna Furniture'
+                  'कार्यक्रम'
                 }
                 venueName={
                   selectedOrder?.event?.venue?.nameMr ||
                   selectedOrder?.event?.venue?.name ||
                   (selectedOrder as any)?.venueName ||
                   (selectedOrder as any)?.venue?.name ||
-                  'बालगंधर्व रंगमंदिर'
+                  'सभागृह उपलब्ध नाही'
                 }
                 venueCity={
                   selectedOrder?.event?.venue?.city ||
                   (selectedOrder as any)?.venue?.city ||
                   (selectedOrder as any)?.venueCity ||
-                  'पुणे, महाराष्ट्र'
+                  ''
                 }
                 showDateStr={
                   selectedOrder?.session?.sessionStartTime ||

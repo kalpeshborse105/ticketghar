@@ -258,10 +258,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setError('');
 
     try {
+      const sessionToken =
+        typeof window !== 'undefined' ? localStorage.getItem('mahaticket_token') : null;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (sessionToken && sessionToken.includes('.')) {
+        headers.Authorization = `Bearer ${sessionToken}`;
+      }
       const res = await fetch('/api/auth/flow/set-password', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        credentials: 'include',
+        headers,
+        body: JSON.stringify({ password }),
       });
 
       const data = await res.json();

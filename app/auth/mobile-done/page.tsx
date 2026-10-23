@@ -1,11 +1,13 @@
 'use client';
 
 /**
- * Mobile OAuth bridge — Chrome blocks automatic redirects to custom schemes
- * after Google OAuth. This page auto-opens mahaticket:// and shows a button.
+ * Mobile OAuth bridge — Chrome often blocks auto custom-scheme redirects.
+ * Deep link carries only the session token (short URL); the app decodes user from it.
  */
-import React, { Suspense, useEffect, useMemo, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+
+const ANDROID_PACKAGE = 'com.kalpkrutinfotech.mahaticket';
 
 function MobileAuthDoneInner() {
   const params = useSearchParams();
@@ -14,24 +16,27 @@ function MobileAuthDoneInner() {
 
   const deepLink = useMemo(() => {
     const token = params.get('token') || '';
-    const user = params.get('user') || '';
     const err = params.get('error') || '';
     if (err) return null;
     if (!token) return null;
+    // Token-only keeps Intent URL under Android length limits (user JSON was truncating).
     const q = new URLSearchParams();
     q.set('token', token);
-    if (user) q.set('user', user);
     return `mahaticket://auth/callback?${q.toString()}`;
   }, [params]);
 
-  /** Android Chrome often blocks custom-scheme auto-redirect; Intent URL forces return to app. */
   const androidIntent = useMemo(() => {
     if (!deepLink) return null;
     const q = deepLink.split('?')[1] || '';
-    return `intent://auth/callback?${q}#Intent;scheme=mahaticket;package=com.kalpkrutinfotech.mahaticket;end`;
+    return (
+      `intent://auth/callback?${q}` +
+      `#Intent;scheme=mahaticket;package=${ANDROID_PACKAGE};` +
+      `action=android.intent.action.VIEW;` +
+      `category=android.intent.category.BROWSABLE;end`
+    );
   }, [deepLink]);
 
-  const openApp = () => {
+  const openApp = useCallback(() => {
     if (!deepLink) {
       setError('Missing login token. Please return to the app and try again.');
       return;
@@ -39,8 +44,29 @@ function MobileAuthDoneInner() {
     setOpened(true);
     const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
     const isAndroid = /Android/i.test(ua);
-    window.location.href = isAndroid && androidIntent ? androidIntent : deepLink;
-  };
+    const target = isAndroid && androidIntent ? androidIntent : deepLink;
+
+    try {
+      // Hidden iframe helps some Chrome builds hand off to the app
+      if (isAndroid && androidIntent) {
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        iframe.src = androidIntent;
+        document.body.appendChild(iframe);
+        setTimeout(() => {
+          try {
+            document.body.removeChild(iframe);
+          } catch {
+            /* ignore */
+          }
+        }, 1500);
+      }
+    } catch {
+      /* ignore */
+    }
+
+    window.location.href = target;
+  }, [deepLink, androidIntent]);
 
   useEffect(() => {
     const err = params.get('error');
@@ -48,14 +74,12 @@ function MobileAuthDoneInner() {
       setError(decodeURIComponent(err));
       return;
     }
-    if (deepLink) {
-      const t = setTimeout(() => {
-        openApp();
-      }, 300);
-      return () => clearTimeout(t);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deepLink, androidIntent, params]);
+    if (!deepLink) return;
+    // Immediate attempt + one retry (Chrome may ignore the first programmatic nav)
+    openApp();
+    const t = setTimeout(() => openApp(), 600);
+    return () => clearTimeout(t);
+  }, [deepLink, openApp, params]);
 
   return (
     <main
@@ -99,7 +123,7 @@ function MobileAuthDoneInner() {
             </p>
             <p style={{ color: '#64748B', fontSize: 14, lineHeight: 1.5, marginBottom: 20 }}>
               {opened
-                ? 'जर अॅप उघडले नाही, खालील बटण दाबा.'
+                ? 'जर अॅप उघडले नाही, खालील बटण दाबा (If the app did not open, tap below).'
                 : 'Opening the MahaTicket app…'}
             </p>
             <button
@@ -111,9 +135,9 @@ function MobileAuthDoneInner() {
                 color: '#fff',
                 border: 0,
                 borderRadius: 12,
-                padding: '14px 18px',
+                padding: '16px 18px',
                 fontWeight: 800,
-                fontSize: 16,
+                fontSize: 17,
                 cursor: 'pointer',
               }}
             >
