@@ -59,6 +59,8 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
           event,
           tickets,
           pricing,
+          session: bookingResult.session || order?.session,
+          sessionId: bookingResult.sessionId || order?.sessionId || bookingResult.session?.id,
           savedAt: new Date().toISOString(),
         };
         localStorage.setItem(
@@ -271,8 +273,17 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
               sessionStartTime={
                 bookingResult.session?.sessionStartTime ||
                 order?.session?.sessionStartTime ||
-                bookingResult.event?.sessions?.find((s: any) => s.id === (order.sessionId || bookingResult.sessionId))?.sessionStartTime ||
-                order?.sessionStart
+                bookingResult.event?.sessions?.find(
+                  (s: any) =>
+                    Number(s.id) === Number(order?.sessionId || bookingResult.sessionId || bookingResult.session?.id)
+                )?.sessionStartTime ||
+                event?.sessions?.find(
+                  (s: any) =>
+                    Number(s.id) === Number(order?.sessionId || bookingResult.sessionId || bookingResult.session?.id)
+                )?.sessionStartTime ||
+                order?.sessionStartTime ||
+                order?.sessionStart ||
+                null
               }
               language={language}
               orderNumber={order.orderNumber}

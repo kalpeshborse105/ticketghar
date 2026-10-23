@@ -362,10 +362,32 @@ export async function confirmBookingOrder(params: {
         .from(events)
         .where(eq(events.id, eventId));
 
+      const [existingSession] = await db
+        .select()
+        .from(eventSessions)
+        .where(eq(eventSessions.id, existingOrder.sessionId || sessionId))
+        .limit(1);
+
+      let existingVenue: any = null;
+      if (existingEvent?.venueId) {
+        const [v] = await db.select().from(venues).where(eq(venues.id, existingEvent.venueId));
+        existingVenue = v;
+      }
+
       return {
         order: existingOrders[0],
         tickets: existingTickets,
-        event: existingEvent,
+        event: existingEvent
+          ? { ...existingEvent, venue: existingVenue }
+          : existingEvent,
+        venue: existingVenue,
+        session: existingSession
+          ? {
+              ...existingSession,
+              sessionStartTime: existingSession.sessionStartTime,
+              venue: existingVenue,
+            }
+          : { id: existingOrder.sessionId || sessionId, venue: existingVenue },
         pricing,
       };
     }
@@ -665,12 +687,27 @@ export async function confirmBookingOrder(params: {
 
   const seatCodesList = currentSeats.map((s) => s.seatCode);
 
+  // Load booked session so ticket pass always has authoritative date/time
+  const [sessionRecord] = await db
+    .select()
+    .from(eventSessions)
+    .where(eq(eventSessions.id, sessionId))
+    .limit(1);
+
   return {
     order: {
       ...order,
       groupQrPayload,
       groupQrDataUrl,
       seatCodes: seatCodesList,
+      sessionId,
+      session: sessionRecord
+        ? {
+            id: sessionRecord.id,
+            sessionStartTime: sessionRecord.sessionStartTime,
+            venue: venueRecord,
+          }
+        : undefined,
     },
     tickets: generatedTickets,
     event: {
@@ -678,10 +715,16 @@ export async function confirmBookingOrder(params: {
       venue: venueRecord,
     },
     venue: venueRecord,
-    session: {
-      id: sessionId,
-      venue: venueRecord,
-    },
+    session: sessionRecord
+      ? {
+          ...sessionRecord,
+          sessionStartTime: sessionRecord.sessionStartTime,
+          venue: venueRecord,
+        }
+      : {
+          id: sessionId,
+          venue: venueRecord,
+        },
     organizer: organizerRecord,
     pricing,
     groupQrPayload,

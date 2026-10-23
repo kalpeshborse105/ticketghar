@@ -345,7 +345,7 @@ export default function MyTicketsScreen({ navigation }: any) {
                     <Text style={styles.metaText}>
                       {item.session?.sessionStartTime
                         ? `${formatDate(item.session.sessionStartTime)} • ${formatTime(item.session.sessionStartTime)}`
-                        : (item as any).showDateStr || 'रविवार, २१ ऑक्टो २०२६ • संध्या. ०७:०० वा.'}
+                        : (item as any).showDateStr || 'तारीख उपलब्ध नाही'}
                     </Text>
                   </View>
                   <View style={styles.metaRow}>
@@ -453,30 +453,26 @@ export default function MyTicketsScreen({ navigation }: any) {
                   'पुणे, महाराष्ट्र'
                 }
                 showDateStr={
-                  (selectedOrder?.session?.sessionStartTime ||
-                    (selectedOrder as any)?.sessionStartTime ||
-                    (selectedOrder as any)?.session_start_time ||
-                    (selectedOrder as any)?.createdAt)
+                  selectedOrder?.session?.sessionStartTime ||
+                  (selectedOrder as any)?.sessionStartTime ||
+                  (selectedOrder as any)?.session_start_time
                     ? formatDate(
                         selectedOrder?.session?.sessionStartTime ||
                           (selectedOrder as any)?.sessionStartTime ||
-                          (selectedOrder as any)?.session_start_time ||
-                          (selectedOrder as any)?.createdAt
+                          (selectedOrder as any)?.session_start_time
                       )
-                    : (selectedOrder as any)?.showDateStr || 'रविवार, २१ ऑक्टो २०२६'
+                    : (selectedOrder as any)?.showDateStr || 'तारीख उपलब्ध नाही'
                 }
                 showTimeStr={
-                  (selectedOrder?.session?.sessionStartTime ||
-                    (selectedOrder as any)?.sessionStartTime ||
-                    (selectedOrder as any)?.session_start_time ||
-                    (selectedOrder as any)?.createdAt)
+                  selectedOrder?.session?.sessionStartTime ||
+                  (selectedOrder as any)?.sessionStartTime ||
+                  (selectedOrder as any)?.session_start_time
                     ? formatTime(
                         selectedOrder?.session?.sessionStartTime ||
                           (selectedOrder as any)?.sessionStartTime ||
-                          (selectedOrder as any)?.session_start_time ||
-                          (selectedOrder as any)?.createdAt
+                          (selectedOrder as any)?.session_start_time
                       )
-                    : (selectedOrder as any)?.showTimeStr || 'संध्या. ०७:०० वा.'
+                    : (selectedOrder as any)?.showTimeStr || 'वेळ उपलब्ध नाही'
                 }
                 orderNumber={selectedOrder?.orderNumber}
                 grandTotal={selectedOrder?.grandTotal}

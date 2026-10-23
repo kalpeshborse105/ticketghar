@@ -177,16 +177,39 @@ export function formatEventCardDateTime(
     };
   }
 
-  // Determine date source
+  // Determine date source — prefer canonical homeSession / showDateStr path
   if (typeof eventOrSession === 'string' || typeof eventOrSession === 'number' || eventOrSession instanceof Date) {
     rawDate = eventOrSession;
+  } else if (eventOrSession.homeSession?.sessionStartTime) {
+    rawDate = eventOrSession.homeSession.sessionStartTime;
+  } else if (eventOrSession.homeSessionId && Array.isArray(eventOrSession.sessions)) {
+    const home = eventOrSession.sessions.find((s: any) => Number(s.id) === Number(eventOrSession.homeSessionId));
+    rawDate = home?.sessionStartTime || home?.startTime;
   } else if (eventOrSession.sessionStartTime) {
     rawDate = eventOrSession.sessionStartTime;
   } else if (eventOrSession.startTime) {
     rawDate = eventOrSession.startTime;
   } else if (eventOrSession.sessions && eventOrSession.sessions.length > 0) {
-    const active = eventOrSession.sessions.find((s: any) => s.status === 'active' || s.status === 'published') || eventOrSession.sessions[0];
-    rawDate = active?.sessionStartTime || active?.startTime;
+    // Next upcoming active session (never prefer a past sessions[0])
+    const nowMs = Date.now() + 5 * 60 * 1000;
+    const upcoming = eventOrSession.sessions
+      .filter((s: any) => {
+        const t = new Date(s.sessionStartTime || s.startTime).getTime();
+        return (
+          !Number.isNaN(t) &&
+          t > nowMs &&
+          s.status !== 'cancelled' &&
+          s.status !== 'completed' &&
+          s.status !== 'sold_out'
+        );
+      })
+      .sort(
+        (a: any, b: any) =>
+          new Date(a.sessionStartTime || a.startTime).getTime() -
+          new Date(b.sessionStartTime || b.startTime).getTime()
+      );
+    const pick = upcoming[0] || null;
+    rawDate = pick?.sessionStartTime || pick?.startTime;
   } else if (eventOrSession.startDate) {
     rawDate = eventOrSession.startDate;
   }

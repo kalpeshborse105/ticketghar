@@ -521,7 +521,10 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
             }
 
             setShowDiscardConfirm(false);
-            // Enrich with venue and session metadata for instant pass display
+            // Enrich with venue + booked session date/time for instant pass display.
+            // Always merge checkout `session` so sessionStartTime is never dropped when
+            // verify returns a partial session object (id/venue only).
+            const verifiedSession = verifyData.session || {};
             const enrichedResult = {
               ...verifyData,
               event: {
@@ -529,8 +532,17 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
                 venue: event?.venue || (session as any)?.venue,
               },
               session: {
-                ...(verifyData.session || session),
-                venue: (session as any)?.venue || event?.venue,
+                ...session,
+                ...verifiedSession,
+                id: verifiedSession.id || session?.id,
+                sessionStartTime:
+                  verifiedSession.sessionStartTime ||
+                  session?.sessionStartTime ||
+                  null,
+                venue:
+                  verifiedSession.venue ||
+                  (session as any)?.venue ||
+                  event?.venue,
               },
               venue: event?.venue || (session as any)?.venue,
               seats: holdData.heldSeats,

@@ -2,7 +2,12 @@ import { NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
 import { seatInventory, ticketTypes, events, orders, users } from '@/src/db/schema.ts';
 import { eq, and, inArray } from 'drizzle-orm';
-import { isRazorpayConfigured, getRazorpayClient } from '@/src/lib/payments/razorpay.ts';
+import {
+  isRazorpayConfigured,
+  getRazorpayClientAsync,
+  getDbRazorpayCreds,
+  clientFromCreds,
+} from '@/src/lib/payments/razorpay.ts';
 import { calculatePricing } from '@/src/lib/inventory-engine.ts';
 import { cacheDel, sessionSeatsCacheKey } from '@/src/lib/redis.ts';
 
@@ -26,15 +31,19 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if Razorpay is configured
-    if (!isRazorpayConfigured()) {
-      return NextResponse.json(
-        {
-          configured: false,
-          error: 'Razorpay payment gateway is not configured. Please contact support.',
-        },
-        { status: 503 }
-      );
+    // Warm credentials (env or DB app_secrets). Soft-fail only if both missing.
+    try {
+      await getRazorpayClientAsync();
+    } catch {
+      if (!isRazorpayConfigured()) {
+        return NextResponse.json(
+          {
+            configured: false,
+            error: 'Razorpay payment gateway is not configured. Please contact support.',
+          },
+          { status: 503 }
+        );
+      }
     }
 
     // Verify the hold exists and get event details
@@ -120,15 +129,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid order amount' }, { status: 400 });
     }
 
-    // Create Razorpay order
-    const razorpayClient = getRazorpayClient();
-
     const receiptId = `rcpt_${sessionId}_${Date.now()}`;
-
-    // Create Razorpay order (TEST MODE verified)
-    const razorpayOrder = await razorpayClient.orders.create({
+    const orderPayload = {
       amount: amountInPaise,
-      currency: 'INR',
+      currency: 'INR' as const,
       receipt: receiptId,
       notes: {
         session_id: sessionId.toString(),
@@ -136,7 +140,31 @@ export async function POST(request: Request) {
         seat_count: seatIds.length.toString(),
         hold_token: userHoldToken || '',
       },
-    });
+    };
+
+    // Env keys first; on Authentication failed, retry with DB app_secrets (prod mismatch fix)
+    let { client: razorpayClient, keyId: publicKeyId, source } = await getRazorpayClientAsync();
+    let razorpayOrder: any;
+    try {
+      razorpayOrder = await razorpayClient.orders.create(orderPayload);
+    } catch (firstErr: any) {
+      const desc = String(firstErr?.error?.description || firstErr?.message || '');
+      if (/authenti/i.test(desc)) {
+        const dbCreds = await getDbRazorpayCreds();
+        if (dbCreds && dbCreds.source === 'db') {
+          console.warn('[OrderCreated] Env Razorpay auth failed — retrying with DB secrets');
+          razorpayClient = clientFromCreds(dbCreds);
+          publicKeyId = dbCreds.keyId;
+          source = 'db';
+          razorpayOrder = await razorpayClient.orders.create(orderPayload);
+        } else {
+          throw firstErr;
+        }
+      } else {
+        throw firstErr;
+      }
+    }
+    console.log('[OrderCreated] Razorpay order via', source, razorpayOrder?.id);
 
     // 1. Resolve customer identity for persisted platform order
     let targetUserId = 1;
@@ -232,14 +260,13 @@ export async function POST(request: Request) {
       amount: amountInPaise,
     });
 
-    // Return order details including public key ID and authoritative hold expiry for frontend
     return NextResponse.json({
       orderId: razorpayOrder.id,
       platformOrderId: pendingOrder.id,
       orderNumber: pendingOrder.orderNumber,
       amount: amountInPaise,
       currency: 'INR',
-      keyId: process.env.RAZORPAY_KEY_ID,
+      keyId: publicKeyId,
       receipt: receiptId,
       holdExpiresAt: tenMinutes.toISOString(),
       pricing,
@@ -249,10 +276,13 @@ export async function POST(request: Request) {
 
     // Handle Razorpay-specific errors
     if (error.statusCode) {
+      const details = error.error?.description || error.message || 'Payment gateway error';
       return NextResponse.json(
         {
-          error: 'Payment gateway error',
-          details: error.error?.description || error.message,
+          error: /authenti/i.test(String(details))
+            ? 'Razorpay Authentication failed — server KEY_ID/KEY_SECRET mismatch'
+            : 'Payment gateway error',
+          details,
         },
         { status: error.statusCode }
       );

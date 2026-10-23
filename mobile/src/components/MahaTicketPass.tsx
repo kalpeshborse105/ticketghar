@@ -69,12 +69,17 @@ export function MahaTicketPass({
   const resolvedTotal = grandTotal !== undefined && grandTotal !== null && Number(grandTotal) > 0
     ? `₹${Math.round(Number(grandTotal) > 15000 ? Number(grandTotal) / 100 : Number(grandTotal)).toLocaleString('en-IN')}`
     : '₹565';
-  const resolvedShowDate = showDateStr || 'रविवार, २१ ऑक्टो २०२६';
-  const resolvedShowTime = showTimeStr || 'संध्या. ०७:०० वा.';
-  const resolvedTitle = eventTitle && eventTitle !== 'Event' ? eventTitle : 'Juna Furniture';
-  const resolvedVenueName = venueName && venueName !== 'Auditorium' && venueName !== 'Venue' ? venueName : 'बालगंधर्व रंगमंदिर';
-  const resolvedVenueCity = venueCity && venueCity !== 'City' && venueCity !== '' ? venueCity : 'पुणे, महाराष्ट्र';
-  const resolvedSeatCode = seatCode && seatCode !== 'General' ? seatCode : 'G01, G02, G03';
+  // Never invent show date/time — must match booked session from event details → seats → checkout
+  const resolvedShowDate = showDateStr || 'तारीख उपलब्ध नाही';
+  const resolvedShowTime = showTimeStr || 'वेळ उपलब्ध नाही';
+  const resolvedTitle = eventTitle && eventTitle !== 'Event' ? eventTitle : 'कार्यक्रम';
+  const resolvedVenueName =
+    venueName && venueName !== 'Auditorium' && venueName !== 'Venue'
+      ? venueName
+      : 'सभागृह';
+  const resolvedVenueCity =
+    venueCity && venueCity !== 'City' && venueCity !== '' ? venueCity : 'महाराष्ट्र';
+  const resolvedSeatCode = seatCode && seatCode !== 'General' ? seatCode : '—';
 
   const normalizedStatus = (status || 'confirmed').toLowerCase();
   const isUsed = normalizedStatus === 'used';

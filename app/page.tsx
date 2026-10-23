@@ -438,8 +438,23 @@ export default function HomePage() {
       router.push(`/events/${event.id}`);
       return;
     }
+    const nowMs = Date.now() + 5 * 60 * 1000;
+    const homeId = (event as any).homeSessionId;
+    const homeSession =
+      (homeId && sessions.find((s: any) => Number(s.id) === Number(homeId))) ||
+      (event as any).homeSession ||
+      sessions
+        .filter((s: any) => {
+          const t = new Date(s.sessionStartTime).getTime();
+          return !Number.isNaN(t) && t > nowMs && s.status !== 'sold_out' && s.status !== 'cancelled';
+        })
+        .sort(
+          (a: any, b: any) =>
+            new Date(a.sessionStartTime).getTime() - new Date(b.sessionStartTime).getTime()
+        )[0] ||
+      sessions[0];
     setSelectedEventForBooking(event);
-    setSelectedSessionForBooking(sessions[0]);
+    setSelectedSessionForBooking(homeSession);
     setSeatMapOpen(true);
   };
 
@@ -474,11 +489,29 @@ export default function HomePage() {
         return pB - pA;
       });
     } else {
-      // Default: soonest date
+      // Default: soonest *bookable* home session (not past sessions[0])
       list.sort((a, b) => {
-        const tA = a.sessions?.[0]?.sessionStartTime ? new Date(a.sessions[0].sessionStartTime).getTime() : 0;
-        const tB = b.sessions?.[0]?.sessionStartTime ? new Date(b.sessions[0].sessionStartTime).getTime() : 0;
-        return tA - tB;
+        const pickStart = (ev: any) => {
+          if (ev.homeSession?.sessionStartTime) return new Date(ev.homeSession.sessionStartTime).getTime();
+          if (ev.homeSessionId && Array.isArray(ev.sessions)) {
+            const s = ev.sessions.find((x: any) => Number(x.id) === Number(ev.homeSessionId));
+            if (s?.sessionStartTime) return new Date(s.sessionStartTime).getTime();
+          }
+          const nowMs = Date.now() + 5 * 60 * 1000;
+          const upcoming = (ev.sessions || [])
+            .filter((s: any) => {
+              const t = new Date(s.sessionStartTime).getTime();
+              return !Number.isNaN(t) && t > nowMs;
+            })
+            .sort(
+              (x: any, y: any) =>
+                new Date(x.sessionStartTime).getTime() - new Date(y.sessionStartTime).getTime()
+            );
+          return upcoming[0]?.sessionStartTime
+            ? new Date(upcoming[0].sessionStartTime).getTime()
+            : Number.MAX_SAFE_INTEGER;
+        };
+        return pickStart(a) - pickStart(b);
       });
     }
     return list;

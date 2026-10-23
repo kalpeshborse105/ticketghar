@@ -42,7 +42,6 @@ import {
   SectionHeader,
   Badge,
   Button,
-  TicketCardFrame,
 } from '../components';
 import { displayTitle, displayCity } from '../utils/display';
 
@@ -441,13 +440,8 @@ export default function HomeScreen({ navigation }: any) {
                       { width: HERO_SLIDE, height: 215 },
                     ]}
                   >
-                    <TicketCardFrame
-                      borderRadius={RADIUS.md}
-                      notchRadius={5}
-                      notchColor={COLORS.bg}
-                      backgroundColor={COLORS.surface2}
-                      style={styles.heroBannerFrame}
-                    >
+                    {/* Match web HeroBanner: full-bleed cinematic slide (no ticket notches) */}
+                    <View style={styles.heroBannerFrame}>
                       <View style={styles.heroBannerMedia}>
                         <Image
                           source={{ uri: bannerUri }}
@@ -457,8 +451,8 @@ export default function HomeScreen({ navigation }: any) {
                       </View>
 
                       <View style={styles.heroBannerOverlay} />
+                      <View style={styles.heroBannerSideFade} />
 
-                      {/* Top Corner Side Rating Star Badge */}
                       <View style={styles.heroRatingBadgeTopRight}>
                         <Icon name="star" size={13} color="#FFB800" />
                         <Text style={styles.heroRatingScore}>{rating}</Text>
@@ -489,7 +483,7 @@ export default function HomeScreen({ navigation }: any) {
                           )}
                         </View>
                       </View>
-                    </TicketCardFrame>
+                    </View>
                   </TouchableOpacity>
                 );
               }}
@@ -1159,7 +1153,15 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: COLORS.primary,
   },
-  aajKayTitle: { color: COLORS.text, fontSize: 18, fontWeight: '900', letterSpacing: -0.2 },
+  aajKayTitle: {
+    color: COLORS.text,
+    fontSize: 18,
+    fontWeight: '900',
+    letterSpacing: -0.2,
+    lineHeight: 28,
+    paddingBottom: 2,
+    includeFontPadding: true,
+  },
   aajKaySub: { color: COLORS.textMuted, fontSize: 12, fontWeight: '500', marginTop: 1 },
   seeAll: { color: COLORS.primary, fontSize: 12, fontWeight: '700' },
 
@@ -1192,6 +1194,9 @@ const styles = StyleSheet.create({
   heroBannerFrame: {
     height: 215,
     width: '100%',
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#141b2b',
   },
   heroBannerMedia: {
     ...StyleSheet.absoluteFillObject,
@@ -1209,7 +1214,15 @@ const styles = StyleSheet.create({
   },
   heroBannerOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(15, 23, 42, 0.35)',
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  heroBannerSideFade: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 120,
+    backgroundColor: 'rgba(0,0,0,0.55)',
   },
   heroRatingBadgeTopRight: {
     position: 'absolute',
@@ -1316,7 +1329,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     color: COLORS.text,
-    lineHeight: 16,
+    // Devanagari glyphs need extra line box + padding or tops/bottoms clip
+    lineHeight: 20,
+    paddingTop: 2,
+    paddingBottom: 4,
+    includeFontPadding: true,
   },
   heroTagRow: { flexDirection: 'row', gap: 6, alignItems: 'center' },
   heroCatPill: {
@@ -1333,7 +1350,15 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.sm,
   },
   heroLangPillText: { fontSize: 10, fontWeight: '700', color: COLORS.white },
-  heroBannerTitle: { fontSize: 18, fontWeight: '900', color: COLORS.white, lineHeight: 28, paddingBottom: 2 },
+  heroBannerTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: COLORS.white,
+    lineHeight: 28,
+    paddingTop: 2,
+    paddingBottom: 4,
+    includeFontPadding: true,
+  },
   heroMetaRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   heroMetaPill: {
     flexDirection: 'row',
@@ -1442,8 +1467,23 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
     borderRadius: RADIUS.xs,
   },
-  festivalTitle: { fontSize: 14, fontWeight: '800', color: COLORS.text, marginTop: 2 },
-  festivalSub: { fontSize: 11, color: COLORS.textMuted, marginTop: 2, lineHeight: 18, paddingBottom: 2 },
+  festivalTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: COLORS.text,
+    marginTop: 2,
+    lineHeight: 22,
+    paddingBottom: 2,
+    includeFontPadding: true,
+  },
+  festivalSub: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 2,
+    lineHeight: 18,
+    paddingBottom: 3,
+    includeFontPadding: true,
+  },
 
   rankBadge: {
     position: 'absolute',
@@ -1484,7 +1524,13 @@ const styles = StyleSheet.create({
   theatreName: { fontSize: 15, fontWeight: '800', color: COLORS.text },
   theatreLocRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   theatreLoc: { fontSize: 12, color: COLORS.textMuted },
-  theatreDesc: { fontSize: 11, color: COLORS.textMuted, lineHeight: 16 },
+  theatreDesc: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    lineHeight: 18,
+    paddingBottom: 2,
+    includeFontPadding: true,
+  },
   facilityRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
   facilityPill: {
     backgroundColor: COLORS.surface2,
@@ -1532,7 +1578,14 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(234,88,12,0.2)',
   },
   benefitItemTitle: { fontSize: 13, fontWeight: '800', color: COLORS.text },
-  benefitItemDesc: { fontSize: 11, color: COLORS.textMuted, lineHeight: 16, marginTop: 2 },
+  benefitItemDesc: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    lineHeight: 18,
+    marginTop: 2,
+    paddingBottom: 2,
+    includeFontPadding: true,
+  },
 
   organizerCard: {
     flexDirection: 'row',
@@ -1555,7 +1608,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   organizerTitle: { fontSize: 14, fontWeight: '800', color: COLORS.text },
-  organizerSub: { fontSize: 11, color: COLORS.textMuted, marginTop: 2, lineHeight: 16 },
+  organizerSub: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 2,
+    lineHeight: 18,
+    paddingBottom: 2,
+    includeFontPadding: true,
+  },
   organizerBtn: {
     alignSelf: 'flex-start',
     backgroundColor: COLORS.primary,

@@ -13,7 +13,6 @@ import {
   Animated,
   Dimensions,
   KeyboardAvoidingView,
-  Linking,
   Platform,
   ScrollView,
   StatusBar,
@@ -25,8 +24,9 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, RADIUS, SPACING, SHADOWS } from '../theme';
-import { api, resolveApiBase } from '../api';
+import { api } from '../api';
 import { useAuthStore } from '../store';
+import { openGoogleAuthInApp } from '../lib/openGoogleAuth';
 
 const { height } = Dimensions.get('window');
 
@@ -202,14 +202,12 @@ export default function LoginScreen({ navigation, route }: any) {
     }
   };
 
-  // Google Sign In
+  // Google Sign In — Chrome Custom Tabs, returns via mahaticket://
   const handleGoogleLogin = async () => {
     try {
       setLoading(true);
       setError('');
-      const base = await resolveApiBase();
-      const targetUrl = `${base}/api/auth/google?direct=true&source=mobile`;
-      await Linking.openURL(targetUrl);
+      await openGoogleAuthInApp();
     } catch (err: any) {
       setError(err?.message || 'Google लॉगिन सुरू करता आले नाही.');
     } finally {

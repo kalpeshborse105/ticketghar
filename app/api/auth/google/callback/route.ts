@@ -163,11 +163,24 @@ export async function GET(request: Request) {
     const destination = state?.redirect || '/';
 
     if (isMobile) {
-      return NextResponse.redirect(
-        `mahaticket://auth/callback?token=${encodeURIComponent(sessionToken)}&user=${encodeURIComponent(
-          JSON.stringify(customerUser)
-        )}`
+      // Chrome blocks direct custom-scheme redirects after OAuth.
+      // Land on a bridge page that opens mahaticket:// (with a fallback button).
+      const bridge = new URL(`${origin}/auth/mobile-done`);
+      bridge.searchParams.set('token', sessionToken);
+      bridge.searchParams.set(
+        'user',
+        JSON.stringify({
+          id: customerUser.id,
+          uid: customerUser.uid,
+          email: customerUser.email,
+          fullName: customerUser.fullName,
+          name: customerUser.fullName,
+          phone: customerUser.phoneNumber,
+          avatarUrl: customerUser.avatarUrl,
+          role: customerUser.role,
+        })
       );
+      return NextResponse.redirect(bridge.toString(), 307);
     }
 
     const redirectUrl = `${origin}${destination.startsWith('/') ? destination : '/'}`;

@@ -1,15 +1,91 @@
 import Razorpay from 'razorpay';
 import * as crypto from 'crypto';
+import { db } from '@/src/db/index.ts';
+import { sql } from 'drizzle-orm';
+
+/** Strip whitespace / wrapping quotes that break Razorpay Authentication. */
+function cleanEnv(value?: string | null): string {
+  return String(value || '')
+    .trim()
+    .replace(/^['"]+|['"]+$/g, '');
+}
+
+type RazorpayCreds = { keyId: string; keySecret: string; source: 'env' | 'db' };
+
+let cachedDbCreds: RazorpayCreds | null = null;
+let dbCredsLoadedAt = 0;
+const DB_CREDS_TTL_MS = 60_000;
+
+function envCreds(): RazorpayCreds | null {
+  const keyId = cleanEnv(process.env.RAZORPAY_KEY_ID);
+  const keySecret = cleanEnv(process.env.RAZORPAY_KEY_SECRET);
+  if (!keyId || !keySecret) return null;
+  if (!keyId.startsWith('rzp_test_') && !keyId.startsWith('rzp_live_')) return null;
+  const placeholders = ['YourKeyIdHere', 'your_razorpay', 'rzp_test_YOUR', 'rzp_live_YOUR', 'placeholder', 'change_me'];
+  for (const p of placeholders) {
+    if (keyId.toLowerCase().includes(p.toLowerCase()) || keySecret.toLowerCase().includes(p.toLowerCase())) {
+      return null;
+    }
+  }
+  return { keyId, keySecret, source: 'env' };
+}
+
+async function loadDbCreds(): Promise<RazorpayCreds | null> {
+  const now = Date.now();
+  if (cachedDbCreds && now - dbCredsLoadedAt < DB_CREDS_TTL_MS) {
+    return cachedDbCreds;
+  }
+  try {
+    // Ensure table exists (idempotent) then read keys
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS app_secrets (
+        key text PRIMARY KEY,
+        value text NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      )
+    `);
+    const rows = await db.execute(sql`
+      SELECT key, value FROM app_secrets
+      WHERE key IN ('RAZORPAY_KEY_ID', 'RAZORPAY_KEY_SECRET')
+    `);
+    const map = new Map<string, string>();
+    const list = (rows as any)?.rows || (rows as any) || [];
+    for (const r of list) {
+      if (r?.key && r?.value) map.set(String(r.key), cleanEnv(r.value));
+    }
+    const keyId = map.get('RAZORPAY_KEY_ID') || '';
+    const keySecret = map.get('RAZORPAY_KEY_SECRET') || '';
+    if (!keyId || !keySecret) return null;
+    if (!keyId.startsWith('rzp_test_') && !keyId.startsWith('rzp_live_')) return null;
+    cachedDbCreds = { keyId, keySecret, source: 'db' };
+    dbCredsLoadedAt = now;
+    return cachedDbCreds;
+  } catch (err: any) {
+    console.warn('[Razorpay] DB secrets load failed:', err?.message || err);
+    return null;
+  }
+}
+
+/**
+ * Resolve credentials: env first, then app_secrets DB fallback (for prod env mismatch).
+ */
+export async function resolveRazorpayCreds(): Promise<RazorpayCreds> {
+  const fromEnv = envCreds();
+  if (fromEnv) return fromEnv;
+  const fromDb = await loadDbCreds();
+  if (fromDb) return fromDb;
+  throw new Error('Razorpay payment gateway is not configured (env + DB empty)');
+}
 
 /**
  * Determine the configured Razorpay mode: 'test' or 'live'
  */
 export function getRazorpayMode(): 'test' | 'live' | 'unknown' {
-  const explicitMode = process.env.RAZORPAY_MODE?.trim().toLowerCase();
+  const explicitMode = cleanEnv(process.env.RAZORPAY_MODE).toLowerCase();
   if (explicitMode === 'test' || explicitMode === 'live') {
     return explicitMode;
   }
-  const keyId = process.env.RAZORPAY_KEY_ID?.trim() || '';
+  const keyId = cleanEnv(process.env.RAZORPAY_KEY_ID) || cachedDbCreds?.keyId || '';
   if (keyId.startsWith('rzp_test_')) return 'test';
   if (keyId.startsWith('rzp_live_')) return 'live';
   return 'unknown';
@@ -25,16 +101,14 @@ export function getRazorpayConfigDiagnostic(): {
   issues: string[];
 } {
   const issues: string[] = [];
-  const keyId = process.env.RAZORPAY_KEY_ID?.trim() || '';
-  const keySecret = process.env.RAZORPAY_KEY_SECRET?.trim() || '';
-  const explicitMode = process.env.RAZORPAY_MODE?.trim().toLowerCase();
-
+  const keyId = cleanEnv(process.env.RAZORPAY_KEY_ID);
+  const keySecret = cleanEnv(process.env.RAZORPAY_KEY_SECRET);
+  const explicitMode = cleanEnv(process.env.RAZORPAY_MODE).toLowerCase();
   const mode = getRazorpayMode();
 
   if (!keyId) issues.push('RAZORPAY_KEY_ID is missing');
   if (!keySecret) issues.push('RAZORPAY_KEY_SECRET is missing');
 
-  // Check placeholder values
   const placeholderPatterns = [
     'YourKeyIdHere',
     'your_razorpay',
@@ -52,106 +126,136 @@ export function getRazorpayConfigDiagnostic(): {
     }
   }
 
-  // Format validation
   if (keyId && !keyId.startsWith('rzp_test_') && !keyId.startsWith('rzp_live_')) {
     issues.push('RAZORPAY_KEY_ID does not match expected prefix (rzp_test_ or rzp_live_)');
   }
 
-  // Consistency between RAZORPAY_MODE and RAZORPAY_KEY_ID
   let isConsistent = true;
   if (explicitMode) {
-    if (explicitMode === 'test' && !keyId.startsWith('rzp_test_')) {
+    if (explicitMode === 'test' && keyId && !keyId.startsWith('rzp_test_')) {
       issues.push('RAZORPAY_MODE is set to "test" but RAZORPAY_KEY_ID does not start with "rzp_test_"');
       isConsistent = false;
-    } else if (explicitMode === 'live' && !keyId.startsWith('rzp_live_')) {
+    } else if (explicitMode === 'live' && keyId && !keyId.startsWith('rzp_live_')) {
       issues.push('RAZORPAY_MODE is set to "live" but RAZORPAY_KEY_ID does not start with "rzp_live_"');
       isConsistent = false;
     }
   }
 
-  const isConfigured = issues.length === 0;
+  // Env may be broken on prod; DB fallback still counts as configured for health checks
+  const isConfigured = issues.length === 0 || Boolean(cachedDbCreds);
 
   return {
     mode,
     isConfigured,
-    isConsistent: isConsistent && (issues.length === 0 || !issues.some(i => i.includes('does not match expected prefix') || i.includes('RAZORPAY_MODE is set'))),
+    isConsistent:
+      isConsistent &&
+      (issues.length === 0 ||
+        !issues.some(
+          (i) => i.includes('does not match expected prefix') || i.includes('RAZORPAY_MODE is set')
+        )),
     issues,
   };
 }
 
-/**
- * Check if Razorpay is properly configured with real credentials and consistent mode
- * @returns true if both key ID and secret are set and not placeholder values
- */
 export function isRazorpayConfigured(): boolean {
+  // Sync check: env OK, or we already loaded DB creds. Async routes should call resolveRazorpayCreds.
   const diag = getRazorpayConfigDiagnostic();
-  return diag.isConfigured && diag.isConsistent;
+  if (diag.isConfigured && diag.isConsistent) return true;
+  return Boolean(envCreds() || cachedDbCreds);
 }
 
-/**
- * Get configured Razorpay client instance
- * @throws Error if Razorpay is not configured or inconsistent
- * @returns Razorpay instance
- */
 export function getRazorpayClient(): Razorpay {
-  const diag = getRazorpayConfigDiagnostic();
-  if (!diag.isConfigured || !diag.isConsistent) {
-    throw new Error(`Razorpay payment gateway configuration error: ${diag.issues.join('; ')}`);
+  const creds = envCreds() || cachedDbCreds;
+  if (!creds) {
+    throw new Error('Razorpay payment gateway configuration error: credentials missing');
   }
-
-  const keyId = process.env.RAZORPAY_KEY_ID!;
-  const keySecret = process.env.RAZORPAY_KEY_SECRET!;
-
-  // Never log secrets - only log that client is being initialized with mode
-  console.log(`Initializing Razorpay client in ${diag.mode} mode`);
-
+  console.log(`Initializing Razorpay client from ${creds.source} (${getRazorpayMode()} mode)`);
   return new Razorpay({
-    key_id: keyId,
-    key_secret: keySecret,
+    key_id: creds.keyId,
+    key_secret: creds.keySecret,
   });
 }
 
 /**
- * Verify Razorpay payment signature
- * @param orderId Razorpay order ID
- * @param paymentId Razorpay payment ID
- * @param signature Signature received from Razorpay
- * @returns true if signature is valid
+ * Preferred async client — env first, DB fallback. Retries with DB if env auth fails at call site.
  */
-export function verifyPaymentSignature(orderId: string, paymentId: string, signature: string): boolean {
-  if (!isRazorpayConfigured()) {
-    throw new Error('Razorpay is not configured');
+export async function getRazorpayClientAsync(): Promise<{ client: Razorpay; keyId: string; source: string }> {
+  const preferred = envCreds() || (await loadDbCreds());
+  if (!preferred) {
+    throw new Error('Razorpay payment gateway is not configured');
   }
+  return {
+    client: new Razorpay({ key_id: preferred.keyId, key_secret: preferred.keySecret }),
+    keyId: preferred.keyId,
+    source: preferred.source,
+  };
+}
 
+/** Build client from explicit creds (used for env→DB auth retry). */
+export function clientFromCreds(creds: RazorpayCreds): Razorpay {
+  return new Razorpay({ key_id: creds.keyId, key_secret: creds.keySecret });
+}
+
+export async function getDbRazorpayCreds(): Promise<RazorpayCreds | null> {
+  return loadDbCreds();
+}
+
+export function verifyPaymentSignature(orderId: string, paymentId: string, signature: string): boolean {
   if (!orderId || !paymentId || !signature) {
     return false;
   }
 
-  const keySecret = process.env.RAZORPAY_KEY_SECRET!;
+  const secrets = [cleanEnv(process.env.RAZORPAY_KEY_SECRET), cachedDbCreds?.keySecret].filter(
+    Boolean
+  ) as string[];
 
-  // Generate expected signature: HMAC SHA256 of "order_id|payment_id"
+  if (secrets.length === 0) {
+    throw new Error('Razorpay is not configured');
+  }
+
+  for (const keySecret of secrets) {
+    const expectedSignature = crypto
+      .createHmac('sha256', keySecret)
+      .update(`${orderId}|${paymentId}`)
+      .digest('hex');
+
+    const expectedBuf = Buffer.from(expectedSignature, 'utf8');
+    const actualBuf = Buffer.from(signature, 'utf8');
+
+    if (expectedBuf.length === actualBuf.length && crypto.timingSafeEqual(expectedBuf, actualBuf)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Async verify — also tries DB secret if env secret fails.
+ */
+export async function verifyPaymentSignatureAsync(
+  orderId: string,
+  paymentId: string,
+  signature: string
+): Promise<boolean> {
+  if (!orderId || !paymentId || !signature) return false;
+
+  if (verifyPaymentSignature(orderId, paymentId, signature)) return true;
+
+  const dbCreds = await loadDbCreds();
+  if (!dbCreds?.keySecret) return false;
+
   const expectedSignature = crypto
-    .createHmac('sha256', keySecret)
+    .createHmac('sha256', dbCreds.keySecret)
     .update(`${orderId}|${paymentId}`)
     .digest('hex');
 
   const expectedBuf = Buffer.from(expectedSignature, 'utf8');
   const actualBuf = Buffer.from(signature, 'utf8');
-
-  if (expectedBuf.length !== actualBuf.length) {
-    return false;
-  }
-
-  // Constant-time comparison to prevent timing attacks
+  if (expectedBuf.length !== actualBuf.length) return false;
   return crypto.timingSafeEqual(expectedBuf, actualBuf);
 }
 
-/**
- * Verify webhook signature from Razorpay
- * @param body Raw webhook body
- * @param signature Signature from x-razorpay-signature header
- * @returns true if signature is valid
- */
 export function verifyWebhookSignature(body: string, signature: string): boolean {
   const webhookSecret = process.env.PAYMENT_WEBHOOK_SECRET || process.env.RAZORPAY_WEBHOOK_SECRET;
 

@@ -443,9 +443,15 @@ export const MyTicketsView: React.FC<MyTicketsViewProps> = ({
                     <button
                       onClick={() =>
                         onViewTicket({
-                          order: ord,
+                          order: {
+                            ...ord,
+                            session: ord.session,
+                            sessionId: ord.sessionId || ord.session?.id,
+                          },
                           tickets: tks,
                           event: ev,
+                          session: ord.session,
+                          sessionId: ord.sessionId || ord.session?.id,
                           pricing: {},
                         })
                       }

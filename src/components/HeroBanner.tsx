@@ -80,7 +80,26 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
       const displayTitle = language === 'mr' ? ev.titleMr || ev.title : ev.title;
       const displayCat = language === 'mr' ? ev.categoryMr || ev.category : ev.category;
       const venue = language === 'mr' ? ev.venue?.nameMr || ev.venue?.name : ev.venue?.name;
-      const session = ev.sessions && ev.sessions.length > 0 ? ev.sessions[0] : null;
+      // Canonical next-bookable session — never past sessions[0]
+      const homeId = (ev as any).homeSessionId;
+      const homeFromApi = (ev as any).homeSession;
+      const session =
+        homeFromApi ||
+        (homeId && Array.isArray(ev.sessions)
+          ? ev.sessions.find((s: any) => Number(s.id) === Number(homeId))
+          : null) ||
+        (() => {
+          const nowMs = Date.now() + 5 * 60 * 1000;
+          return (ev.sessions || [])
+            .filter((s: any) => {
+              const t = new Date(s.sessionStartTime).getTime();
+              return !Number.isNaN(t) && t > nowMs && s.status !== 'cancelled' && s.status !== 'completed';
+            })
+            .sort(
+              (a: any, b: any) =>
+                new Date(a.sessionStartTime).getTime() - new Date(b.sessionStartTime).getTime()
+            )[0] || null;
+        })();
 
       list.push({
         type: 'event',
@@ -90,18 +109,24 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
         imageUrl: ev.bannerUrl || ev.posterUrl || '',
         city: ev.venue?.city,
         venueName: venue,
-        dateStr: session
-          ? new Date(session.sessionStartTime).toLocaleDateString(
-              language === 'mr' ? 'mr-IN' : 'en-IN',
-              { weekday: 'short', day: 'numeric', month: 'short' },
-            )
-          : undefined,
-        timeStr: session
-          ? new Date(session.sessionStartTime).toLocaleTimeString([], {
-              hour: '2-digit',
-              minute: '2-digit',
-            })
-          : undefined,
+        dateStr:
+          (ev as any).showDateStr ||
+          (session
+            ? new Date(session.sessionStartTime).toLocaleDateString(
+                language === 'mr' ? 'mr-IN' : 'en-IN',
+                { timeZone: 'Asia/Kolkata', weekday: 'short', day: 'numeric', month: 'short' }
+              )
+            : undefined),
+        timeStr:
+          (ev as any).showTimeStr ||
+          (session
+            ? new Date(session.sessionStartTime).toLocaleTimeString('en-IN', {
+                timeZone: 'Asia/Kolkata',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true,
+              })
+            : undefined),
         ctaLabel: t.bookNow,
         rawEvent: ev,
         rating: ev.rating ?? null,

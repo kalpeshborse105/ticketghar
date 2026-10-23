@@ -32,8 +32,21 @@ export default function App() {
             if (matchUser && matchUser[1]) {
               userObj = JSON.parse(decodeURIComponent(matchUser[1]));
             }
-            if (userObj) {
-              useAuthStore.getState().setAuth(userObj, token);
+            if (userObj && token && token.includes('.')) {
+              useAuthStore
+                .getState()
+                .setAuth(
+                  {
+                    id: userObj.id,
+                    name: userObj.fullName || userObj.name,
+                    email: userObj.email,
+                    phone: userObj.phone || userObj.phoneNumber,
+                    avatarUrl: userObj.avatarUrl,
+                    role: userObj.role || 'customer',
+                  },
+                  token
+                )
+                .catch(() => null);
               Toast.show({
                 type: 'success',
                 text1: 'साइन इन यशस्वी (Signed In)',

@@ -41,7 +41,18 @@ export const EventCard: React.FC<EventCardProps> = ({
         ? (Number(event.rating) / 2).toFixed(1)
         : Number(event.rating).toFixed(1)
       : (4.7 + ((Math.abs(Number(event.id) || 1) * 3) % 3) * 0.1).toFixed(1);
-  const { fullStr: dateTimeLabel } = formatEventCardDateTime(event, language, true);
+  // Prefer API canonical showDateStr+showTimeStr (next bookable) over sessions[0]
+  const apiDateLabel =
+    (event as any).showDateStr && (event as any).showTimeStr
+      ? `${(event as any).showDateStr} • ${(event as any).showTimeStr}`
+      : (event as any).showDateStr || null;
+  const { fullStr: computedDateLabel } = formatEventCardDateTime(event, language, true);
+  const dateTimeLabel =
+    (event as any).hasBookableSessions === false
+      ? language === 'mr'
+        ? 'आगामी प्रयोग • तारीख लवकरच'
+        : 'Upcoming • Dates soon'
+      : apiDateLabel || computedDateLabel;
 
   return (
     <article

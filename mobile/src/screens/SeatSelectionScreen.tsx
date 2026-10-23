@@ -781,29 +781,17 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
         guestId = 'guest-app';
       }
       const userIdStr = user?.id ? String(user.id) : guestId;
-      let holdToken = `app-hold-${sessionId}-${Date.now()}`;
-      let expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
-      let lockedFace = subtotal;
 
-      // Temporary local hold with 5-minute timer; try server hold with fast timeout
-      try {
-        const holdPromise = api.hold({ sessionId, seatIds: selected, userIdStr });
-        const hold = await Promise.race([
-          holdPromise,
-          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Hold timeout')), 3500)),
-        ]);
-        if (hold?.holdToken) {
-          holdToken = hold.holdToken;
-        }
-        if (hold?.hold?.holdExpiresAt) {
-          expiresAt = hold.hold.holdExpiresAt;
-        }
-        if (hold?.hold?.faceValueTotal > 0) {
-          lockedFace = hold.hold.faceValueTotal;
-        }
-      } catch {
-        // Fast local fallback: keep hold client-side in Zustand cart without blocking on DB
+      // Server hold is mandatory — never invent a local holdToken (prevents orphaned seats)
+      const hold = await api.hold({ sessionId, seatIds: selected, userIdStr });
+      if (!hold?.holdToken) {
+        throw new Error('Seat hold failed. Please try again.');
       }
+      const holdToken = hold.holdToken;
+      const expiresAt =
+        hold.hold?.holdExpiresAt || new Date(Date.now() + 5 * 60 * 1000).toISOString();
+      const lockedFace =
+        hold.hold?.faceValueTotal > 0 ? hold.hold.faceValueTotal : subtotal;
 
       setHold({
         holdToken,
@@ -828,6 +816,8 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
         sessionId,
         eventTitle,
         posterUrl,
+        venueName: venueName || routeEvent?.venue?.name,
+        sessionStartTime: sessionStartTime || null,
         sessionMeta: sessionStartTime ? formatShow(sessionStartTime) : routeSessionMeta,
       });
     } catch (e: any) {
@@ -1387,10 +1377,27 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
         title="बुकिंग रद्द करायची आहे का?"
         message="तुम्ही मागे गेल्यास तुमची निवडलेली तात्पुरती आसने रद्द केली जातील आणि कॅश/कुकीज क्लिअर केले जातील. (Your selected seats will be released.)"
         primaryButtonText="होय, रद्द करा (Release)"
-        onPrimaryPress={() => {
+        onPrimaryPress={async () => {
           setShowDiscardModal(false);
+          const cart = useCartStore.getState();
+          const token = cart.holdToken;
+          const heldSeats =
+            (cart.selectedSeatIds && cart.selectedSeatIds.length > 0
+              ? cart.selectedSeatIds
+              : selected) || [];
+          try {
+            if (sessionId && token && !String(token).startsWith('app-hold-') && heldSeats.length) {
+              await api.releaseHold({
+                sessionId,
+                holdToken: token,
+                seatIds: heldSeats,
+              });
+            }
+          } catch {
+            // Server TTL still expires holds; continue local cleanup
+          }
           setSelected([]);
-          useCartStore.getState().clearCart();
+          cart.clearCart();
           sessionSeatsCache.delete(sessionId);
           navigation.goBack();
         }}

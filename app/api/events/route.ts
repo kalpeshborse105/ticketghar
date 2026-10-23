@@ -156,16 +156,24 @@ export async function GET(request: Request) {
                 .flatMap((s) => (s.ticketTypes || []).map((t: any) => Number(t.price || 0)))
                 .filter((p: number) => p > 0)
                 .reduce((min: number | null, p: number) => (min == null ? p : Math.min(min, p)), null);
-        const showDateStr = homeSession
-          ? new Date(homeSession.sessionStartTime).toLocaleString('en-IN', {
-              weekday: 'short',
-              day: 'numeric',
-              month: 'short',
-              hour: '2-digit',
-              minute: '2-digit',
-              hour12: true,
-            })
-          : null;
+        // Canonical Asia/Kolkata formatting — same rule for web + Android
+        let showDateStr: string | null = null;
+        let showTimeStr: string | null = null;
+        if (homeSession?.sessionStartTime) {
+          const start = new Date(homeSession.sessionStartTime);
+          showDateStr = start.toLocaleDateString('en-IN', {
+            timeZone: 'Asia/Kolkata',
+            weekday: 'short',
+            day: 'numeric',
+            month: 'short',
+          });
+          showTimeStr = start.toLocaleTimeString('en-IN', {
+            timeZone: 'Asia/Kolkata',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true,
+          });
+        }
         const stats = reviewStatsMap[evId];
 
         // Ensure every event card displays an authentic star rating (4.6 - 4.9)
@@ -180,7 +188,20 @@ export async function GET(request: Request) {
             : item.organizer,
           sessions,
           minPrice,
+          /** Canonical next bookable session — clients MUST prefer this over sessions[0] */
+          homeSessionId: homeSession?.id ?? null,
+          homeSession: homeSession
+            ? {
+                id: homeSession.id,
+                sessionStartTime: homeSession.sessionStartTime,
+                sessionEndTime: homeSession.sessionEndTime,
+                status: homeSession.status,
+                availableInventoryCount: homeSession.availableInventoryCount,
+                isSoldOut: homeSession.isSoldOut,
+              }
+            : null,
           showDateStr,
+          showTimeStr,
           hasBookableSessions: !!nextBookable,
           rating: stats && stats.rating > 0 ? stats.rating : defaultRating,
           ratingCount: stats && stats.count > 0 ? stats.count : defaultCount,

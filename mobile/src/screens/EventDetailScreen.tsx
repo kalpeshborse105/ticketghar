@@ -457,20 +457,27 @@ export default function EventDetailScreen({ navigation, route }: any) {
       dateGroups.length > 0 &&
       (!selectedDateKey || !dateGroups.some((g) => g.dateKey === selectedDateKey))
     ) {
-      const firstGroup = dateGroups[0];
-      setSelectedDateKey(firstGroup.dateKey);
+      // Prefer API homeSessionId when present
+      const homeId = (event as any)?.homeSessionId;
+      const homeGroup =
+        (homeId &&
+          dateGroups.find((g) => g.sessions.some((s) => Number(s.id) === Number(homeId)))) ||
+        dateGroups[0];
+      setSelectedDateKey(homeGroup.dateKey);
       if (
         !selectedSession ||
-        !firstGroup.sessions.some((s) => s.id === selectedSession.id)
+        !homeGroup.sessions.some((s) => s.id === selectedSession.id)
       ) {
-        const firstAvail =
-          firstGroup.sessions.find(
+        const preferred =
+          (homeId && homeGroup.sessions.find((s) => Number(s.id) === Number(homeId))) ||
+          homeGroup.sessions.find(
             (s) => getSessionAvailableCount(s) > 0 && s.status !== 'sold_out'
-          ) || firstGroup.sessions[0];
-        setSelectedSession(firstAvail);
+          ) ||
+          homeGroup.sessions[0];
+        setSelectedSession(preferred);
       }
     }
-  }, [dateGroups, selectedDateKey, selectedSession]);
+  }, [dateGroups, selectedDateKey, selectedSession, event]);
 
   const hasUpcomingSchedule = dateGroups.length > 0;
   const activeDateGroup =
@@ -1934,16 +1941,19 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#0F172A',
     letterSpacing: 0.2,
-    lineHeight: 34,
-    paddingBottom: 4,
+    lineHeight: 36,
+    paddingTop: 2,
+    paddingBottom: 6,
+    includeFontPadding: true,
   },
   eventTitleSub: {
     fontSize: 14,
     color: '#64748B',
     marginTop: 2,
     fontWeight: '600',
-    lineHeight: 22,
-    paddingBottom: 2,
+    lineHeight: 24,
+    paddingBottom: 4,
+    includeFontPadding: true,
   },
   quickMetaGrid: {
     flexDirection: 'row',
@@ -2404,7 +2414,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#92400E',
-    lineHeight: 17,
+    lineHeight: 20,
+    paddingBottom: 2,
+    includeFontPadding: true,
   },
   informativeNotifyBtn: {
     flexDirection: 'row',

@@ -94,17 +94,28 @@ export function normalizeEvent<T extends Partial<EventItem> & Record<string, any
     ...(raw as unknown as EventItem),
     posterUrl,
     bannerUrl,
-  };
-  const { homeSession, hasBookableSessions, nextBookable } = pickHomeSession(base.sessions);
+    homeSessionId: raw?.homeSessionId ?? (raw as any)?.home_session_id ?? null,
+    showTimeStr: raw?.showTimeStr ?? (raw as any)?.show_time_str ?? null,
+  } as EventItem & { homeSessionId?: number | null; showTimeStr?: string | null };
+  const { homeSession, hasBookableSessions, nextBookable } = pickHomeSession(
+    base.sessions,
+    base.homeSessionId
+  );
   const bookablePrices = (nextBookable?.ticketTypes || [])
     .filter((t) => Number(t.availableQuota || 0) > 0)
     .map((t) => Number(t.price || 0))
     .filter((p) => p > 0);
+  // Prefer server Asia/Kolkata showDateStr when present
+  const serverShow = base.showDateStr || null;
   return {
     ...base,
-    showDateStr: homeSession
-      ? formatCardDate(homeSession.sessionStartTime)
-      : base.showDateStr || null,
+    homeSessionId: base.homeSessionId ?? homeSession?.id ?? null,
+    showDateStr: serverShow
+      ? serverShow
+      : homeSession
+        ? formatCardDate(homeSession.sessionStartTime)
+        : null,
+    showTimeStr: base.showTimeStr || null,
     hasBookableSessions:
       typeof base.hasBookableSessions === 'boolean'
         ? base.hasBookableSessions || hasBookableSessions
@@ -262,6 +273,8 @@ export interface EventItem {
   ratingCount?: number | null;
   ratingCountStr?: string | null;
   showDateStr?: string | null;
+  showTimeStr?: string | null;
+  homeSessionId?: number | null;
   hasBookableSessions?: boolean;
   trailerUrl?: string | null;
   cast?: string | null;
@@ -371,8 +384,11 @@ function sessionHasInventorySignal(session: SessionItem): boolean {
   );
 }
 
-/** Same next-session rule as Home cards + Event Detail */
-export function pickHomeSession(sessions: SessionItem[] | null | undefined): {
+/** Same next-session rule as Home cards + Event Detail + web homeSessionId */
+export function pickHomeSession(
+  sessions: SessionItem[] | null | undefined,
+  preferredId?: number | null
+): {
   nextBookable: SessionItem | null;
   nextUpcoming: SessionItem | null;
   homeSession: SessionItem | null;
@@ -384,6 +400,10 @@ export function pickHomeSession(sessions: SessionItem[] | null | undefined): {
       new Date(a.sessionStartTime).getTime() - new Date(b.sessionStartTime).getTime()
   );
   const hasInventoryData = upcoming.some(sessionHasInventorySignal);
+  const preferred =
+    preferredId != null
+      ? upcoming.find((s) => Number(s.id) === Number(preferredId)) || null
+      : null;
   const nextBookable = hasInventoryData
     ? upcoming.find(
         (s) => getSessionAvailableCount(s) > 0 && s.status !== 'sold_out' && !s.isSoldOut
@@ -393,18 +413,26 @@ export function pickHomeSession(sessions: SessionItem[] | null | undefined): {
   return {
     nextBookable,
     nextUpcoming,
-    homeSession: nextBookable || nextUpcoming,
+    homeSession: preferred || nextBookable || nextUpcoming,
     hasBookableSessions: hasInventoryData ? !!nextBookable : upcoming.length > 0,
     hasInventoryData,
   };
 }
 
 export function getEventCardDateLabel(
-  event: Pick<EventItem, 'sessions' | 'showDateStr' | 'hasBookableSessions'>,
+  event: Pick<EventItem, 'sessions' | 'showDateStr' | 'hasBookableSessions'> & {
+    homeSessionId?: number | null;
+    showTimeStr?: string | null;
+  },
   language: 'mr' | 'en' = 'mr'
 ): string {
+  // Prefer server-formatted canonical fields (Asia/Kolkata)
+  if (event.hasBookableSessions && event.showDateStr) {
+    return event.showTimeStr ? `${event.showDateStr} • ${event.showTimeStr}` : event.showDateStr;
+  }
   const { homeSession, hasBookableSessions, nextUpcoming, hasInventoryData } = pickHomeSession(
-    event.sessions
+    event.sessions,
+    (event as any).homeSessionId
   );
   if (hasBookableSessions && homeSession) {
     return formatCardDate(homeSession.sessionStartTime);

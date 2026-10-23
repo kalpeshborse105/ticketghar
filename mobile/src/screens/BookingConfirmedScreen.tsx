@@ -84,7 +84,16 @@ const CONFETTI_COLORS = ['#EA580C', '#F97316', '#F59E0B', '#10B981', '#6366F1'];
 
 export default function BookingConfirmedScreen({ navigation, route }: any) {
   const insets = useSafeAreaInsets();
-  const { orderId, orderNumber, eventTitle, seatCodes, grandTotal } = route.params || {};
+  const {
+    orderId,
+    orderNumber,
+    eventTitle,
+    seatCodes,
+    grandTotal,
+    sessionStartTime: routeSessionStartTime,
+    showDateStr: routeShowDateStr,
+    venueName: routeVenueName,
+  } = route.params || {};
   const clearCart = useCartStore((s) => s.clearCart);
 
   const [order, setOrder] = useState<OrderItem | null>(null);
@@ -147,14 +156,21 @@ export default function BookingConfirmedScreen({ navigation, route }: any) {
   const resolvedOrderNum = order?.orderNumber || orderNumber || '—';
   const resolvedEventTitle = order?.event?.titleMr || order?.event?.title || eventTitle || 'कार्यक्रम';
   const resolvedVenue =
-    order?.event?.venue?.nameMr || order?.event?.venue?.name || 'सभागृह उपलब्ध नाही';
+    order?.event?.venue?.nameMr ||
+    order?.event?.venue?.name ||
+    routeVenueName ||
+    'सभागृह उपलब्ध नाही';
   const resolvedCity = order?.event?.venue?.city || '';
-  const showDateStr = order?.session?.sessionStartTime
-    ? formatDate(order.session.sessionStartTime)
-    : 'तारीख उपलब्ध नाही';
-  const showTimeStr = order?.session?.sessionStartTime
-    ? formatTime(order.session.sessionStartTime)
-    : 'वेळ उपलब्ध नाही';
+  const bookedStart =
+    order?.session?.sessionStartTime || routeSessionStartTime || null;
+  const showDateStr = bookedStart
+    ? formatDate(bookedStart)
+    : routeShowDateStr || 'तारीख उपलब्ध नाही';
+  const showTimeStr = bookedStart
+    ? formatTime(bookedStart)
+    : routeShowDateStr
+      ? ''
+      : 'वेळ उपलब्ध नाही';
 
   const formattedSeats =
     Array.isArray(seatCodes) && seatCodes.length > 0

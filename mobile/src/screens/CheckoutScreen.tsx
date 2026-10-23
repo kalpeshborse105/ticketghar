@@ -20,7 +20,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../theme';
-import { api, paise, formatDate } from '../api';
+import { api, paise, formatDate, formatTime } from '../api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCartStore, useAuthStore, useUIStore } from '../store';
 import RazorpayCheckout from 'react-native-razorpay';
@@ -125,6 +125,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
     eventTitle,
     posterUrl,
     sessionMeta,
+    sessionStartTime: routeSessionStartTime,
     venueName,
     platformFeeTotal: routePlatformFeeTotal,
     taxTotal: routeTaxTotal,
@@ -323,13 +324,46 @@ export default function CheckoutScreen({ navigation, route }: any) {
       return;
     }
     try {
-      if (sessionId && holdToken) {
+      if (sessionId && holdToken && !String(holdToken).startsWith('app-hold-')) {
         await api.releaseHold({ sessionId, holdToken, seatIds });
       }
-    } catch { }
+    } catch {
+      // Hold TTL still frees seats server-side
+    }
+    try {
+      useCartStore.getState().clearCart();
+    } catch {}
     clearSessionSeatsCache(sessionId);
     navigation.goBack();
   };
+
+  // Track successful payment so beforeRemove does NOT release booked seats
+  const paymentDoneRef = useRef(false);
+
+  // Hardware / gesture back must also release server hold (cancel only)
+  useEffect(() => {
+    const unsub = navigation.addListener('beforeRemove', (e: any) => {
+      if (paymentDoneRef.current) return;
+      if (paying) {
+        e.preventDefault();
+        setCheckoutModal({
+          visible: true,
+          type: 'warning',
+          title: 'Payment in progress',
+          message: 'Please complete or cancel Razorpay first. Seats stay held until then.',
+          primaryButtonText: 'OK',
+          onPrimaryPress: () => setCheckoutModal(null),
+        });
+        return;
+      }
+      // Fire-and-forget release when cancelling checkout (idempotent on server)
+      if (sessionId && holdToken && !String(holdToken).startsWith('app-hold-')) {
+        api.releaseHold({ sessionId, holdToken, seatIds }).catch(() => null);
+        clearSessionSeatsCache(sessionId);
+      }
+    });
+    return unsub;
+  }, [navigation, paying, sessionId, holdToken, seatIds]);
 
   const applyCouponCode = async (codeToApply: string) => {
     const code = codeToApply.trim().toUpperCase();
@@ -507,10 +541,14 @@ export default function CheckoutScreen({ navigation, route }: any) {
           sessionMeta?.venue ||
           ticketMeta?.venue ||
           'सभागृह उपलब्ध नाही';
-        const resolvedShowDate =
-          verified?.order?.session?.sessionStartTime
-            ? formatDate(verified.order.session.sessionStartTime)
-            : ticketMeta?.dateTime || 'वेळ उपलब्ध नाही';
+        const bookedSessionStart =
+          verified?.session?.sessionStartTime ||
+          verified?.order?.session?.sessionStartTime ||
+          routeSessionStartTime ||
+          null;
+        const resolvedShowDate = bookedSessionStart
+          ? `${formatDate(bookedSessionStart)} • ${formatTime(bookedSessionStart)}`
+          : ticketMeta?.dateTime || sessionMeta?.dateTime || null;
         const resolvedTickets =
           verified?.order?.tickets ||
           verified?.tickets ||
@@ -548,9 +586,13 @@ export default function CheckoutScreen({ navigation, route }: any) {
               city: 'Pune',
             },
           },
-          session: verified?.order?.session || {
-            id: sessionId,
-            sessionStartTime: sessionMeta?.startTime || ticketMeta?.dateTime || new Date().toISOString(),
+          session: {
+            id:
+              verified?.session?.id ||
+              verified?.order?.session?.id ||
+              sessionId,
+            sessionStartTime: bookedSessionStart,
+            ...(verified?.session || verified?.order?.session || {}),
           },
           tickets: resolvedTickets,
         };
@@ -567,6 +609,9 @@ export default function CheckoutScreen({ navigation, route }: any) {
 
         // Clear session seats cache so refreshed map immediately shows booked seats
         clearSessionSeatsCache(sessionId);
+
+        // Prevent beforeRemove from releasing seats after successful payment
+        paymentDoneRef.current = true;
 
         // Direct reset to BookingConfirmed so checkout is completely unmounted from the background
         navigation.dispatch(
@@ -586,7 +631,9 @@ export default function CheckoutScreen({ navigation, route }: any) {
                   grandTotal: verified?.order?.grandTotal || grandTotal,
                   venueName: resolvedVenue,
                   sessionMeta: sessionMeta || ticketMeta,
+                  sessionStartTime: bookedSessionStart,
                   showDateStr: resolvedShowDate,
+                  tickets: resolvedTickets,
                 },
               },
             ],
