@@ -78,7 +78,7 @@ export async function GET(
     const startTime = ticketRecord.session.sessionStartTime;
     const showtime = startTime
       ? `${formatISTDate(startTime, 'en', false)} • ${formatISTTime(startTime, 'en', true)}`
-      : 'Sun, 21 Oct 2026 • 07:00 PM';
+      : 'Show time unavailable';
 
     const seatsSummary =
       allOrderTickets.length > 1

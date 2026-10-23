@@ -1406,7 +1406,7 @@ export default function EventDetailPage() {
                   {(!event.sessions || event.sessions.length === 0 || (event as any).isInformational)
                     ? 'माहितीपर शो'
                     : selectedSession
-                      ? `${new Date(selectedSession.sessionStartTime).toLocaleDateString(language === 'mr' ? 'mr-IN' : 'en-IN', { weekday: 'short', day: 'numeric', month: 'short' })} • ${new Date(selectedSession.sessionStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                      ? `${formatISTDate(selectedSession.sessionStartTime, language, false)} • ${formatISTTime(selectedSession.sessionStartTime, language, true)}`
                       : (language === 'mr' ? 'शो वेळ निवडा' : 'Select Showtime')}
                 </span>
               </p>

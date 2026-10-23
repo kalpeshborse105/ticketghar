@@ -75,10 +75,9 @@ export function absoluteMediaUrl(raw?: string | null): string | null {
   return `${base}/${u}`;
 }
 
-/** Stable real image fallback when DB poster/banner is missing */
+/** Return empty if DB poster/banner is missing; components render neutral placeholder */
 export function fallbackPosterUrl(eventId?: number | string | null): string {
-  const seed = eventId != null && String(eventId).trim() !== '' ? String(eventId).trim() : 'default';
-  return `https://picsum.photos/seed/mahaticket-${seed}/400/600`;
+  return '';
 }
 
 /** Ensure every event has normalized absolute HTTP(S) posterUrl & bannerUrl with stable Picsum fallback */
@@ -1775,29 +1774,50 @@ export function formatShow(iso: string): string {
   }
 }
 
-export function formatDate(iso: string): string {
+function parseToISTDate(raw?: string | null): Date | null {
+  if (!raw || typeof raw !== 'string' || !raw.trim()) return null;
+  const clean = raw.trim();
+  if (clean === '—' || clean === 'null' || clean === 'undefined') return null;
+  let normalized = clean;
+  if (!normalized.includes('T') && normalized.includes(' ')) {
+    normalized = normalized.replace(' ', 'T');
+  }
+  if (!normalized.endsWith('Z') && !/[+-]\d{2}(:\d{2})?$/.test(normalized)) {
+    normalized = `${normalized}+05:30`;
+  }
+  const d = new Date(normalized);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+export function formatDate(iso?: string | null): string {
+  if (!iso) return 'तारीख उपलब्ध नाही';
+  const d = parseToISTDate(iso);
+  if (!d) return 'तारीख उपलब्ध नाही';
   try {
-    return new Date(iso).toLocaleDateString('en-IN', {
+    return d.toLocaleDateString('en-IN', {
       timeZone: 'Asia/Kolkata',
       day: 'numeric',
       month: 'short',
       year: 'numeric',
     });
   } catch {
-    return iso;
+    return 'तारीख उपलब्ध नाही';
   }
 }
 
-export function formatTime(iso: string): string {
+export function formatTime(iso?: string | null): string {
+  if (!iso) return 'वेळ उपलब्ध नाही';
+  const d = parseToISTDate(iso);
+  if (!d) return 'वेळ उपलब्ध नाही';
   try {
-    return new Date(iso).toLocaleTimeString('en-IN', {
+    return d.toLocaleTimeString('en-IN', {
       timeZone: 'Asia/Kolkata',
       hour: '2-digit',
       minute: '2-digit',
       hour12: true,
     });
   } catch {
-    return iso;
+    return 'वेळ उपलब्ध नाही';
   }
 }
 

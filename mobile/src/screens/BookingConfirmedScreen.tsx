@@ -144,32 +144,32 @@ export default function BookingConfirmedScreen({ navigation, route }: any) {
     };
   }, [orderNumber, navigation]);
 
-  const resolvedOrderNum = order?.orderNumber || orderNumber || `TG-2026-${Math.floor(10000 + Math.random() * 90000)}`;
-  const resolvedEventTitle = order?.event?.titleMr || order?.event?.title || eventTitle || 'मराठी महानाट्य';
+  const resolvedOrderNum = order?.orderNumber || orderNumber || '—';
+  const resolvedEventTitle = order?.event?.titleMr || order?.event?.title || eventTitle || 'कार्यक्रम';
   const resolvedVenue =
-    order?.event?.venue?.nameMr || order?.event?.venue?.name || 'बालगंधर्व रंगमंदिर';
-  const resolvedCity = order?.event?.venue?.city || 'पुणे, महाराष्ट्र';
+    order?.event?.venue?.nameMr || order?.event?.venue?.name || 'सभागृह उपलब्ध नाही';
+  const resolvedCity = order?.event?.venue?.city || '';
   const showDateStr = order?.session?.sessionStartTime
     ? formatDate(order.session.sessionStartTime)
-    : 'रविवार, २१ ऑक्टो २०२६';
+    : 'तारीख उपलब्ध नाही';
   const showTimeStr = order?.session?.sessionStartTime
     ? formatTime(order.session.sessionStartTime)
-    : 'संध्या. ०७:०० वा.';
+    : 'वेळ उपलब्ध नाही';
 
   const formattedSeats =
     Array.isArray(seatCodes) && seatCodes.length > 0
       ? seatCodes.join(', ')
-      : order?.tickets?.map((t) => t.seatCode).join(', ') || 'A01, C01, H01';
+      : order?.tickets?.map((t) => t.seatCode).join(', ') || '—';
 
   const ticketCount = Array.isArray(seatCodes) && seatCodes.length > 0
     ? seatCodes.length
-    : order?.tickets?.length || 1;
+    : order?.tickets?.length || 0;
 
   const totalAmountStr = grandTotal
     ? `₹${Math.round(grandTotal / 100).toLocaleString('en-IN')}`
     : order?.grandTotal
     ? `₹${Math.round(order.grandTotal / 100).toLocaleString('en-IN')}`
-    : '₹1,606';
+    : '—';
 
   const qrPayload =
     order?.tickets?.[0]?.qrPayload ||

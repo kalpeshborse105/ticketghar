@@ -17,6 +17,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import type { AddonSelection } from '@/src/lib/concessions';
+import { formatISTTime, formatISTDate } from '@/src/lib/dateUtils';
 
 interface SeatMapModalProps {
   event: EventItem;
@@ -471,10 +472,7 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
             {/* Time Chips for current date */}
             {timesForActiveDate.map((s) => {
               const selected = s.id === activeSession.id;
-              const timeLabel = new Date(s.sessionStartTime).toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
-              });
+              const timeLabel = formatISTTime(s.sessionStartTime, language, true);
               return (
                 <button
                   key={s.id}

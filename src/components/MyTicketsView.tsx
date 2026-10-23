@@ -46,27 +46,54 @@ export const MyTicketsView: React.FC<MyTicketsViewProps> = ({
    * Check user authentication session and load tickets strictly for that verified user.
    */
   const checkAuthAndLoadTickets = async () => {
-    setAuthChecking(true);
     let currentUser: any | null = null;
+
+    // Check localStorage first so UI matches Header instantly with 0ms delay
+    if (typeof window !== 'undefined') {
+      try {
+        const local = localStorage.getItem('mahaticket_user');
+        if (local) {
+          currentUser = JSON.parse(local);
+          if (currentUser?.email) {
+            setUser(currentUser);
+            setAuthChecking(false);
+          }
+        }
+      } catch {}
+    }
+
+    const token = typeof window !== 'undefined' ? localStorage.getItem('mahaticket_token') : null;
+    const authHeaders: Record<string, string> = {};
+    if (token) {
+      authHeaders['Authorization'] = `Bearer ${token}`;
+    }
 
     try {
       const sessionRes = await fetch('/api/auth/flow/session', {
         method: 'GET',
         cache: 'no-store',
         credentials: 'include',
+        headers: authHeaders,
       });
 
       if (sessionRes.ok) {
         const sessionData = await sessionRes.json();
-        currentUser = sessionData?.user || null;
+        if (sessionData?.user) {
+          currentUser = sessionData.user;
+          setUser(currentUser);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('mahaticket_user', JSON.stringify(currentUser));
+          }
+        }
+      } else if (!currentUser) {
+        currentUser = null;
+        setUser(null);
       }
     } catch (e) {
       console.warn('Session verification error:', e);
-      currentUser = null;
+    } finally {
+      setAuthChecking(false);
     }
-
-    setUser(currentUser);
-    setAuthChecking(false);
 
     // If user is not authenticated, DO NOT show any tickets and do not load localStorage indiscriminately
     if (!currentUser || !currentUser.email) {
@@ -136,16 +163,23 @@ export const MyTicketsView: React.FC<MyTicketsViewProps> = ({
     };
 
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'mahaticket_customer_session' || e.key === 'mahaticket_lang') {
+      if (
+        e.key === 'mahaticket_user' ||
+        e.key === 'mahaticket_token' ||
+        e.key === 'mahaticket_customer_session' ||
+        e.key === 'mahaticket_lang'
+      ) {
         checkAuthAndLoadTickets();
       }
     };
 
     window.addEventListener('mahaticket_profile_updated', handleProfileUpdate);
+    window.addEventListener('auth_changed', handleProfileUpdate);
     window.addEventListener('storage', handleStorageChange);
 
     return () => {
       window.removeEventListener('mahaticket_profile_updated', handleProfileUpdate);
+      window.removeEventListener('auth_changed', handleProfileUpdate);
       window.removeEventListener('storage', handleStorageChange);
     };
   }, []);

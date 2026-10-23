@@ -233,8 +233,8 @@ export default function PublicTicketPage() {
           eventCategory={data.event.categoryMr || data.event.category}
           venueName={data.venue.nameMr || data.venue.name || 'Venue'}
           venueCity={data.venue.city || 'महाराष्ट्र'}
-          showTimeStr={eventDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          showDateStr={eventDate.toLocaleDateString('mr-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+          sessionStartTime={data.session.sessionStartTime}
+          language="mr"
           orderNumber={data.order.orderNumber}
           grandTotal={data.order.grandTotal}
           qrPayload={data.publicShareUrl || getTicketShareUrl(data.ticket.ticketCode)}

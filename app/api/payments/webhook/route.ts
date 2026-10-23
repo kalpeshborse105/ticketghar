@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
 import { orders, auditLogs, tickets, seatInventory } from '@/src/db/schema.ts';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { verifyWebhookSignature } from '@/src/lib/payments/razorpay.ts';
+import { cacheDel, sessionSeatsCacheKey } from '@/src/lib/redis.ts';
 
 export async function POST(request: Request) {
   try {
@@ -91,6 +92,12 @@ export async function POST(request: Request) {
         details: JSON.stringify({ razorpayPaymentId, event }),
       });
     } else if (event === 'payment.failed') {
+      // Guard: Late payment.failed must NEVER cancel an already captured payment or confirmed order
+      if (order.paymentStatus === 'captured' || order.orderStatus === 'confirmed') {
+        console.warn(`[Webhook] Ignored late payment.failed for confirmed/captured order #${order.orderNumber}`);
+        return NextResponse.json({ received: true, ignored: 'Late failure ignored for confirmed order' });
+      }
+
       if (order.paymentStatus === 'failed') {
         return NextResponse.json({ received: true, status: 'already_failed' });
       }
@@ -104,7 +111,7 @@ export async function POST(request: Request) {
         })
         .where(eq(orders.id, order.id));
 
-      // Release any held seats back to available
+      // Release inventory ONLY for this specific pending order and ONLY if seats are still in 'held' status
       await db
         .update(seatInventory)
         .set({
@@ -113,7 +120,16 @@ export async function POST(request: Request) {
           holdExpiresAt: null,
           orderId: null,
         })
-        .where(eq(seatInventory.orderId, order.id));
+        .where(
+          and(
+            eq(seatInventory.orderId, order.id),
+            eq(seatInventory.status, 'held')
+          )
+        );
+
+      if (order.sessionId) {
+        await cacheDel(sessionSeatsCacheKey(order.sessionId)).catch(() => undefined);
+      }
 
       await db.insert(auditLogs).values({
         actorId: 'gateway-webhook',

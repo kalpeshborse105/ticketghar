@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
-import { seatInventory, ticketTypes, events } from '@/src/db/schema.ts';
+import { seatInventory, ticketTypes, events, orders, users } from '@/src/db/schema.ts';
 import { eq, and, inArray } from 'drizzle-orm';
 import { isRazorpayConfigured, getRazorpayClient } from '@/src/lib/payments/razorpay.ts';
 import { calculatePricing } from '@/src/lib/inventory-engine.ts';
@@ -125,6 +125,7 @@ export async function POST(request: Request) {
 
     const receiptId = `rcpt_${sessionId}_${Date.now()}`;
 
+    // Create Razorpay order (TEST MODE verified)
     const razorpayOrder = await razorpayClient.orders.create({
       amount: amountInPaise,
       currency: 'INR',
@@ -133,14 +134,109 @@ export async function POST(request: Request) {
         session_id: sessionId.toString(),
         event_id: eventId.toString(),
         seat_count: seatIds.length.toString(),
+        hold_token: userHoldToken || '',
       },
     });
 
-    console.log('Razorpay order created:', razorpayOrder.id);
+    // 1. Resolve customer identity for persisted platform order
+    let targetUserId = 1;
+    let targetUserEmail = body.userEmail ? String(body.userEmail).trim().toLowerCase() : '';
+    let targetUserName = body.userName ? String(body.userName).trim() : '';
+    let targetUserPhone = body.userPhone ? String(body.userPhone).trim() : '';
+
+    if (targetUserEmail) {
+      const existingUser = await db
+        .select({ id: users.id, fullName: users.fullName, phoneNumber: users.phoneNumber })
+        .from(users)
+        .where(eq(users.email, targetUserEmail))
+        .limit(1);
+
+      if (existingUser.length > 0) {
+        targetUserId = existingUser[0].id;
+        if (!targetUserName && existingUser[0].fullName) targetUserName = existingUser[0].fullName;
+        if (!targetUserPhone && existingUser[0].phoneNumber) targetUserPhone = existingUser[0].phoneNumber;
+      } else {
+        const [newUser] = await db
+          .insert(users)
+          .values({
+            uid: `cust-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            email: targetUserEmail,
+            fullName: targetUserName || 'Customer',
+            phoneNumber: targetUserPhone || null,
+            role: 'customer',
+            preferredLanguage: 'mr',
+            city: 'Pune',
+          })
+          .returning({ id: users.id });
+        targetUserId = newUser.id;
+      }
+    } else {
+      // Find default or first customer
+      const [firstCust] = await db.select({ id: users.id, email: users.email }).from(users).limit(1);
+      if (firstCust) {
+        targetUserId = firstCust.id;
+        targetUserEmail = targetUserEmail || firstCust.email;
+      }
+    }
+
+    // 2. Persist authoritative pending platform order with unique order number & idempotency key
+    const randomSuffix = Math.floor(10000 + Math.random() * 90000);
+    const orderNumber = `MT-${new Date().getFullYear()}-${randomSuffix}`;
+
+    const [pendingOrder] = await db
+      .insert(orders)
+      .values({
+        orderNumber,
+        userId: targetUserId,
+        userEmail: targetUserEmail || 'guest@mahaticket.kalpkrutinfotech.com',
+        userPhone: targetUserPhone || '',
+        userName: targetUserName || 'Customer',
+        eventId,
+        sessionId,
+        ticketCount: seatIds.length,
+        ticketFaceValueTotal: pricing.ticketFaceValueTotal,
+        platformFeeTotal: pricing.platformFeeTotal,
+        taxTotal: pricing.taxTotal,
+        gatewayCostEstimate: pricing.gatewayCostEstimate || 0,
+        discountTotal: pricing.discountTotal || 0,
+        grandTotal: pricing.grandTotal,
+        currency: 'INR',
+        paymentStatus: 'pending',
+        orderStatus: 'pending',
+        razorpayOrderId: razorpayOrder.id,
+        idempotencyKey: `order_rzp_${razorpayOrder.id}`,
+        holdExpiresAt: tenMinutes,
+      })
+      .returning();
+
+    // 3. Bind the seat inventory rows directly to this pending order
+    await db
+      .update(seatInventory)
+      .set({
+        status: 'held',
+        heldByUserId: userHoldToken || seatInventory.heldByUserId,
+        holdExpiresAt: tenMinutes,
+        orderId: pendingOrder.id,
+      })
+      .where(
+        and(
+          eq(seatInventory.sessionId, sessionId),
+          inArray(seatInventory.seatId, seatIds)
+        )
+      );
+
+    console.log('[OrderCreated] Bound Razorpay order to DB order:', {
+      orderId: razorpayOrder.id,
+      platformOrderId: pendingOrder.id,
+      orderNumber: pendingOrder.orderNumber,
+      amount: amountInPaise,
+    });
 
     // Return order details including public key ID and authoritative hold expiry for frontend
     return NextResponse.json({
       orderId: razorpayOrder.id,
+      platformOrderId: pendingOrder.id,
+      orderNumber: pendingOrder.orderNumber,
       amount: amountInPaise,
       currency: 'INR',
       keyId: process.env.RAZORPAY_KEY_ID,

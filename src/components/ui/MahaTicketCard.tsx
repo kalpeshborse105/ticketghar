@@ -3,6 +3,7 @@
 import React from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Calendar, Clock, MapPin, ShieldCheck, Ticket, Download, Share2 } from 'lucide-react';
+import { formatISTTime, formatISTDate } from '@/src/lib/dateUtils';
 
 export interface MahaTicketCardProps {
   ticketCode: string;
@@ -15,6 +16,8 @@ export interface MahaTicketCardProps {
   venueCity?: string;
   showTimeStr?: string;
   showDateStr?: string;
+  sessionStartTime?: string | Date | null;
+  language?: 'mr' | 'en';
   orderNumber?: string;
   grandTotal?: number;
   qrPayload: string;
@@ -37,6 +40,8 @@ export const MahaTicketCard: React.FC<MahaTicketCardProps> = ({
   venueCity = 'महाराष्ट्र',
   showTimeStr,
   showDateStr,
+  sessionStartTime,
+  language = 'mr',
   orderNumber,
   grandTotal,
   qrPayload,
@@ -49,6 +54,39 @@ export const MahaTicketCard: React.FC<MahaTicketCardProps> = ({
 }) => {
   const isUsed = status.toLowerCase() === 'used';
   const isCancelled = status.toLowerCase() === 'cancelled';
+
+  // Authoritatively resolve time and date from sessionStartTime if provided, or from string
+  const resolvedDateStr = React.useMemo(() => {
+    if (sessionStartTime) {
+      return formatISTDate(sessionStartTime, language, false);
+    }
+    if (showDateStr && (showDateStr.includes('T') || showDateStr.includes('-') || showDateStr.includes(':'))) {
+      const formatted = formatISTDate(showDateStr, language, false);
+      if (formatted && formatted !== 'तारीख उपलब्ध नाही' && formatted !== 'Date unavailable') {
+        return formatted;
+      }
+    }
+    if (showDateStr && showDateStr !== 'Today') {
+      return showDateStr;
+    }
+    return language === 'mr' ? 'तारीख उपलब्ध नाही' : 'Date unavailable';
+  }, [sessionStartTime, showDateStr, language]);
+
+  const resolvedTimeStr = React.useMemo(() => {
+    if (sessionStartTime) {
+      return formatISTTime(sessionStartTime, language, true);
+    }
+    if (showTimeStr && (showTimeStr.includes('T') || (showTimeStr.includes('-') && showTimeStr.includes(':')))) {
+      const formatted = formatISTTime(showTimeStr, language, true);
+      if (formatted && formatted !== 'वेळ उपलब्ध नाही' && formatted !== 'Show time unavailable') {
+        return formatted;
+      }
+    }
+    if (showTimeStr && showTimeStr !== '7:00 PM') {
+      return showTimeStr;
+    }
+    return language === 'mr' ? 'वेळ उपलब्ध नाही' : 'Show time unavailable';
+  }, [sessionStartTime, showTimeStr, language]);
 
   return (
     <div
@@ -100,7 +138,7 @@ export const MahaTicketCard: React.FC<MahaTicketCardProps> = ({
                 तारीख / Date
               </span>
               <span className="font-extrabold text-[#111827]">
-                {showDateStr || 'Today'}
+                {resolvedDateStr}
               </span>
             </div>
           </div>
@@ -112,7 +150,7 @@ export const MahaTicketCard: React.FC<MahaTicketCardProps> = ({
                 वेळ / Time
               </span>
               <span className="font-extrabold text-[#111827]">
-                {showTimeStr || '7:00 PM'}
+                {resolvedTimeStr}
               </span>
             </div>
           </div>

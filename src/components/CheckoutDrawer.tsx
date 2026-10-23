@@ -19,6 +19,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { CONCESSION_MENU, addonTotalPaise } from '@/src/lib/concessions';
+import { formatISTDate, formatISTTime } from '@/src/lib/dateUtils';
 
 declare global {
   interface Window {
@@ -596,14 +597,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
               <Clock className="w-3.5 h-3.5 shrink-0 text-[#ea580c]" />
               <span>
                 {session?.sessionStartTime
-                  ? `${new Date(session.sessionStartTime).toLocaleDateString(language === 'mr' ? 'mr-IN' : 'en-IN', {
-                    weekday: 'short',
-                    day: 'numeric',
-                    month: 'short',
-                  })} • ${new Date(session.sessionStartTime).toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}`
+                  ? `${formatISTDate(session.sessionStartTime, language, false)} • ${formatISTTime(session.sessionStartTime, language, true)}`
                   : (language === 'mr' ? 'तारीख व वेळ निश्चित' : 'Date & time confirmed')}
               </span>
               <span className="text-slate-400 font-normal">• {holdData.seatIds.length} {language === 'mr' ? 'जागा' : 'seats'}</span>

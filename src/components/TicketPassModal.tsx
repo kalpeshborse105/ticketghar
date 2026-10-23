@@ -201,14 +201,21 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
         body: JSON.stringify({ email: order.userEmail }),
       });
       const data = await res.json();
-      if (data.sent) {
+      if (res.ok && data.sent) {
         setEmailStatus('sent');
         setEmailMessage(
           language === 'mr' ? `ईमेल पाठवला: ${data.recipient}` : `Email sent to ${data.recipient}`
         );
+      } else if (data.status === 'not_configured') {
+        setEmailStatus('pending');
+        setEmailMessage(
+          language === 'mr'
+            ? 'ईमेल सेवा सध्या उपलब्ध नाही. आपण PDF थेट डाउनलोड करू शकता.'
+            : 'Email service is not configured. You can download the PDF pass directly.'
+        );
       } else {
-        setEmailStatus(data.configured === false ? 'pending' : 'failed');
-        setEmailMessage(data.message || 'Email delivery not configured.');
+        setEmailStatus('failed');
+        setEmailMessage(data.error || data.message || 'Email delivery failed.');
       }
     } catch {
       setEmailStatus('failed');
@@ -261,16 +268,13 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
               }
               venueName={venueName}
               venueCity={venueCity}
-              showTimeStr={
-                order.sessionStart || bookingResult.session?.sessionStartTime
-                  ? formatISTTime(order.sessionStart || bookingResult.session?.sessionStartTime, language, true)
-                  : undefined
+              sessionStartTime={
+                bookingResult.session?.sessionStartTime ||
+                order?.session?.sessionStartTime ||
+                bookingResult.event?.sessions?.find((s: any) => s.id === (order.sessionId || bookingResult.sessionId))?.sessionStartTime ||
+                order?.sessionStart
               }
-              showDateStr={
-                order.sessionStart || bookingResult.session?.sessionStartTime || order.createdAt
-                  ? formatISTDate(order.sessionStart || bookingResult.session?.sessionStartTime || order.createdAt, language, true)
-                  : 'Today'
-              }
+              language={language}
               orderNumber={order.orderNumber}
               grandTotal={order.grandTotal}
               qrPayload={

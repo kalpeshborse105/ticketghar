@@ -446,7 +446,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
       // Server-side signature verify → confirm booking
       const payload: any = {
         sessionId,
-        eventId: eventId || 1,
+        eventId,
         seatIds,
         userName: name.trim(),
         userEmail: email.trim().toLowerCase(),
@@ -494,24 +494,23 @@ export default function CheckoutScreen({ navigation, route }: any) {
           verified?.orderNumber ||
           verified?.order?.orderNumber ||
           `MT-${Date.now().toString().slice(-6)}`;
-        const resolvedOrderId = verified?.orderId || verified?.bookingId || verified?.order?.id || 1;
+        const resolvedOrderId = verified?.orderId || verified?.bookingId || verified?.order?.id;
         const resolvedEventTitle =
           verified?.order?.event?.titleMr ||
           verified?.order?.event?.title ||
           eventTitle ||
-          'Selected event';
+          'कार्यक्रम';
         const resolvedVenue =
           venueName ||
           verified?.order?.event?.venue?.nameMr ||
           verified?.order?.event?.venue?.name ||
           sessionMeta?.venue ||
           ticketMeta?.venue ||
-          'Bal Gandharva Rangmandir';
+          'सभागृह उपलब्ध नाही';
         const resolvedShowDate =
-          ticketMeta?.dateTime ||
-          (verified?.order?.session?.sessionStartTime
+          verified?.order?.session?.sessionStartTime
             ? formatDate(verified.order.session.sessionStartTime)
-            : 'Date & Time');
+            : ticketMeta?.dateTime || 'वेळ उपलब्ध नाही';
         const resolvedTickets =
           verified?.order?.tickets ||
           verified?.tickets ||
@@ -992,42 +991,18 @@ export default function CheckoutScreen({ navigation, route }: any) {
           />
         </View>
 
-        {/* 4. Modern Payment Options & Security Card */}
+        {/* 4. Payment Gateway Card */}
         <View style={styles.modernCard}>
           <View style={styles.cardHeaderRow}>
             <Icon name="credit-card-chip-outline" size={20} color={COLORS.primary} />
             <View style={{ flex: 1 }}>
               <Text style={styles.modernCardTitle}>
-                {language === 'mr' ? '४. पेमेंट पर्याय' : '4. Payment Options'}
+                {language === 'mr' ? '४. पेमेंट' : '4. Payment'}
               </Text>
               <Text style={styles.modernCardSubtitle}>
-                {language === 'mr' ? 'सर्व सुरक्षित पेमेंट पद्धती समर्थित' : 'All secure payment methods supported'}
+                {language === 'mr' ? 'सुरक्षित ऑनलाइन पेमेंट (Razorpay)' : 'Secure Online Payment (Razorpay)'}
               </Text>
             </View>
-          </View>
-
-          <View style={styles.paymentMethodsRow}>
-            <View style={styles.paymentMethodPill}>
-              <Icon name="cellphone-nfc" size={14} color="#7C3AED" style={{ marginRight: 5 }} />
-              <Text style={styles.paymentMethodText}>UPI / GPay / PhonePe</Text>
-            </View>
-            <View style={styles.paymentMethodPill}>
-              <Icon name="credit-card-outline" size={14} color="#0284C7" style={{ marginRight: 5 }} />
-              <Text style={styles.paymentMethodText}>Cards / RuPay</Text>
-            </View>
-            <View style={styles.paymentMethodPill}>
-              <Icon name="bank-outline" size={14} color="#059669" style={{ marginRight: 5 }} />
-              <Text style={styles.paymentMethodText}>NetBanking</Text>
-            </View>
-          </View>
-
-          <View style={styles.secureGatewayNotice}>
-            <Icon name="shield-check" size={15} color="#16A34A" style={{ marginRight: 6 }} />
-            <Text style={styles.secureGatewayNoticeText}>
-              {language === 'mr'
-                ? '256-Bit SSL सुरक्षित पेमेंट • RBI अधिकृत Razorpay गेटवे'
-                : '256-Bit SSL Encrypted • RBI Approved Razorpay Gateway'}
-            </Text>
           </View>
         </View>
 
@@ -1036,8 +1011,8 @@ export default function CheckoutScreen({ navigation, route }: any) {
           <Icon name="shield-check" size={16} color="#16A34A" style={{ marginRight: 6 }} />
           <Text style={styles.securityTrustText}>
             {language === 'mr'
-              ? '१००% सुरक्षित व्यवहार • Razorpay समर्थित'
-              : '100% Secure Checkout • Powered by Razorpay'}
+              ? 'सुरक्षित व्यवहार • Razorpay'
+              : 'Secure Payment • Powered by Razorpay'}
           </Text>
         </View>
 
@@ -1089,7 +1064,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Icon name="shield-lock-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
               <Text style={styles.payBtnText}>
-                {language === 'mr' ? `पेमेंट करा ${paise(grandTotal)}` : `Pay ${paise(grandTotal)}`}
+                {language === 'mr' ? `${paise(grandTotal)} भरा` : `Pay ${paise(grandTotal)}`}
               </Text>
             </View>
           )}

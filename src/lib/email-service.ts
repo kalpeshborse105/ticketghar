@@ -12,8 +12,11 @@ interface SendTicketEmailParams {
   recipientEmail?: string;
 }
 
+export type EmailDeliveryStatus = 'sent' | 'pending' | 'not_configured' | 'failed';
+
 export interface EmailDispatchResult {
   success: boolean;
+  status: EmailDeliveryStatus;
   sent: boolean;
   configured: boolean;
   provider?: 'smtp' | 'resend';
@@ -48,6 +51,7 @@ export async function sendBookingTicketEmail(
     if (!ticketRecord) {
       return {
         success: false,
+        status: 'failed',
         sent: false,
         configured: true,
         error: 'Ticket not found',
@@ -71,6 +75,7 @@ export async function sendBookingTicketEmail(
     if (!recipient) {
       return {
         success: false,
+        status: 'failed',
         sent: false,
         configured: true,
         error: 'No recipient email specified for order',
@@ -207,6 +212,7 @@ export async function sendBookingTicketEmail(
         console.log(`[Email] Sent booking confirmation via SMTP to ${recipient} with PDF ticket attached`);
         return {
           success: true,
+          status: 'sent',
           sent: true,
           configured: true,
           provider: 'smtp',
@@ -223,15 +229,16 @@ export async function sendBookingTicketEmail(
           console.warn(`[Email] SMTP delivery warning (${smtpErr?.message || 'error'}):`, recipient);
         }
         return {
-          success: true,
+          success: false,
+          status: 'failed',
           sent: false,
-          configured: false,
+          configured: true,
           provider: 'smtp',
           recipient,
           error: isAuthErr
             ? 'Gmail App Password invalid or revoked. Generate new 16-character App Password at myaccount.google.com/apppasswords'
-            : smtpErr?.message,
-          message: `ईमेल पाठवण्याची नोंद झाली (${recipient})`,
+            : smtpErr?.message || 'SMTP delivery failed',
+          message: `ईमेल पाठवणे अयशस्वी झाले (${recipient})`,
         };
       }
     }
@@ -268,18 +275,21 @@ export async function sendBookingTicketEmail(
         const errorText = await res.text();
         console.warn('[Email] Resend API error:', errorText);
         return {
-          success: true,
+          success: false,
+          status: 'failed',
           sent: false,
           configured: true,
           provider: 'resend',
           recipient,
-          message: `ईमेल पाठवण्याची विनंती स्वीकारली (${recipient})`,
+          error: errorText,
+          message: `ईमेल पाठवणे अयशस्वी झाले (${recipient})`,
         };
       }
 
       console.log(`[Email] Sent booking confirmation via Resend to ${recipient}`);
       return {
         success: true,
+        status: 'sent',
         sent: true,
         configured: true,
         provider: 'resend',
@@ -290,22 +300,25 @@ export async function sendBookingTicketEmail(
 
     // Neither SMTP nor Resend is configured
     console.log(
-      `[Email] Development mode: Email dispatch recorded for ${recipient}.`
+      `[Email] Email service not configured for ${recipient}.`
     );
     return {
-      success: true,
+      success: false,
+      status: 'not_configured',
       sent: false,
       configured: false,
       recipient,
-      message: `ईमेल पाठवण्याची विनंती स्वीकारली (${recipient})`,
+      message: 'Email service is not configured (SMTP or Resend credentials missing).',
     };
   } catch (error: any) {
     console.warn('[Email] Exception handled gracefully during email dispatch:', error?.message || error);
     return {
-      success: true,
+      success: false,
+      status: 'failed',
       sent: false,
       configured: false,
-      message: 'ईमेल पाठवण्याची नोंद झाली',
+      error: error?.message || 'Email dispatch exception',
+      message: 'ईमेल पाठवताना त्रुटी आली.',
     };
   }
 }

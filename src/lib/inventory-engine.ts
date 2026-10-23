@@ -427,35 +427,66 @@ export async function confirmBookingOrder(params: {
     }
   }
 
-  // 4. Create authoritative Order
-  const randomSuffix = Math.floor(10000 + Math.random() * 90000);
-  const orderNumber = `MT-${new Date().getFullYear()}-${randomSuffix}`;
+  // 4. Update existing pending order OR create new authoritative Order
+  let order: any = null;
+  if (paymentDetails.razorpayOrderId) {
+    const pendingOrders = await db
+      .select()
+      .from(orders)
+      .where(eq(orders.razorpayOrderId, paymentDetails.razorpayOrderId))
+      .limit(1);
 
-  const [order] = await db
-    .insert(orders)
-    .values({
-      orderNumber,
-      userId,
-      userEmail,
-      userPhone,
-      userName,
-      eventId,
-      sessionId,
-      ticketCount: pricing.ticketCount || seatIds.length || 1,
-      ticketFaceValueTotal: pricing.ticketFaceValueTotal,
-      platformFeeTotal: pricing.platformFeeTotal,
-      taxTotal: pricing.taxTotal,
-      gatewayCostEstimate: pricing.gatewayCostEstimate || 0,
-      discountTotal: pricing.discountTotal || 0,
-      grandTotal: pricing.grandTotal,
-      currency: 'INR',
-      paymentStatus: 'captured',
-      orderStatus: 'confirmed',
-      razorpayOrderId: paymentDetails.razorpayOrderId || null,
-      razorpayPaymentId: paymentDetails.razorpayPaymentId || null,
-      idempotencyKey: paymentDetails.idempotencyKey || `idem_${orderNumber}`,
-    })
-    .returning();
+    if (pendingOrders.length > 0) {
+      const pending = pendingOrders[0];
+      const [updatedOrder] = await db
+        .update(orders)
+        .set({
+          userId,
+          userEmail,
+          userPhone,
+          userName,
+          paymentStatus: 'captured',
+          orderStatus: 'confirmed',
+          razorpayPaymentId: paymentDetails.razorpayPaymentId || pending.razorpayPaymentId,
+          updatedAt: new Date(),
+        })
+        .where(eq(orders.id, pending.id))
+        .returning();
+      order = updatedOrder;
+    }
+  }
+
+  if (!order) {
+    const randomSuffix = Math.floor(10000 + Math.random() * 90000);
+    const orderNumber = `MT-${new Date().getFullYear()}-${randomSuffix}`;
+
+    const [newOrder] = await db
+      .insert(orders)
+      .values({
+        orderNumber,
+        userId,
+        userEmail,
+        userPhone,
+        userName,
+        eventId,
+        sessionId,
+        ticketCount: pricing.ticketCount || seatIds.length || 1,
+        ticketFaceValueTotal: pricing.ticketFaceValueTotal,
+        platformFeeTotal: pricing.platformFeeTotal,
+        taxTotal: pricing.taxTotal,
+        gatewayCostEstimate: pricing.gatewayCostEstimate || 0,
+        discountTotal: pricing.discountTotal || 0,
+        grandTotal: pricing.grandTotal,
+        currency: 'INR',
+        paymentStatus: 'captured',
+        orderStatus: 'confirmed',
+        razorpayOrderId: paymentDetails.razorpayOrderId || null,
+        razorpayPaymentId: paymentDetails.razorpayPaymentId || null,
+        idempotencyKey: paymentDetails.idempotencyKey || `idem_${orderNumber}`,
+      })
+      .returning();
+    order = newOrder;
+  }
 
   // 5. Update seat inventory to 'booked' and attach orderId
   await db
@@ -517,43 +548,58 @@ export async function confirmBookingOrder(params: {
     },
   });
 
-  // 6. Generate individual tickets with QR codes & HMAC SHA-256 signatures
+  // 6. Generate individual tickets with QR codes & HMAC SHA-256 signatures (Idempotent)
   const generatedTickets: any[] = [];
+  const existingOrderTickets = await db
+    .select()
+    .from(tickets)
+    .where(eq(tickets.orderId, order.id));
 
-  for (let idx = 0; idx < currentSeats.length; idx++) {
-    const s = currentSeats[idx];
-    const ticketCode = `MT-TK-${order.id}-${s.seatCode.replace(/[^A-Za-z0-9]/g, '')}-${idx + 1}`;
+  if (existingOrderTickets.length > 0) {
+    for (const t of existingOrderTickets) {
+      generatedTickets.push({
+        ...t,
+        qrDataUrl: groupQrDataUrl,
+        groupQrPayload,
+        groupQrDataUrl,
+      });
+    }
+  } else {
+    for (let idx = 0; idx < currentSeats.length; idx++) {
+      const s = currentSeats[idx];
+      const ticketCode = `MT-TK-${order.id}-${s.seatCode.replace(/[^A-Za-z0-9]/g, '')}-${idx + 1}`;
 
-    // Cryptographic signature: HMAC SHA256 of ticketCode + eventId + sessionId + seatCode
-    const rawData = `${ticketCode}|${eventId}|${sessionId}|${s.seatCode}|${userName}`;
-    const securityHash = crypto
-      .createHmac('sha256', TICKET_SECRET)
-      .update(rawData)
-      .digest('hex');
+      // Cryptographic signature: HMAC SHA256 of ticketCode + eventId + sessionId + seatCode
+      const rawData = `${ticketCode}|${eventId}|${sessionId}|${s.seatCode}|${userName}`;
+      const securityHash = crypto
+        .createHmac('sha256', TICKET_SECRET)
+        .update(rawData)
+        .digest('hex');
 
-    const [ticketRecord] = await db
-      .insert(tickets)
-      .values({
-        ticketCode,
-        orderId: order.id,
-        sessionId,
-        ticketTypeId: s.ticketTypeId,
-        seatId: s.seatId,
-        seatCode: s.seatCode,
-        attendeeName: userName,
-        faceValue: s.price,
-        securityHash,
-        qrPayload: groupQrPayload,
-        status: 'valid',
-      })
-      .returning();
+      const [ticketRecord] = await db
+        .insert(tickets)
+        .values({
+          ticketCode,
+          orderId: order.id,
+          sessionId,
+          ticketTypeId: s.ticketTypeId,
+          seatId: s.seatId,
+          seatCode: s.seatCode,
+          attendeeName: userName,
+          faceValue: s.price,
+          securityHash,
+          qrPayload: groupQrPayload,
+          status: 'valid',
+        })
+        .returning();
 
-    generatedTickets.push({
-      ...ticketRecord,
-      qrDataUrl: groupQrDataUrl,
-      groupQrPayload,
-      groupQrDataUrl,
-    });
+      generatedTickets.push({
+        ...ticketRecord,
+        qrDataUrl: groupQrDataUrl,
+        groupQrPayload,
+        groupQrDataUrl,
+      });
+    }
   }
 
   // 7. Update Settlement Ledger for the Organiser

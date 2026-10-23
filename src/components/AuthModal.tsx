@@ -166,6 +166,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         return;
       }
 
+      if (typeof window !== 'undefined') {
+        const userObj = data.user || { email, fullName: email.split('@')[0] };
+        localStorage.setItem('mahaticket_user', JSON.stringify(userObj));
+        if (data.token) {
+          localStorage.setItem('mahaticket_token', data.token);
+        }
+        window.dispatchEvent(new CustomEvent('mahaticket_profile_updated', { detail: userObj }));
+        window.dispatchEvent(new Event('auth_changed'));
+      }
+
       setSuccessMessage('लॉगिन यशस्वी झाले! Redirecting...');
       setTimeout(() => {
         onSuccess?.();
@@ -201,6 +211,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         setError(data.error || 'अवैध किंवा कालबाह्य OTP कोड.');
         setLoading(false);
         return;
+      }
+
+      if (typeof window !== 'undefined') {
+        const userObj = data.user || { email, fullName: email.split('@')[0] };
+        localStorage.setItem('mahaticket_user', JSON.stringify(userObj));
+        if (data.token) {
+          localStorage.setItem('mahaticket_token', data.token);
+        }
+        window.dispatchEvent(new CustomEvent('mahaticket_profile_updated', { detail: userObj }));
+        window.dispatchEvent(new Event('auth_changed'));
       }
 
       if (data.needsPasswordSetup) {
@@ -249,6 +269,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         setError(data.error || 'पासवर्ड सेट करताना त्रुटी आली.');
         setLoading(false);
         return;
+      }
+
+      if (typeof window !== 'undefined') {
+        const userObj = data.user || { email, fullName: email.split('@')[0] };
+        localStorage.setItem('mahaticket_user', JSON.stringify(userObj));
+        if (data.token) {
+          localStorage.setItem('mahaticket_token', data.token);
+        }
+        window.dispatchEvent(new CustomEvent('mahaticket_profile_updated', { detail: userObj }));
+        window.dispatchEvent(new Event('auth_changed'));
       }
 
       setSuccessMessage('पासवर्ड यशस्वीरीत्या सेट झाला! पुढील वेळी आपण थेट या पासवर्डने लॉगिन करू शकता.');

@@ -82,7 +82,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         '@mahaticket_session_token',
       ]);
       if (!userStr || !token) {
-        [[userStr], [token]] = await AsyncStorage.multiGet([
+        [[, userStr], [, token]] = await AsyncStorage.multiGet([
           '@tg_user',
           '@tg_session_token',
         ]);

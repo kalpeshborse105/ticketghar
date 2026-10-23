@@ -42,9 +42,8 @@ export function getISTDateParts(input: string | Date | number | null | undefined
       if (clean.includes(' ') && !clean.includes('T')) {
         clean = clean.replace(' ', 'T');
       }
-      // If no timezone offset present, treat as IST / ISO
-      if (!clean.endsWith('Z') && !clean.includes('+') && !clean.includes('-')) {
-        // Append +05:30 to interpret stored local IST string correctly
+      // If no timezone offset present, append IST offset (+05:30) so it's not parsed as UTC or system local
+      if (!clean.endsWith('Z') && !/[+-]\d{2}(:\d{2})?$/.test(clean)) {
         clean = clean + '+05:30';
       }
       dateObj = new Date(clean);
@@ -65,7 +64,6 @@ export function getISTDateParts(input: string | Date | number | null | undefined
       hour: 'numeric',
       minute: 'numeric',
       hour12: false,
-      weekday: 'narrow',
     });
 
     const parts = formatter.formatToParts(dateObj);
@@ -74,7 +72,6 @@ export function getISTDateParts(input: string | Date | number | null | undefined
     let day = dateObj.getDate();
     let hours = dateObj.getHours();
     let minutes = dateObj.getMinutes();
-    let dayOfWeek = dateObj.getDay();
 
     parts.forEach((p) => {
       if (p.type === 'year') year = parseInt(p.value, 10);
@@ -83,6 +80,10 @@ export function getISTDateParts(input: string | Date | number | null | undefined
       if (p.type === 'hour') hours = parseInt(p.value, 10) % 24;
       if (p.type === 'minute') minutes = parseInt(p.value, 10);
     });
+
+    // Derive day of week strictly from the IST date components (never local system time)
+    const istMidnight = new Date(Date.UTC(year, monthIdx, day, 12, 0, 0));
+    const dayOfWeek = istMidnight.getUTCDay();
 
     return { year, monthIdx, day, hours, minutes, dayOfWeek };
   } catch {
@@ -118,7 +119,7 @@ export function formatISTTime(
   short: boolean = true
 ): string {
   const parts = getISTDateParts(input);
-  if (!parts) return language === 'mr' ? 'दु. १२:३०' : '12:30 PM';
+  if (!parts) return language === 'mr' ? 'वेळ उपलब्ध नाही' : 'Show time unavailable';
 
   const { hours, minutes } = parts;
   const hours12 = hours % 12 || 12;
@@ -141,7 +142,7 @@ export function formatISTDate(
   short: boolean = true
 ): string {
   const parts = getISTDateParts(input);
-  if (!parts) return language === 'mr' ? 'रविवार, १५ ऑक्टो' : 'Sun, 15 Oct';
+  if (!parts) return language === 'mr' ? 'तारीख उपलब्ध नाही' : 'Date unavailable';
 
   const { day, monthIdx, dayOfWeek } = parts;
 
@@ -150,9 +151,8 @@ export function formatISTDate(
     const monthName = MARATHI_MONTHS_SHORT[monthIdx] || '';
     return short ? `${day} ${monthName}` : `${dayName}, ${day} ${monthName}`;
   } else {
-    const dateObj = new Date(parts.year, parts.monthIdx, parts.day);
-    const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short' });
-    const monthName = dateObj.toLocaleDateString('en-US', { month: 'short' });
+    const dayName = ENGLISH_DAYS_SHORT[dayOfWeek] || '';
+    const monthName = ENGLISH_MONTHS_SHORT[monthIdx] || '';
     return short ? `${day} ${monthName}` : `${dayName}, ${day} ${monthName}`;
   }
 }
@@ -168,10 +168,12 @@ export function formatEventCardDateTime(
   let rawDate: any = null;
 
   if (!eventOrSession) {
+    const naDate = language === 'mr' ? 'तारीख उपलब्ध नाही' : 'Date unavailable';
+    const naTime = language === 'mr' ? 'वेळ उपलब्ध नाही' : 'Show time unavailable';
     return {
-      dateStr: language === 'mr' ? 'रविवार, १५ ऑक्टो' : 'Sun, 15 Oct',
-      timeStr: language === 'mr' ? 'दु. १२:३०' : '12:30 PM',
-      fullStr: language === 'mr' ? 'रविवार, १५ ऑक्टो • दु. १२:३०' : 'Sun, 15 Oct • 12:30 PM',
+      dateStr: naDate,
+      timeStr: naTime,
+      fullStr: `${naDate} • ${naTime}`,
     };
   }
 
@@ -190,10 +192,12 @@ export function formatEventCardDateTime(
   }
 
   if (!rawDate) {
+    const naDate = language === 'mr' ? 'तारीख उपलब्ध नाही' : 'Date unavailable';
+    const naTime = language === 'mr' ? 'वेळ उपलब्ध नाही' : 'Show time unavailable';
     return {
-      dateStr: language === 'mr' ? '१५ ऑक्टो' : '15 Oct',
-      timeStr: language === 'mr' ? 'दु. ४:००' : '4:00 PM',
-      fullStr: language === 'mr' ? '१५ ऑक्टो • दु. ४:००' : '15 Oct • 4:00 PM',
+      dateStr: naDate,
+      timeStr: naTime,
+      fullStr: `${naDate} • ${naTime}`,
     };
   }
 
