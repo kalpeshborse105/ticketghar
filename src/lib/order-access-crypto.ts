@@ -18,17 +18,15 @@ export type AuthCustomerLite = {
   email: string;
 };
 
-/** True when the authenticated customer owns the order. */
+/**
+ * Canonical ownership: application user id only.
+ * Email equality alone must not grant access (prevents wrong-account association).
+ */
 export function customerOwnsOrder(
   customer: AuthCustomerLite,
   order: OrderOwnershipFields
 ): boolean {
-  if (typeof customer.id === 'number' && customer.id === order.userId) {
-    return true;
-  }
-  const ce = customer.email?.trim().toLowerCase();
-  const oe = order.userEmail?.trim().toLowerCase();
-  return Boolean(ce && oe && ce === oe);
+  return typeof customer.id === 'number' && customer.id === order.userId;
 }
 
 export function mintOrderPdfToken(orderId: number, userId: number): string {

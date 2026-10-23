@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
 import { orders, events, venues, eventSessions, tickets } from '@/src/db/schema.ts';
-import { eq, desc, or, sql } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import {
   resolveAuthCustomer,
   customerOwnsOrder,
@@ -96,8 +96,7 @@ export async function GET(request: Request) {
       });
     }
 
-    // List: only the authenticated customer's orders (ignore email/phone query)
-    const emailLower = customer.email.trim().toLowerCase();
+    // List: canonical ownership by application userId only (ignore email/phone query)
     const userOrders = await db
       .select({
         order: orders,
@@ -109,12 +108,7 @@ export async function GET(request: Request) {
       .innerJoin(events, eq(orders.eventId, events.id))
       .innerJoin(venues, eq(events.venueId, venues.id))
       .innerJoin(eventSessions, eq(orders.sessionId, eventSessions.id))
-      .where(
-        or(
-          eq(orders.userId, customer.id),
-          sql`lower(${orders.userEmail}) = ${emailLower}`
-        )
-      )
+      .where(eq(orders.userId, customer.id))
       .orderBy(desc(orders.createdAt))
       .limit(50);
 
