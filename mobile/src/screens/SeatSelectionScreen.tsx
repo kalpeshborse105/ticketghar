@@ -411,17 +411,18 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
             if (next && next.id !== sessionId) {
               setSessionId(next.id);
               setError(null);
+              setLoading(false);
               return;
             }
             setError('Session not found for this show. Please pick another time.');
           } catch {
             setError('Session not found. Please go back and open the event again.');
           }
-        } else if (!cached) {
+        } else {
           setError(
-            /timed out|timeout|slow/i.test(msg)
+            /timed out|timeout|slow|network/i.test(msg)
               ? 'Seat map is taking longer than usual. Tap Retry seats.'
-              : msg || 'Seat map unavailable.'
+              : msg || 'Seat map unavailable. Tap Retry seats.'
           );
         }
       } finally {

@@ -12,6 +12,7 @@ import {
   FlatList,
   Linking,
   Modal,
+  Platform,
   RefreshControl,
   ScrollView,
   Share,
@@ -64,17 +65,29 @@ export default function MyTicketsScreen({ navigation }: any) {
     }
   }, [user?.email, user?.phone]);
 
-  // Fast-hydrate from local storage first (0ms delay), then sync with remote DB
+  // Fast-hydrate from local storage first (never flash empty), then sync with remote DB
   useEffect(() => {
     let mounted = true;
     (async () => {
+      let cached: OrderItem[] = [];
       try {
         const stored = await AsyncStorage.getItem('@tg_my_orders');
-        if (stored && mounted) {
+        if (stored) {
           const parsed = JSON.parse(stored);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            setOrders(parsed);
-            setLoading(false);
+            const email = String(user?.email || '').toLowerCase().trim();
+            cached = email
+              ? parsed.filter(
+                  (o: any) =>
+                    !email ||
+                    String(o?.userEmail || o?.email || '').toLowerCase().trim() === email ||
+                    !o?.userEmail
+                )
+              : parsed;
+            if (mounted && cached.length > 0) {
+              setOrders(cached);
+              setLoading(false);
+            }
           }
         }
       } catch {}
@@ -82,9 +95,18 @@ export default function MyTicketsScreen({ navigation }: any) {
       try {
         const data = await api.getMyTickets(user?.email, user?.phone);
         if (mounted && data?.orders) {
-          setOrders(data.orders);
+          // Prefer network list when non-empty; keep cache if network empty (guest / slow)
+          if (data.orders.length > 0) {
+            setOrders(data.orders);
+            await AsyncStorage.setItem('@tg_my_orders', JSON.stringify(data.orders.slice(0, 30))).catch(
+              () => null
+            );
+          } else if (cached.length === 0) {
+            setOrders([]);
+          }
         }
       } catch {
+        /* keep cache */
       } finally {
         if (mounted) setLoading(false);
       }
@@ -306,80 +328,66 @@ export default function MyTicketsScreen({ navigation }: any) {
               colors={[COLORS.primary]}
             />
           }
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              onPress={() => {
-                setSelectedOrder(item);
-                setQrVisible(true);
-              }}
-              activeOpacity={0.88}
-              style={styles.ticketCard}
-            >
-              {/* Top Accent Strip */}
-              <View style={[styles.accentStrip, { backgroundColor: COLORS.primary }]} />
-
-              <View style={styles.ticketBody}>
-                {/* Title & Status */}
-                <View style={styles.titleRow}>
-                  <Text style={styles.ticketTitle} numberOfLines={2}>
-                    {item.event?.titleMr || item.event?.title || (item as any).eventTitle || 'Juna Furniture'}
-                  </Text>
-                  <View style={[styles.statusPill, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
-                    <View style={[styles.statusDot, { backgroundColor: COLORS.success }]} />
-                    <Text style={[styles.statusPillText, { color: COLORS.success }]}>
-                      {item.paymentStatus === 'paid' || item.paymentStatus === 'captured' ? 'PAID' : 'ACTIVE'}
+          renderItem={({ item }) => {
+            const seatCodes =
+              item.tickets?.map((t) => t.seatCode).filter(Boolean).join(', ') ||
+              (Array.isArray((item as any).seatCodes) ? (item as any).seatCodes.join(', ') : '');
+            const venue =
+              item.event?.venue?.nameMr ||
+              item.event?.venue?.name ||
+              (item as any).venueName ||
+              'सभागृह';
+            const when = item.session?.sessionStartTime
+              ? `${formatDate(item.session.sessionStartTime)} • ${formatTime(item.session.sessionStartTime)}`
+              : (item as any).showDateStr || '—';
+            return (
+              <View style={styles.webTicketCard}>
+                <View style={styles.webTicketTop}>
+                  <View style={styles.webTicketIcon}>
+                    <Icon name="ticket-confirmation" size={22} color={COLORS.primary} />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <View style={styles.webBadgeRow}>
+                      <Text style={styles.webOrderBadge}>{item.orderNumber}</Text>
+                      <View style={styles.webPaidPill}>
+                        <Text style={styles.webPaidText}>
+                          {item.paymentStatus === 'paid' || item.paymentStatus === 'captured'
+                            ? '✓ PAID'
+                            : 'ACTIVE'}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.webEventTitle} numberOfLines={2}>
+                      {item.event?.titleMr || item.event?.title || (item as any).eventTitle || 'कार्यक्रम'}
+                    </Text>
+                    <Text style={styles.webMetaLine} numberOfLines={1}>
+                      {venue}
+                      {item.event?.venue?.city ? ` • ${item.event.venue.city}` : ''}
+                    </Text>
+                    <Text style={styles.webMetaLine}>{when}</Text>
+                    {seatCodes ? (
+                      <View style={styles.webSeatsBox}>
+                        <Text style={styles.webSeatsText}>आसने: {seatCodes}</Text>
+                      </View>
+                    ) : null}
+                    <Text style={styles.webTotal}>
+                      GRAND TOTAL {paise(item.grandTotal)}
                     </Text>
                   </View>
                 </View>
-
-                {/* Show Details */}
-                <View style={styles.metaCol}>
-                  <View style={styles.metaRow}>
-                    <Icon name="map-marker" size={12} color={COLORS.primary} />
-                    <Text style={styles.metaText} numberOfLines={1}>
-                      {item.event?.venue?.nameMr || item.event?.venue?.name || (item as any).venueName || 'बालगंधर्व रंगमंदिर'} • {item.event?.venue?.city || (item as any).venueCity || 'पुणे'}
-                    </Text>
-                  </View>
-                  <View style={styles.metaRow}>
-                    <Icon name="calendar-clock" size={12} color={COLORS.accentGold} />
-                    <Text style={styles.metaText}>
-                      {item.session?.sessionStartTime
-                        ? `${formatDate(item.session.sessionStartTime)} • ${formatTime(item.session.sessionStartTime)}`
-                        : (item as any).showDateStr || 'तारीख उपलब्ध नाही'}
-                    </Text>
-                  </View>
-                  <View style={styles.metaRow}>
-                    <Icon name="seat" size={12} color={COLORS.primary} />
-                    <Text style={[styles.metaText, { color: COLORS.accent, fontWeight: '700' }]}>
-                      Seats: {item.tickets?.map((t) => t.seatCode).filter(Boolean).join(', ') || (Array.isArray((item as any).seatCodes) ? (item as any).seatCodes.join(', ') : 'G01, G02, G03')}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Perforation Line */}
-                <View style={styles.perforationContainer}>
-                  <View style={styles.notchLeft} />
-                  <View style={styles.perforationLine} />
-                  <View style={styles.notchRight} />
-                </View>
-
-                {/* Bottom Row */}
-                <View style={styles.bottomRow}>
-                  <View>
-                    <Text style={styles.orderNum}>#{item.orderNumber}</Text>
-                    <Text style={styles.ticketCount}>
-                      {(item.tickets?.length || item.ticketCount || 1)} {(item.tickets?.length || item.ticketCount || 1) > 1 ? 'seats' : 'seat'} • {paise(item.grandTotal)}
-                    </Text>
-                  </View>
-
-                  <View style={styles.qrActionBtn}>
-                    <Icon name="qrcode-scan" size={14} color={COLORS.primary} />
-                    <Text style={styles.qrActionText}>QR</Text>
-                  </View>
-                </View>
+                <TouchableOpacity
+                  onPress={() => {
+                    setSelectedOrder(item);
+                    setQrVisible(true);
+                  }}
+                  style={styles.webViewPassBtn}
+                  activeOpacity={0.88}
+                >
+                  <Text style={styles.webViewPassText}>पास उघडा / View Pass</Text>
+                </TouchableOpacity>
               </View>
-            </TouchableOpacity>
-          )}
+            );
+          }}
         />
       )}
 
@@ -747,46 +755,78 @@ const styles = StyleSheet.create({
 
   skeletonList: { paddingHorizontal: SPACING.base, gap: SPACING.sm },
 
-  ticketCard: {
-    backgroundColor: COLORS.surface,
+  // Web-parity My Tickets list card
+  webTicketCard: {
+    backgroundColor: COLORS.white,
     borderRadius: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    overflow: 'hidden',
+    borderColor: '#E2E8F0',
+    padding: 14,
+    gap: 12,
     ...SHADOWS.sm,
   },
-  accentStrip: { height: 3, width: '100%' },
-  ticketBody: { padding: 14, gap: 8 },
-  titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
-  ticketTitle: { flex: 1, color: COLORS.text, fontSize: 14, fontWeight: '800', lineHeight: 19 },
-  statusPill: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 7, paddingVertical: 2, borderRadius: RADIUS.full },
-  statusDot: { width: 5, height: 5, borderRadius: 2.5 },
-  statusPillText: { fontSize: 9, fontWeight: '800' },
-  metaCol: { gap: 3 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  metaText: { color: COLORS.textMuted, fontSize: 11 },
-
-  perforationContainer: { flexDirection: 'row', alignItems: 'center', marginVertical: 6, position: 'relative', marginHorizontal: -14 },
-  notchLeft: { width: 12, height: 12, borderRadius: 6, backgroundColor: COLORS.bg, marginLeft: -6 },
-  perforationLine: { flex: 1, height: 1, borderWidth: 1, borderColor: COLORS.border, borderStyle: 'dashed' },
-  notchRight: { width: 12, height: 12, borderRadius: 6, backgroundColor: COLORS.bg, marginRight: -6 },
-
-  bottomRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 0 },
-  orderNum: { color: COLORS.textDim, fontSize: 9, fontWeight: '700', letterSpacing: 0.5 },
-  ticketCount: { color: COLORS.text, fontSize: 12, fontWeight: '700', marginTop: 2 },
-  qrActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(255,107,53,0.1)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: RADIUS.full,
+  webTicketTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  webTicketIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#FFF7ED',
     borderWidth: 1,
-    borderColor: 'rgba(255,107,53,0.2)',
+    borderColor: '#FED7AA',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  qrActionText: { color: COLORS.primary, fontSize: 11, fontWeight: '700' },
+  webBadgeRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 4 },
+  webOrderBadge: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: COLORS.primary,
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    overflow: 'hidden',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  webPaidPill: {
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+  },
+  webPaidText: { fontSize: 10, fontWeight: '800', color: '#059669' },
+  webEventTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: COLORS.text,
+    lineHeight: 22,
+    paddingBottom: 2,
+    includeFontPadding: true,
+  },
+  webMetaLine: { fontSize: 12, color: COLORS.textMuted, marginTop: 2 },
+  webSeatsBox: {
+    marginTop: 8,
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FDBA74',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  webSeatsText: { fontSize: 12, fontWeight: '800', color: COLORS.primary },
+  webTotal: { marginTop: 8, fontSize: 13, fontWeight: '900', color: COLORS.text },
+  webViewPassBtn: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 12,
+    paddingVertical: 11,
+    alignItems: 'center',
+  },
+  webViewPassText: { color: COLORS.white, fontSize: 13, fontWeight: '800' },
 
   modalBg: { flex: 1, backgroundColor: 'rgba(15,23,42,0.96)' },
   fullScreenTicket: {

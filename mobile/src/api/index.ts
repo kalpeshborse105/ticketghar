@@ -13,8 +13,8 @@ const SUPABASE_ANON_KEY =
 
 // ─── Base URL Resolution (Dev server fallback) ───────────────────────────────
 
-// Live API (Vercel production with working Razorpay keys + ticket session payload)
-const PROD_API_URL = 'https://mahaticket.vercel.app';
+// Production API — official domain (not vercel.app)
+const PROD_API_URL = 'https://mahaticket.kalpkrutinfotech.com';
 const DEV_URLS = [
   PROD_API_URL,
   'http://192.168.31.154:3000',
@@ -30,10 +30,10 @@ export async function resolveApiBase(): Promise<string> {
   const stored =
     (await AsyncStorage.getItem(STORAGE_KEY).catch(() => null)) ||
     (await AsyncStorage.getItem('@tg_api_base').catch(() => null));
-  // Migrate away from legacy host with broken Razorpay env
+  // Drop stale vercel.app / LAN cache so release always prefers official prod
   const storedOk =
     stored &&
-    !/kalpkrutinfotech\.com/i.test(stored) &&
+    !/vercel\.app/i.test(stored) &&
     stored.replace(/\/$/, '') !== PROD_API_URL
       ? stored
       : null;
@@ -48,7 +48,7 @@ export async function resolveApiBase(): Promise<string> {
         return storedOk;
       }
     } catch {}
-  } else if (stored && /kalpkrutinfotech\.com/i.test(stored)) {
+  } else if (stored && /vercel\.app/i.test(stored)) {
     await AsyncStorage.removeItem(STORAGE_KEY).catch(() => null);
     await AsyncStorage.removeItem('@tg_api_base').catch(() => null);
   }

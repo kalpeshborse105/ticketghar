@@ -135,27 +135,12 @@ export async function GET(request: Request) {
             .from(tickets)
             .where(eq(tickets.orderId, row.order.id));
 
-          const ticketsWithQr = await Promise.all(
-            ticketList.map(async (tk) => {
-              const qrDataUrl = await QRCode.toDataURL(tk.qrPayload, {
-                errorCorrectionLevel: 'M',
-                margin: 2,
-                width: 240,
-                color: { dark: '#0F172A', light: '#FFFFFF' },
-              });
-              return {
-                ...tk,
-                qrDataUrl,
-              };
-            })
-          );
-
           return {
             ...row.order,
-            event: row.event,
+            event: { ...row.event, venue: row.venue },
             venue: row.venue,
             session: row.session,
-            tickets: ticketsWithQr,
+            tickets: ticketList,
           };
         })
       );
@@ -195,6 +180,8 @@ export async function GET(request: Request) {
       .orderBy(desc(orders.createdAt))
       .limit(50);
 
+    // List endpoint: skip heavy QR data-URL generation (pass screen generates QR client-side).
+    // This removes the multi-second "empty → tickets" flash on My Tickets.
     const enriched = await Promise.all(
       userOrders.map(async (row) => {
         const ticketList = await db
@@ -202,27 +189,12 @@ export async function GET(request: Request) {
           .from(tickets)
           .where(eq(tickets.orderId, row.order.id));
 
-        const ticketsWithQr = await Promise.all(
-          ticketList.map(async (tk) => {
-            const qrDataUrl = await QRCode.toDataURL(tk.qrPayload, {
-              errorCorrectionLevel: 'M',
-              margin: 2,
-              width: 240,
-              color: { dark: '#0F172A', light: '#FFFFFF' },
-            });
-            return {
-              ...tk,
-              qrDataUrl,
-            };
-          })
-        );
-
         return {
           ...row.order,
-          event: row.event,
+          event: { ...row.event, venue: row.venue },
           venue: row.venue,
           session: row.session,
-          tickets: ticketsWithQr,
+          tickets: ticketList,
         };
       })
     );

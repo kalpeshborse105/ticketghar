@@ -46,9 +46,18 @@ export default function AdminPage() {
     setLoginLoading(true);
 
     try {
+      const cleanEmail = email.trim().toLowerCase();
+      if (loginMode === 'organizer_login') {
+        if (!cleanEmail || cleanEmail.length < 3) {
+          setLoginError('कृपया नोंदणीकृत ईमेल / वापरकर्तानाव प्रविष्ट करा (Enter registered email).');
+          setLoginLoading(false);
+          return;
+        }
+      }
+
       const payload =
         loginMode === 'organizer_login'
-          ? { email: email.trim(), username: email.trim(), password }
+          ? { email: cleanEmail, username: cleanEmail, password }
           : { password };
 
       const res = await fetch('/api/admin/login', {
@@ -65,11 +74,14 @@ export default function AdminPage() {
         if (data.user) setUser(data.user);
         setPassword('');
         setEmail('');
+        setLoginError('');
       } else {
         setLoginError(data.error || 'प्रमाणीकरण अयशस्वी (Authentication failed)');
+        setPassword('');
       }
     } catch (err: any) {
       setLoginError('लॉगिन त्रुटी: ' + err.message);
+      setPassword('');
     } finally {
       setLoginLoading(false);
     }

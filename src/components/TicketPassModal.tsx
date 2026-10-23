@@ -53,21 +53,22 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
     try {
       const existingStr = localStorage.getItem('mahaticket_offline_orders') || '[]';
       const existing = JSON.parse(existingStr);
-      if (!existing.some((o: any) => o.orderNumber === order.orderNumber)) {
-        const toSave = {
-          ...order,
-          event,
-          tickets,
-          pricing,
-          session: bookingResult.session || order?.session,
-          sessionId: bookingResult.sessionId || order?.sessionId || bookingResult.session?.id,
-          savedAt: new Date().toISOString(),
-        };
-        localStorage.setItem(
-          'mahaticket_offline_orders',
-          JSON.stringify([toSave, ...existing].slice(0, 20))
-        );
-      }
+      const toSave = {
+        ...order,
+        event,
+        tickets,
+        pricing,
+        userEmail: order?.userEmail || order?.email,
+        session: bookingResult.session || order?.session,
+        sessionId: bookingResult.sessionId || order?.sessionId || bookingResult.session?.id,
+        savedAt: new Date().toISOString(),
+      };
+      const next = [toSave, ...existing.filter((o: any) => o.orderNumber !== order.orderNumber)].slice(
+        0,
+        20
+      );
+      localStorage.setItem('mahaticket_offline_orders', JSON.stringify(next));
+      localStorage.setItem('mahaticket_my_orders', JSON.stringify(next));
     } catch {
       /* ignore cache errors */
     }

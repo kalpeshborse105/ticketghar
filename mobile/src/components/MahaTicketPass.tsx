@@ -23,7 +23,7 @@ import LinearGradient from 'react-native-linear-gradient';
 import QRCode from 'react-native-qrcode-svg';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS } from '../theme';
-import { WEB_ORIGIN, openUrl } from '../lib/contact';
+import { WEB_ORIGIN } from '../lib/contact';
 import { downloadTicketPdf } from '../lib/downloader';
 
 export interface MahaTicketPassProps {
@@ -92,11 +92,15 @@ export function MahaTicketPass({
   const ticketWebUrl = `${WEB_ORIGIN}/tickets/${encodeURIComponent(ticketCode || resolvedOrderNum)}`;
 
   const handleDownloadPdf = async () => {
-    // Open public ticket web pass directly so user can view & print without auth
-    try {
-      await openUrl(ticketWebUrl);
-    } catch {
-      await Linking.openURL(ticketWebUrl).catch(() => null);
+    // Native DownloadManager with ASCII filename — avoids "Waiting to retry" / 0B failures
+    const ok = await downloadTicketPdf({
+      url: `${pdfUrl}?download=1`,
+      filename: `MahaTicket-${resolvedOrderNum}.pdf`,
+      title: 'MahaTicket Pass',
+      description: `Order ${resolvedOrderNum}`,
+    });
+    if (!ok) {
+      await Linking.openURL(`${pdfUrl}?download=1`).catch(() => null);
     }
   };
 
@@ -318,34 +322,22 @@ export function MahaTicketPass({
           <Text style={styles.iconActionLabel}>PDF</Text>
         </TouchableOpacity>
 
-        {/* Home Button (if onHome callback provided) */}
-        {onHome ? (
-          <TouchableOpacity
-            onPress={onHome}
-            style={styles.iconActionBtnItem}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.iconCircle, { backgroundColor: '#334155' }]}>
-              <Icon name="home-outline" size={22} color="#FFFFFF" />
-            </View>
-            <Text style={styles.iconActionLabel}>Home</Text>
-          </TouchableOpacity>
-        ) : null}
-
-        {/* Close Button (if in modal) */}
-        {onClose ? (
-          <TouchableOpacity
-            onPress={onClose}
-            style={styles.iconActionBtnItem}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.iconCircle, { backgroundColor: '#64748B' }]}>
-              <Icon name="close" size={22} color="#FFFFFF" />
-            </View>
-            <Text style={styles.iconActionLabel}>बंद करा</Text>
-          </TouchableOpacity>
-        ) : null}
       </View>
+
+      {/* Primary CTA — matches web "माझी तिकिटे पहा" */}
+      {(onClose || onHome) ? (
+        <TouchableOpacity
+          onPress={() => {
+            if (onClose) onClose();
+            else if (onHome) onHome();
+          }}
+          style={styles.myTicketsCta}
+          activeOpacity={0.88}
+        >
+          <Icon name="ticket-confirmation" size={18} color="#FFFFFF" />
+          <Text style={styles.myTicketsCtaText}>माझी तिकिटे पहा</Text>
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 }
@@ -664,6 +656,23 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#334155',
+  },
+  myTicketsCta: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#0F172A',
+    borderRadius: 999,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    marginBottom: 8,
+  },
+  myTicketsCtaText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
   },
 });
 

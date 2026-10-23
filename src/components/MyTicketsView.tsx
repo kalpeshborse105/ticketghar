@@ -37,18 +37,41 @@ export const MyTicketsView: React.FC<MyTicketsViewProps> = ({
   const [user, setUser] = useState<any | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
   const [orders, setOrders] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  // Start true so we never flash "No booked tickets yet" before first fetch finishes
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [authModalOpen, setAuthModalOpen] = useState(false);
 
+  const readCachedOrdersForEmail = (email: string): any[] => {
+    if (typeof window === 'undefined' || !email) return [];
+    const userEmailLower = email.toLowerCase().trim();
+    const buckets = ['mahaticket_offline_orders', 'mahaticket_my_orders'];
+    const out: any[] = [];
+    for (const key of buckets) {
+      try {
+        const cached = localStorage.getItem(key);
+        if (!cached) continue;
+        const parsed = JSON.parse(cached);
+        if (!Array.isArray(parsed)) continue;
+        for (const o of parsed) {
+          const oe = String(o?.userEmail || o?.email || '').toLowerCase().trim();
+          if (oe && oe === userEmailLower) out.push(o);
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    return out;
+  };
 
   /**
-   * Check user authentication session and load tickets strictly for that verified user.
+   * Guest checkout writes mahaticket_user (email) without always having a cookie session.
+   * Always hydrate cache first, then fetch /api/orders?email=… so list never flashes empty.
    */
   const checkAuthAndLoadTickets = async () => {
     let currentUser: any | null = null;
 
-    // Check localStorage first so UI matches Header instantly with 0ms delay
+    // 1) Instant identity from localStorage (guest booking + logged-in)
     if (typeof window !== 'undefined') {
       try {
         const local = localStorage.getItem('mahaticket_user');
@@ -56,6 +79,11 @@ export const MyTicketsView: React.FC<MyTicketsViewProps> = ({
           currentUser = JSON.parse(local);
           if (currentUser?.email) {
             setUser(currentUser);
+            const cached = readCachedOrdersForEmail(currentUser.email);
+            if (cached.length > 0) {
+              setOrders(cached);
+            }
+            setLoading(true);
             setAuthChecking(false);
           }
         }
@@ -85,7 +113,7 @@ export const MyTicketsView: React.FC<MyTicketsViewProps> = ({
             localStorage.setItem('mahaticket_user', JSON.stringify(currentUser));
           }
         }
-      } else if (!currentUser) {
+      } else if (!currentUser?.email) {
         currentUser = null;
         setUser(null);
       }
@@ -95,21 +123,29 @@ export const MyTicketsView: React.FC<MyTicketsViewProps> = ({
       setAuthChecking(false);
     }
 
-    // If user is not authenticated, DO NOT show any tickets and do not load localStorage indiscriminately
+    // Guest / logged-in both need an email on the booking profile
     if (!currentUser || !currentUser.email) {
       setOrders([]);
       setLoading(false);
       return;
     }
 
-    // User is verified -> load authenticated user's tickets
     setLoading(true);
+
+    // Keep showing cache while network runs (stale-while-revalidate)
+    const cachedOrders = readCachedOrdersForEmail(currentUser.email);
+    if (cachedOrders.length > 0) {
+      setOrders((prev) => (prev.length > 0 ? prev : cachedOrders));
+    }
+
     let onlineOrders: any[] = [];
     try {
-      const res = await fetch('/api/orders', {
+      const emailQ = encodeURIComponent(String(currentUser.email).trim().toLowerCase());
+      const res = await fetch(`/api/orders?email=${emailQ}`, {
         method: 'GET',
         cache: 'no-store',
         credentials: 'include',
+        headers: authHeaders,
       });
       if (res.ok) {
         const data = await res.json();
@@ -119,29 +155,7 @@ export const MyTicketsView: React.FC<MyTicketsViewProps> = ({
       console.warn('Error fetching online orders:', e);
     }
 
-    // If network failed or offline, only match cached orders belonging to THIS verified user's email
-    let cachedOrders: any[] = [];
-    if (typeof window !== 'undefined') {
-      try {
-        const cached = localStorage.getItem('mahaticket_offline_orders');
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed)) {
-            const userEmailLower = currentUser.email.toLowerCase().trim();
-            cachedOrders = parsed.filter(
-              (o: any) =>
-                (o.userEmail && o.userEmail.toLowerCase().trim() === userEmailLower) ||
-                (o.email && o.email.toLowerCase().trim() === userEmailLower)
-            );
-          }
-        }
-      } catch {
-        // ignore parse error
-      }
-    }
-
-    // Deduplicate by orderNumber
-    const orderMap = new Map();
+    const orderMap = new Map<string, any>();
     for (const o of onlineOrders) {
       if (o.orderNumber) orderMap.set(o.orderNumber, o);
     }
@@ -151,7 +165,16 @@ export const MyTicketsView: React.FC<MyTicketsViewProps> = ({
       }
     }
 
-    setOrders(Array.from(orderMap.values()));
+    const merged = Array.from(orderMap.values());
+    setOrders(merged);
+
+    // Persist merged list for next visit (prevents empty flash on profile ↔ tickets)
+    if (typeof window !== 'undefined' && merged.length > 0) {
+      try {
+        localStorage.setItem('mahaticket_my_orders', JSON.stringify(merged.slice(0, 40)));
+      } catch {}
+    }
+
     setLoading(false);
   };
 
@@ -349,15 +372,15 @@ export const MyTicketsView: React.FC<MyTicketsViewProps> = ({
         />
       </div>
 
-      {/* Ticket List */}
-      {loading ? (
+      {/* Ticket List — never show empty while still loading (avoids flash) */}
+      {loading && filteredOrders.length === 0 ? (
         <div className="py-16 flex flex-col items-center justify-center text-slate-500 gap-3">
           <div className="w-7 h-7 border-3 border-[#ea580c] border-t-transparent rounded-full animate-spin" />
           <p className="text-xs font-medium text-slate-600">
             {language === 'mr' ? 'तिकिटे शोधत आहे... (Loading Passes)' : 'Loading passes...'}
           </p>
         </div>
-      ) : filteredOrders.length === 0 ? (
+      ) : !loading && filteredOrders.length === 0 ? (
         <MTEmptyState
           type="tickets"
           title={language === 'mr' ? 'कोणतीही तिकिटे आढळली नाहीत' : 'No booked tickets yet'}

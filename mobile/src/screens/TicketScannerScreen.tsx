@@ -20,7 +20,7 @@ import { RADIUS, SHADOWS } from '../theme';
 import { api, EventItem, OrderItem, SessionItem, filterUpcomingSessions } from '../api';
 import { useAuthStore } from '../store';
 
-const PUBLIC_TICKET_BASE_URL = 'https://mahaticket.vercel.app/tickets';
+const PUBLIC_TICKET_BASE_URL = 'https://mahaticket.kalpkrutinfotech.com/tickets';
 
 export function extractTicketCode(raw: string): string | null {
   const trimmed = (raw || '').trim();

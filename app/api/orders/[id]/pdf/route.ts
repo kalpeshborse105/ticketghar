@@ -111,10 +111,13 @@ export async function GET(
         'Cache-Control': 'public, max-age=60',
       },
     });
-  } catch (error) {
-    console.error('PDF generation error:', error);
+  } catch (error: any) {
+    console.error('PDF generation error:', error?.message || error, error?.stack);
     return NextResponse.json(
-      { error: 'Something went wrong while generating ticket PDF. Please try again.' },
+      {
+        error: 'Something went wrong while generating ticket PDF. Please try again.',
+        details: process.env.NODE_ENV === 'development' ? String(error?.message || error) : undefined,
+      },
       { status: 500 }
     );
   }

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { db } from '@/src/db/index.ts';
 import { users, organizers } from '@/src/db/schema.ts';
-import { eq, or } from 'drizzle-orm';
+import { eq, or, sql } from 'drizzle-orm';
 import { verifyPassword } from '@/src/lib/auth-service.ts';
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
@@ -60,21 +60,22 @@ export async function authenticateAdmin(credentials: {
     const cleanIdentifier = rawIdentifier.toLowerCase();
 
     try {
-      // Find in users by email OR phone
+      // Case-insensitive email / exact phone / username match against DB
       const userMatches = await db
         .select()
         .from(users)
         .where(
           or(
-            eq(users.email, cleanIdentifier),
-            eq(users.phoneNumber, rawIdentifier)
+            sql`lower(${users.email}) = ${cleanIdentifier}`,
+            eq(users.phoneNumber, rawIdentifier),
+            sql`lower(coalesce(${users.fullName}, '')) = ${cleanIdentifier}`
           )
         )
         .limit(1);
 
       let user = userMatches[0];
 
-      // If not directly found in users, check if an organizer matches by email, phone, or name
+      // If not directly found in users, check organizers by email / phone / name / company
       let orgMatch = null;
       if (!user) {
         const orgList = await db
@@ -82,21 +83,22 @@ export async function authenticateAdmin(credentials: {
           .from(organizers)
           .where(
             or(
-              eq(organizers.email, cleanIdentifier),
+              sql`lower(${organizers.email}) = ${cleanIdentifier}`,
               eq(organizers.phone, rawIdentifier),
-              eq(organizers.name, rawIdentifier),
-              eq(organizers.companyName, rawIdentifier)
+              sql`lower(coalesce(${organizers.name}, '')) = ${cleanIdentifier}`,
+              sql`lower(coalesce(${organizers.companyName}, '')) = ${cleanIdentifier}`,
+              sql`${organizers.email} ilike ${'%' + cleanIdentifier + '%'}`
             )
           )
           .limit(1);
 
         if (orgList.length > 0) {
           orgMatch = orgList[0];
-          // Try finding user linked to this organizer email
+          const orgEmail = String(orgMatch.email || '').toLowerCase();
           const linkedUsers = await db
             .select()
             .from(users)
-            .where(eq(users.email, orgMatch.email.toLowerCase()))
+            .where(sql`lower(${users.email}) = ${orgEmail}`)
             .limit(1);
           user = linkedUsers[0];
         }
@@ -105,7 +107,8 @@ export async function authenticateAdmin(credentials: {
       if (!user) {
         return {
           success: false,
-          error: 'या वापरकर्तानाव / ईमेलसाठी कोणतेही खाते सापडले नाही (No account found with this username/email)',
+          error:
+            'या ईमेल / वापरकर्तानावासाठी आयोजक खाते सापडले नाही. नोंदणीकृत ईमेल तपासा (No organizer account for this email).',
         };
       }
 
@@ -124,12 +127,14 @@ export async function authenticateAdmin(credentials: {
         };
       }
 
-      // Check if user is linked to an organizer
-      const [org] = orgMatch ? [orgMatch] : await db
-        .select()
-        .from(organizers)
-        .where(eq(organizers.email, user.email.toLowerCase()))
-        .limit(1);
+      // Check if user is linked to an organizer (case-insensitive email)
+      const [org] = orgMatch
+        ? [orgMatch]
+        : await db
+            .select()
+            .from(organizers)
+            .where(sql`lower(${organizers.email}) = ${String(user.email || '').toLowerCase()}`)
+            .limit(1);
 
       let rawRole = String(user.role || 'customer');
       const organizerId = org ? org.id : undefined;
