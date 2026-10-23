@@ -223,6 +223,14 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
     fetchSessionSeats(false);
   }, [fetchSessionSeats]);
 
+  // Live sync: refresh seats so another user's hold greys out immediately (same as Android)
+  useEffect(() => {
+    const poll = setInterval(() => {
+      fetchSessionSeats(true);
+    }, 8000);
+    return () => clearInterval(poll);
+  }, [fetchSessionSeats]);
+
   // Handle seat click
   const toggleSeatSelection = (seat: any) => {
     if (seat.status === 'booked' || seat.status === 'held' || seat.status === 'blocked') return;

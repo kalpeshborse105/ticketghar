@@ -40,7 +40,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const MAP_MIN_SCALE = 1;
 const MAP_MAX_SCALE = 2.75;
-const POLL_INTERVAL = 20000;
+/** Live hold sync — same spirit as web fresh seat refresh */
+const POLL_INTERVAL = 8000;
 const DEVANAGARI_RE = /[\u0900-\u097F]/;
 const LATIN_RE = /[A-Za-z]/;
 const TEXT_COLLATOR = new Intl.Collator('en', { numeric: true, sensitivity: 'base' });
@@ -320,17 +321,43 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
     sessions.find((s) => s.id === sessionId) || routeSelectedSession || sessions[0];
   const sessionStartTime = activeSession?.sessionStartTime || routeSelectedSession?.sessionStartTime;
 
-  const fetchSeats = useCallback(async () => {
+  const fetchSeats = useCallback(async (fresh = true) => {
     if (!sessionId) return;
     try {
-      const data = await api.getSessionSeats(sessionId);
+      const data = await api.getSessionSeats(sessionId, {
+        fresh,
+        timeoutMs: fresh ? 18000 : 22000,
+      });
       const liveSeats = data.seats || [];
       const selectedIds = selectedRef.current;
 
+      // Prune local selection if another user held/booked the seat (strict like web)
+      const stillFree = selectedIds.filter((id) => {
+        const match = liveSeats.find((s) => s.seatId === id);
+        return match && match.status === 'available';
+      });
+      if (stillFree.length !== selectedIds.length) {
+        const lost = selectedIds.length - stillFree.length;
+        setSelected(stillFree);
+        setError(
+          lost > 0
+            ? `निवडलेली ${lost} आसने दुसऱ्या ग्राहकाने आरक्षित केली. कृपया इतर आसने निवडा.\n(Some seats were just held by another user — pick different seats.)`
+            : null
+        );
+        if (stillFree.length === 0) {
+          setHoldTimerActive(false);
+          setSecondsLeft(HOLD_SECONDS);
+        }
+      }
+
+      // Never paint held/booked seats as "selected" — that hid conflicts before
       setSeats(
         liveSeats.map((seat) => ({
           ...seat,
-          status: selectedIds.includes(seat.seatId) ? ('selected' as any) : seat.status,
+          status:
+            stillFree.includes(seat.seatId) && seat.status === 'available'
+              ? ('selected' as any)
+              : seat.status,
         }))
       );
       setSectionsData(Array.isArray(data.sections) ? data.sections : []);
@@ -345,11 +372,9 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
 
       if (!liveSeats.length) {
         setError('No seats available for this show right now.');
-      } else {
-        setError(null);
       }
     } catch {
-      // Background poll failure is silent — never treat network abort as hold timeout
+      // Background poll failure is silent — never treat network abort as hold expiry
     }
   }, [sessionId]);
 
@@ -363,7 +388,8 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
     let cancelled = false;
     const cached = sessionSeatsCache.get(sessionId);
 
-    if (cached && Date.now() - cached.time < 3000) {
+    // Show cached map immediately (up to 12s) so UI is not stuck on spinner
+    if (cached && Date.now() - cached.time < 12000) {
       setSeats(cached.seats);
       setSectionsData(cached.sections || []);
       setLayoutConfig(cached.layoutConfig || null);
@@ -379,7 +405,7 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
 
     const loadSeats = async () => {
       try {
-        const data = await api.getSessionSeats(sessionId);
+        const data = await api.getSessionSeats(sessionId, { fresh: true, timeoutMs: 22000 });
         if (cancelled) return;
         const liveSeats = data.seats || [];
         setSeats(liveSeats);
@@ -418,7 +444,7 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
           } catch {
             setError('Session not found. Please go back and open the event again.');
           }
-        } else {
+        } else if (!cached) {
           setError(
             /timed out|timeout|slow|network/i.test(msg)
               ? 'Seat map is taking longer than usual. Tap Retry seats.'
@@ -432,7 +458,7 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
 
     loadSeats();
 
-    pollRef.current = setInterval(fetchSeats, POLL_INTERVAL);
+    pollRef.current = setInterval(() => fetchSeats(true), POLL_INTERVAL);
     return () => {
       cancelled = true;
       clearInterval(pollRef.current);
@@ -768,9 +794,10 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
   );
 
   const finishHold = async () => {
-    if (!selected.length) return;
+    if (!selected.length || holding) return;
     try {
       setHolding(true);
+      setError(null);
       let guestId = '';
       try {
         guestId = (await AsyncStorage.getItem('@mahaticket_guest_device_id')) || '';
@@ -822,11 +849,22 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
         sessionMeta: sessionStartTime ? formatShow(sessionStartTime) : routeSessionMeta,
       });
     } catch (e: any) {
-      const msg = e.message || 'निवडलेली आसने या शोसाठी उपलब्ध नाहीत किंवा वेळ संपली आहे. कृपया पुन्हा आसने निवडा.';
+      const msg =
+        e.message ||
+        'निवडलेली आसने या शोसाठी उपलब्ध नाहीत. कृपया इतर आसने निवडा.';
+      const isNetwork =
+        /नेटवर्क|network|slow|timeout|timed out|पुन्हा "पुढे जा"/i.test(msg);
+      const isConflict = /दुसऱ्या|held|आरक्षित|another/i.test(msg);
+
       setError(msg);
       setErrorModalMsg(msg);
-      fetchSeats();
-      setSelected([]);
+      // Refresh live map so held seats show grey immediately
+      fetchSeats(true);
+
+      // Only clear selection on real conflict — keep seats on network timeout (timer still valid)
+      if (isConflict && !isNetwork) {
+        setSelected([]);
+      }
     } finally {
       setHolding(false);
     }
@@ -1074,12 +1112,18 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
                 setError(null);
                 setLoading(true);
                 api
-                  .getSessionSeats(sessionId)
+                  .getSessionSeats(sessionId, { fresh: true, timeoutMs: 22000 })
                   .then((data) => {
                     const liveSeats = data.seats || [];
                     setSeats(liveSeats);
                     setSectionsData(Array.isArray(data.sections) ? data.sections : []);
                     setLayoutConfig(data.layoutConfig || null);
+                    sessionSeatsCache.set(sessionId, {
+                      seats: liveSeats,
+                      sections: data.sections || [],
+                      layoutConfig: data.layoutConfig || null,
+                      time: Date.now(),
+                    });
                     if (!liveSeats.length) {
                       setError('No seats available for this show right now.');
                     }
@@ -1336,7 +1380,8 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
           <TouchableOpacity
             style={[
               styles.proceedButton,
-              (!selected.length || holding) && styles.proceedButtonDisabled,
+              // Match web: stay orange while holding; only grey when nothing selected
+              !selected.length && styles.proceedButtonDisabled,
             ]}
             disabled={!selected.length || holding}
             onPress={finishHold}
@@ -1345,7 +1390,7 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
             {holding ? (
               <View style={styles.proceedBtnInner}>
                 <ActivityIndicator color="#FFFFFF" size="small" style={{ marginRight: 6 }} />
-                <Text style={styles.proceedButtonText}>प्रक्रिया करत आहे...</Text>
+                <Text style={styles.proceedButtonText}>आरक्षित करत आहे...</Text>
               </View>
             ) : (
               <View style={styles.proceedBtnInner}>
@@ -1355,9 +1400,7 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
                     !selected.length && styles.proceedButtonTextDisabled,
                   ]}
                 >
-                  {selected.length > 0
-                    ? `पुढे जा (Proceed)`
-                    : 'आसने निवडा'}
+                  {selected.length > 0 ? 'पुढे जा' : 'आसने निवडा'}
                 </Text>
                 <Icon
                   name={selected.length > 0 ? 'arrow-right' : 'seat-outline'}

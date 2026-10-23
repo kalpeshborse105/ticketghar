@@ -1059,9 +1059,10 @@ export const api = {
     };
   },
 
-  // Sessions & Seats — same as web: GET /api/sessions/:id/seats only (no fake map / raw DB)
+  // Sessions & Seats — same as web: GET /api/sessions/:id/seats (?fresh=1 for live holds)
   getSessionSeats: async (
-    sessionId: number
+    sessionId: number,
+    opts?: { fresh?: boolean; timeoutMs?: number }
   ): Promise<{
     seats: SeatItem[];
     sections: any[];
@@ -1070,44 +1071,37 @@ export const api = {
     if (!sessionId || Number.isNaN(Number(sessionId))) {
       throw new Error('Session not found');
     }
-    let lastErr: any = null;
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        const data = await request<{
-          seats: SeatItem[];
-          sections: any[];
-          layoutConfig?: SeatLayoutConfig;
-          venue?: any;
-          error?: string;
-        }>(`/api/sessions/${sessionId}/seats`, { timeout: 45000 });
-        if (!data || data.error) {
-          throw new ApiError(data?.error || 'Failed to load seat layout', 400, data);
-        }
-        return {
-          seats: Array.isArray(data.seats) ? data.seats : [],
-          sections: Array.isArray(data.sections) ? data.sections : [],
-          layoutConfig: data.layoutConfig || data.venue?.layoutConfig || undefined,
-        };
-      } catch (e: any) {
-        lastErr = e;
-        // Retry once on network/timeout only — not on Session not found
-        if (e?.status === 404 || /session not found/i.test(String(e?.message || ''))) {
-          throw new ApiError('Session not found', 404, e?.data);
-        }
-        if (attempt === 0 && (e?.status === 408 || e?.status === 0)) {
-          continue;
-        }
-        break;
+    const q = opts?.fresh ? '?fresh=1' : '';
+    const timeout = opts?.timeoutMs ?? 22000;
+    try {
+      const data = await request<{
+        seats: SeatItem[];
+        sections: any[];
+        layoutConfig?: SeatLayoutConfig;
+        venue?: any;
+        error?: string;
+      }>(`/api/sessions/${sessionId}/seats${q}`, { timeout });
+      if (!data || data.error) {
+        throw new ApiError(data?.error || 'Failed to load seat layout', 400, data);
       }
+      return {
+        seats: Array.isArray(data.seats) ? data.seats : [],
+        sections: Array.isArray(data.sections) ? data.sections : [],
+        layoutConfig: data.layoutConfig || data.venue?.layoutConfig || undefined,
+      };
+    } catch (e: any) {
+      if (e?.status === 404 || /session not found/i.test(String(e?.message || ''))) {
+        throw new ApiError('Session not found', 404, e?.data);
+      }
+      const msg = String(e?.message || '');
+      if (/timed out|timeout|network/i.test(msg) || e?.status === 408 || e?.status === 0) {
+        throw new ApiError(
+          'Seat map load is slow. Please retry — your show session is still valid.',
+          408
+        );
+      }
+      throw e instanceof Error ? e : new Error('Failed to load seat layout');
     }
-    const msg = String(lastErr?.message || '');
-    if (/timed out|timeout|network/i.test(msg)) {
-      throw new ApiError(
-        'Seat map load is slow. Please retry — your show session is still valid.',
-        408
-      );
-    }
-    throw lastErr instanceof Error ? lastErr : new Error('Failed to load seat layout');
   },
 
   // Hold — same payload as web SeatMapModal
@@ -1124,7 +1118,7 @@ export const api = {
           seatIds: body.seatIds,
           userIdStr: body.userIdStr,
         }),
-        timeout: 20000,
+        timeout: 45000,
       });
       const token = res?.holdToken || res?.hold?.holdToken;
       if (token) {
@@ -1145,8 +1139,19 @@ export const api = {
       }
       throw new Error(res?.error || 'Seat hold failed');
     } catch (e: any) {
+      const raw = String(e?.message || e?.data?.error || '');
+      if (/timed out|timeout|AbortError|408/i.test(raw)) {
+        throw new Error(
+          'नेटवर्क हळू आहे — आसन आरक्षण वेळ संपली नाही. कृपया पुन्हा "पुढे जा" दाबा.\n(Network slow — hold timer still active. Tap Proceed again.)'
+        );
+      }
+      if (/currently held|held by|आरक्षित|another/i.test(raw)) {
+        throw new Error(
+          'निवडलेले आसन सध्या दुसऱ्या ग्राहकाकडे आरक्षित आहे. कृपया इतर उपलब्ध आसन निवडा.\n(Seat held by another user — choose different seats.)'
+        );
+      }
       throw new Error(
-        e?.message ||
+        raw ||
           'Selected seats could not be held. They may have been taken — please refresh the map.'
       );
     }

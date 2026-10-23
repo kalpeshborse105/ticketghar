@@ -162,8 +162,8 @@ export function MahaTicketPass({
               <Icon name="ticket-confirmation" size={17} color="#FFFFFF" />
             </View>
             <View>
-              <Text style={styles.brandTitle}>MAHATICKET • E-PASS</Text>
-              <Text style={styles.orderNumberText}>ORDER #{resolvedOrderNum}</Text>
+              <Text style={styles.brandTitle}>महाटिकिट M-TICKET PASS</Text>
+              <Text style={styles.orderNumberText}>#{resolvedOrderNum}</Text>
             </View>
           </View>
 
@@ -268,7 +268,7 @@ export function MahaTicketPass({
             स्कॅन करण्यासाठी स्क्रीन ब्राईटनेस वाढवा • Increase brightness
           </Text>
           <Text style={styles.qrTicketCodeText}>
-            PASS ID: #{resolvedOrderNum}
+            CODE: {ticketCode || resolvedOrderNum}
           </Text>
 
           {/* Compact Security Shield Badge */}
@@ -382,6 +382,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   brandTitle: {
+    // Match web: महाटिकिट M-TICKET PASS
     fontSize: 9.5,
     fontWeight: '900',
     color: 'rgba(255,255,255,0.92)',
