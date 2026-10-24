@@ -60,19 +60,13 @@ function AuthCallbackInner() {
         setStatus('success');
         setMessage('लॉगिन यशस्वी झाले! Redirecting...');
 
-        // If from mobile app or mobile user agent, forward to deep link
+        // If from mobile app or mobile user agent, forward to mobile-done bridge
         const isMobileDevice =
           source === 'mobile' ||
           /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
 
         if (isMobileDevice && data.token) {
-          const deepLink = `mahaticket://auth/callback?token=${encodeURIComponent(
-            data.token
-          )}&user=${encodeURIComponent(JSON.stringify(data.user))}`;
-          window.location.href = deepLink;
-          setTimeout(() => {
-            window.location.href = '/';
-          }, 800);
+          router.replace(`/auth/mobile-done?token=${encodeURIComponent(data.token)}`);
           return;
         }
 

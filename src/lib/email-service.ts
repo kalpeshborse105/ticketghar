@@ -167,40 +167,49 @@ export async function sendBookingTicketEmail(
     const emailSubject = `MahaTicket 🎟️ — Booking Confirmed (${ticketRecord.order.orderNumber}): ${eventRecord?.event.titleMr || eventRecord?.event.title || 'Event'}`;
 
     // 4. Try SMTP first if configured
-    const smtpHost = process.env.SMTP_HOST?.trim();
-    const smtpPort = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : 587;
-    const smtpUser = process.env.SMTP_USER?.trim();
+    const cleanEnv = (val?: string | null) => (val ? val.trim().replace(/^["']|["']$/g, '').trim() : '');
+    const smtpHost = cleanEnv(process.env.SMTP_HOST);
+    const rawPort = cleanEnv(process.env.SMTP_PORT);
+    const smtpPort = rawPort && !isNaN(parseInt(rawPort, 10)) ? parseInt(rawPort, 10) : 587;
+    const smtpUser = cleanEnv(process.env.SMTP_USER);
     const rawPass = process.env.SMTP_PASS || process.env.SMTP_PASSWORD || '';
-    const smtpPass = rawPass.trim().replace(/\s+/g, '');
-    const isGmail = smtpHost?.toLowerCase().includes('gmail.com');
-    const fromAddress = isGmail
-      ? (process.env.SMTP_FROM || `MahaTicket <${smtpUser}>`)
-      : (process.env.SMTP_FROM || process.env.EMAIL_FROM || 'MahaTicket <tickets@mahaticket.kalpkrutinfotech.com>');
+    const smtpPass = cleanEnv(rawPass).replace(/\s+/g, '');
+    const rawSecure = cleanEnv(process.env.SMTP_SECURE).toLowerCase();
+    const isSecure = rawSecure === 'true' || rawSecure === '1' || (rawSecure !== 'false' && rawSecure !== '0' && smtpPort === 465);
+    const isGmail = smtpHost.toLowerCase().includes('gmail.com');
+    const fromAddress =
+      cleanEnv(process.env.SMTP_FROM) ||
+      (isGmail
+        ? `MahaTicket <${smtpUser}>`
+        : cleanEnv(process.env.EMAIL_FROM) || 'MahaTicket <tickets@mahaticket.kalpkrutinfotech.com>');
 
     if (smtpHost && smtpUser && smtpPass) {
-      const transporter = isGmail
-        ? nodemailer.createTransport({
+      const createTransporter = (useDirectGmailService = false) => {
+        if (isGmail && useDirectGmailService) {
+          return nodemailer.createTransport({
             service: 'gmail',
             auth: {
               user: smtpUser,
               pass: smtpPass,
             },
-          })
-        : nodemailer.createTransport({
-            host: smtpHost,
-            port: smtpPort,
-            secure: smtpPort === 465,
-            auth: {
-              user: smtpUser,
-              pass: smtpPass,
-            },
-            tls: {
-              rejectUnauthorized: false,
-            },
           });
+        }
+        return nodemailer.createTransport({
+          host: smtpHost,
+          port: smtpPort,
+          secure: isSecure,
+          auth: {
+            user: smtpUser,
+            pass: smtpPass,
+          },
+          tls: {
+            rejectUnauthorized: false,
+          },
+        });
+      };
 
       const attachments: any[] = [];
-      if (pdfBuffer) {
+      if (pdfBuffer && pdfBuffer.length > 0) {
         attachments.push({
           filename: `MahaTicket-${ticketRecord.order.orderNumber}.pdf`,
           content: pdfBuffer,
@@ -208,6 +217,7 @@ export async function sendBookingTicketEmail(
         });
       }
 
+      let transporter = createTransporter(false);
       try {
         await transporter.sendMail({
           from: fromAddress,
@@ -234,6 +244,34 @@ export async function sendBookingTicketEmail(
             : `Booking email sent to ${recipient} (PDF attachment could not be generated)`,
         };
       } catch (smtpErr: any) {
+        // If host/port failed and is Gmail, try service: 'gmail'
+        if (isGmail) {
+          try {
+            console.log('[Email] Retrying via service: gmail transport...');
+            const fallbackTransporter = createTransporter(true);
+            await fallbackTransporter.sendMail({
+              from: fromAddress,
+              to: recipient,
+              subject: emailSubject,
+              html: htmlContent,
+              attachments,
+            });
+            console.log(`[Email] Sent confirmation via Gmail service fallback to ${recipient}`);
+            return {
+              success: true,
+              status: 'sent',
+              sent: true,
+              attached: Boolean(pdfBuffer),
+              configured: true,
+              provider: 'smtp',
+              recipient,
+              message: `Booking email with PDF ticket sent to ${recipient} via SMTP`,
+            };
+          } catch (retryErr: any) {
+            smtpErr = retryErr;
+          }
+        }
+
         const isAuthErr = smtpErr?.code === 'EAUTH' || smtpErr?.responseCode === 535;
         if (isAuthErr) {
           console.warn(

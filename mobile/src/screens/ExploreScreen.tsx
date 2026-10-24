@@ -13,7 +13,9 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  BackHandler,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, RADIUS, SPACING } from '../theme';
@@ -57,6 +59,22 @@ export default function ExploreScreen({ navigation }: any) {
     const t = setTimeout(() => setSearch(localSearch), 300);
     return () => clearTimeout(t);
   }, [localSearch]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        if (localSearch) {
+          setLocalSearch('');
+          setSearch('');
+          return true;
+        }
+        navigation.navigate('Home');
+        return true;
+      };
+      const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => sub.remove();
+    }, [localSearch, navigation, setSearch])
+  );
 
   const applyPriceFilter = (evts: any[]) => {
     switch (priceFilter) {

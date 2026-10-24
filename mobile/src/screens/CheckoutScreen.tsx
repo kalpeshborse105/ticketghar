@@ -264,15 +264,6 @@ export default function CheckoutScreen({ navigation, route }: any) {
     [seatCodes]
   );
 
-  // Authoritative hold countdown — never resets to 300 if expired
-  const [countdown, setCountdown] = useState(() => {
-    if (!expiresAt) return 300;
-    const diff = Math.round((new Date(expiresAt).getTime() - Date.now()) / 1000);
-    return Math.max(0, diff);
-  });
-
-  const countdownRef = useRef<ReturnType<typeof setInterval>>();
-
   // Load available coupons
   useEffect(() => {
     api.getCoupons()
@@ -282,33 +273,6 @@ export default function CheckoutScreen({ navigation, route }: any) {
         }
       })
       .catch(() => null);
-  }, []);
-
-  // Countdown timer ticking — guarded by paymentDoneRef
-  useEffect(() => {
-    countdownRef.current = setInterval(() => {
-      setCountdown((c) => {
-        if (c <= 1) {
-          if (!paymentDoneRef.current) {
-            setCheckoutModal({
-              visible: true,
-              type: 'warning',
-              title: 'आसन आरक्षण वेळ संपली (Hold Expired)',
-              message:
-                'तुमच्या तात्पुरत्या आसन आरक्षणाची वेळ संपली आहे. कृपया पुन्हा आसने निवडा. (Your temporary seat hold has expired.)',
-              primaryButtonText: 'आसने निवडा (Select Seats)',
-              onPrimaryPress: () => {
-                setCheckoutModal(null);
-                handleDiscardAndBack();
-              },
-            });
-          }
-          return 0;
-        }
-        return c - 1;
-      });
-    }, 1000);
-    return () => clearInterval(countdownRef.current);
   }, []);
 
   // Check pending payment reconciliation on mount
@@ -489,20 +453,6 @@ export default function CheckoutScreen({ navigation, route }: any) {
     if (!email.trim() || !email.includes('@')) {
       setFieldError('कृपया ई-तिकीटसाठी वैध ईमेल टाका (Valid email for ticket).');
       focusField('email');
-      return;
-    }
-    if (countdown <= 0) {
-      setCheckoutModal({
-        visible: true,
-        type: 'warning',
-        title: 'आसन आरक्षण वेळ संपली (Hold Expired)',
-        message: 'तुमच्या तात्पुरत्या आसन आरक्षणाची वेळ संपली आहे. कृपया पुन्हा आसने निवडा. (Your reservation has expired.)',
-        primaryButtonText: 'आसने पुन्हा निवडा (Select Seats)',
-        onPrimaryPress: () => {
-          setCheckoutModal(null);
-          handleDiscardAndBack();
-        },
-      });
       return;
     }
 
@@ -940,16 +890,6 @@ export default function CheckoutScreen({ navigation, route }: any) {
 
       <BackHeader title={language === 'mr' ? 'तिकीट बुकिंग' : 'Checkout'} onBack={handleDiscardAndBack} />
 
-      {/* Professional Session Active Banner */}
-      <View style={styles.timerPillBanner}>
-        <View style={styles.timerPillBox}>
-          <Icon name="clock-outline" size={15} color="#D97706" style={{ marginRight: 6 }} />
-          <Text style={styles.timerPillLabel}>
-            {language === 'mr' ? 'आसन आरक्षण वेळ: ' : 'Booking Session Active: '}
-          </Text>
-          <CountdownTimer seconds={countdown} />
-        </View>
-      </View>
 
       <ScrollView
         ref={scrollRef}
@@ -1344,11 +1284,11 @@ export default function CheckoutScreen({ navigation, route }: any) {
         </View>
         <TouchableOpacity
           onPress={handlePayment}
-          disabled={paying || countdown <= 0}
+          disabled={paying}
           activeOpacity={0.85}
           style={[
             styles.payBtn,
-            (paying || countdown <= 0) && styles.payBtnDisabled,
+            paying && styles.payBtnDisabled,
           ]}
         >
           {paying ? (

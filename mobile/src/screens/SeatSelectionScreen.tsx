@@ -255,49 +255,8 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
   const mapSavedTY = useSharedValue(0);
 
   const [showDiscardModal, setShowDiscardModal] = useState(false);
-  const [showTimeoutModal, setShowTimeoutModal] = useState(false);
   const [errorModalMsg, setErrorModalMsg] = useState<string | null>(null);
   const [showHelpModal, setShowHelpModal] = useState(false);
-
-  // Hold window matches web/backend: 5 minutes (only runs while seats are selected)
-  const HOLD_SECONDS = 5 * 60;
-  const [secondsLeft, setSecondsLeft] = useState(HOLD_SECONDS);
-  const [holdTimerActive, setHoldTimerActive] = useState(false);
-
-  useEffect(() => {
-    if (selected.length > 0 && !holdTimerActive) {
-      setHoldTimerActive(true);
-      setSecondsLeft(HOLD_SECONDS);
-    }
-    if (selected.length === 0 && holdTimerActive) {
-      setHoldTimerActive(false);
-      setSecondsLeft(HOLD_SECONDS);
-    }
-  }, [selected.length, holdTimerActive]);
-
-  useEffect(() => {
-    if (!holdTimerActive) return;
-    const timer = setInterval(() => {
-      setSecondsLeft((prev) => {
-        if (prev <= 1) {
-          setShowTimeoutModal(true);
-          setSelected([]);
-          setHoldTimerActive(false);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [holdTimerActive]);
-
-  const formattedTimer = useMemo(() => {
-    const m = Math.floor(secondsLeft / 60);
-    const s = secondsLeft % 60;
-    return `${toMarathiDigits(String(m).padStart(2, '0'))}:${toMarathiDigits(
-      String(s).padStart(2, '0')
-    )} मि.`;
-  }, [secondsLeft]);
 
   const pollRef = useRef<ReturnType<typeof setInterval>>();
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -309,10 +268,6 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
   const handleBackPress = useCallback(() => {
     if (showDiscardModal) {
       setShowDiscardModal(false);
-      return true;
-    }
-    if (showTimeoutModal) {
-      setShowTimeoutModal(false);
       return true;
     }
     if (showHelpModal) {
@@ -337,7 +292,6 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
     navigation,
     selected.length,
     showDiscardModal,
-    showTimeoutModal,
     showHelpModal,
     errorModalMsg,
     eventId,
@@ -399,8 +353,7 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
             : null
         );
         if (stillFree.length === 0) {
-          setHoldTimerActive(false);
-          setSecondsLeft(HOLD_SECONDS);
+          // All selected seats became unavailable
         }
       }
 
@@ -460,8 +413,6 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
     }
 
     setSelected([]);
-    setHoldTimerActive(false);
-    setSecondsLeft(HOLD_SECONDS);
     setError(null);
 
     try {
@@ -1117,18 +1068,6 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
           </View>
         ) : null}
 
-        {/* ── 3. Hold countdown only after seats selected (5 min, same as web) ── */}
-        {holdTimerActive ? (
-          <View style={styles.timerBannerWrap}>
-            <View style={styles.timerBanner}>
-              <View style={styles.timerLeft}>
-                <Text style={styles.timerClockEmoji}>⏱️</Text>
-                <Text style={styles.timerLabelText}>तिकिटे राखीव राहतील:</Text>
-              </View>
-              <Text style={styles.timerCountdownText}>{formattedTimer}</Text>
-            </View>
-          </View>
-        ) : null}
 
         {/* ── 4. Seat legend (BMS-style — no zoom text UI) ── */}
         <View style={styles.legendCardBar}>
@@ -1530,27 +1469,6 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
         onRequestClose={() => setShowDiscardModal(false)}
       />
 
-      {/* ── Reservation Timeout Modal ── */}
-      <MTPopupModal
-        visible={showTimeoutModal}
-        type="warning"
-        title="वेळ संपली (Hold Timed Out)"
-        message="आसन निवडीची ५ मिनिटांची वेळ संपली आहे. तुमची निवडलेली आसने इतरांसाठी खुली करण्यात आली आहेत. कृपया पुन्हा आसने निवडा."
-        primaryButtonText="पुन्हा आसने निवडा (Select Seats)"
-        onPrimaryPress={() => {
-          setShowTimeoutModal(false);
-          setHoldTimerActive(false);
-          setSecondsLeft(HOLD_SECONDS);
-          setSelected([]);
-          fetchSeats();
-        }}
-        onRequestClose={() => {
-          setShowTimeoutModal(false);
-          setHoldTimerActive(false);
-          setSecondsLeft(HOLD_SECONDS);
-          fetchSeats();
-        }}
-      />
 
       {/* ── Error / Notice Modal ── */}
       <MTPopupModal

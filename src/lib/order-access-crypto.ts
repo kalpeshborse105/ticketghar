@@ -5,8 +5,8 @@ const TOKEN_SECRET =
   process.env.ADMIN_SESSION_SECRET ||
   'mahaticket_secure_production_secret_key_2026';
 
-/** Short-lived PDF download capability (not a session). Long enough for checkout + pass view. */
-const PDF_TOKEN_TTL_MS = 60 * 60 * 1000;
+/** PDF download capability token — valid for 30 days to cover event duration */
+const PDF_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 export type OrderOwnershipFields = {
   userId: number;

@@ -470,14 +470,6 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
       return;
     }
 
-    if (timeLeft <= 0) {
-      setErrorMessage(
-        language === 'mr'
-          ? 'जागेचे आरक्षण संपले आहे. कृपया पुन्हा जागा निवडा.'
-          : 'Hold reservation has expired. Please reselect seats.'
-      );
-      return;
-    }
 
     try {
       setIsProcessing(true);
@@ -676,17 +668,6 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
           >
             <X className="w-5 h-5" />
           </button>
-        </div>
-
-        {/* Hold Countdown Banner */}
-        <div className="px-5 py-2.5 bg-orange-50 border-b border-orange-100 flex items-center justify-between text-xs">
-          <div className="flex items-center gap-2 text-[#ea580c] font-bold">
-            <Clock className="w-4 h-4" />
-            <span>{t.holdNotice}</span>
-          </div>
-          <span className="font-mono font-black text-white bg-[#ea580c] px-2.5 py-0.5 rounded-full text-xs shadow-sm">
-            {formatCountdown(timeLeft)}
-          </span>
         </div>
 
         {/* Scrollable Form Body */}

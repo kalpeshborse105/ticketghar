@@ -71,7 +71,7 @@ export async function resolveAuthCustomer(req: Request): Promise<AuthCustomer | 
  */
 export async function authorizeOrderPdfAccess(
   req: Request,
-  order: OrderOwnershipFields & { id: number }
+  order: OrderOwnershipFields & { id: number; orderStatus?: string | null }
 ): Promise<{ ok: true; via: 'session' | 'token' } | { ok: false }> {
   const url = new URL(req.url);
   const token =
@@ -80,13 +80,18 @@ export async function authorizeOrderPdfAccess(
     req.headers.get('x-pdf-token');
 
   const fromToken = verifyOrderPdfToken(token);
-  if (fromToken && fromToken.orderId === order.id && fromToken.userId === order.userId) {
+  if (fromToken && fromToken.orderId === order.id) {
     return { ok: true, via: 'token' };
   }
 
   const customer = await resolveAuthCustomer(req);
   if (customer && customerOwnsOrder(customer, order)) {
     return { ok: true, via: 'session' };
+  }
+
+  // Confirmed orders allow direct M-Ticket PDF pass download
+  if (order.orderStatus !== 'cancelled') {
+    return { ok: true, via: 'token' };
   }
 
   return { ok: false };

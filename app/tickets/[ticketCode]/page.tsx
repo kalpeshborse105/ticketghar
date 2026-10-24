@@ -113,10 +113,6 @@ export default function PublicTicketPage() {
 
   const handleDownloadPdf = async () => {
     if (!ticketCode || !data) return;
-    if (!data.owner && !data.downloadPdfUrl && !data.pdfDownloadToken) {
-      setError('PDF डाउनलोडसाठी लॉगिन आवश्यक आहे (Sign in required to download PDF).');
-      return;
-    }
     try {
       setIsDownloading(true);
       setDownloadSuccess(false);

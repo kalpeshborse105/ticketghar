@@ -20,6 +20,7 @@ import {
   TouchableOpacity,
   View,
   BackHandler,
+  Alert,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import Toast from 'react-native-toast-message';
@@ -118,7 +119,7 @@ export default function HomeScreen({ navigation }: any) {
   const bannerRef = useRef<FlatList>(null);
   const lastBackPressRef = useRef(0);
 
-  // Conventional double-tap-to-exit on root home screen
+  // Confirmation dialog on root home screen back press
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
@@ -126,17 +127,24 @@ export default function HomeScreen({ navigation }: any) {
           setCityPickerOpen(false);
           return true;
         }
-        const now = Date.now();
-        if (now - lastBackPressRef.current < 2000) {
-          BackHandler.exitApp();
-          return true;
-        }
-        lastBackPressRef.current = now;
-        Toast.show({
-          type: 'info',
-          text1: language === 'mr' ? 'बाहेर पडण्यासाठी पुन्हा मागे दाबा' : 'Press back again to exit',
-          visibilityTime: 1800,
-        });
+        Alert.alert(
+          language === 'mr' ? 'MahaTicket मधून बाहेर पडायचे?' : 'Exit MahaTicket?',
+          language === 'mr'
+            ? 'तुम्हाला खात्री आहे की तुम्ही ॲप बंद करू इच्छिता?'
+            : 'Are you sure you want to close the app?',
+          [
+            {
+              text: language === 'mr' ? 'रद्द करा' : 'Cancel',
+              style: 'cancel',
+            },
+            {
+              text: language === 'mr' ? 'बाहेर पडा' : 'Exit',
+              style: 'destructive',
+              onPress: () => BackHandler.exitApp(),
+            },
+          ],
+          { cancelable: true }
+        );
         return true;
       };
 

@@ -14,7 +14,9 @@ import {
   Text,
   TouchableOpacity,
   View,
+  BackHandler,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, RADIUS, SPACING, SHADOWS } from '../theme';
@@ -65,6 +67,21 @@ export default function ProfileScreen({ navigation }: any) {
       useAuthStore.getState().syncUserProfile().catch(() => null);
     }
   }, [isAuthenticated]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      const onBackPress = () => {
+        if (showLogoutModal) {
+          setShowLogoutModal(false);
+          return true;
+        }
+        navigation.navigate('Home');
+        return true;
+      };
+      const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => sub.remove();
+    }, [showLogoutModal, navigation])
+  );
 
   const handleLogout = () => {
     setShowLogoutModal(true);

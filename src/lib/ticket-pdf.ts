@@ -23,7 +23,13 @@ const DEVANAGARI_FONT_CANDIDATES = [
   path.join(process.cwd(), 'public', 'fonts', 'NotoSansDevanagari-unhinted.ttf'),
   path.join(process.cwd(), 'assets', 'fonts', 'NotoSansDevanagari-Regular.ttf'),
   path.join(process.cwd(), 'assets', 'fonts', 'NotoSansDevanagari-unhinted.ttf'),
+  path.resolve(__dirname, '../../../../public/fonts/NotoSansDevanagari-Regular.ttf'),
+  path.resolve(__dirname, '../../../public/fonts/NotoSansDevanagari-Regular.ttf'),
   path.resolve(__dirname, '../../public/fonts/NotoSansDevanagari-Regular.ttf'),
+  path.resolve(__dirname, '../public/fonts/NotoSansDevanagari-Regular.ttf'),
+  path.resolve(__dirname, './public/fonts/NotoSansDevanagari-Regular.ttf'),
+  path.resolve(__dirname, '../../../../assets/fonts/NotoSansDevanagari-Regular.ttf'),
+  path.resolve(__dirname, '../../../assets/fonts/NotoSansDevanagari-Regular.ttf'),
   path.resolve(__dirname, '../../assets/fonts/NotoSansDevanagari-Regular.ttf'),
 ];
 
@@ -54,6 +60,10 @@ export function toSafePdfString(str: string | null | undefined, fallback: string
   if (!str) return fallback;
   const cleaned = String(str).replace(/\s+/g, ' ').trim();
   return cleaned || fallback;
+}
+
+function toAsciiSafeString(str: string): string {
+  return str.replace(/[^\x20-\x7E\xA0-\xFF]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 function hasDevanagari(text: string): boolean {
@@ -101,10 +111,17 @@ export async function generateTicketPdfBuffer(input: TicketPdfInput): Promise<Bu
   }
 
   const pickFont = (text: string, bold = false) => {
-    if (hasDevanagari(text) || bodyFont === UNICODE_FONT_NAME) {
+    if (bodyFont === UNICODE_FONT_NAME) {
       return bold ? bodyFontBold : bodyFont;
     }
     return bold ? 'Helvetica-Bold' : 'Helvetica';
+  };
+
+  const sanitizeForFont = (text: string) => {
+    if (bodyFont === UNICODE_FONT_NAME) {
+      return text;
+    }
+    return toAsciiSafeString(text) || 'Event Admission';
   };
 
   const pageWidth = doc.page.width;
@@ -151,7 +168,7 @@ export async function generateTicketPdfBuffer(input: TicketPdfInput): Promise<Bu
     .fillColor('#0F172A')
     .fontSize(18)
     .font(pickFont(safeTitle, true))
-    .text(safeTitle, margin + 20, currentY, { width: contentWidth - 40 });
+    .text(sanitizeForFont(safeTitle), margin + 20, currentY, { width: contentWidth - 40 });
 
   currentY += 28;
 
@@ -190,7 +207,7 @@ export async function generateTicketPdfBuffer(input: TicketPdfInput): Promise<Bu
     doc
       .fillColor('#0F172A')
       .font(pickFont(val, true))
-      .text(val, col1X + labelWidth, leftY, { width: valueWidth });
+      .text(sanitizeForFont(val), col1X + labelWidth, leftY, { width: valueWidth });
     leftY += 26;
   }
 
@@ -200,7 +217,7 @@ export async function generateTicketPdfBuffer(input: TicketPdfInput): Promise<Bu
     doc
       .fillColor(label === 'Seats Assigned' ? '#ea580c' : '#0F172A')
       .font(pickFont(val, true))
-      .text(val, col2X + labelWidth, rightY, { width: valueWidth });
+      .text(sanitizeForFont(val), col2X + labelWidth, rightY, { width: valueWidth });
     rightY += 26;
   }
 

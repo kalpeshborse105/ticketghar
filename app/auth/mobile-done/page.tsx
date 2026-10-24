@@ -29,44 +29,28 @@ function MobileAuthDoneInner() {
     if (!deepLink) return null;
     const q = deepLink.split('?')[1] || '';
     return (
-      `intent://auth/callback?${q}` +
-      `#Intent;scheme=mahaticket;package=${ANDROID_PACKAGE};` +
-      `action=android.intent.action.VIEW;` +
-      `category=android.intent.category.BROWSABLE;end`
+      `intent://auth/callback?${q}#Intent;scheme=mahaticket;package=${ANDROID_PACKAGE};end`
     );
   }, [deepLink]);
 
+  const target = useMemo(() => {
+    const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
+    const isAndroid = /Android/i.test(ua);
+    return isAndroid && androidIntent ? androidIntent : deepLink || '';
+  }, [androidIntent, deepLink]);
+
   const openApp = useCallback(() => {
-    if (!deepLink) {
+    if (!target) {
       setError('Missing login token. Please return to the app and try again.');
       return;
     }
     setOpened(true);
-    const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
-    const isAndroid = /Android/i.test(ua);
-    const target = isAndroid && androidIntent ? androidIntent : deepLink;
-
     try {
-      // Hidden iframe helps some Chrome builds hand off to the app
-      if (isAndroid && androidIntent) {
-        const iframe = document.createElement('iframe');
-        iframe.style.display = 'none';
-        iframe.src = androidIntent;
-        document.body.appendChild(iframe);
-        setTimeout(() => {
-          try {
-            document.body.removeChild(iframe);
-          } catch {
-            /* ignore */
-          }
-        }, 1500);
-      }
+      window.location.href = target;
     } catch {
-      /* ignore */
+      if (deepLink) window.location.href = deepLink;
     }
-
-    window.location.href = target;
-  }, [deepLink, androidIntent]);
+  }, [target, deepLink]);
 
   useEffect(() => {
     const err = params.get('error');
@@ -74,12 +58,12 @@ function MobileAuthDoneInner() {
       setError(decodeURIComponent(err));
       return;
     }
-    if (!deepLink) return;
-    // Immediate attempt + one retry (Chrome may ignore the first programmatic nav)
+    if (!target) return;
+    // Immediate attempt + retry
     openApp();
     const t = setTimeout(() => openApp(), 600);
     return () => clearTimeout(t);
-  }, [deepLink, openApp, params]);
+  }, [target, openApp, params]);
 
   return (
     <main
@@ -126,10 +110,11 @@ function MobileAuthDoneInner() {
                 ? 'जर अॅप उघडले नाही, खालील बटण दाबा (If the app did not open, tap below).'
                 : 'Opening the MahaTicket app…'}
             </p>
-            <button
-              type="button"
-              onClick={openApp}
+            <a
+              href={target}
+              onClick={() => setOpened(true)}
               style={{
+                display: 'block',
                 width: '100%',
                 background: '#EA580C',
                 color: '#fff',
@@ -138,11 +123,30 @@ function MobileAuthDoneInner() {
                 padding: '16px 18px',
                 fontWeight: 800,
                 fontSize: 17,
+                textAlign: 'center',
+                textDecoration: 'none',
+                boxSizing: 'border-box',
                 cursor: 'pointer',
               }}
             >
-              Open MahaTicket App
-            </button>
+              Open MahaTicket App (अॅप उघडा)
+            </a>
+            {deepLink && (
+              <div style={{ marginTop: 12 }}>
+                <a
+                  href={deepLink}
+                  onClick={() => setOpened(true)}
+                  style={{
+                    fontSize: 13,
+                    color: '#EA580C',
+                    fontWeight: 600,
+                    textDecoration: 'underline',
+                  }}
+                >
+                  Direct Scheme Link (पर्यायी लिंक)
+                </a>
+              </div>
+            )}
             <p style={{ color: '#94A3B8', fontSize: 12, marginTop: 14 }}>
               अॅप उघडल्यानंतर हे Chrome टॅब बंद करू शकता.
             </p>

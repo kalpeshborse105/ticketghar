@@ -444,10 +444,6 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
                 </span>
               </div>
             )}
-            <div className="bg-orange-500/20 border border-orange-500/40 text-[#EA580C] px-3 py-1 rounded-full flex items-center gap-1.5 text-xs font-bold font-mono">
-              <Timer className="w-3.5 h-3.5" />
-              <span>{formatCountdown(countdownSeconds)}</span>
-            </div>
           </div>
         </header>
 

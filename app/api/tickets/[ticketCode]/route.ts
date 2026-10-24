@@ -103,6 +103,9 @@ export async function GET(
         end: ticketRecord.session.sessionEndTime,
       },
       publicShareUrl: publicUrl,
+      downloadPdfUrl: `/api/tickets/${encodeURIComponent(ticketRecord.ticket.ticketCode)}/pdf?download=1`,
+      viewPdfUrl: `/api/tickets/${encodeURIComponent(ticketRecord.ticket.ticketCode)}/pdf`,
+      pdfDownloadToken: mintOrderPdfToken(ticketRecord.order.id, ticketRecord.order.userId),
       owner: false as boolean,
     };
 
@@ -120,7 +123,7 @@ export async function GET(
       .where(eq(tickets.orderId, ticketRecord.order.id));
 
     const seatsList = allOrderTickets.map((t) => t.seatCode);
-    const pdfToken = mintOrderPdfToken(ticketRecord.order.id, ticketRecord.order.userId);
+    const pdfToken = publicPayload.pdfDownloadToken;
 
     return NextResponse.json(
       {

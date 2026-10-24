@@ -22,7 +22,9 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  BackHandler,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, RADIUS, SPACING, SHADOWS } from '../theme';
@@ -53,6 +55,29 @@ export default function MyTicketsScreen({ navigation }: any) {
     title: string;
     message: string;
   } | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        if (selectedOrder) {
+          setSelectedOrder(null);
+          return true;
+        }
+        if (mitraModalVisible) {
+          setMitraModalVisible(false);
+          return true;
+        }
+        if (ticketPopupModal) {
+          setTicketPopupModal(null);
+          return true;
+        }
+        navigation.navigate('Home');
+        return true;
+      };
+      const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => sub.remove();
+    }, [selectedOrder, mitraModalVisible, ticketPopupModal, navigation])
+  );
 
   const fetchTickets = useCallback(
     async (generation: { current: number }) => {
