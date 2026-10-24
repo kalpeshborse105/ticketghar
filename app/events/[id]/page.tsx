@@ -435,8 +435,38 @@ export default function EventDetailPage() {
           openBooking();
         }
       };
+
+      const checkoutListener = (e: any) => {
+        const payload = e?.detail;
+        if (!payload?.sessionId || !payload?.holdToken) return;
+        if (event && event.sessions) {
+          const sess =
+            event.sessions.find((s: any) => Number(s.id) === Number(payload.sessionId)) ||
+            ({
+              id: payload.sessionId,
+              sessionStartTime: payload.sessionStartTime,
+              venue: event.venue,
+            } as any);
+          setSelectedSession(sess);
+        }
+        setCheckoutHoldData({
+          holdToken: payload.holdToken,
+          holdExpiresAt: payload.holdExpiresAt || new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+          seatIds: payload.seatIds || [],
+          seatCodes: payload.seatCodes || [],
+          faceValue: payload.faceValue || 0,
+          pricing: payload.pricing,
+        });
+        setSeatMapOpen(false);
+        setCheckoutOpen(true);
+      };
+
       window.addEventListener('tikitmitra_open_seatmap', botListener);
-      return () => window.removeEventListener('tikitmitra_open_seatmap', botListener);
+      window.addEventListener('tikitmitra_start_checkout', checkoutListener);
+      return () => {
+        window.removeEventListener('tikitmitra_open_seatmap', botListener);
+        window.removeEventListener('tikitmitra_start_checkout', checkoutListener);
+      };
     }
   }, [event, eventId]);
 

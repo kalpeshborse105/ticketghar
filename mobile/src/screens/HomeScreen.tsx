@@ -46,6 +46,7 @@ import {
   SectionHeader,
   Badge,
   Button,
+  TikitMitraModal,
 } from '../components';
 import { displayTitle, displayCity } from '../utils/display';
 
@@ -116,6 +117,7 @@ export default function HomeScreen({ navigation }: any) {
   const [refreshing, setRefreshing] = useState(false);
   const [heroBannerIdx, setHeroBannerIdx] = useState(0);
   const [cityPickerOpen, setCityPickerOpen] = useState(false);
+  const [tikitMitraOpen, setTikitMitraOpen] = useState(false);
   const bannerRef = useRef<FlatList>(null);
   const lastBackPressRef = useRef(0);
 
@@ -1101,7 +1103,32 @@ export default function HomeScreen({ navigation }: any) {
             </ScrollView>
           </Pressable>
         </Pressable>
-      </Modal>
+      {/* Floating TikitMitra AI Assistant Button */}
+      <TouchableOpacity
+        style={[styles.floatingTikitMitraFab, { bottom: insets.bottom + 20 }]}
+        onPress={() => setTikitMitraOpen(true)}
+        activeOpacity={0.88}
+        testID="tikitmitra_fab"
+      >
+        <View style={styles.fabIconBox}>
+          <Icon name="robot-happy-outline" size={24} color="#FFFFFF" />
+        </View>
+        <View style={styles.fabTextBox}>
+          <Text style={styles.fabTitle}>तिकीटमित्र AI</Text>
+          <Text style={styles.fabSub}>थेट बुकिंग मदत</Text>
+        </View>
+        <View style={styles.fabSparkle}>
+          <Icon name="sparkles" size={14} color="#FDE047" />
+        </View>
+      </TouchableOpacity>
+
+      {/* TikitMitra AI Assistant Modal */}
+      <TikitMitraModal
+        visible={tikitMitraOpen}
+        onClose={() => setTikitMitraOpen(false)}
+        navigation={navigation}
+        language={language}
+      />
 
     </View>
   );
@@ -1666,4 +1693,48 @@ const styles = StyleSheet.create({
   organizerBtnText: { fontSize: 11, fontWeight: '800', color: COLORS.white },
 
   listContainer: { paddingHorizontal: SPACING.base, gap: 10 },
+  floatingTikitMitraFab: {
+    position: 'absolute',
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0F172A',
+    borderRadius: 30,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderWidth: 1.5,
+    borderColor: '#EA580C',
+    shadowColor: '#EA580C',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.45,
+    shadowRadius: 10,
+    elevation: 8,
+    gap: 8,
+    zIndex: 999,
+  },
+  fabIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#EA580C',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fabTextBox: {
+    justifyContent: 'center',
+  },
+  fabTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.2,
+  },
+  fabSub: {
+    fontSize: 9.5,
+    fontWeight: '600',
+    color: '#CBD5E1',
+  },
+  fabSparkle: {
+    paddingLeft: 2,
+  },
 });

@@ -4,18 +4,19 @@ import { askTikitMitra } from '@/src/lib/tikitmitra.ts';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
-    const message = body.message;
+    const message = body.message || '';
     const history = body.history || [];
     const language = body.language === 'en' ? 'en' : 'mr';
+    const actionPayload = body.actionPayload || body.payload || undefined;
 
-    if (!message || typeof message !== 'string' || message.trim().length === 0) {
+    if (!message && !actionPayload) {
       return NextResponse.json(
-        { success: false, error: 'Message cannot be empty.' },
+        { success: false, error: 'Message or action payload is required.' },
         { status: 400 }
       );
     }
 
-    if (message.length > 500) {
+    if (typeof message === 'string' && message.length > 500) {
       return NextResponse.json(
         { success: false, error: 'Message exceeds maximum allowed length of 500 characters.' },
         { status: 400 }
@@ -23,9 +24,10 @@ export async function POST(req: NextRequest) {
     }
 
     const response = await askTikitMitra({
-      message,
+      message: String(message || ''),
       history,
       language,
+      actionPayload,
     });
 
     return NextResponse.json({

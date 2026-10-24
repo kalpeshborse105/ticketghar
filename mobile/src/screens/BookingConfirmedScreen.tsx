@@ -11,6 +11,7 @@
  */
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   BackHandler,
   Dimensions,
@@ -30,6 +31,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
 import QRCode from 'react-native-qrcode-svg';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import Toast from 'react-native-toast-message';
 import { COLORS, RADIUS, SPACING, SHADOWS } from '../theme';
 import { api, OrderItem, formatDate, formatTime, paise } from '../api';
 import { Button, Skeleton } from '../components';
@@ -248,6 +250,46 @@ export default function BookingConfirmedScreen({ navigation, route }: any) {
     });
   };
 
+  const [emailing, setEmailing] = useState(false);
+
+  const handleEmailTicket = async () => {
+    if (emailing) return;
+    setEmailing(true);
+    try {
+      const code = primaryTicketCode || resolvedOrderNum;
+      const pdfToken =
+        (order as any)?.pdfDownloadToken ||
+        (route.params as any)?.pdfDownloadToken ||
+        (route.params as any)?.order?.pdfDownloadToken;
+      const res = await api.sendTicketEmail(
+        code,
+        order?.userEmail || undefined,
+        pdfToken || undefined
+      );
+      if (res && res.success) {
+        Toast.show({
+          type: 'success',
+          text1: 'ईमेल पाठवले (Email Sent)',
+          text2: 'आपले ई-तिकीट आणि पास आपल्या ईमेलवर पाठवले आहे.',
+        });
+      } else {
+        Toast.show({
+          type: 'info',
+          text1: 'ईमेल सूचना',
+          text2: res?.message || 'तिकीट ईमेल विनंती स्वीकारली गेली आहे.',
+        });
+      }
+    } catch {
+      Toast.show({
+        type: 'error',
+        text1: 'ईमेल पाठवता आले नाही',
+        text2: 'कृपया काही वेळात पुन्हा प्रयत्न करा.',
+      });
+    } finally {
+      setEmailing(false);
+    }
+  };
+
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.bg} />
@@ -457,6 +499,23 @@ export default function BookingConfirmedScreen({ navigation, route }: any) {
                 <Icon name="file-pdf-box" size={24} color="#FFFFFF" />
               </View>
               <Text style={styles.iconActionLabel}>PDF</Text>
+            </TouchableOpacity>
+
+            {/* Email Ticket */}
+            <TouchableOpacity
+              onPress={handleEmailTicket}
+              disabled={emailing}
+              style={styles.iconActionBtnItem}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.iconCircle, { backgroundColor: '#7C3AED' }]}>
+                {emailing ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Icon name="email-fast-outline" size={22} color="#FFFFFF" />
+                )}
+              </View>
+              <Text style={styles.iconActionLabel}>ईमेल</Text>
             </TouchableOpacity>
 
             {/* My Tickets */}

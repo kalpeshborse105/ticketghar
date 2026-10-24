@@ -88,6 +88,10 @@ android {
             abiFilters "arm64-v8a", "armeabi-v7a"
         }
     }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
     signingConfigs {
         debug {
             storeFile file('debug.keystore')

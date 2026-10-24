@@ -126,7 +126,8 @@ export default function CheckoutScreen({ navigation, route }: any) {
     faceValue = 0,
     seatCodes = [],
     seatIds = [],
-    expiresAt,
+    expiresAt: routeExpiresAt,
+    holdExpiresAt,
     addonTotal = 0,
     eventId,
     sessionId,
@@ -137,7 +138,11 @@ export default function CheckoutScreen({ navigation, route }: any) {
     venueName,
     platformFeeTotal: routePlatformFeeTotal,
     taxTotal: routeTaxTotal,
-  } = route.params;
+    pricing: routePricing,
+    grandTotal: routeGrandTotal,
+  } = route.params || {};
+
+  const expiresAt = routeExpiresAt || holdExpiresAt;
 
   const { user, setAuth } = useAuthStore();
   const { setRazorpayOrder } = useCartStore();
@@ -490,7 +495,9 @@ export default function CheckoutScreen({ navigation, route }: any) {
         prefill: {
           name: name.trim(),
           email: email.trim().toLowerCase(),
-          contact: cleanPhone,
+          contact: cleanPhone.startsWith('+91')
+            ? cleanPhone
+            : `+91${cleanPhone.replace(/^0+/, '')}`,
         },
         theme: { color: '#EA580C' },
         retry: { enabled: true, max_count: 2 },

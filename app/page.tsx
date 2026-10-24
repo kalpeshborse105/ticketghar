@@ -416,9 +416,62 @@ export default function HomePage() {
       }
     };
 
+    const handleTikitMitraCheckout = async (e: any) => {
+      const payload = e?.detail;
+      if (!payload?.sessionId || !payload?.holdToken) return;
+
+      let ev = events.find((item) => Number(item.id) === Number(payload.eventId));
+      if (!ev) {
+        try {
+          const res = await fetch(`/api/events/${payload.eventId}`);
+          if (res.ok) {
+            const data = await res.json();
+            ev = data.event;
+          }
+        } catch { }
+      }
+      if (!ev) return;
+
+      const sess =
+        (ev.sessions || []).find((s: any) => Number(s.id) === Number(payload.sessionId)) ||
+        ({
+          id: payload.sessionId,
+          sessionStartTime: payload.sessionStartTime,
+          venue: { name: payload.venueName },
+        } as any);
+
+      setSelectedEventForBooking(ev);
+      setSelectedSessionForBooking(sess);
+      setCheckoutHoldData({
+        holdToken: payload.holdToken,
+        holdExpiresAt: payload.holdExpiresAt || new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+        seatIds: payload.seatIds || [],
+        seatCodes: payload.seatCodes || [],
+        faceValue: payload.faceValue || 0,
+        pricing: payload.pricing,
+      });
+      setSeatMapOpen(false);
+      setCheckoutOpen(true);
+    };
+
+    const handleTikitMitraSeatmap = (e: any) => {
+      const payload = e?.detail;
+      if (!payload?.eventId) return;
+      const ev = events.find((item) => Number(item.id) === Number(payload.eventId));
+      if (ev) {
+        handleBookEvent(ev);
+      } else {
+        router.push(`/events/${payload.eventId}?book=true`);
+      }
+    };
+
+    window.addEventListener('tikitmitra_start_checkout', handleTikitMitraCheckout);
+    window.addEventListener('tikitmitra_open_seatmap', handleTikitMitraSeatmap);
     window.addEventListener('mahaticket_switch_nav_tab', handleSwitchNav);
     window.addEventListener('popstate', syncTab);
     return () => {
+      window.removeEventListener('tikitmitra_start_checkout', handleTikitMitraCheckout);
+      window.removeEventListener('tikitmitra_open_seatmap', handleTikitMitraSeatmap);
       window.removeEventListener('mahaticket_switch_nav_tab', handleSwitchNav);
       window.removeEventListener('popstate', syncTab);
     };

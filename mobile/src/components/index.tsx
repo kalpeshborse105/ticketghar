@@ -8,6 +8,7 @@ export { TicketCardFrame } from './TicketCardFrame';
 export type { TicketCardFrameProps } from './TicketCardFrame';
 export { MTPopupModal } from './MTPopupModal';
 export type { MTPopupModalProps, MTPopupType } from './MTPopupModal';
+export { TikitMitraModal } from './TikitMitraModal';
 
 import React, { useEffect, useRef } from 'react';
 import {

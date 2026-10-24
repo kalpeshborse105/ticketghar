@@ -1,25 +1,35 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Theater, X, Send, Sparkles, MessageSquare, RotateCcw, ChevronRight, ExternalLink } from 'lucide-react';
+import { Theater, X, Send, Sparkles, MessageSquare, RotateCcw, ChevronRight, ExternalLink, CreditCard, Armchair, Calendar, Clock } from 'lucide-react';
 import Link from 'next/link';
+
+interface ChatOption {
+  label: string;
+  value: string;
+  type?: 'chat' | 'select_event' | 'select_session' | 'select_seats' | 'checkout_pay' | 'my_tickets' | 'open_seatmap' | 'explore_category';
+  payload?: Record<string, any>;
+}
+
+interface ChatAction {
+  type: 'open_event' | 'select_seats' | 'my_tickets' | 'explore_category' | 'contact_support' | 'checkout_pay' | 'open_seatmap';
+  label: string;
+  payload?: Record<string, any>;
+}
 
 interface ChatMessage {
   id: string;
   sender: 'user' | 'bot';
   text: string;
-  action?: {
-    type: 'open_event' | 'select_seats' | 'my_tickets' | 'explore_category' | 'contact_support';
-    label: string;
-    payload?: Record<string, any>;
-  };
+  action?: ChatAction;
+  options?: ChatOption[];
   timestamp: string;
 }
 
 const DEFAULT_SUGGESTIONS = [
   '🎭 सध्याची लोकप्रिय नाटके कोणती?',
+  '🎟️ २ तिकीट बुक करा (Auto Select Seats)',
   '📍 बालगंधर्व रंगमंदिरातील प्रयोग',
-  '🎟️ तिकीट कसे बुक करावे?',
   '💡 महानाट्य महोत्सव ऑफर काय आहे?',
 ];
 
@@ -37,7 +47,13 @@ export function TikitMitraFloatingBot() {
     {
       id: 'welcome',
       sender: 'bot',
-      text: 'नमस्कार! 🙏 मी **टिकिट मित्र**, मी आपल्याला नाटक शोधण्यात, वेळेची माहिती देण्यात किंवा तिकीट बुक करण्यात कशी मदत करू शकतो?',
+      text: 'नमस्कार! 🙏 मी **टिकिट मित्र**, महाटिकिटचा अधिकृत AI डिजिटल नाट्य साहाय्यक.\n\nमी आपल्याला नाटक शोधणे, शोची वेळ निवडणे, सर्वोत्तम आसने आरक्षित करणे आणि थेट पेमेंट करण्यात पूर्ण मदत करू शकतो!\n\nआपण आज काय पाहू इच्छिता?',
+      options: [
+        { label: '🎭 लोकप्रिय नाटके दाखवा', value: 'लोकप्रिय नाटके दाखवा', type: 'chat' },
+        { label: '🎟️ तिकीट बुक करा (Auto Seats)', value: 'तिकीट बुक करा', type: 'chat' },
+        { label: '📍 बालगंधर्व रंगमंदिर', value: 'बालगंधर्व रंगमंदिर', type: 'chat' },
+        { label: '🎟️ माझी तिकिटे पहा', value: 'माझी तिकिटे दाखवा', type: 'my_tickets' },
+      ],
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
   ]);
@@ -52,14 +68,14 @@ export function TikitMitraFloatingBot() {
     }
   }, [isOpen, isMinimized, messages]);
 
-  const handleSendMessage = async (textToSend?: string) => {
+  const handleSendMessage = async (textToSend?: string, actionPayload?: Record<string, any>) => {
     const text = (textToSend || inputValue).trim();
-    if (!text || loading) return;
+    if (!text && !actionPayload) return;
 
     const userMsg: ChatMessage = {
       id: `user-${Date.now()}`,
       sender: 'user',
-      text,
+      text: text || actionPayload?.label || 'पुढे जा',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
 
@@ -80,6 +96,7 @@ export function TikitMitraFloatingBot() {
           message: text,
           history,
           language: 'mr',
+          actionPayload,
         }),
       });
 
@@ -90,6 +107,7 @@ export function TikitMitraFloatingBot() {
           sender: 'bot',
           text: data.reply || 'क्षमस्व, उत्तर देता आले नाही. कृपया पुन्हा प्रयत्न करा.',
           action: data.action,
+          options: data.options,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         };
         setMessages((prev) => [...prev, botMsg]);
@@ -102,7 +120,7 @@ export function TikitMitraFloatingBot() {
         };
         setMessages((prev) => [...prev, errorMsg]);
       }
-    } catch (err) {
+    } catch {
       const errorMsg: ChatMessage = {
         id: `bot-err-${Date.now()}`,
         sender: 'bot',
@@ -115,26 +133,65 @@ export function TikitMitraFloatingBot() {
     }
   };
 
+  const handleOptionClick = (opt: ChatOption) => {
+    if (opt.type === 'checkout_pay' && opt.payload) {
+      setIsOpen(false);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('tikitmitra_start_checkout', {
+            detail: opt.payload,
+          })
+        );
+      }
+      return;
+    }
+
+    if (opt.type === 'open_seatmap' && opt.payload) {
+      setIsOpen(false);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('tikitmitra_open_seatmap', {
+            detail: { eventId: opt.payload.eventId, sessionId: opt.payload.sessionId },
+          })
+        );
+      }
+      return;
+    }
+
+    if (opt.type === 'my_tickets') {
+      setIsOpen(false);
+      window.location.href = '/my-tickets';
+      return;
+    }
+
+    handleSendMessage(opt.value, opt.payload ? { type: opt.type, ...opt.payload } : undefined);
+  };
+
   const handleReset = () => {
     setMessages([
       {
         id: 'welcome',
         sender: 'bot',
-        text: 'नमस्कार! 🙏 मी **टिकिटमित्र**, मी आपल्याला नाटक शोधण्यात किंवा तिकीट बुक करण्यात कशी मदत करू शकतो?',
+        text: 'नमस्कार! 🙏 मी **टिकिटमित्र**, मी आपल्याला नाटक शोधण्यात, सीट निवडण्यात किंवा तिकीट बुक करण्यात कशी मदत करू शकतो?',
+        options: [
+          { label: '🎭 लोकप्रिय नाटके दाखवा', value: 'लोकप्रिय नाटके दाखवा', type: 'chat' },
+          { label: '🎟️ तिकीट बुक करा (Auto Seats)', value: 'तिकीट बुक करा', type: 'chat' },
+          { label: '📍 बालगंधर्व रंगमंदिर', value: 'बालगंधर्व रंगमंदिर', type: 'chat' },
+          { label: '🎟️ माझी तिकिटे पहा', value: 'माझी तिकिटे दाखवा', type: 'my_tickets' },
+        ],
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       },
     ]);
   };
 
   const formatText = (text: string) => {
-    // Replace **bold** with <strong>
     const formatted = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
     return <span dangerouslySetInnerHTML={{ __html: formatted }} />;
   };
 
   return (
     <>
-      {/* Floating Launcher Button - elevated cleanly above sticky bottom mobile nav */}
+      {/* Floating Launcher Button */}
       <div className="fixed bottom-[76px] md:bottom-6 right-3 sm:right-6 z-30">
         {!isOpen && (
           <div className="flex items-center gap-1">
@@ -157,16 +214,14 @@ export function TikitMitraFloatingBot() {
               </button>
             ) : (
               <div className="flex flex-col items-center gap-1.5 bg-gradient-to-b from-[#EA580C] via-[#C2410C] to-[#9A3412] px-2 py-2 rounded-3xl shadow-[0_8px_25px_rgba(234,88,12,0.45)] border border-amber-400/40 text-center">
-                {/* Top: TikitMitra Text */}
                 <button
                   type="button"
                   onClick={() => setIsOpen(true)}
                   className="text-[10px] font-extrabold text-white tracking-tight cursor-pointer hover:scale-105 transition-transform drop-shadow-xs"
                 >
-                  टिकिट मित्र
+                  टिकिट मित्र AI
                 </button>
 
-                {/* Middle: Circle logo button */}
                 <button
                   type="button"
                   onClick={() => setIsOpen(true)}
@@ -180,7 +235,6 @@ export function TikitMitraFloatingBot() {
                   </span>
                 </button>
 
-                {/* Bottom: Close button */}
                 <button
                   type="button"
                   onClick={(e) => {
@@ -200,7 +254,7 @@ export function TikitMitraFloatingBot() {
 
       {/* Floating Chat Window */}
       {isOpen && (
-        <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 w-[94vw] sm:w-[410px] max-h-[85vh] h-[580px] bg-white rounded-2xl shadow-2xl border border-orange-200/80 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-6 duration-200">
+        <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 w-[94vw] sm:w-[420px] max-h-[85vh] h-[600px] bg-white rounded-2xl shadow-2xl border border-orange-200/80 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-6 duration-200">
           {/* Header */}
           <div className="bg-gradient-to-r from-[#EA580C] via-[#C2410C] to-[#9A3412] text-white px-4 py-3.5 flex items-center justify-between shrink-0 shadow-sm">
             <div className="flex items-center gap-2.5">
@@ -209,13 +263,13 @@ export function TikitMitraFloatingBot() {
               </div>
               <div>
                 <div className="flex items-center gap-1.5">
-                  <h3 className="font-extrabold text-sm leading-tight">टिकिटमित्र AI</h3>
+                  <h3 className="font-extrabold text-sm leading-tight">टिकिटमित्र AI साहाय्यक</h3>
                   <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-green-500/20 text-green-200 border border-green-400/30">
-                    सक्रिय
+                    थेट बुकिंग सक्षम
                   </span>
                 </div>
                 <p className="text-[10px] text-orange-100 font-medium">
-                  महाटिकिटचा अधिकृत डिजिटल नाट्य मदतनीस
+                  नाटकाचा शोध, सीट निवड व थेट पेमेंट
                 </p>
               </div>
             </div>
@@ -245,21 +299,75 @@ export function TikitMitraFloatingBot() {
             {messages.map((msg) => (
               <div
                 key={msg.id}
-                className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'
-                  }`}
+                className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}
               >
                 <div
-                  className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 shadow-xs leading-relaxed whitespace-pre-wrap ${msg.sender === 'user'
-                    ? 'bg-[#EA580C] text-white rounded-tr-xs'
-                    : 'bg-white text-slate-800 border border-slate-200/70 rounded-tl-xs'
-                    }`}
+                  className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 shadow-xs leading-relaxed whitespace-pre-wrap ${
+                    msg.sender === 'user'
+                      ? 'bg-[#EA580C] text-white rounded-tr-xs'
+                      : 'bg-white text-slate-800 border border-slate-200/70 rounded-tl-xs'
+                  }`}
                 >
                   {formatText(msg.text)}
 
-                  {/* Direct Action Link if provided by TikitMitra */}
-                  {msg.action && (
+                  {/* Interactive Options Chips inside AI Chat */}
+                  {msg.options && msg.options.length > 0 && (
+                    <div className="mt-3 pt-2.5 border-t border-slate-100 flex flex-wrap gap-1.5">
+                      {msg.options.map((opt, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => handleOptionClick(opt)}
+                          disabled={loading}
+                          className={`text-left px-2.5 py-1.5 rounded-xl font-bold text-[11px] transition shadow-xs cursor-pointer flex items-center gap-1.5 ${
+                            opt.type === 'checkout_pay'
+                              ? 'bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 text-white w-full justify-center py-2 text-xs shadow-md animate-pulse'
+                              : opt.type === 'select_seats'
+                              ? 'bg-orange-50 hover:bg-orange-100 text-[#EA580C] border border-orange-200'
+                              : opt.type === 'select_session'
+                              ? 'bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200'
+                              : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200'
+                          }`}
+                        >
+                          {opt.type === 'checkout_pay' ? (
+                            <CreditCard className="w-3.5 h-3.5" />
+                          ) : opt.type === 'select_seats' ? (
+                            <Armchair className="w-3 h-3 text-[#EA580C]" />
+                          ) : opt.type === 'select_session' ? (
+                            <Calendar className="w-3 h-3 text-amber-700" />
+                          ) : null}
+                          <span>{opt.label}</span>
+                          {opt.type === 'checkout_pay' && <ChevronRight className="w-4 h-4 ml-auto" />}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Direct Action Link */}
+                  {msg.action && !msg.options?.some(o => o.type === msg.action?.type) && (
                     <div className="mt-2.5 pt-2 border-t border-slate-100/80">
-                      {(msg.action.type === 'open_event' || msg.action.type === 'select_seats') && msg.action.payload?.eventId ? (
+                      {msg.action.type === 'checkout_pay' && msg.action.payload ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsOpen(false);
+                            if (typeof window !== 'undefined') {
+                              window.dispatchEvent(
+                                new CustomEvent('tikitmitra_start_checkout', {
+                                  detail: msg.action?.payload,
+                                })
+                              );
+                            }
+                          }}
+                          className="inline-flex items-center justify-between w-full gap-2 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 text-white font-extrabold text-xs transition shadow-md active:scale-95 cursor-pointer"
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <CreditCard className="h-4 w-4" />
+                            <span>{msg.action.label || '💳 आता पैसे भरा (Pay Now)'}</span>
+                          </div>
+                          <ChevronRight className="h-4 w-4 shrink-0" />
+                        </button>
+                      ) : (msg.action.type === 'open_event' || msg.action.type === 'select_seats') && msg.action.payload?.eventId ? (
                         <Link
                           href={`/events/${msg.action.payload.eventId}?book=true`}
                           onClick={() => {
@@ -279,23 +387,14 @@ export function TikitMitraFloatingBot() {
                         </Link>
                       ) : msg.action.type === 'my_tickets' ? (
                         <Link
-                          href="/tickets"
+                          href="/my-tickets"
                           onClick={() => setIsOpen(false)}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#FFF7ED] text-[#EA580C] font-bold text-[11px] hover:bg-[#EA580C] hover:text-white transition shadow-2xs cursor-pointer"
                         >
                           <span>{msg.action.label || 'माझी तिकिटे पहा'}</span>
                           <ExternalLink className="h-3.5 w-3.5" />
                         </Link>
-                      ) : (
-                        <Link
-                          href="/"
-                          onClick={() => setIsOpen(false)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#FFF7ED] text-[#EA580C] font-bold text-[11px] hover:bg-[#EA580C] hover:text-white transition shadow-2xs cursor-pointer"
-                        >
-                          <span>{msg.action.label || 'सर्व प्रयोगांची यादी पहा'}</span>
-                          <ChevronRight className="h-3.5 w-3.5" />
-                        </Link>
-                      )}
+                      ) : null}
                     </div>
                   )}
                 </div>
@@ -313,7 +412,7 @@ export function TikitMitraFloatingBot() {
                   <span className="w-1.5 h-1.5 bg-[#EA580C] rounded-full animate-bounce"></span>
                 </div>
                 <span className="text-[11px] font-medium text-slate-600">
-                  टिकिटमित्र उत्तर शोधत आहे...
+                  टिकिटमित्र सीट माहिती तपासत आहे...
                 </span>
               </div>
             )}
@@ -321,7 +420,7 @@ export function TikitMitraFloatingBot() {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Prompt Suggestions Strip */}
+          {/* Quick Suggestions Bar */}
           <div className="px-3 py-2 bg-white border-t border-slate-100 flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0">
             {DEFAULT_SUGGESTIONS.map((sug, i) => (
               <button
@@ -349,7 +448,7 @@ export function TikitMitraFloatingBot() {
               type="text"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              placeholder="तुमचा प्रश्न किंवा नाटकाचे नाव लिहा..."
+              placeholder="उदा. 'नियम व अटी लागू चे २ तिकीट' किंवा शोधा..."
               maxLength={200}
               disabled={loading}
               className="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:border-[#EA580C] focus:ring-1 focus:ring-[#EA580C] text-slate-800 placeholder:text-slate-400 bg-slate-50/50"

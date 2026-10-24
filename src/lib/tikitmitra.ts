@@ -1,9 +1,17 @@
 import { db } from '@/src/db/index.ts';
-import { events, eventSessions, venues, ticketTypes } from '@/src/db/schema.ts';
-import { eq, and, sql } from 'drizzle-orm';
+import { events, eventSessions, venues, ticketTypes, seatInventory, seats } from '@/src/db/schema.ts';
+import { eq, and, sql, inArray, isNull, gte, or } from 'drizzle-orm';
+import { createTemporarySeatHold, calculatePricing } from '@/src/lib/inventory-engine.ts';
+
+export interface ChatOption {
+  label: string;
+  value: string;
+  type?: 'chat' | 'select_event' | 'select_session' | 'select_seats' | 'checkout_pay' | 'my_tickets' | 'open_seatmap' | 'explore_category';
+  payload?: Record<string, any>;
+}
 
 export interface ChatAction {
-  type: 'open_event' | 'select_seats' | 'my_tickets' | 'explore_category' | 'contact_support';
+  type: 'open_event' | 'select_seats' | 'my_tickets' | 'explore_category' | 'contact_support' | 'checkout_pay' | 'open_seatmap';
   label: string;
   payload?: Record<string, any>;
 }
@@ -11,36 +19,45 @@ export interface ChatAction {
 export interface TikitMitraResponse {
   reply: string;
   action?: ChatAction;
+  options?: ChatOption[];
   source: 'gemini' | 'openai' | 'grounded_local_db';
+}
+
+function formatSessionTimeStr(startTime?: string | Date | null): string {
+  if (!startTime) return 'वेळ उपलब्ध नाही';
+  const d = new Date(startTime);
+  if (isNaN(d.getTime())) return String(startTime);
+  try {
+    return d.toLocaleString('mr-IN', {
+      timeZone: 'Asia/Kolkata',
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+  } catch {
+    return d.toLocaleDateString();
+  }
 }
 
 /**
  * TikitMitra AI Assistant Service
  * Official AI booking assistant for MahaTicket (Product of Kalpkrut Infotech)
+ * Full conversational discovery, session selection, auto seat-picking, real hold & one-tap payment
  */
 export async function askTikitMitra(params: {
   message: string;
   history?: { sender: 'user' | 'agent' | 'model'; text: string }[];
   language?: 'mr' | 'en';
+  actionPayload?: Record<string, any>;
 }): Promise<TikitMitraResponse> {
-  const { message, history = [], language = 'mr' } = params;
+  const { message, history = [], language = 'mr', actionPayload } = params;
   const cleanMsg = (message || '').trim();
 
-  if (!cleanMsg) {
-    return {
-      reply: language === 'mr'
-        ? 'नमस्कार! 🙏 मी टिकिटमित्र आहे. नाटकाचे नाव किंवा "तिकीट बुक करा" टाईप करा.'
-        : 'Hello! I am TikitMitra. Type an event name or "Book Ticket" to get started.',
-      source: 'grounded_local_db',
-    };
-  }
-
-  // Clean query by removing leading emojis or special symbols without stripping text
-  const cleanTextOnly = cleanMsg.replace(/^[\p{Extended_Pictographic}\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\s]+/gu, '').trim() || cleanMsg;
-  const lowerMsg = cleanTextOnly.toLowerCase();
-  const rawLower = cleanMsg.toLowerCase();
-
   // Guard against prompt injection or credential solicitation
+  const lowerMsg = cleanMsg.toLowerCase();
   if (
     lowerMsg.includes('otp') ||
     lowerMsg.includes('card number') ||
@@ -57,8 +74,26 @@ export async function askTikitMitra(params: {
     };
   }
 
-  // Fetch all published events & venues from real database
-  let groundedContext = '';
+  // Handle direct Action Payloads from interactive options
+  if (actionPayload?.type === 'select_event' && actionPayload.eventId) {
+    return await handleEventSessionsSelection(actionPayload.eventId, language);
+  }
+
+  if (actionPayload?.type === 'select_session' && actionPayload.sessionId) {
+    return await handleSessionSeatsSelection(actionPayload.sessionId, actionPayload.eventId, language);
+  }
+
+  if (actionPayload?.type === 'select_seats' && actionPayload.sessionId) {
+    return await handleAutoHoldSeats(
+      actionPayload.sessionId,
+      actionPayload.eventId,
+      actionPayload.seatCount || 2,
+      actionPayload.tier || 'best',
+      language
+    );
+  }
+
+  // 1. Fetch published events from database
   let activeEventsList: any[] = [];
   try {
     const rawEvents = await db
@@ -79,352 +114,538 @@ export async function askTikitMitra(params: {
       .limit(20);
 
     activeEventsList = rawEvents;
-    groundedContext = rawEvents
-      .map(
-        e =>
-          `- [ID: ${e.id}] "${e.titleMr}" (${e.title}) | वर्ग: ${e.categoryMr} | नाट्यगृह: ${e.venueNameMr || e.venueName}, ${e.city} | सुविधा शुल्क: ₹${(e.convenienceFeeValue || 3000) / 100}`
-      )
-      .join('\n');
   } catch (err) {
-    console.warn('Could not fetch active events for TikitMitra grounding:', err);
+    console.warn('Could not fetch active events for TikitMitra:', err);
   }
 
-  // Smart Intent Matching against Database Events
-  let action: ChatAction | undefined = undefined;
-
+  // 2. Direct event title match or booking intent
   const matchedEvent = activeEventsList.find(e => {
     const titleEn = e.title.toLowerCase();
     const titleMr = (e.titleMr || '').toLowerCase();
     return (
       lowerMsg.includes(titleEn) ||
       lowerMsg.includes(titleMr) ||
-      rawLower.includes(titleEn) ||
-      rawLower.includes(titleMr) ||
-      (titleMr.includes('नियम') && (lowerMsg.includes('नियम') || rawLower.includes('नियम'))) ||
-      (titleMr.includes('अलबत्या') && (lowerMsg.includes('अलबत्या') || rawLower.includes('अलबत्या'))) ||
-      (titleMr.includes('सही') && (lowerMsg.includes('सही') || rawLower.includes('सही'))) ||
-      (titleMr.includes('स्वर') && (lowerMsg.includes('स्वर') || rawLower.includes('स्वर')))
+      (titleMr.includes('नियम') && lowerMsg.includes('नियम')) ||
+      (titleMr.includes('अलबत्या') && lowerMsg.includes('अलबत्या')) ||
+      (titleMr.includes('सही') && lowerMsg.includes('सही')) ||
+      (titleMr.includes('स्वर') && lowerMsg.includes('स्वर')) ||
+      (titleMr.includes('वसंत') && lowerMsg.includes('वसंत'))
     );
   });
 
+  // If specific event is matched, provide sessions and direct seat pick options
   if (matchedEvent) {
-    action = {
-      type: 'open_event',
-      label: language === 'mr'
-        ? `🎟️ '${matchedEvent.titleMr}' - थेट आसन निवडा व तिकीट बुक करा`
-        : `🎟️ '${matchedEvent.title}' - Select Seats & Book Ticket`,
-      payload: { eventId: matchedEvent.id, action: 'select_seats' },
-    };
-  } else if (
-    lowerMsg.includes('लोकप्रिय') ||
-    lowerMsg.includes('popular') ||
-    lowerMsg.includes('सध्याची') ||
-    rawLower.includes('लोकप्रिय')
-  ) {
-    const primaryEvent = activeEventsList[0];
-    action = {
-      type: 'open_event',
-      label: language === 'mr'
-        ? `🎟️ '${primaryEvent?.titleMr || 'नाटकाचे प्रयोग'}' - थेट आसन निवडा व बुक करा`
-        : `🎟️ '${primaryEvent?.title || 'Popular Play'}' - Select Seats & Book Ticket`,
-      payload: { eventId: primaryEvent?.id || 1, action: 'select_seats' },
-    };
-  } else if (
-    lowerMsg.includes('बालगंधर्व') ||
-    lowerMsg.includes('नाट्यगृह') ||
-    lowerMsg.includes('venue') ||
-    rawLower.includes('बालगंधर्व')
-  ) {
-    const bgEvent = activeEventsList.find(e => (e.venueNameMr || '').includes('बालगंधर्व')) || activeEventsList[0];
-    action = {
-      type: 'open_event',
-      label: language === 'mr'
-        ? `📍 बालगंधर्व रंगमंदिर - प्रयोग पहा व आसन निवडा`
-        : `📍 Bal Gandharva Ranga Mandir - View Shows & Pick Seats`,
-      payload: { eventId: bgEvent?.id || 1, action: 'select_seats' },
-    };
-  } else if (
+    return await handleEventSessionsSelection(matchedEvent.id, language, matchedEvent);
+  }
+
+  // 3. User asks to pick/book seats or popular events
+  if (
     lowerMsg.includes('book') ||
     lowerMsg.includes('तिकीट') ||
     lowerMsg.includes('जागा') ||
     lowerMsg.includes('आसन') ||
     lowerMsg.includes('बुक') ||
-    rawLower.includes('तिकीट')
+    lowerMsg.includes('लोकप्रिय') ||
+    lowerMsg.includes('popular') ||
+    lowerMsg.includes('नाटक') ||
+    lowerMsg.includes('मैफल')
   ) {
-    const primaryEvent = activeEventsList[0];
-    if (primaryEvent) {
-      action = {
-        type: 'open_event',
-        label: language === 'mr'
-          ? `🎟️ '${primaryEvent.titleMr}' - थेट आसन निवडा व तिकीट बुक करा`
-          : `🎟️ '${primaryEvent.title}' - Select Seats & Book Ticket`,
-        payload: { eventId: primaryEvent.id, action: 'select_seats' },
-      };
-    } else {
-      action = {
-        type: 'explore_category',
-        label: language === 'mr' ? 'सर्व नाटके व प्रयोग पहा' : 'Explore All Shows',
-        payload: { category: 'plays' },
-      };
-    }
-  } else if (lowerMsg.includes('माझी') || lowerMsg.includes('my tickets') || rawLower.includes('माझी')) {
-    action = {
+    const topEvents = activeEventsList.slice(0, 5);
+    const options: ChatOption[] = topEvents.map(e => ({
+      label: `🎭 ${e.titleMr || e.title}`,
+      value: `मी '${e.titleMr || e.title}' पाहू इच्छितो`,
+      type: 'select_event',
+      payload: { eventId: e.id, eventTitle: e.titleMr || e.title },
+    }));
+
+    options.push({
+      label: '🎟️ माझी तिकिटे पहा (My Tickets)',
+      value: 'माझी तिकिटे दाखवा',
       type: 'my_tickets',
-      label: language === 'mr' ? '🎟️ माझी तिकिटे उघडा (View Ticket Pass)' : '🎟️ View My Ticket Pass',
-    };
-  }
+    });
 
-  // API Key Check (Gemini or OpenAI)
-  const apiKey = (
-    process.env.GEMINI_API_KEY ||
-    process.env.GOOGLE_API_KEY ||
-    process.env.TICKETMITRA_API ||
-    process.env.OPENAI_API_KEY
-  )?.trim();
+    const reply = language === 'mr'
+      ? `नमस्कार! 🙏 महाटिकिटवर सध्या खालील लोकप्रिय नाटके व प्रयोग सुरू आहेत.\n\nआपण कोणत्या नाटकाचे तिकीट बुक करू इच्छिता? खालील पर्यायांपैकी एकावर टॅप करा:`
+      : `Hello! 🙏 Here are the top live Marathi plays and events currently open for booking.\n\nWhich show would you like to book? Tap one of the options below:`;
 
-  // If no API key configured or placeholder key, use 100% automatic DB-grounded AI matching
-  if (!apiKey || apiKey.toLowerCase().includes('placeholder') || apiKey.length < 8) {
     return {
-      reply: getSmartGroundedDbAnswer(cleanMsg, activeEventsList, matchedEvent, language),
-      action,
+      reply,
+      options,
+      action: {
+        type: 'open_event',
+        label: `🎭 ${topEvents[0]?.titleMr || 'नाटके'} - थेट बुक करा`,
+        payload: { eventId: topEvents[0]?.id || 1 },
+      },
       source: 'grounded_local_db',
     };
   }
 
-  // Call LLM API (Google Gemini or OpenAI) if API key is present
-  try {
-    const systemPrompt = `You are टिकिटमित्र (TikitMitra), the helpful Marathi & English ticket-booking AI assistant for MahaTicket (a product of Kalpkrut Infotech).
-MahaTicket is Maharashtra's premier platform for Marathi theatre (नाट्य), live concerts, standup comedy, and cultural performances.
-Always be polite, warm, concise, and helpful.
-
-Authoritative live events currently published on MahaTicket database:
-${groundedContext || 'No live events currently published.'}
-
-Platform Knowledge:
-1. Direct Booking: You provide direct, instant seat booking assistance. Always provide the direct action button for the event so the user can open the seat map immediately: "होय! खालील बटनावर क्लिक करा आणि थेट आसन निवडून आपले तिकीट आरक्षित करा!" Never tell the user that you are restricted or unable to book seats.
-2. Seats: Interactive live seat map with real-time seat locks (up to 5 seats per booking).
-3. Fees: Ticket prices starting ₹250-500. Platform fee ₹30-35 with 18% GST.
-4. M-Tickets: Digital ticket pass with encrypted QR code generated instantly.
-
-Strictly adhere to:
-- When the user asks to book tickets, buy tickets, or select seats, enthusiastically provide the direct booking action.
-- Never hallucinate non-existent shows or prices outside the database context.
-- Never ask for confidential passwords, OTPs, or UPI PINs.
-- Always answer in Marathi if user asks in Marathi, or English if asked in English.
-- Keep responses short and formatted with clear emojis and bullet points for mobile screens.`;
-
-    // OpenAI API support
-    if (process.env.OPENAI_API_KEY && apiKey.startsWith('sk-')) {
-      const openAiRes = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: cleanMsg },
-          ],
-          max_tokens: 300,
-        }),
-      });
-
-      if (openAiRes.ok) {
-        const data = await openAiRes.json();
-        const replyText = data.choices?.[0]?.message?.content;
-        if (replyText) {
-          return {
-            reply: replyText.trim(),
-            action,
-            source: 'openai',
-          };
-        }
-      }
-    }
-
-    // Google Gemini API support
-    const preferredModel = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
-    const candidateModels = Array.from(new Set([
-      preferredModel,
-      'gemini-3.5-flash-lite',
-      'gemini-3.5-flash',
-      'gemini-flash-latest',
-      'gemini-3.8-flash',
-    ]));
-
-    // Format chat history into Gemini format
-    const formattedHistory = (history || []).slice(-6).map((h) => ({
-      role: h.sender === 'user' ? 'user' : 'model',
-      parts: [{ text: h.text }],
-    }));
-
-    const contents = [
-      ...formattedHistory,
-      {
-        role: 'user',
-        parts: [{ text: cleanMsg }],
+  // 4. User asks for My Tickets / Pass
+  if (lowerMsg.includes('माझी') || lowerMsg.includes('my tickets') || lowerMsg.includes('पास') || lowerMsg.includes('तिकीट दाखवा')) {
+    return {
+      reply: language === 'mr'
+        ? `🎟️ **आपली बुक केलेली तिकिटे:**\n\nआपण बुक केलेली सर्व तिकिटे, क्यूआर कोड आणि PDF पास खालील बटनावर टॅप करून पाहू शकता:`
+        : `🎟️ **Your Booked Tickets:**\n\nView all your confirmed passes, QR codes, and PDF downloads by tapping below:`,
+      action: {
+        type: 'my_tickets',
+        label: language === 'mr' ? '🎟️ माझी तिकिटे उघडा' : '🎟️ View My Tickets',
       },
-    ];
-
-    const safetySettings = [
-      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-      { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-      { category: 'HARM_CATEGORY_CIVIC_INTEGRITY', threshold: 'BLOCK_NONE' },
-    ];
-
-    for (const model of candidateModels) {
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 9000);
-
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              system_instruction: {
-                parts: [{ text: systemPrompt }],
-              },
-              contents,
-              safetySettings,
-              generationConfig: {
-                temperature: 0.7,
-                maxOutputTokens: 600,
-                topP: 0.95,
-              },
-            }),
-            signal: controller.signal,
-          }
-        );
-        clearTimeout(timeout);
-
-        if (res.ok) {
-          const data = await res.json();
-          const candidateText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (candidateText && candidateText.trim().length > 0) {
-            return {
-              reply: candidateText.trim(),
-              action,
-              source: 'gemini',
-            };
-          }
-        }
-      } catch (e: any) {
-        console.warn(`Gemini model ${model} attempt failed:`, e?.message);
-      }
-    }
-  } catch (err: any) {
-    console.warn('AI API call failed or timed out:', err.message);
+      options: [
+        {
+          label: '🎟️ माझी तिकिटे पहा',
+          value: 'माझी तिकिटे उघडा',
+          type: 'my_tickets',
+        },
+        {
+          label: '🎭 नवीन नाटके शोधा',
+          value: 'नवीन नाटके दाखवा',
+          type: 'explore_category',
+        },
+      ],
+      source: 'grounded_local_db',
+    };
   }
 
-  // Fallback to DB grounded response
+  // 5. Default welcoming response with top event chips
+  const options: ChatOption[] = activeEventsList.slice(0, 4).map(e => ({
+    label: `🎭 ${e.titleMr || e.title}`,
+    value: `मला '${e.titleMr || e.title}' चे तिकीट बुक करायचे आहे`,
+    type: 'select_event',
+    payload: { eventId: e.id, eventTitle: e.titleMr || e.title },
+  }));
+
+  options.push({
+    label: '🎉 महानाट्य महोत्सव ऑफर (MAHA50)',
+    value: 'ऑफर काय आहे?',
+    type: 'chat',
+  });
+
   return {
-    reply: getSmartGroundedDbAnswer(cleanMsg, activeEventsList, matchedEvent, language),
-    action,
+    reply: language === 'mr'
+      ? `नमस्कार! 🙏 मी **टिकिटमित्र**, महाटिकिटचा अधिकृत AI डिजिटल नाट्य साहाय्यक.\n\nमी आपल्याला संपूर्ण बुकिंग प्रक्रियेत मदत करू शकतो — नाटक शोधणे, शोची वेळ निवडणे, सर्वोत्तम आसने (Seats) राखीव करणे आणि थेट पेमेंट पर्याय देणे!\n\nखालीलपैकी एका पर्यायावर टॅप करा किंवा नाटकाचे नाव लिहा:`
+      : `Hello! 🙏 I am **TikitMitra**, the official AI booking assistant for MahaTicket.\n\nI can handle your entire booking: find shows, select showtimes, pick the best seats, and give you a 1-tap payment button!\n\nTap an option below or type the name of a play:`,
+    options,
     source: 'grounded_local_db',
   };
 }
 
-function getSmartGroundedDbAnswer(
-  query: string,
-  eventsList: any[],
-  matchedEvent: any,
+/**
+ * Handle Event Selection: Look up real event sessions from DB and return interactive time chips
+ */
+async function handleEventSessionsSelection(
+  eventId: number,
+  language: 'mr' | 'en',
+  cachedEvent?: any
+): Promise<TikitMitraResponse> {
+  try {
+    let eventObj = cachedEvent;
+    if (!eventObj) {
+      const [ev] = await db
+        .select({
+          id: events.id,
+          title: events.title,
+          titleMr: events.titleMr,
+          category: events.category,
+          categoryMr: events.categoryMr,
+          venueName: venues.name,
+          venueNameMr: venues.nameMr,
+          city: venues.city,
+        })
+        .from(events)
+        .leftJoin(venues, eq(events.venueId, venues.id))
+        .where(eq(events.id, eventId))
+        .limit(1);
+      eventObj = ev;
+    }
+
+    if (!eventObj) {
+      return {
+        reply: language === 'mr' ? 'क्षमस्व, हा कार्यक्रम सापडला नाही.' : 'Sorry, event not found.',
+        source: 'grounded_local_db',
+      };
+    }
+
+    // Query active sessions for this event
+    const sessionRows = await db
+      .select({
+        id: eventSessions.id,
+        sessionStartTime: eventSessions.sessionStartTime,
+        sessionEndTime: eventSessions.sessionEndTime,
+        status: eventSessions.status,
+      })
+      .from(eventSessions)
+      .where(and(eq(eventSessions.eventId, eventId), eq(eventSessions.status, 'open')))
+      .limit(6);
+
+    const title = language === 'mr' ? eventObj.titleMr || eventObj.title : eventObj.title;
+    const venue = eventObj.venueNameMr || eventObj.venueName || 'सभागृह';
+    const city = eventObj.city || 'पुणे';
+
+    if (sessionRows.length === 0) {
+      return {
+        reply: language === 'mr'
+          ? `🎭 **${title}**\n📍 **सभागृह:** ${venue}, ${city}\n\nया कार्यक्रमाचे सध्याचे सर्व प्रयोग आरक्षित झाले आहेत किंवा लवकरच नवीन प्रयोगांची घोषणा होईल.`
+          : `🎭 **${title}**\n📍 **Venue:** ${venue}, ${city}\n\nAll current sessions are fully booked or will be announced soon.`,
+        options: [
+          {
+            label: '🎭 इतर नाटके पहा',
+            value: 'इतर नाटके दाखवा',
+            type: 'explore_category',
+          },
+        ],
+        source: 'grounded_local_db',
+      };
+    }
+
+    const options: ChatOption[] = sessionRows.map(s => {
+      const timeStr = formatSessionTimeStr(s.sessionStartTime);
+      return {
+        label: `📅 ${timeStr}`,
+        value: `मी ${timeStr} चा प्रयोग निवडला`,
+        type: 'select_session',
+        payload: {
+          eventId,
+          sessionId: s.id,
+          eventTitle: title,
+          venueName: venue,
+          sessionStartTime: s.sessionStartTime,
+          sessionMeta: `${timeStr} • ${venue}`,
+        },
+      };
+    });
+
+    options.push({
+      label: '🗺️ स्वतः संपूर्ण सीट मॅप पहा',
+      value: 'सीट मॅप उघडा',
+      type: 'open_seatmap',
+      payload: { eventId, sessionId: sessionRows[0].id },
+    });
+
+    const reply = language === 'mr'
+      ? `🎭 **${title}**\n📍 **सभागृह:** ${venue}, ${city}\n\nया कार्यक्रमासाठी खालील प्रयोग उपलब्ध आहेत. कृपया आपल्याला हवी असलेली वेळ निवडा:`
+      : `🎭 **${title}**\n📍 **Venue:** ${venue}, ${city}\n\nThe following showtimes are open for booking. Please select your preferred time:`;
+
+    return {
+      reply,
+      options,
+      action: {
+        type: 'select_seats',
+        label: `🎟️ ${title} - आसन निवडा`,
+        payload: { eventId, sessionId: sessionRows[0].id },
+      },
+      source: 'grounded_local_db',
+    };
+  } catch (err: any) {
+    console.error('Error handling event session selection:', err);
+    return {
+      reply: language === 'mr' ? 'माहिती लोड करताना अडचण आली.' : 'Error loading showtimes.',
+      source: 'grounded_local_db',
+    };
+  }
+}
+
+/**
+ * Handle Session Selection: Show available seat tiers and 1-tap seat auto-pick options
+ */
+async function handleSessionSeatsSelection(
+  sessionId: number,
+  eventId: number,
   language: 'mr' | 'en'
-): string {
-  const cleanText = query.replace(/^[\p{Extended_Pictographic}\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\s]+/gu, '').trim() || query;
-  const lower = cleanText.toLowerCase();
+): Promise<TikitMitraResponse> {
+  try {
+    const [sess] = await db
+      .select({
+        id: eventSessions.id,
+        sessionStartTime: eventSessions.sessionStartTime,
+        eventTitle: events.title,
+        eventTitleMr: events.titleMr,
+        venueName: venues.name,
+        venueNameMr: venues.nameMr,
+        city: venues.city,
+      })
+      .from(eventSessions)
+      .innerJoin(events, eq(eventSessions.eventId, events.id))
+      .leftJoin(venues, eq(events.venueId, venues.id))
+      .where(eq(eventSessions.id, sessionId))
+      .limit(1);
 
-  // 1. If a specific play was matched from DB
-  if (matchedEvent) {
-    return language === 'mr'
-      ? `🎭 **${matchedEvent.titleMr}**\n\n📍 **नाट्यगृह:** ${matchedEvent.venueNameMr || matchedEvent.venueName}, ${matchedEvent.city}\n🎟️ **तिकीट दर:** ₹२५० - ₹६०० पासून उपलब्ध\n⚡ **थेट आरक्षण:** खालील बटनावर क्लिक करून आपण थेट आपल्या आवडीचे आसन निवडून लगेच बुकिंग करू शकता!`
-      : `🎭 **${matchedEvent.title}**\n\n📍 **Venue:** ${matchedEvent.venueName}, ${matchedEvent.city}\n🎟️ **Tickets:** Starting from ₹250 - ₹600\n⚡ **Direct Booking:** Click the button below to pick your seats directly and book your tickets!`;
+    if (!sess) {
+      return {
+        reply: language === 'mr' ? 'हा प्रयोग उपलब्ध नाही.' : 'Session not found.',
+        source: 'grounded_local_db',
+      };
+    }
+
+    // Query available seats in this session
+    const availSeats = await db
+      .select({
+        invId: seatInventory.id,
+        seatId: seatInventory.seatId,
+        seatCode: seats.seatCode,
+        rowLabel: seats.rowLabel,
+        price: ticketTypes.price,
+        typeName: ticketTypes.name,
+        typeNameMr: ticketTypes.nameMr,
+      })
+      .from(seatInventory)
+      .innerJoin(seats, eq(seatInventory.seatId, seats.id))
+      .innerJoin(ticketTypes, eq(seatInventory.ticketTypeId, ticketTypes.id))
+      .where(and(eq(seatInventory.sessionId, sessionId), eq(seatInventory.status, 'available')))
+      .limit(60);
+
+    const title = language === 'mr' ? sess.eventTitleMr || sess.eventTitle : sess.eventTitle;
+    const venue = sess.venueNameMr || sess.venueName || 'सभागृह';
+    const timeStr = formatSessionTimeStr(sess.sessionStartTime);
+
+    if (availSeats.length === 0) {
+      return {
+        reply: language === 'mr'
+          ? `क्षमस्व! ${timeStr} च्या प्रयोगातील सर्व आसने आरक्षित झाली आहेत. कृपया इतर वेळ निवडा.`
+          : `Sorry, this show is sold out. Please select another time.`,
+        options: [
+          {
+            label: '🔄 दुसरी वेळ निवडा',
+            value: 'इतर प्रयोग दाखवा',
+            type: 'select_event',
+            payload: { eventId },
+          },
+        ],
+        source: 'grounded_local_db',
+      };
+    }
+
+    const vipPrice = Math.max(...availSeats.map(s => s.price));
+    const budgetPrice = Math.min(...availSeats.map(s => s.price));
+
+    const options: ChatOption[] = [
+      {
+        label: `🎯 २ सर्वोत्तम जागा निवडा (Auto 2 Best Seats)`,
+        value: `मी २ सर्वोत्तम जागा निवडत आहे`,
+        type: 'select_seats',
+        payload: { eventId, sessionId, seatCount: 2, tier: 'best' },
+      },
+      {
+        label: `👑 १ VIP जागा (₹${Math.round(vipPrice / 100)})`,
+        value: `मला १ VIP जागा हवी आहे`,
+        type: 'select_seats',
+        payload: { eventId, sessionId, seatCount: 1, tier: 'vip' },
+      },
+      {
+        label: `💺 २ किफायतशीर जागा (₹${Math.round(budgetPrice / 100)})`,
+        value: `मला २ बाल्कनी जागा हव्या आहेत`,
+        type: 'select_seats',
+        payload: { eventId, sessionId, seatCount: 2, tier: 'budget' },
+      },
+      {
+        label: '🗺️ स्वतः आसन निवडा (Interactive Map)',
+        value: 'सीट मॅप उघडा',
+        type: 'open_seatmap',
+        payload: { eventId, sessionId },
+      },
+    ];
+
+    const reply = language === 'mr'
+      ? `🎭 **${title}**\n📍 **सभागृह:** ${venue}\n⏰ **वेळ:** ${timeStr}\n\n⚡ **जागांचे दर:**\n• सर्वोत्तम श्रेणी (VIP): ₹${Math.round(vipPrice / 100)}\n• सामान्य / बाल्कनी: ₹${Math.round(budgetPrice / 100)}\n\nमी आपल्यासाठी कोणत्या जागा बुक करू? खालीलपैकी एका पर्यायावर टॅप करा:`
+      : `🎭 **${title}**\n📍 **Venue:** ${venue}\n⏰ **Time:** ${timeStr}\n\n⚡ **Pricing Tiers:**\n• Premium (VIP): ₹${Math.round(vipPrice / 100)}\n• Balcony/Budget: ₹${Math.round(budgetPrice / 100)}\n\nWhich seats should I reserve for you? Tap below:`;
+
+    return {
+      reply,
+      options,
+      source: 'grounded_local_db',
+    };
+  } catch (err: any) {
+    console.error('Error handling session seats selection:', err);
+    return {
+      reply: language === 'mr' ? 'आसने लोड करताना अडचण आली.' : 'Error loading seats.',
+      source: 'grounded_local_db',
+    };
   }
+}
 
-  // 2. Popular Plays intent
-  if (lower.includes('लोकप्रिय') || lower.includes('popular') || lower.includes('सध्याची')) {
-    const listStr = eventsList
-      .slice(0, 3)
-      .map(e => `• **${e.titleMr}** (${e.venueNameMr || e.venueName}, ${e.city}) - ₹२५० पासून`)
-      .join('\n');
+/**
+ * Handle Auto Hold Seats: Selects real seats, creates real database hold, calculates pricing,
+ * and provides the ready-to-pay "💳 आता पैसे भरा (Proceed to Payment)" button right inside chat!
+ */
+async function handleAutoHoldSeats(
+  sessionId: number,
+  eventId: number,
+  seatCount: number,
+  tier: 'best' | 'vip' | 'budget',
+  language: 'mr' | 'en'
+): Promise<TikitMitraResponse> {
+  try {
+    const [sessionRecord] = await db
+      .select({
+        id: eventSessions.id,
+        sessionStartTime: eventSessions.sessionStartTime,
+        eventId: eventSessions.eventId,
+      })
+      .from(eventSessions)
+      .where(eq(eventSessions.id, sessionId))
+      .limit(1);
 
-    return language === 'mr'
-      ? `🔥 **महाराष्ट्रातील सध्याची लोकप्रिय नाटके:**\n\n${listStr || '• पुन्हा सही रे सही\n• नियम व अटी लागू'}\n\n👉 कोणत्याही नाटकाचे तिकीट बुक करण्यासाठी खालील बटनावर क्लिक करा!`
-      : `🔥 **Currently Popular Marathi Plays:**\n\n${listStr || '• Punha Sahi Re Sahi'}\n\n👉 Click the button below to view seats and book tickets instantly!`;
+    if (!sessionRecord) {
+      return {
+        reply: language === 'mr' ? 'हा प्रयोग उपलब्ध नाही.' : 'Session not found.',
+        source: 'grounded_local_db',
+      };
+    }
+
+    const [eventRecord] = await db
+      .select()
+      .from(events)
+      .where(eq(events.id, sessionRecord.eventId))
+      .limit(1);
+
+    let venueRecord: any = null;
+    if (eventRecord?.venueId) {
+      const [v] = await db.select().from(venues).where(eq(venues.id, eventRecord.venueId)).limit(1);
+      venueRecord = v;
+    }
+
+    // Query available seats in database
+    const availSeats = await db
+      .select({
+        invId: seatInventory.id,
+        seatId: seatInventory.seatId,
+        seatCode: seats.seatCode,
+        rowLabel: seats.rowLabel,
+        price: ticketTypes.price,
+      })
+      .from(seatInventory)
+      .innerJoin(seats, eq(seatInventory.seatId, seats.id))
+      .innerJoin(ticketTypes, eq(seatInventory.ticketTypeId, ticketTypes.id))
+      .where(and(eq(seatInventory.sessionId, sessionId), eq(seatInventory.status, 'available')))
+      .limit(100);
+
+    if (availSeats.length < seatCount) {
+      return {
+        reply: language === 'mr'
+          ? `क्षमस्व! या प्रयोगासाठी पुरेशी सलग आसने उपलब्ध नाहीत. कृपया इतर पर्याय निवडा.`
+          : `Sorry, insufficient available seats for this show. Please select another show.`,
+        options: [
+          {
+            label: '🔄 दुसरी वेळ निवडा',
+            value: 'इतर प्रयोग दाखवा',
+            type: 'select_event',
+            payload: { eventId },
+          },
+        ],
+        source: 'grounded_local_db',
+      };
+    }
+
+    // Sort seats by tier preference: VIP = highest price & front row; Budget = lowest price
+    let sortedSeats = [...availSeats];
+    if (tier === 'vip') {
+      sortedSeats.sort((a, b) => b.price - a.price || a.seatCode.localeCompare(b.seatCode));
+    } else if (tier === 'budget') {
+      sortedSeats.sort((a, b) => a.price - b.price || a.seatCode.localeCompare(b.seatCode));
+    } else {
+      // 'best' = middle-to-front seats with comfortable viewing
+      sortedSeats.sort((a, b) => b.price - a.price || a.seatCode.localeCompare(b.seatCode));
+    }
+
+    const picked = sortedSeats.slice(0, Math.min(seatCount, 5));
+    const pickedSeatIds = picked.map(s => s.seatId);
+    const pickedSeatCodes = picked.map(s => s.seatCode);
+
+    // Call real authoritative database hold
+    const holdResult = await createTemporarySeatHold({
+      sessionId,
+      seatIds: pickedSeatIds,
+    });
+
+    const pricing = await calculatePricing(
+      eventRecord,
+      pickedSeatIds.length,
+      holdResult.faceValueTotal
+    );
+
+    const title = language === 'mr' ? eventRecord.titleMr || eventRecord.title : eventRecord.title;
+    const venueName = venueRecord?.nameMr || venueRecord?.name || 'सभागृह';
+    const timeStr = formatSessionTimeStr(sessionRecord.sessionStartTime);
+    const grandTotalRupees = Math.round(pricing.grandTotal / 100);
+
+    const checkoutPayload = {
+      eventId: eventRecord.id,
+      sessionId,
+      seatIds: pickedSeatIds,
+      seatCodes: pickedSeatCodes,
+      holdToken: holdResult.holdToken,
+      holdExpiresAt: holdResult.holdExpiresAt,
+      faceValue: holdResult.faceValueTotal,
+      grandTotal: pricing.grandTotal,
+      platformFeeTotal: pricing.platformFeeTotal,
+      taxTotal: pricing.taxTotal,
+      pricing,
+      eventTitle: title,
+      venueName,
+      sessionStartTime: sessionRecord.sessionStartTime,
+      sessionMeta: `${timeStr} • ${venueName}`,
+      partySize: pickedSeatIds.length,
+    };
+
+    const reply = language === 'mr'
+      ? `✅ **आपल्या जागा राखीव झाल्या आहेत! (Seats Reserved)**\n\n` +
+        `🎭 **कार्यक्रम:** ${title}\n` +
+        `📍 **सभागृह:** ${venueName}\n` +
+        `⏰ **वेळ:** ${timeStr}\n` +
+        `💺 **निवडलेली आसने:** **${pickedSeatCodes.join(', ')}** (${pickedSeatCodes.length} जागा)\n\n` +
+        `💰 **रक्कम तपशील:**\n` +
+        `• तिकीट दर: ₹${Math.round(pricing.ticketFaceValueTotal / 100)}\n` +
+        `• सुविधा शुल्क + जीएसटी: ₹${Math.round((pricing.platformFeeTotal + pricing.taxTotal) / 100)}\n` +
+        `• **एकूण रक्कम: ₹${grandTotalRupees}**\n\n` +
+        `⏳ आपल्या जागा पुढील **१० मिनिटांसाठी** सुरक्षित ठेवल्या आहेत.\n\n` +
+        `तिकीट पक्के करण्यासाठी खालील बटनावर टॅप करून पेमेंट पूर्ण करा:`
+      : `✅ **Seats Successfully Reserved!**\n\n` +
+        `🎭 **Event:** ${title}\n` +
+        `📍 **Venue:** ${venueName}\n` +
+        `⏰ **Time:** ${timeStr}\n` +
+        `💺 **Seats:** **${pickedSeatCodes.join(', ')}** (${pickedSeatCodes.length} Seats)\n\n` +
+        `💰 **Summary:**\n` +
+        `• Tickets: ₹${Math.round(pricing.ticketFaceValueTotal / 100)}\n` +
+        `• Platform Fee + GST: ₹${Math.round((pricing.platformFeeTotal + pricing.taxTotal) / 100)}\n` +
+        `• **Grand Total: ₹${grandTotalRupees}**\n\n` +
+        `⏳ Your seats are held for the next **10 minutes**.\n\n` +
+        `Tap the button below to complete payment & receive your instant pass:`;
+
+    const action: ChatAction = {
+      type: 'checkout_pay',
+      label: language === 'mr'
+        ? `💳 आता पैसे भरा • ₹${grandTotalRupees} (Pay Now)`
+        : `💳 Pay Now • ₹${grandTotalRupees}`,
+      payload: checkoutPayload,
+    };
+
+    const options: ChatOption[] = [
+      {
+        label: `💳 आता पैसे भरा • ₹${grandTotalRupees} (Pay Now)`,
+        value: `मी ₹${grandTotalRupees} पेमेंट करत आहे`,
+        type: 'checkout_pay',
+        payload: checkoutPayload,
+      },
+      {
+        label: '🔄 इतर जागा निवडा',
+        value: 'मला इतर जागा निवडून द्या',
+        type: 'select_session',
+        payload: { eventId, sessionId },
+      },
+    ];
+
+    return {
+      reply,
+      action,
+      options,
+      source: 'grounded_local_db',
+    };
+  } catch (err: any) {
+    console.error('Error in handleAutoHoldSeats:', err);
+    return {
+      reply: language === 'mr'
+        ? `क्षमस्व! जागा आरक्षित करताना तांत्रिक त्रुटी आली: ${err?.message || 'कृपया पुन्हा प्रयत्न करा.'}`
+        : `Unable to reserve seats: ${err?.message || 'Please retry.'}`,
+      source: 'grounded_local_db',
+    };
   }
-
-  // 3. Venue Directory / Bal Gandharva intent
-  if (lower.includes('बालगंधर्व') || lower.includes('नाट्यगृह') || lower.includes('venue')) {
-    return language === 'mr'
-      ? `🏛️ **बालगंधर्व रंगमंदिर, पुणे:**\n📍 **पत्ता:** जेएम रोड, शिवाजीनगर, पुणे - ४११००५\n🎭 **सध्याचे प्रयोग:** पुन्हा सही रे सही, नियम व अटी लागू, अलबत्या गलबत्या\n🎟️ **तिकीट दर:** ₹२५० - ₹६००\n\nखालील बटनावर क्लिक करून बालगंधर्व रंगमंदिराचे प्रयोग व आसने पहा.`
-      : `🏛️ **Bal Gandharva Ranga Mandir, Pune:**\n📍 **Address:** JM Road, Shivajinagar, Pune - 411005\n🎭 **Active Shows:** Punha Sahi Re Sahi, Niyam Va Ati Laagu, Albatya Galbatya\n\nClick below to pick your seats directly!`;
-  }
-
-  // 4. Offer / Discount intent
-  if (lower.includes('ऑफर') || lower.includes('offer') || lower.includes('महोत्सव') || lower.includes('कूपन')) {
-    return language === 'mr'
-      ? `🎉 **महानाट्य महोत्सव विशेष ऑफर:**\n\n• कूपन कोड: **MAHA50** (१०% सवलत)\n• कूपन कोड: **NATYA100** (₹१०० थेट सूट)\n\nचेकआउट करताना कूपन कोड प्रविष्ट करा व सवलत मिळवा!`
-      : `🎉 **MahaTicket Special Festival Offer:**\n\n• Coupon Code: **MAHA50** (10% Off)\n• Coupon Code: **NATYA100** (₹100 Instant Discount)\n\nEnter coupon code during payment checkout!`;
-  }
-
-  // 5. General Booking request
-  if (
-    lower.includes('book') ||
-    lower.includes('तिकीट') ||
-    lower.includes('जागा') ||
-    lower.includes('आसन') ||
-    lower.includes('ुक')
-  ) {
-    const listStr = eventsList
-      .slice(0, 3)
-      .map(e => `• **${e.titleMr}** (${e.venueNameMr || e.venueName}, ${e.city})`)
-      .join('\n');
-
-    return language === 'mr'
-      ? `🎟️ **महाटिकिटवर तिकीट बुकिंग सेवा:**\n\nसध्या उपलब्ध प्रमुख नाटके:\n${listStr || '• पुन्हा सही रे सही'}\n\n👉 खालील बटनावर क्लिक करा, आसन व्यवस्था उघडा, आपली आवडती आसने निवडा आणि Razorpay द्वारे १ मिनिटात बुकिंग पूर्ण करा!`
-      : `🎟️ **MahaTicket Direct Booking Service:**\n\nCurrently available top shows:\n${listStr || '• Punha Sahi Re Sahi'}\n\n👉 Click the button below to choose your seats on the interactive map. Only final payment is completed manually by you!`;
-  }
-
-  // 6. Rules / Cancellation
-  if (lower.includes('रद्द') || lower.includes('cancel') || lower.includes('refund') || lower.includes('परतावा')) {
-    return language === 'mr'
-      ? 'ℹ️ **तिकीट रद्द व परतावा धोरण:**\n• प्रयोगाच्या ४ तास आधीपर्यंत रद्द केल्यास ७०% रक्कम मूळ पेमेंट खात्यात जमा होते.\n• तांत्रिक अथवा नैसर्गिक कारणास्तव प्रयोग रद्द झाल्यास १००% परतावा त्वरित मिळतो.'
-      : 'ℹ️ **Cancellation & Refund Policy:**\n• Tickets cancelled up to 4 hours before showtime get 70% refund to original payment source.\n• 100% refund if show is cancelled by organizers.';
-  }
-
-  // 7. Greetings Intent
-  if (lower.includes('नमस्कार') || lower.includes('hi') || lower.includes('hello') || lower.includes('hey') || lower.includes('हाय') || lower.includes('हॅलो') || lower.includes('namaskar')) {
-    const titles = eventsList.slice(0, 3).map(e => e.titleMr).join(', ');
-    return language === 'mr'
-      ? `नमस्कार! 🙏 मी **टिकिटमित्र**, महाटिकिटचा डिजिटल साहाय्यक.\n\nआज आपण काय पाहणार आहात? मी आपल्याला:\n• सध्याची लोकप्रिय नाटके शोधण्यात\n• नाट्यगृह व प्रयोगाची वेळ समजून घेण्यात\n• थेट सीट निवडून तिकीट बुक करण्यात मदत करू शकतो.\n\nआपल्या आवडीचे नाटक किंवा शहराचे नाव सांगा!`
-      : `Hello! 🙏 I am **TikitMitra**, 
-\nI can help you browse top performances, check seat availability, find venues, and book tickets instantly.\n\nWhich play or city are you looking for today?`;
-  }
-
-  // 8. Payment & UPI Intent
-  if (lower.includes('payment') || lower.includes('पेमेंट') || lower.includes('पैसे') || lower.includes('upi') || lower.includes('gpay') || lower.includes('phonepe')) {
-    return language === 'mr'
-      ? '💳 **पेमेंट व सुरक्षा:**\n• महाटिकिटवर UPI (GPay, PhonePe, Paytm), NetBanking, Credit/Debit Cards द्वारे १००% सुरक्षित पेमेंट उपलब्ध आहे.\n• पेमेंट पूर्ण होताच WhatsApp आणि ई-मेलवर त्वरित डिजिटल एम-तिकीट प्राप्त होते.'
-      : '💳 **Payment & Security:**\n• We accept all UPI apps (GPay, PhonePe, Paytm), NetBanking, and Cards with multi-tier encryption.\n• Digital M-Ticket is sent instantly via WhatsApp & Email upon successful booking.';
-  }
-
-  // 9. Showtime & Timing Intent
-  if (lower.includes('वेळ') || lower.includes('तारीख') || lower.includes('कधी') || lower.includes('timing') || lower.includes('time') || lower.includes('date') || lower.includes('आज') || lower.includes('उद्या')) {
-    const primary = eventsList[0];
-    return language === 'mr'
-      ? `⏰ **नाट्य प्रयोगांचे वेळापत्रक:**\n• दुपारचा शो: सहसा १२:३० किंवा ४:३० वाजता\n• रात्रीचा शो: सहसा ८:०० किंवा ९:३० वाजता\n\n${primary ? `उदा. '${primary.titleMr}' नाटकाचे आजचे प्रयोग व जागा पाहण्यासाठी खालील बटनावर क्लिक करा.` : 'आपल्या पसंतीच्या नाटकावर क्लिक करून सर्व उपलब्ध वेळा पहा.'}`
-      : `⏰ **Showtimes & Schedules:**\n• Matinee Shows: 12:30 PM & 4:30 PM\n• Evening Shows: 8:00 PM & 9:30 PM\n\nClick on any event to see all available show timings and seat availability!`;
-  }
-
-  // 10. Default welcoming response
-  const titles = eventsList.slice(0, 3).map(e => e.titleMr).join(', ');
-
-  return language === 'mr'
-    ? `नमस्कार! 🙏 मी टिकिट मित्र, महाटिकिटचा आहे.\n\nमी आपल्याला महाटिकिटवरील लोकप्रिय नाटकांची माहिती (उदा. ${titles || 'पुन्हा सही रे सही'}), वेळेचे नियोजन आणि आसन आरक्षणात मदत करतो.\n\nआपल्याला कोणत्या नाटकाचे तिकीट बुक करायचे आहे?`
-    : `Hello! 🙏 I am TikitMitra.\n\nI can help you explore top Marathi plays (like ${titles || 'Punha Sahi Re Sahi'}), check showtimes, select seats, and book tickets instantly.\n\nWhich show would you like to book today?`;
 }

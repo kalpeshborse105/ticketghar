@@ -30,8 +30,6 @@ const COUPONS_CACHE_TTL_MS = 5 * 60 * 1000;
 export async function resolveApiBase(): Promise<string> {
   if (resolvedBase) return resolvedBase;
 
-  // Instant path for release: prefer official prod so checkout/coupons are not blocked
-  // by sequential health probes (was adding ~1–3s before every first API call).
   const stored =
     (await AsyncStorage.getItem(STORAGE_KEY).catch(() => null)) ||
     (await AsyncStorage.getItem('@tg_api_base').catch(() => null));
@@ -48,11 +46,9 @@ export async function resolveApiBase(): Promise<string> {
       ? stored.replace(/\/$/, '')
       : null;
 
-  // Use cached non-prod only if it responded recently; otherwise go straight to prod.
   if (storedOk) {
     resolvedBase = storedOk;
-    // Background re-validate — do not block callers
-    fetch(`${storedOk}/api/health`)
+    fetch(`${storedOk}/api/health`, { signal: AbortSignal.timeout(1500) })
       .then((res) => {
         if (!res.ok) {
           resolvedBase = PROD_API_URL;
@@ -63,6 +59,21 @@ export async function resolveApiBase(): Promise<string> {
         resolvedBase = PROD_API_URL;
       });
     return storedOk;
+  }
+
+  // In development, check if the emulator loopback (10.0.2.2:3000) is running
+  if (__DEV__) {
+    try {
+      const devRes = await fetch('http://10.0.2.2:3000/api/health', {
+        signal: AbortSignal.timeout(500),
+      });
+      if (devRes.ok) {
+        resolvedBase = 'http://10.0.2.2:3000';
+        return resolvedBase;
+      }
+    } catch {
+      // Dev server not on 10.0.2.2:3000, fallback to prod
+    }
   }
 
   resolvedBase = PROD_API_URL;
@@ -1702,6 +1713,49 @@ export const api = {
       cities: string[];
       catalog?: Array<{ id: number; name: string; nameMr?: string; isPopular?: number }>;
     }>('/api/cities'),
+
+  // TikitMitra AI Assistant
+  askTikitMitra: async (body: {
+    message: string;
+    history?: { sender: 'user' | 'agent' | 'model'; text: string }[];
+    language?: 'mr' | 'en';
+    actionPayload?: Record<string, any>;
+  }): Promise<{
+    success: boolean;
+    reply: string;
+    action?: {
+      type: string;
+      label: string;
+      payload?: Record<string, any>;
+    };
+    options?: Array<{
+      label: string;
+      value: string;
+      type?: string;
+      payload?: Record<string, any>;
+    }>;
+    source?: string;
+    error?: string;
+  }> => {
+    return request<any>('/api/tikitmitra/chat', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      timeout: 25000,
+    });
+  },
+
+  // Ticket Email Delivery
+  sendTicketEmail: async (
+    ticketCode: string,
+    email?: string,
+    pdfDownloadToken?: string
+  ): Promise<{ success: boolean; message?: string; error?: string }> => {
+    return request<any>(`/api/tickets/${encodeURIComponent(ticketCode)}/email`, {
+      method: 'POST',
+      body: JSON.stringify({ email, pdfDownloadToken }),
+      timeout: 15000,
+    });
+  },
 };
 
 // ─── Formatters ──────────────────────────────────────────────────────────────
