@@ -1,24 +1,20 @@
-import { Linking, Platform } from 'react-native';
+import { Platform } from 'react-native';
 import { resolveApiBase } from '../api';
 
 /**
- * Open Google OAuth for the Android app.
- * Do NOT force com.android.chrome — that leaves the user stuck in a Chrome tab
- * after /auth/mobile-done because Custom-Tabs / app-task association is lost.
- * Plain https Linking.openURL uses the system browser / Custom Tabs tied to the app.
+ * Build Google OAuth URL for in-app WebView (preferred) or external browser fallback.
+ * In-app WebView intercepts /auth/mobile-done?token=… and closes — no stuck Chrome tab.
  */
-export async function openGoogleAuthInApp(): Promise<void> {
+export async function getGoogleAuthUrl(): Promise<string> {
   const base = await resolveApiBase();
-  const targetUrl = `${base.replace(/\/$/, '')}/api/auth/google?direct=true&source=mobile`;
+  return `${base.replace(/\/$/, '')}/api/auth/google?direct=true&source=mobile`;
+}
 
-  if (Platform.OS === 'android') {
-    try {
-      await Linking.openURL(targetUrl);
-      return;
-    } catch {
-      // fall through
-    }
-  }
+/** @deprecated Prefer getGoogleAuthUrl + in-app WebView */
+export async function openGoogleAuthInApp(): Promise<string> {
+  return getGoogleAuthUrl();
+}
 
-  await Linking.openURL(targetUrl);
+export function isAndroid(): boolean {
+  return Platform.OS === 'android';
 }

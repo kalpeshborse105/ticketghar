@@ -23,7 +23,8 @@ import { COLORS, RADIUS, SPACING, SHADOWS } from '../theme';
 import { useAuthStore, useUIStore } from '../store';
 import { Button, Divider, MTPopupModal } from '../components';
 import { WEB_ADMIN_URL, openUrl, openPlayStoreListing } from '../lib/contact';
-import { openGoogleAuthInApp } from '../lib/openGoogleAuth';
+import { getGoogleAuthUrl } from '../lib/openGoogleAuth';
+import { GoogleAuthWebView } from '../components/GoogleAuthWebView';
 
 interface MenuItemProps {
   iconName: string;
@@ -56,6 +57,8 @@ export default function ProfileScreen({ navigation }: any) {
   const { language, setLanguage } = useUIStore();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [googleAuthUrl, setGoogleAuthUrl] = useState('');
+  const [googleAuthVisible, setGoogleAuthVisible] = useState(false);
 
   const userRole = user?.role || 'customer';
   const isOrganizer = userRole === 'organizer';
@@ -97,7 +100,9 @@ export default function ProfileScreen({ navigation }: any) {
 
   const handleGoogleLogin = async () => {
     try {
-      await openGoogleAuthInApp();
+      const url = await getGoogleAuthUrl();
+      setGoogleAuthUrl(url);
+      setGoogleAuthVisible(true);
     } catch {
       navigation.navigate('Login');
     }
@@ -406,6 +411,11 @@ export default function ProfileScreen({ navigation }: any) {
         secondaryButtonText="नाही (Cancel)"
         onSecondaryPress={() => setShowLogoutModal(false)}
         onRequestClose={() => setShowLogoutModal(false)}
+      />
+      <GoogleAuthWebView
+        visible={googleAuthVisible}
+        authUrl={googleAuthUrl}
+        onClose={() => setGoogleAuthVisible(false)}
       />
     </View>
   );

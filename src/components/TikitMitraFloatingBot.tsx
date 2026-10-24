@@ -191,64 +191,25 @@ export function TikitMitraFloatingBot() {
 
   return (
     <>
-      {/* Floating Launcher Button */}
+      {/* Compact round logo FAB — minimal space */}
       <div className="fixed bottom-[76px] md:bottom-6 right-3 sm:right-6 z-30">
         {!isOpen && (
-          <div className="flex items-center gap-1">
-            {isMinimized ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setIsMinimized(false);
-                  setIsOpen(true);
-                }}
-                aria-label="टिकिटमित्र AI उघडा"
-                className="group relative flex items-center justify-center w-14 h-14 rounded-full bg-gradient-to-r from-[#EA580C] to-[#C2410C] hover:from-[#C2410C] text-white shadow-xl hover:shadow-2xl transition-all transform hover:scale-105 active:scale-95 cursor-pointer border-2 border-amber-300/60 p-2"
-                title="टिकिटमित्र AI उघडा"
-              >
-                <TheatreFaceMasksIcon className="h-8 w-8 transition-transform group-hover:scale-110 drop-shadow-sm" />
-                <span className="absolute -top-1 -right-1 flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-300 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-green-400"></span>
-                </span>
-              </button>
-            ) : (
-              <div className="flex flex-col items-center gap-1.5 bg-gradient-to-b from-[#EA580C] via-[#C2410C] to-[#9A3412] px-2 py-2 rounded-3xl shadow-[0_8px_25px_rgba(234,88,12,0.45)] border border-amber-400/40 text-center">
-                <button
-                  type="button"
-                  onClick={() => setIsOpen(true)}
-                  className="text-[10px] font-extrabold text-white tracking-tight cursor-pointer hover:scale-105 transition-transform drop-shadow-xs"
-                >
-                  टिकिट मित्र AI
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setIsOpen(true)}
-                  aria-label="टिकिटमित्र AI नाट्य मदतनीस उघडा"
-                  className="group relative flex items-center justify-center w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm border border-amber-300/60 p-1 transition-all transform active:scale-95 cursor-pointer shadow-inner"
-                >
-                  <TheatreFaceMasksIcon className="h-7 w-7 transition-transform group-hover:scale-110 drop-shadow-sm" />
-                  <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-300 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-400"></span>
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsMinimized(true);
-                  }}
-                  title="लपवा / Minimize"
-                  className="w-5 h-5 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition cursor-pointer text-xs font-bold"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setIsMinimized(false);
+              setIsOpen(true);
+            }}
+            aria-label="टिकिटमित्र AI उघडा"
+            title="टिकिटमित्र AI"
+            className="group relative flex items-center justify-center w-14 h-14 rounded-full bg-white hover:bg-orange-50 text-white shadow-xl hover:shadow-2xl transition-all transform hover:scale-105 active:scale-95 cursor-pointer border-2 border-[#EA580C] p-1.5"
+          >
+            <TheatreFaceMasksIcon className="h-9 w-9 transition-transform group-hover:scale-105" />
+            <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-300 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-green-400 border border-white"></span>
+            </span>
+          </button>
         )}
       </div>
 

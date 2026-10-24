@@ -25,4 +25,14 @@ class MainActivity : ReactActivity() {
     super.onNewIntent(intent)
     setIntent(intent)
   }
+
+  /**
+   * When JS does not consume the hardware back press (root tab), send the app to the
+   * background instead of finishing the Activity — matches common Android UX.
+   */
+  override fun invokeDefaultOnBackPressed() {
+    if (!moveTaskToBack(true)) {
+      super.invokeDefaultOnBackPressed()
+    }
+  }
 }

@@ -118,6 +118,77 @@ export async function askTikitMitra(params: {
     console.warn('Could not fetch active events for TikitMitra:', err);
   }
 
+  // 1b. Gemini NL understanding (when configured) — still executes via grounded DB handlers only
+  if (cleanMsg && activeEventsList.length > 0) {
+    const geminiIntent = await interpretWithGemini({
+      message: cleanMsg,
+      history,
+      language,
+      events: activeEventsList,
+    });
+    if (geminiIntent) {
+      if (geminiIntent.intent === 'my_tickets') {
+        return {
+          reply:
+            language === 'mr'
+              ? `🎟️ **आपली बुक केलेली तिकिटे:**\n\nखालील बटनावर टॅप करून पास व QR पहा:`
+              : `🎟️ **Your tickets:**\n\nTap below to view passes and QR:`,
+          action: {
+            type: 'my_tickets',
+            label: language === 'mr' ? '🎟️ माझी तिकिटे उघडा' : '🎟️ View My Tickets',
+          },
+          options: [
+            { label: '🎟️ माझी तिकिटे पहा', value: 'माझी तिकिटे उघडा', type: 'my_tickets' },
+          ],
+          source: 'gemini',
+        };
+      }
+      if (geminiIntent.intent === 'book' && geminiIntent.eventId) {
+        if (geminiIntent.sessionId && geminiIntent.seatCount) {
+          return await handleAutoHoldSeats(
+            geminiIntent.sessionId,
+            geminiIntent.eventId,
+            geminiIntent.seatCount,
+            geminiIntent.tier || 'best',
+            language
+          );
+        }
+        if (geminiIntent.sessionId) {
+          return await handleSessionSeatsSelection(
+            geminiIntent.sessionId,
+            geminiIntent.eventId,
+            language
+          );
+        }
+        return await handleEventSessionsSelection(geminiIntent.eventId, language);
+      }
+      if (geminiIntent.intent === 'list_shows') {
+        const topEvents = activeEventsList.slice(0, 5);
+        return {
+          reply:
+            geminiIntent.reply ||
+            (language === 'mr'
+              ? 'सध्या उपलब्ध नाटके खाली आहेत. एकावर टॅप करा:'
+              : 'Available shows below. Tap one:'),
+          options: topEvents.map((e) => ({
+            label: `🎭 ${e.titleMr || e.title}`,
+            value: `मी '${e.titleMr || e.title}' पाहू इच्छितो`,
+            type: 'select_event' as const,
+            payload: { eventId: e.id, eventTitle: e.titleMr || e.title },
+          })),
+          source: 'gemini',
+        };
+      }
+      if (geminiIntent.reply) {
+        return {
+          reply: geminiIntent.reply,
+          options: geminiIntent.options,
+          source: 'gemini',
+        };
+      }
+    }
+  }
+
   // 2. Direct event title match or booking intent
   const matchedEvent = activeEventsList.find(e => {
     const titleEn = e.title.toLowerCase();
@@ -647,5 +718,91 @@ async function handleAutoHoldSeats(
         : `Unable to reserve seats: ${err?.message || 'Please retry.'}`,
       source: 'grounded_local_db',
     };
+  }
+}
+
+type GeminiIntent = {
+  intent?: 'book' | 'list_shows' | 'my_tickets' | 'chat';
+  eventId?: number;
+  sessionId?: number;
+  seatCount?: number;
+  tier?: 'best' | 'vip' | 'budget';
+  reply?: string;
+  options?: ChatOption[];
+};
+
+/**
+ * Optional Gemini NL layer. Uses GEMINI_API_KEY or TICKETMITRA_API from server env.
+ * Never invents seats/prices — only suggests intents that grounded handlers execute.
+ */
+async function interpretWithGemini(params: {
+  message: string;
+  history?: { sender: string; text: string }[];
+  language: 'mr' | 'en';
+  events: any[];
+}): Promise<GeminiIntent | null> {
+  const apiKey = (process.env.GEMINI_API_KEY || process.env.TICKETMITRA_API || '').trim();
+  if (!apiKey) return null;
+
+  const model =
+    (process.env.GEMINI_MODEL || 'gemini-2.0-flash').trim() || 'gemini-2.0-flash';
+
+  const catalog = params.events.slice(0, 12).map((e) => ({
+    id: e.id,
+    title: e.title,
+    titleMr: e.titleMr,
+    venue: e.venueNameMr || e.venueName,
+    city: e.city,
+  }));
+
+  const system = `You are TikitMitra, MahaTicket booking assistant (Marathi theatre tickets, India).
+Reply ONLY with compact JSON (no markdown):
+{"intent":"book"|"list_shows"|"my_tickets"|"chat","eventId":number|null,"sessionId":null,"seatCount":number|null,"tier":"best"|"vip"|"budget"|null,"reply":"short Marathi or English help text"}
+Rules:
+- eventId MUST be one of the catalog ids when booking a named show; else null.
+- seatCount from user text (e.g. "2 seats" / "३ सीट") default 2 when booking.
+- Never invent prices, seat codes, or session ids (sessionId always null here).
+- If user wants their tickets: intent my_tickets.
+- If unclear which show: intent list_shows with a short reply asking them to pick.
+Catalog: ${JSON.stringify(catalog)}`;
+
+  const hist = (params.history || [])
+    .slice(-4)
+    .map((h) => `${h.sender}: ${h.text}`)
+    .join('\n');
+
+  const userPrompt = `${hist ? `History:\n${hist}\n\n` : ''}User (${params.language}): ${params.message}`;
+
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: `${system}\n\n${userPrompt}` }] }],
+        generationConfig: { temperature: 0.2, maxOutputTokens: 400 },
+      }),
+    });
+    if (!res.ok) {
+      console.warn('[TikitMitra] Gemini HTTP', res.status);
+      return null;
+    }
+    const data = await res.json();
+    const text =
+      data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('') || '';
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return null;
+    const parsed = JSON.parse(jsonMatch[0]) as GeminiIntent;
+    if (parsed.eventId != null) {
+      const ok = catalog.some((c) => Number(c.id) === Number(parsed.eventId));
+      if (!ok) parsed.eventId = undefined;
+    }
+    if (parsed.seatCount != null) {
+      parsed.seatCount = Math.min(5, Math.max(1, Number(parsed.seatCount) || 2));
+    }
+    return parsed;
+  } catch (err) {
+    console.warn('[TikitMitra] Gemini interpret failed:', err instanceof Error ? err.message : 'unknown');
+    return null;
   }
 }

@@ -27,7 +27,8 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, RADIUS, SPACING, SHADOWS } from '../theme';
 import { api } from '../api';
 import { useAuthStore } from '../store';
-import { openGoogleAuthInApp } from '../lib/openGoogleAuth';
+import { getGoogleAuthUrl } from '../lib/openGoogleAuth';
+import { GoogleAuthWebView } from '../components/GoogleAuthWebView';
 
 const { height } = Dimensions.get('window');
 
@@ -47,6 +48,8 @@ export default function LoginScreen({ navigation, route }: any) {
   const [info, setInfo] = useState('');
   /** Session token from OTP verify — required before set-password (server rejects email-only). */
   const [verifiedSessionToken, setVerifiedSessionToken] = useState<string>('');
+  const [googleAuthUrl, setGoogleAuthUrl] = useState('');
+  const [googleAuthVisible, setGoogleAuthVisible] = useState(false);
 
   const setAuth = useAuthStore((s) => s.setAuth);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -240,12 +243,15 @@ export default function LoginScreen({ navigation, route }: any) {
     }
   };
 
-  // Google Sign In — Chrome Custom Tabs, returns via mahaticket://
+  // Google Sign In — in-app WebView (auto-closes after success)
   const handleGoogleLogin = async () => {
     try {
       setLoading(true);
       setError('');
-      await openGoogleAuthInApp();
+      const url = await getGoogleAuthUrl();
+      setGoogleAuthUrl(url);
+      setGoogleAuthVisible(true);
+      setLoading(false);
     } catch (err: any) {
       setError(err?.message || 'Google लॉगिन सुरू करता आले नाही.');
     } finally {
@@ -272,6 +278,7 @@ export default function LoginScreen({ navigation, route }: any) {
   });
 
   return (
+    <>
     <KeyboardAvoidingView
       style={styles.root}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -566,6 +573,23 @@ export default function LoginScreen({ navigation, route }: any) {
         </Text>
       </ScrollView>
     </KeyboardAvoidingView>
+      <GoogleAuthWebView
+        visible={googleAuthVisible}
+        authUrl={googleAuthUrl}
+        onClose={() => setGoogleAuthVisible(false)}
+        onSuccess={() => {
+          setGoogleAuthVisible(false);
+          if (route.params?.onSuccess) {
+            route.params.onSuccess();
+            navigation.goBack();
+          } else if (navigation.canGoBack()) {
+            navigation.goBack();
+          } else {
+            navigation.replace('Main', { screen: 'Tickets' });
+          }
+        }}
+      />
+    </>
   );
 }
 

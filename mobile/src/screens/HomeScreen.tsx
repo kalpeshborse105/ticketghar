@@ -119,12 +119,14 @@ export default function HomeScreen({ navigation }: any) {
   const [cityPickerOpen, setCityPickerOpen] = useState(false);
   const [tikitMitraOpen, setTikitMitraOpen] = useState(false);
   const bannerRef = useRef<FlatList>(null);
-  const lastBackPressRef = useRef(0);
-
-  // Graceful back navigation on root home screen:
+  // Hardware back: close overlays / pop stack; at root let MainActivity move app to background
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
+        if (tikitMitraOpen) {
+          setTikitMitraOpen(false);
+          return true;
+        }
         if (cityPickerOpen) {
           setCityPickerOpen(false);
           return true;
@@ -133,23 +135,13 @@ export default function HomeScreen({ navigation }: any) {
           navigation.goBack();
           return true;
         }
-        const now = Date.now();
-        if (now - lastBackPressRef.current < 2000) {
-          BackHandler.exitApp();
-          return true;
-        }
-        lastBackPressRef.current = now;
-        Toast.show({
-          type: 'info',
-          text1: language === 'mr' ? 'बाहेर पडण्यासाठी पुन्हा बॅक दाबा' : 'Press back again to exit',
-          visibilityTime: 1800,
-        });
-        return true;
+        // Return false → MainActivity.invokeDefaultOnBackPressed → moveTaskToBack
+        return false;
       };
 
       const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
       return () => sub.remove();
-    }, [cityPickerOpen, language, navigation])
+    }, [cityPickerOpen, navigation, tikitMitraOpen])
   );
 
   const selectCity = useCallback(
@@ -1102,23 +1094,19 @@ export default function HomeScreen({ navigation }: any) {
         </Pressable>
       </Modal>
 
-      {/* Floating TikitMitra AI Assistant Button */}
+      {/* Compact round TikitMitra FAB (logo only) */}
       <TouchableOpacity
-        style={[styles.floatingTikitMitraFab, { bottom: insets.bottom + 20 }]}
+        style={[styles.floatingTikitMitraFab, { bottom: insets.bottom + 72 }]}
         onPress={() => setTikitMitraOpen(true)}
         activeOpacity={0.88}
         testID="tikitmitra_fab"
+        accessibilityLabel="तिकीटमित्र AI"
       >
-        <View style={styles.fabIconBox}>
-          <Icon name="robot-happy-outline" size={24} color="#FFFFFF" />
-        </View>
-        <View style={styles.fabTextBox}>
-          <Text style={styles.fabTitle}>तिकीटमित्र AI</Text>
-          <Text style={styles.fabSub}>थेट बुकिंग मदत</Text>
-        </View>
-        <View style={styles.fabSparkle}>
-          <Icon name="sparkles" size={14} color="#FDE047" />
-        </View>
+        <Image
+          source={{ uri: 'https://mahaticket.kalpkrutinfotech.com/logo.png' }}
+          style={styles.fabLogo}
+          resizeMode="contain"
+        />
       </TouchableOpacity>
 
       {/* TikitMitra AI Assistant Modal */}
@@ -1695,21 +1683,25 @@ const styles = StyleSheet.create({
   floatingTikitMitraFab: {
     position: 'absolute',
     right: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#0F172A',
-    borderRadius: 30,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderWidth: 1.5,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
     borderColor: '#EA580C',
+    alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: '#EA580C',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.45,
-    shadowRadius: 10,
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
     elevation: 8,
-    gap: 8,
     zIndex: 999,
+    overflow: 'hidden',
+  },
+  fabLogo: {
+    width: 40,
+    height: 40,
   },
   fabIconBox: {
     width: 34,

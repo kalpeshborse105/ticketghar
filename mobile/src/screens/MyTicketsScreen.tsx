@@ -10,6 +10,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   Linking,
   Modal,
   Platform,
@@ -24,6 +25,7 @@ import {
   View,
   BackHandler,
 } from 'react-native';
+import { TikitMitraModal } from '../components/TikitMitraModal';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -263,68 +265,26 @@ export default function MyTicketsScreen({ navigation }: any) {
           <View style={{ height: 60 }} />
         </ScrollView>
 
-        {/* ── FLOATING TICKET MITRA BADGE ────── */}
+        {/* Compact round TikitMitra — opens full chat booking assistant */}
         <TouchableOpacity
           onPress={() => setMitraModalVisible(true)}
           style={styles.floatingMitra}
           activeOpacity={0.85}
+          accessibilityLabel="तिकीटमित्र AI"
         >
-          <View style={styles.mitraDot} />
-          <Text style={styles.mitraLabel}>तिकीट मित्र</Text>
-          <View style={styles.mitraIconWrap}>
-            <Icon name="theater" size={20} color={COLORS.white} />
-          </View>
+          <Image
+            source={{ uri: 'https://mahaticket.kalpkrutinfotech.com/logo.png' }}
+            style={styles.mitraLogo}
+            resizeMode="contain"
+          />
         </TouchableOpacity>
 
-        {/* Ticket Mitra Dialog */}
-        <Modal
+        <TikitMitraModal
           visible={mitraModalVisible}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setMitraModalVisible(false)}
-        >
-          <View style={styles.modalBg}>
-            <View style={styles.mitraSheet}>
-              <View style={styles.mitraSheetTop}>
-                <View style={styles.mitraAvatar}>
-                  <Icon name="theater" size={24} color={COLORS.primary} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.mitraSheetTitle}>तिकीट मित्र (Ticket Mitra)</Text>
-                  <Text style={styles.mitraSheetSub}>२४/७ ग्राहक सहाय्यता केंद्र</Text>
-                </View>
-                <TouchableOpacity onPress={() => setMitraModalVisible(false)}>
-                  <Icon name="close" size={20} color={COLORS.textMuted} />
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.mitraNotice}>
-                तिकीट बुकिंग, तारीख बदल, किंवा सभागृह पत्त्याबाबत काही अडचण आहे का?
-              </Text>
-              <View style={{ gap: 8, marginTop: 12 }}>
-                <TouchableOpacity
-                  onPress={() => {
-                    setMitraModalVisible(false);
-                    navigation.navigate('Explore');
-                  }}
-                  style={styles.mitraActionBtn}
-                >
-                  <Icon name="magnify" size={16} color={COLORS.primary} />
-                  <Text style={styles.mitraActionText}>नाटके व प्रयोग शोधा</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => {
-                    setMitraModalVisible(false);
-                    navigation.navigate('PolicyViewer', { type: 'refund' });
-                  }}
-                  style={styles.mitraActionBtn}
-                >
-                  <Icon name="keyboard-return" size={16} color={COLORS.primary} />
-                  <Text style={styles.mitraActionText}>परतावा व रद्द धोरण (Refund)</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
+          onClose={() => setMitraModalVisible(false)}
+          navigation={navigation}
+          language="mr"
+        />
       </View>
     );
   }
@@ -615,6 +575,25 @@ export default function MyTicketsScreen({ navigation }: any) {
           onRequestClose={() => setTicketPopupModal(null)}
         />
       ) : null}
+
+      <TouchableOpacity
+        onPress={() => setMitraModalVisible(true)}
+        style={[styles.floatingMitra, { bottom: insets.bottom + 24 }]}
+        activeOpacity={0.85}
+        accessibilityLabel="तिकीटमित्र AI"
+      >
+        <Image
+          source={{ uri: 'https://mahaticket.kalpkrutinfotech.com/logo.png' }}
+          style={styles.mitraLogo}
+          resizeMode="contain"
+        />
+      </TouchableOpacity>
+      <TikitMitraModal
+        visible={mitraModalVisible}
+        onClose={() => setMitraModalVisible(false)}
+        navigation={navigation}
+        language="mr"
+      />
     </View>
   );
 }
@@ -759,15 +738,18 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 24,
     right: 16,
-    flexDirection: 'row',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: COLORS.primary,
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: COLORS.primary,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: RADIUS.full,
+    justifyContent: 'center',
+    overflow: 'hidden',
     ...SHADOWS.md,
   },
+  mitraLogo: { width: 40, height: 40 },
   mitraDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#22C55E' },
   mitraLabel: { fontSize: 11, fontWeight: '800', color: COLORS.white },
   mitraIconWrap: {
