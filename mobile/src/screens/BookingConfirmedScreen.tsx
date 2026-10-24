@@ -307,7 +307,7 @@ export default function BookingConfirmedScreen({ navigation, route }: any) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.scroll,
-          { paddingBottom: Math.max(insets.bottom, 12) + 12 },
+          { paddingBottom: Math.max(insets.bottom, 24) + 36 },
         ]}
       >
         <Animated.View
@@ -356,9 +356,16 @@ export default function BookingConfirmedScreen({ navigation, route }: any) {
 
             {/* Ticket Upper Body */}
             <View style={styles.ticketBody}>
-              {/* Category Badge */}
-              <View style={styles.categoryPill}>
-                <Text style={styles.categoryPillText}>नाटक / THEATRE</Text>
+              {/* Category Badge & Pass Counter */}
+              <View style={styles.tagRow}>
+                <View style={styles.categoryPill}>
+                  <Text style={styles.categoryPillText}>नाटक / THEATRE</Text>
+                </View>
+                {ticketCount > 1 ? (
+                  <View style={styles.counterPill}>
+                    <Text style={styles.counterText}>1 of {ticketCount} Passes</Text>
+                  </View>
+                ) : null}
               </View>
 
               {/* Event Title */}
@@ -681,6 +688,12 @@ const styles = StyleSheet.create({
     padding: 14,
     backgroundColor: '#FFFFFF',
   },
+  tagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
   categoryPill: {
     alignSelf: 'flex-start',
     paddingHorizontal: 8,
@@ -689,13 +702,23 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF7ED',
     borderWidth: 1,
     borderColor: 'rgba(234,88,12,0.3)',
-    marginBottom: 6,
   },
   categoryPillText: {
     fontSize: 9.5,
     fontWeight: '800',
     color: '#C2410C',
     letterSpacing: 0.5,
+  },
+  counterPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+    borderRadius: 100,
+    backgroundColor: '#F1F5F9',
+  },
+  counterText: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: '#64748B',
   },
   eventTitleText: {
     fontSize: 17,

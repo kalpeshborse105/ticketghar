@@ -57,7 +57,7 @@ export function MahaTicketPass({
   eventTitle,
   eventCategory = 'नाटक / THEATRE',
   venueName,
-  venueCity = 'महाराष्ट्र',
+  venueCity,
   showTimeStr,
   showDateStr,
   orderNumber,
@@ -74,7 +74,7 @@ export function MahaTicketPass({
   const resolvedOrderNum = orderNumber || ticketCode || 'MT-PASS';
   const resolvedTotal = grandTotal !== undefined && grandTotal !== null && Number(grandTotal) > 0
     ? `₹${Math.round(Number(grandTotal) > 15000 ? Number(grandTotal) / 100 : Number(grandTotal)).toLocaleString('en-IN')}`
-    : '₹565';
+    : '—';
   // Never invent show date/time — must match booked session from event details → seats → checkout
   const resolvedShowDate = showDateStr || 'तारीख उपलब्ध नाही';
   const resolvedShowTime = showTimeStr || 'वेळ उपलब्ध नाही';
@@ -82,9 +82,9 @@ export function MahaTicketPass({
   const resolvedVenueName =
     venueName && venueName !== 'Auditorium' && venueName !== 'Venue'
       ? venueName
-      : 'सभागृह';
+      : 'सभागृह उपलब्ध नाही';
   const resolvedVenueCity =
-    venueCity && venueCity !== 'City' && venueCity !== '' ? venueCity : 'महाराष्ट्र';
+    venueCity && venueCity !== 'City' ? venueCity : '';
   const resolvedSeatCode = seatCode && seatCode !== 'General' ? seatCode : '—';
 
   const normalizedStatus = (status || 'confirmed').toLowerCase();
@@ -259,9 +259,11 @@ export function MahaTicketPass({
                 <Text style={styles.gridVal} numberOfLines={1}>
                   {resolvedVenueName}
                 </Text>
-                <Text style={styles.gridSubVal} numberOfLines={1}>
-                  {resolvedVenueCity}
-                </Text>
+                {resolvedVenueCity ? (
+                  <Text style={styles.gridSubVal} numberOfLines={1}>
+                    {resolvedVenueCity}
+                  </Text>
+                ) : null}
               </View>
             </View>
           </View>
@@ -307,7 +309,7 @@ export function MahaTicketPass({
             स्कॅन करण्यासाठी स्क्रीन ब्राईटनेस वाढवा • Increase brightness
           </Text>
           <Text style={styles.qrTicketCodeText}>
-            CODE: {ticketCode || resolvedOrderNum}
+            PASS ID: #{resolvedOrderNum}
           </Text>
 
           {/* Compact Security Shield Badge */}

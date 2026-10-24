@@ -106,21 +106,29 @@ export default function EventDetailScreen({ navigation, route }: any) {
   const scrollY = useRef(new Animated.Value(0)).current;
 
   const handleBack = () => {
+    if (loginModalVisible) {
+      setLoginModalVisible(false);
+      return;
+    }
     if (navigation.canGoBack()) {
       navigation.goBack();
     } else {
-      navigation.navigate('Main');
+      navigation.navigate('Main', { screen: 'Home' });
     }
   };
 
   useEffect(() => {
     const onBackPress = () => {
+      if (loginModalVisible) {
+        setLoginModalVisible(false);
+        return true;
+      }
       handleBack();
       return true;
     };
     const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
     return () => sub.remove();
-  }, [navigation]);
+  }, [loginModalVisible, navigation]);
 
   const loadEventData = React.useCallback(() => {
     const cached = useEventsStore.getState().events.find((e) => e.id === Number(eventId));

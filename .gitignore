@@ -19,5 +19,6 @@ mobile/ios/build/
 mobile/.env
 build_out
 .vercel
-.apk
-.aab
+#ignore apk and aab files
+*.apk
+*.aab
