@@ -1,8 +1,49 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
-import { tickets, ticketScans, events, orders, eventSessions } from '@/src/db/schema.ts';
-import { eq, desc, inArray, and } from 'drizzle-orm';
+import { tickets, ticketScans, events, orders, eventSessions, venues } from '@/src/db/schema.ts';
+import { eq, desc, and } from 'drizzle-orm';
 import { decryptSecureTicketQr, decryptSecureGroupOrderQr } from '@/src/lib/ticket-crypto.ts';
+
+function formatShowtimeIst(value: Date | string | null | undefined): string {
+  if (!value) return '—';
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+function ticketPassSummary(params: {
+  code: string;
+  seat?: string | null;
+  seats?: string;
+  attendee?: string | null;
+  eventTitle?: string | null;
+  eventTitleMr?: string | null;
+  venueName?: string | null;
+  showtime?: Date | string | null;
+  sessionId?: number | null;
+}) {
+  return {
+    code: params.code,
+    seat: params.seat || params.seats || '',
+    seats: params.seats || params.seat || '',
+    attendee: params.attendee || '',
+    event: params.eventTitle || '',
+    eventMr: params.eventTitleMr || params.eventTitle || '',
+    venue: params.venueName || '',
+    showtime: params.showtime || null,
+    showtimeLabel: formatShowtimeIst(params.showtime),
+    sessionId: params.sessionId ?? null,
+  };
+}
 
 export async function POST(request: Request) {
   try {
@@ -13,7 +54,9 @@ export async function POST(request: Request) {
       scannerUserId,
       scannerDevice,
       targetEventId,
+      targetSessionId,
       scannerOrganizerId,
+      requireScope,
     } = body;
 
     if (!ticketCodeOrPayload) {
@@ -21,6 +64,16 @@ export async function POST(request: Request) {
         { error: 'Ticket code or QR payload is required for scanning.' },
         { status: 400 }
       );
+    }
+
+    // Gate staff must lock scanner to one event + showtime before accepting entry
+    if (requireScope && (!targetEventId || !targetSessionId)) {
+      return NextResponse.json({
+        valid: false,
+        scanResult: 'SCOPE_REQUIRED',
+        message:
+          'कृपया स्कॅन करण्यापूर्वी कार्यक्रम व शो वेळ निवडा (Select event and showtime first).',
+      });
     }
 
     let targetCode = String(ticketCodeOrPayload).trim();
@@ -44,10 +97,12 @@ export async function POST(request: Request) {
           order: orders,
           session: eventSessions,
           event: events,
+          venue: venues,
         })
         .from(orders)
         .innerJoin(eventSessions, eq(orders.sessionId, eventSessions.id))
         .innerJoin(events, eq(orders.eventId, events.id))
+        .leftJoin(venues, eq(events.venueId, venues.id))
         .where(eq(orders.orderNumber, groupData.orderNumber))
         .limit(1);
 
@@ -59,7 +114,8 @@ export async function POST(request: Request) {
         });
       }
 
-      const { order, session, event } = orderRows[0];
+      const { order, session, event, venue } = orderRows[0];
+      const venueName = venue?.nameMr || venue?.name || '';
 
       // Cryptographic Event ID Cross-Verification
       if (groupData.eventId && Number(order.eventId) !== Number(groupData.eventId)) {
@@ -76,12 +132,33 @@ export async function POST(request: Request) {
           valid: false,
           scanResult: 'WRONG_EVENT',
           message: `हे तिकीट या कार्यक्रमाचे नाही! (Wrong Event: तिकीट '${event.titleMr || event.title}' चे आहे).`,
-          ticket: {
+          ticket: ticketPassSummary({
             code: order.orderNumber,
             attendee: order.userName,
-            event: event.title,
-            eventMr: event.titleMr,
-          },
+            eventTitle: event.title,
+            eventTitleMr: event.titleMr,
+            venueName,
+            showtime: session.sessionStartTime,
+            sessionId: session.id,
+          }),
+        });
+      }
+
+      // Exact showtime / session lock — never accept another date/time for same event
+      if (targetSessionId && Number(order.sessionId) !== Number(targetSessionId)) {
+        return NextResponse.json({
+          valid: false,
+          scanResult: 'WRONG_SESSION',
+          message: `हे तिकीट या शो वेळेचे नाही! (Wrong showtime: ${formatShowtimeIst(session.sessionStartTime)})`,
+          ticket: ticketPassSummary({
+            code: order.orderNumber,
+            attendee: order.userName,
+            eventTitle: event.title,
+            eventTitleMr: event.titleMr,
+            venueName,
+            showtime: session.sessionStartTime,
+            sessionId: session.id,
+          }),
         });
       }
 
@@ -90,12 +167,15 @@ export async function POST(request: Request) {
           valid: false,
           scanResult: 'WRONG_ORGANIZER',
           message: 'सावधान! हे तिकीट तुमच्या संस्थेच्या / आयोजकाच्या कार्यक्रमाचे नाही (Unauthorized Organizer Scan).',
-          ticket: {
+          ticket: ticketPassSummary({
             code: order.orderNumber,
             attendee: order.userName,
-            event: event.title,
-            eventMr: event.titleMr,
-          },
+            eventTitle: event.title,
+            eventTitleMr: event.titleMr,
+            venueName,
+            showtime: session.sessionStartTime,
+            sessionId: session.id,
+          }),
         });
       }
 
@@ -165,13 +245,16 @@ export async function POST(request: Request) {
           isGroup: true,
           totalSeats: order.ticketCount,
           seatCodes: allSeatsList,
-          ticket: {
+          ticket: ticketPassSummary({
             code: order.orderNumber,
             seats: allSeatsList.join(', '),
             attendee: order.userName,
-            event: event.title,
-            eventMr: event.titleMr,
-          },
+            eventTitle: event.title,
+            eventTitleMr: event.titleMr,
+            venueName,
+            showtime: session.sessionStartTime,
+            sessionId: session.id,
+          }),
         });
       }
 
@@ -215,14 +298,16 @@ export async function POST(request: Request) {
         isGroup: true,
         totalSeats: order.ticketCount,
         seatCodes: allSeatsList,
-        ticket: {
+        ticket: ticketPassSummary({
           code: order.orderNumber,
           seats: allSeatsList.join(', '),
           attendee: order.userName,
-          event: event.title,
-          eventMr: event.titleMr,
+          eventTitle: event.title,
+          eventTitleMr: event.titleMr,
+          venueName,
           showtime: session.sessionStartTime,
-        },
+          sessionId: session.id,
+        }),
         scannedAt: scanLog.scannedAt,
       });
     }
@@ -261,11 +346,13 @@ export async function POST(request: Request) {
         order: orders,
         session: eventSessions,
         event: events,
+        venue: venues,
       })
       .from(tickets)
       .innerJoin(orders, eq(tickets.orderId, orders.id))
       .innerJoin(eventSessions, eq(tickets.sessionId, eventSessions.id))
       .innerJoin(events, eq(orders.eventId, events.id))
+      .leftJoin(venues, eq(events.venueId, venues.id))
       .where(eq(tickets.ticketCode, targetCode));
 
     if (ticketRows.length === 0) {
@@ -277,7 +364,8 @@ export async function POST(request: Request) {
       });
     }
 
-    const { ticket, order, session, event } = ticketRows[0];
+    const { ticket, order, session, event, venue } = ticketRows[0];
+    const venueName = venue?.nameMr || venue?.name || '';
 
     // Cryptographic Token Cross-Verification:
     if (embeddedEventId && Number(order.eventId) !== Number(embeddedEventId)) {
@@ -294,13 +382,35 @@ export async function POST(request: Request) {
         valid: false,
         scanResult: 'WRONG_EVENT',
         message: `हे तिकीट या कार्यक्रमाचे नाही! (Wrong Event: तिकीट '${event.titleMr || event.title}' चे आहे).`,
-        ticket: {
+        ticket: ticketPassSummary({
           code: 'PROTECTED',
           seat: ticket.seatCode,
           attendee: ticket.attendeeName,
-          event: event.title,
-          eventMr: event.titleMr,
-        },
+          eventTitle: event.title,
+          eventTitleMr: event.titleMr,
+          venueName,
+          showtime: session.sessionStartTime,
+          sessionId: session.id,
+        }),
+      });
+    }
+
+    // Exact showtime lock — ticket must match the selected session/date/time
+    if (targetSessionId && Number(ticket.sessionId) !== Number(targetSessionId)) {
+      return NextResponse.json({
+        valid: false,
+        scanResult: 'WRONG_SESSION',
+        message: `हे तिकीट या शो वेळेचे नाही! (Wrong showtime: ${formatShowtimeIst(session.sessionStartTime)})`,
+        ticket: ticketPassSummary({
+          code: ticket.ticketCode,
+          seat: ticket.seatCode,
+          attendee: ticket.attendeeName,
+          eventTitle: event.title,
+          eventTitleMr: event.titleMr,
+          venueName,
+          showtime: session.sessionStartTime,
+          sessionId: session.id,
+        }),
       });
     }
 
@@ -309,13 +419,35 @@ export async function POST(request: Request) {
         valid: false,
         scanResult: 'WRONG_ORGANIZER',
         message: 'सावधान! हे तिकीट तुमच्या संस्थेच्या / आयोजकाच्या कार्यक्रमाचे नाही (Unauthorized Organizer Scan).',
-        ticket: {
+        ticket: ticketPassSummary({
           code: 'PROTECTED',
           seat: ticket.seatCode,
           attendee: ticket.attendeeName,
-          event: event.title,
-          eventMr: event.titleMr,
-        },
+          eventTitle: event.title,
+          eventTitleMr: event.titleMr,
+          venueName,
+          showtime: session.sessionStartTime,
+          sessionId: session.id,
+        }),
+      });
+    }
+
+    // Payment must be captured for entry
+    if (order.paymentStatus !== 'captured') {
+      return NextResponse.json({
+        valid: false,
+        scanResult: 'UNPAID',
+        message: 'या बुकिंगचे पेमेंट पूर्ण झालेले नाही (Payment not captured).',
+        ticket: ticketPassSummary({
+          code: ticket.ticketCode,
+          seat: ticket.seatCode,
+          attendee: ticket.attendeeName,
+          eventTitle: event.title,
+          eventTitleMr: event.titleMr,
+          venueName,
+          showtime: session.sessionStartTime,
+          sessionId: session.id,
+        }),
       });
     }
 
@@ -345,13 +477,16 @@ export async function POST(request: Request) {
         message: 'सावधान! हे तिकीट आधीच वापरले गेले आहे (Already Scanned).',
         alreadyScannedAt: lastScan?.scannedAt || ticket.createdAt,
         previousGate: lastScan?.gateName || 'Gate 1',
-        ticket: {
+        ticket: ticketPassSummary({
           code: ticket.ticketCode,
           seat: ticket.seatCode,
           attendee: ticket.attendeeName,
-          event: event.title,
-          eventMr: event.titleMr,
-        },
+          eventTitle: event.title,
+          eventTitleMr: event.titleMr,
+          venueName,
+          showtime: session.sessionStartTime,
+          sessionId: session.id,
+        }),
       });
     }
 
@@ -360,19 +495,43 @@ export async function POST(request: Request) {
         valid: false,
         scanResult: 'TICKET_CANCELLED',
         message: 'हे तिकीट रद्द / परतावा केलेले आहे (Ticket was cancelled or refunded).',
-        ticket: {
+        ticket: ticketPassSummary({
           code: ticket.ticketCode,
           seat: ticket.seatCode,
           attendee: ticket.attendeeName,
-        },
+          eventTitle: event.title,
+          eventTitleMr: event.titleMr,
+          venueName,
+          showtime: session.sessionStartTime,
+          sessionId: session.id,
+        }),
       });
     }
 
-    // Atomic update
-    await db
+    // Atomic update — only valid tickets transition to used
+    const marked = await db
       .update(tickets)
       .set({ status: 'used' })
-      .where(eq(tickets.id, ticket.id));
+      .where(and(eq(tickets.id, ticket.id), eq(tickets.status, 'valid')))
+      .returning({ id: tickets.id });
+
+    if (marked.length === 0) {
+      return NextResponse.json({
+        valid: false,
+        scanResult: 'ALREADY_USED',
+        message: 'सावधान! हे तिकीट आधीच वापरले गेले आहे.',
+        ticket: ticketPassSummary({
+          code: ticket.ticketCode,
+          seat: ticket.seatCode,
+          attendee: ticket.attendeeName,
+          eventTitle: event.title,
+          eventTitleMr: event.titleMr,
+          venueName,
+          showtime: session.sessionStartTime,
+          sessionId: session.id,
+        }),
+      });
+    }
 
     // Log successful scan
     const [scanLog] = await db
@@ -391,14 +550,16 @@ export async function POST(request: Request) {
       valid: true,
       scanResult: 'SUCCESS',
       message: 'प्रवेश मान्य! (Entry Approved)',
-      ticket: {
+      ticket: ticketPassSummary({
         code: ticket.ticketCode,
         seat: ticket.seatCode,
         attendee: ticket.attendeeName,
-        event: event.title,
-        eventMr: event.titleMr,
+        eventTitle: event.title,
+        eventTitleMr: event.titleMr,
+        venueName,
         showtime: session.sessionStartTime,
-      },
+        sessionId: session.id,
+      }),
       scannedAt: scanLog.scannedAt,
     });
   } catch (error: any) {

@@ -433,6 +433,7 @@ export const MyTicketsView: React.FC<MyTicketsViewProps> = ({
                         onViewTicket({
                           order: {
                             ...ord,
+                            userEmail: ord.userEmail || ord.email || user?.email || null,
                             session: ord.session,
                             sessionId: ord.sessionId || ord.session?.id,
                           },
@@ -440,6 +441,7 @@ export const MyTicketsView: React.FC<MyTicketsViewProps> = ({
                           event: ev,
                           session: ord.session,
                           sessionId: ord.sessionId || ord.session?.id,
+                          pdfDownloadToken: ord.pdfDownloadToken,
                           pricing: {},
                         })
                       }

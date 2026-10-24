@@ -183,8 +183,8 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
   const fetchSessionSeats = useCallback(async (silent = false) => {
     try {
       if (!silent) {
-        setLoading(true);
-        setError(null);
+      setLoading(true);
+      setError(null);
       }
       const res = await fetch(`/api/sessions/${activeSession.id}/seats?fresh=1`);
       if (!res.ok) {
@@ -210,11 +210,11 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
     } catch (err: any) {
       console.error(err);
       if (!silent) {
-        setError(err.message || 'Error loading seats');
+      setError(err.message || 'Error loading seats');
       }
     } finally {
       if (!silent) {
-        setLoading(false);
+      setLoading(false);
       }
     }
   }, [activeSession.id]);
@@ -414,11 +414,11 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
               <X className="w-5 h-5" />
             </button>
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
                 <span className="font-extrabold text-sm text-[#EA580C]">महाटिकिट</span>
                 <span className="text-slate-500">|</span>
                 <h1 className="font-bold text-sm sm:text-base text-white truncate">
-                  {language === 'mr' ? event.titleMr || event.title : event.title}
+                {language === 'mr' ? event.titleMr || event.title : event.title}
                 </h1>
               </div>
               <p className="text-[11px] text-slate-400 truncate">
@@ -511,7 +511,7 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
             >
               {Math.round(zoomLevel * 100)}%
             </button>
-            <button
+          <button
               type="button"
               onClick={handleZoomIn}
               disabled={zoomLevel >= 1.5}
@@ -519,7 +519,7 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
               title="Zoom In"
             >
               <ZoomIn className="w-3.5 h-3.5" />
-            </button>
+          </button>
           </div>
         </div>
 
@@ -528,7 +528,7 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
           <div className="flex items-center gap-1.5">
             <span className="w-3.5 h-3.5 rounded-t-xs rounded-b-sm bg-white border border-slate-300 shadow-2xs inline-block"></span>
             <span>{language === 'mr' ? 'उपलब्ध' : 'Available'}</span>
-          </div>
+            </div>
           <div className="flex items-center gap-1.5">
             <span className="w-3.5 h-3.5 rounded-t-xs rounded-b-sm bg-[#EA580C] text-white flex items-center justify-center font-bold text-[9px]">
               <Check className="w-2.5 h-2.5 stroke-[3]" />
@@ -586,7 +586,7 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
                   </svg>
                   <div className="flex items-center gap-1.5 text-[#EA580C] -mt-1 font-bold text-xs tracking-widest uppercase">
                     <span>रंगमंच / STAGE (समोर)</span>
-                  </div>
+                </div>
                 </div>
                 <span className="text-[11px] text-slate-500 mt-0.5">पडदा क्रमांक १ • प्रेक्षक समोर</span>
               </div>
@@ -605,7 +605,7 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
                     <div className="flex items-center justify-between mb-3 px-1">
                       <span className="font-bold text-xs sm:text-sm text-[#141B2B]">
                         {sec.nameMr}
-                      </span>
+                    </span>
                       <span
                         className={`bg-white font-extrabold text-xs px-2.5 py-0.5 rounded-full shadow-2xs border ${isOrangeTheme
                           ? 'text-[#EA580C] border-orange-200'
@@ -615,8 +615,8 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
                         {language === 'mr'
                           ? `₹${toMarathiDigits(sec.priceRupees)} प्रति आसन`
                           : `₹${sec.priceRupees} per seat`}
-                      </span>
-                    </div>
+                  </span>
+                </div>
 
                     <div className="space-y-2 text-center">
                       {Object.entries(sec.rows)
@@ -652,14 +652,14 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
                         })}
                     </div>
                   </div>
-                );
-              })}
+                            );
+                          })}
 
               {/* Cultural Assurance Pill */}
               <div className="pt-2 flex items-center justify-center gap-1.5 text-center text-slate-600 text-xs">
                 <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span>महाराष्ट्राचे अधिकृत थेट तिकीट आरक्षण • १००% सुरक्षित पेमेंट</span>
-              </div>
+                </div>
             </div>
           )}
         </div>
@@ -683,7 +683,7 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
                     : language === 'mr'
                       ? 'कोणतेही आसन निवडलेले नाही'
                       : 'No seats selected'}
-                </span>
+                      </span>
               </div>
               <div className="flex items-baseline gap-1 mt-0.5">
                 <span className="text-lg sm:text-xl font-bold text-[#EA580C] tabular-nums font-mono">
@@ -693,27 +693,27 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
                   {language === 'mr' ? '+ जीएसटी (GST)' : '+ GST'}
                 </span>
               </div>
-            </div>
+          </div>
 
             {/* Right: Proceed Directly to Checkout Button */}
-            <button
-              disabled={selectedSeatIds.length === 0 || isHolding}
-              onClick={handleHoldAndProceed}
+          <button
+            disabled={selectedSeatIds.length === 0 || isHolding}
+            onClick={handleHoldAndProceed}
               className="h-11 px-6 rounded-xl bg-[#EA580C] hover:bg-[#C2410C] disabled:opacity-50 disabled:pointer-events-none text-white font-bold text-sm flex items-center gap-1.5 shadow-md shadow-orange-500/25 active:scale-95 transition-all shrink-0 cursor-pointer"
-            >
-              {isHolding ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>आरक्षित करत आहे...</span>
-                </>
-              ) : (
-                <>
+          >
+            {isHolding ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>आरक्षित करत आहे...</span>
+              </>
+            ) : (
+              <>
                   <span>पुढे जा</span>
-                  <ArrowRight className="w-4 h-4" />
-                </>
-              )}
-            </button>
-          </div>
+                <ArrowRight className="w-4 h-4" />
+              </>
+            )}
+          </button>
+        </div>
         </div>
 
         {/* Discard Seat Selection Confirmation Modal */}

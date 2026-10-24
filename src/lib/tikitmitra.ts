@@ -1,6 +1,6 @@
 import { db } from '@/src/db/index.ts';
 import { events, eventSessions, venues, ticketTypes, seatInventory, seats } from '@/src/db/schema.ts';
-import { eq, and, sql, inArray, isNull, gte, or } from 'drizzle-orm';
+import { eq, and, sql, inArray, isNull, gte, or, asc } from 'drizzle-orm';
 import { createTemporarySeatHold, calculatePricing } from '@/src/lib/inventory-engine.ts';
 
 export interface ChatOption {
@@ -336,8 +336,9 @@ async function handleEventSessionsSelection(
       };
     }
 
-    // Query active sessions for this event
-    const sessionRows = await db
+    // Schema uses 'active' (not 'open'). Include upcoming/active shows; exclude cancelled/completed.
+    const now = new Date();
+    const allSessionRows = await db
       .select({
         id: eventSessions.id,
         sessionStartTime: eventSessions.sessionStartTime,
@@ -345,18 +346,43 @@ async function handleEventSessionsSelection(
         status: eventSessions.status,
       })
       .from(eventSessions)
-      .where(and(eq(eventSessions.eventId, eventId), eq(eventSessions.status, 'open')))
-      .limit(6);
+      .where(eq(eventSessions.eventId, eventId))
+      .orderBy(asc(eventSessions.sessionStartTime))
+      .limit(24);
+
+    // Bookable showtimes only (DB status is 'active'; legacy 'open' accepted)
+    const sessionRows = allSessionRows
+      .filter((s) => {
+        const status = String(s.status || '').toLowerCase();
+        if (status === 'cancelled' || status === 'completed' || status === 'sold_out') return false;
+        if (status && status !== 'active' && status !== 'open') return false;
+        const start = s.sessionStartTime ? new Date(s.sessionStartTime) : null;
+        if (start && !Number.isNaN(start.getTime()) && start.getTime() < now.getTime() - 3 * 60 * 60 * 1000) {
+          return false; // ended more than ~3h ago
+        }
+        return true;
+      })
+      .slice(0, 8);
 
     const title = language === 'mr' ? eventObj.titleMr || eventObj.title : eventObj.title;
     const venue = eventObj.venueNameMr || eventObj.venueName || 'सभागृह';
     const city = eventObj.city || 'पुणे';
 
     if (sessionRows.length === 0) {
+      const hadSoldOutOnly =
+        allSessionRows.some((s) => String(s.status || '').toLowerCase() === 'sold_out') &&
+        !allSessionRows.some((s) => {
+          const st = String(s.status || '').toLowerCase();
+          return st === 'active' || st === 'open';
+        });
       return {
         reply: language === 'mr'
-          ? `🎭 **${title}**\n📍 **सभागृह:** ${venue}, ${city}\n\nया कार्यक्रमाचे सध्याचे सर्व प्रयोग आरक्षित झाले आहेत किंवा लवकरच नवीन प्रयोगांची घोषणा होईल.`
-          : `🎭 **${title}**\n📍 **Venue:** ${venue}, ${city}\n\nAll current sessions are fully booked or will be announced soon.`,
+          ? hadSoldOutOnly
+            ? `🎭 **${title}**\n📍 **सभागृह:** ${venue}, ${city}\n\nया कार्यक्रमाचे सध्याचे प्रयोग विकले गेले आहेत (sold out). इतर नाटके पहा किंवा नंतर पुन्हा तपासा.`
+            : `🎭 **${title}**\n📍 **सभागृह:** ${venue}, ${city}\n\nसध्या बुकिंगसाठी कोणताही आगामी प्रयोग सूचीबद्ध नाही. लवकरच नवीन वेळा जाहीर होऊ शकतात — किंवा इतर नाटके पहा.`
+          : hadSoldOutOnly
+            ? `🎭 **${title}**\n📍 **Venue:** ${venue}, ${city}\n\nCurrent shows are sold out. Browse other plays or check back later.`
+            : `🎭 **${title}**\n📍 **Venue:** ${venue}, ${city}\n\nNo upcoming bookable showtimes are listed right now. New times may be announced soon — or browse other plays.`,
         options: [
           {
             label: '🎭 इतर नाटके पहा',

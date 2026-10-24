@@ -133,28 +133,63 @@ export function TikitMitraFloatingBot() {
     }
   };
 
+  const routeMitraCheckout = (payload: Record<string, any>) => {
+    if (typeof window === 'undefined' || !payload?.eventId) return;
+    try {
+      sessionStorage.setItem('tikitmitra_checkout', JSON.stringify(payload));
+    } catch {
+      /* ignore */
+    }
+    window.dispatchEvent(new CustomEvent('tikitmitra_start_checkout', { detail: payload }));
+    // Always land on event page so checkout opens even when chat was opened from /my-tickets etc.
+    const sid = payload.sessionId ? `&sessionId=${encodeURIComponent(String(payload.sessionId))}` : '';
+    window.location.href = `/events/${payload.eventId}?mitraCheckout=1${sid}`;
+  };
+
+  const routeMitraSeatmap = (payload: Record<string, any>) => {
+    if (typeof window === 'undefined' || !payload?.eventId) return;
+    try {
+      sessionStorage.setItem(
+        'tikitmitra_seatmap',
+        JSON.stringify({ eventId: payload.eventId, sessionId: payload.sessionId })
+      );
+    } catch {
+      /* ignore */
+    }
+    window.dispatchEvent(
+      new CustomEvent('tikitmitra_open_seatmap', {
+        detail: { eventId: payload.eventId, sessionId: payload.sessionId },
+      })
+    );
+    const sid = payload.sessionId ? `&sessionId=${encodeURIComponent(String(payload.sessionId))}` : '';
+    window.location.href = `/events/${payload.eventId}?book=true${sid}`;
+  };
+
   const handleOptionClick = (opt: ChatOption) => {
-    if (opt.type === 'checkout_pay' && opt.payload) {
+    // Pay / seatmap / event deep-links — never fall through to my-tickets
+    if (opt.type === 'checkout_pay' && opt.payload?.eventId) {
       setIsOpen(false);
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(
-          new CustomEvent('tikitmitra_start_checkout', {
-            detail: opt.payload,
-          })
-        );
-      }
+      routeMitraCheckout(opt.payload);
       return;
     }
 
-    if (opt.type === 'open_seatmap' && opt.payload) {
-      setIsOpen(false);
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(
-          new CustomEvent('tikitmitra_open_seatmap', {
-            detail: { eventId: opt.payload.eventId, sessionId: opt.payload.sessionId },
-          })
-        );
+    if (
+      (opt.type === 'open_seatmap' || opt.type === 'select_seats' || opt.type === 'select_event') &&
+      opt.payload?.eventId
+    ) {
+      // select_event continues chat for showtimes; open_seatmap/select_seats open booking UI
+      if (opt.type === 'select_event') {
+        handleSendMessage(opt.value, { type: opt.type, ...opt.payload });
+        return;
       }
+      setIsOpen(false);
+      routeMitraSeatmap(opt.payload);
+      return;
+    }
+
+    if (opt.type === 'explore_category') {
+      setIsOpen(false);
+      window.location.href = '/?category=plays';
       return;
     }
 
@@ -283,7 +318,7 @@ export function TikitMitraFloatingBot() {
                           className={`text-left px-2.5 py-1.5 rounded-xl font-bold text-[11px] transition shadow-xs cursor-pointer flex items-center gap-1.5 ${
                             opt.type === 'checkout_pay'
                               ? 'bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 text-white w-full justify-center py-2 text-xs shadow-md animate-pulse'
-                              : opt.type === 'select_seats'
+                              : opt.type === 'open_seatmap' || opt.type === 'select_seats'
                               ? 'bg-orange-50 hover:bg-orange-100 text-[#EA580C] border border-orange-200'
                               : opt.type === 'select_session'
                               ? 'bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200'
@@ -292,7 +327,7 @@ export function TikitMitraFloatingBot() {
                         >
                           {opt.type === 'checkout_pay' ? (
                             <CreditCard className="w-3.5 h-3.5" />
-                          ) : opt.type === 'select_seats' ? (
+                          ) : opt.type === 'open_seatmap' || opt.type === 'select_seats' ? (
                             <Armchair className="w-3 h-3 text-[#EA580C]" />
                           ) : opt.type === 'select_session' ? (
                             <Calendar className="w-3 h-3 text-amber-700" />
@@ -304,21 +339,21 @@ export function TikitMitraFloatingBot() {
                     </div>
                   )}
 
-                  {/* Direct Action Link */}
-                  {msg.action && !msg.options?.some(o => o.type === msg.action?.type) && (
+                  {/* Direct Action — always show pay/seatmap even if a matching chip exists */}
+                  {msg.action &&
+                    (msg.action.type === 'checkout_pay' ||
+                      msg.action.type === 'open_event' ||
+                      msg.action.type === 'select_seats' ||
+                      msg.action.type === 'open_seatmap' ||
+                      (msg.action.type === 'my_tickets' &&
+                        !msg.options?.some((o) => o.type === 'my_tickets'))) && (
                     <div className="mt-2.5 pt-2 border-t border-slate-100/80">
-                      {msg.action.type === 'checkout_pay' && msg.action.payload ? (
+                      {msg.action.type === 'checkout_pay' && msg.action.payload?.eventId ? (
                         <button
                           type="button"
                           onClick={() => {
                             setIsOpen(false);
-                            if (typeof window !== 'undefined') {
-                              window.dispatchEvent(
-                                new CustomEvent('tikitmitra_start_checkout', {
-                                  detail: msg.action?.payload,
-                                })
-                              );
-                            }
+                            routeMitraCheckout(msg.action?.payload || {});
                           }}
                           className="inline-flex items-center justify-between w-full gap-2 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 text-white font-extrabold text-xs transition shadow-md active:scale-95 cursor-pointer"
                         >
@@ -328,24 +363,21 @@ export function TikitMitraFloatingBot() {
                           </div>
                           <ChevronRight className="h-4 w-4 shrink-0" />
                         </button>
-                      ) : (msg.action.type === 'open_event' || msg.action.type === 'select_seats') && msg.action.payload?.eventId ? (
-                        <Link
-                          href={`/events/${msg.action.payload.eventId}?book=true`}
+                      ) : (msg.action.type === 'open_event' ||
+                          msg.action.type === 'select_seats' ||
+                          msg.action.type === 'open_seatmap') &&
+                        msg.action.payload?.eventId ? (
+                        <button
+                          type="button"
                           onClick={() => {
                             setIsOpen(false);
-                            if (typeof window !== 'undefined') {
-                              window.dispatchEvent(
-                                new CustomEvent('tikitmitra_open_seatmap', {
-                                  detail: { eventId: msg.action?.payload?.eventId },
-                                })
-                              );
-                            }
+                            routeMitraSeatmap(msg.action?.payload || {});
                           }}
                           className="inline-flex items-center justify-between w-full gap-2 px-3 py-2 rounded-xl bg-gradient-to-r from-[#EA580C] to-[#C2410C] hover:from-[#C2410C] hover:to-[#9A3412] text-white font-bold text-xs transition shadow-md active:scale-95 cursor-pointer"
                         >
                           <span className="truncate">{msg.action.label || '🎟️ थेट आसन निवडा व बुक करा'}</span>
                           <ChevronRight className="h-4 w-4 shrink-0" />
-                        </Link>
+                        </button>
                       ) : msg.action.type === 'my_tickets' ? (
                         <Link
                           href="/my-tickets"

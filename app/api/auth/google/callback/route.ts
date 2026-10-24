@@ -3,16 +3,21 @@ import { db } from '@/src/db/index.ts';
 import { users } from '@/src/db/schema.ts';
 import { eq } from 'drizzle-orm';
 import { setCustomerSessionCookie, signSessionToken, CustomerSessionUser } from '@/src/lib/auth-service.ts';
+import { getAppBaseUrl } from '@/src/lib/public-url';
 
 function getOrigin(request: Request): string {
   const forwardedHost = request.headers.get('x-forwarded-host');
   const forwardedProto = request.headers.get('x-forwarded-proto') || 'https';
   if (forwardedHost) {
+    const host = forwardedHost.toLowerCase();
+    if (host === 'mahaticket.com' || host === 'www.mahaticket.com') {
+      return getAppBaseUrl();
+    }
     return `${forwardedProto}://${forwardedHost}`;
   }
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL;
   if (appUrl && !appUrl.includes('localhost')) {
-    return appUrl.replace(/\/+$/, '');
+    return getAppBaseUrl();
   }
   return new URL(request.url).origin;
 }

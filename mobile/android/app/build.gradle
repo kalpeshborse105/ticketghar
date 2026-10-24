@@ -55,9 +55,10 @@ react {
 }
 
 /**
- * Set this to true to Run Proguard on Release builds to minify the Java bytecode.
+ * Play Console DEX optimization (obfuscation/shrinking) requires R8 on release.
+ * Keep false only for local debug diagnosis — never for Play AABs.
  */
-def enableProguardInReleaseBuilds = false
+def enableProguardInReleaseBuilds = true
 
 /**
  * The preferred build flavor of JavaScriptCore (JSC)
@@ -82,10 +83,11 @@ android {
         applicationId "com.kalpkrutinfotech.mahaticket"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 19
-        versionName "1.0.18"
+        versionCode 22
+        versionName "1.0.21"
+        // 64-bit only: Play 16 KB check applies to arm64/x86_64; drop legacy 32-bit ABIs
         ndk {
-            abiFilters "arm64-v8a", "armeabi-v7a"
+            abiFilters "arm64-v8a"
         }
     }
     compileOptions {
@@ -139,7 +141,9 @@ android {
             }
             signingConfig signingConfigs.release
             minifyEnabled enableProguardInReleaseBuilds
-            proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+            shrinkResources enableProguardInReleaseBuilds
+            // Use optimize preset — plain proguard-android.txt disables optimization (-dontoptimize)
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
         }
     }
 }
@@ -147,6 +151,9 @@ android {
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
+    // Android 15 edge-to-edge helper (enableEdgeToEdge)
+    implementation("androidx.activity:activity-ktx:1.9.3")
+    implementation("androidx.core:core-ktx:1.15.0")
 
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")

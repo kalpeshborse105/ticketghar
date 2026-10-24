@@ -240,7 +240,12 @@ export async function sendBookingTicketEmail(
           filename: `MahaTicket-${ticketRecord.order.orderNumber}.pdf`,
           content: pdfBuffer,
           contentType: 'application/pdf',
+          contentDisposition: 'attachment',
         });
+      } else {
+        console.error(
+          `[Email] PDF buffer missing for ${ticketRecord.order.orderNumber} — email will go without attachment`
+        );
       }
 
       let transporter = createTransporter(false);
@@ -331,13 +336,24 @@ export async function sendBookingTicketEmail(
         html: htmlContent,
       };
 
-      if (pdfBuffer) {
-        payload.attachments = [
-          {
-            filename: `MahaTicket-${ticketRecord.order.orderNumber}.pdf`,
-            content: pdfBuffer.toString('base64'),
-          },
-        ];
+      const resendAttachments: Array<Record<string, string>> = [];
+      if (pdfBuffer && pdfBuffer.length > 0) {
+        resendAttachments.push({
+          filename: `MahaTicket-${ticketRecord.order.orderNumber}.pdf`,
+          content: pdfBuffer.toString('base64'),
+          contentType: 'application/pdf',
+        });
+      }
+      if (qrPngBuffer && qrPngBuffer.length > 0) {
+        resendAttachments.push({
+          filename: 'qrcode.png',
+          content: qrPngBuffer.toString('base64'),
+          contentType: 'image/png',
+          content_id: 'ticket-qr-code',
+        });
+      }
+      if (resendAttachments.length > 0) {
+        payload.attachments = resendAttachments;
       }
 
       const res = await fetch('https://api.resend.com/emails', {

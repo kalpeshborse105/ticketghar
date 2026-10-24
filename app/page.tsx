@@ -273,7 +273,7 @@ export default function HomePage() {
       // (prevents wiping out rendered cards into skeleton when refreshing/filtering)
       setEvents((currentEvents) => {
         if (currentEvents.length === 0) {
-          setLoading(true);
+      setLoading(true);
         }
         return currentEvents;
       });
@@ -323,9 +323,9 @@ export default function HomePage() {
                 (ev: any, index: number, self: any[]) => index === self.findIndex((e: any) => e.id === ev.id)
               );
               setEvents(unique);
-              setError(null);
-              setLoading(false);
-              return;
+            setError(null);
+            setLoading(false);
+            return;
             }
           } catch { }
         }
@@ -388,8 +388,8 @@ export default function HomePage() {
       } else if (tab === 'tickets') {
         setViewState('my_tickets');
         setActiveNavTab('tickets');
-      } else if (tab === 'profile') {
-        setViewState('profile');
+    } else if (tab === 'profile') {
+      setViewState('profile');
         setActiveNavTab('profile');
       } else if (!tab || tab === 'home') {
         setViewState('home');
@@ -442,12 +442,18 @@ export default function HomePage() {
 
       setSelectedEventForBooking(ev);
       setSelectedSessionForBooking(sess);
+      const seatIds: number[] = payload.seatIds || [];
+      const seatCodes: string[] = payload.seatCodes || [];
       setCheckoutHoldData({
+        sessionId: Number(payload.sessionId),
         holdToken: payload.holdToken,
         holdExpiresAt: payload.holdExpiresAt || new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-        seatIds: payload.seatIds || [],
-        seatCodes: payload.seatCodes || [],
-        faceValue: payload.faceValue || 0,
+        seatIds,
+        heldSeats: seatIds.map((id, i) => ({
+          seatId: id,
+          seatCode: seatCodes[i] || String(id),
+        })),
+        faceValueTotal: Number(payload.faceValue || payload.faceValueTotal || 0),
         pricing: payload.pricing,
       });
       setSeatMapOpen(false);
@@ -934,11 +940,11 @@ export default function HomePage() {
             <div className="mt-container space-y-3.5 pt-3">
               {/* BookNgo-style cinematic hero — tighter height */}
               {!searchQuery.trim() && getSec('hero', 'विशेष शिफारस व थेट बुकिंग', 'Featured Shows').visible && (
-                <HeroBanner
+              <HeroBanner
                   events={sortedEvents}
                   announcements={announcements}
-                  language={language}
-                  onSelectEvent={handleSelectEvent}
+                language={language}
+                onSelectEvent={handleSelectEvent}
                   loading={loading}
                 />
               )}
@@ -977,16 +983,16 @@ export default function HomePage() {
                     )}
                   </div>
                 <div className="flex overflow-x-auto gap-2 sm:gap-2.5 pb-2 scrollbar-none no-scrollbar">
-                  {CATEGORIES.map((cat) => {
-                    const Icon = cat.icon;
-                    const isSelected = selectedCategory === cat.id;
-                    return (
-                      <button
-                        key={cat.id}
+                {CATEGORIES.map((cat) => {
+                  const Icon = cat.icon;
+                  const isSelected = selectedCategory === cat.id;
+                  return (
+                    <button
+                      key={cat.id}
                         type="button"
-                        onClick={() => setSelectedCategory(cat.id)}
+                      onClick={() => setSelectedCategory(cat.id)}
                         className={`group flex flex-col items-center justify-center rounded-2xl p-2 sm:p-2.5 text-center shadow-2xs transition min-w-[70px] sm:min-w-[85px] shrink-0 cursor-pointer ${
-                          isSelected
+                        isSelected
                             ? 'bg-[#ea580c] text-white shadow-md'
                             : 'bg-white text-[#141b2b] hover:bg-[#FFF7ED]'
                         }`}
@@ -1003,10 +1009,10 @@ export default function HomePage() {
                         <span className="text-[10px] sm:text-xs font-bold leading-tight">
                           {language === 'mr' ? cat.labelMr : cat.labelEn}
                         </span>
-                      </button>
-                    );
-                  })}
-                </div>
+                    </button>
+                  );
+                })}
+              </div>
               </section>
               )}
 
@@ -1034,7 +1040,7 @@ export default function HomePage() {
                     >
                       {language === 'mr' ? '✕ सर्व दाखवा' : '✕ Show all'}
                     </button>
-                  </div>
+            </div>
 
                   {categoryFilteredEvents.length === 0 ? (
                     <div className="py-8 text-center text-[#64748b] bg-orange-50/50 rounded-xl border border-dashed border-orange-200">
@@ -1057,7 +1063,7 @@ export default function HomePage() {
                         <div key={`cat-result-${evt.id}`} className="w-[170px] sm:w-[210px] shrink-0">
                           <EventCard
                             event={evt}
-                            language={language}
+              language={language}
                             onSelect={handleSelectEvent} onBook={handleBookEvent}
                           />
                         </div>
@@ -1077,7 +1083,7 @@ export default function HomePage() {
                 sortedEvents.filter((e) => e.featured).length > 0 &&
                 getSec('today', 'आज काय पाहायचं?', "What's on today?").visible && (
                   <section className="space-y-3">
-                    <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
                       <div className="h-8 w-1.5 rounded-full bg-[#ea580c]" />
                       <div>
                         <h2 className="text-xl font-bold text-[#141b2b]">
@@ -1086,7 +1092,7 @@ export default function HomePage() {
                         <p className="text-sm text-[#64748b]">
                           {getSec('today', '', '', `${selectedCity} परिसरातील खास प्रयोग`, `${selectedCity} Popular Shows`).subtitle}
                         </p>
-                      </div>
+                  </div>
                     </div>
                     <div className="flex overflow-x-auto gap-3.5 pb-2 scrollbar-none">
                       {sortedEvents
@@ -1110,14 +1116,14 @@ export default function HomePage() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div className="h-8 w-1.5 rounded-full bg-[#ea580c]" />
-                      <div>
+                  <div>
                         <h2 className="text-xl font-bold text-[#141b2b]">
                           {getSec('drama', 'मराठी रंगभूमी विशेष 🎭', 'Marathi Theatre Specials').title}
-                        </h2>
+                    </h2>
                         <p className="text-sm text-[#64748b]">
                           {getSec('drama', '', '', 'सध्याचे गाजलेले व प्रेक्षकप्रिय मराठी नाटके', 'Acclaimed & blockbuster Marathi plays').subtitle}
-                        </p>
-                      </div>
+                    </p>
+                  </div>
                     </div>
                     <button
                       type="button"
@@ -1130,7 +1136,7 @@ export default function HomePage() {
                       <span>{language === 'mr' ? 'सर्व पहा' : 'View all'}</span>
                       <ChevronRight className="h-4 w-4" />
                     </button>
-                  </div>
+                </div>
 
                   <div className="flex overflow-x-auto gap-3.5 pb-2 scrollbar-none">
                     {(sortedEvents.filter((e) => e.category === 'plays' || (e as any).categoryMr === 'नाटक').length > 0
@@ -1139,14 +1145,14 @@ export default function HomePage() {
                     )
                       .map((evt) => (
                         <div key={`theatre-${evt.id}`} className="w-[170px] sm:w-[210px] shrink-0">
-                          <EventCard
-                            event={evt}
-                            language={language}
+                    <EventCard
+                      event={evt}
+                      language={language}
                             onSelect={handleSelectEvent} onBook={handleBookEvent}
-                          />
+                    />
                         </div>
-                      ))}
-                  </div>
+                  ))}
+                </div>
                 </section>
               )}
 
@@ -1179,28 +1185,28 @@ export default function HomePage() {
                       </button>
                     </div>
                   </div>
-                </div>
-              )}
+              </div>
+            )}
 
               {/* STITCH SECTION 1: विकेंड प्लॅनर - या आठवड्याचे लोकप्रिय कार्यक्रम (Popular Shows of the Week) */}
               {!searchQuery.trim() && (
                 <section className="space-y-3.5">
                   <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
-                    <div>
+                <div>
                       <p className="text-xs font-bold text-[#ea580c] tracking-wide mb-1">
                         {language === 'mr' ? 'विकेंड प्लॅनर' : 'Weekend Planner'}
                       </p>
                       <h2 className="text-2xl sm:text-3xl font-extrabold text-[#141b2b] tracking-tight">
                         {language === 'mr' ? 'या आठवड्याचे लोकप्रिय कार्यक्रम' : 'Trending Shows This Week'}
-                      </h2>
+                  </h2>
                       <p className="text-xs sm:text-sm text-[#64748b] mt-0.5">
                         {language === 'mr'
                           ? 'प्रेक्षकांची पहिली पसंती आणि झपाट्याने भरणारे आगामी प्रयोग'
                           : 'Top audience picks and rapidly filling upcoming shows'}
-                      </p>
-                    </div>
+                  </p>
+                </div>
 
-                    <button
+                <button
                       type="button"
                       onClick={() => {
                         setSelectedCategory('all');
@@ -1210,7 +1216,7 @@ export default function HomePage() {
                     >
                       <span>{language === 'mr' ? 'सर्व पहा' : 'View all'}</span>
                       <ArrowRight className="h-4 w-4" />
-                    </button>
+                </button>
                   </div>
 
                   {/* Dynamic Database Fetched High-Rating Events (1 Row, 3 Cards Only) */}
@@ -1321,34 +1327,34 @@ export default function HomePage() {
                         : ''}
                     </p>
                   </div>
-                </div>
+              </div>
 
-                {loading ? (
+              {loading ? (
                   <div className="flex overflow-x-auto gap-3.5 pb-2 scrollbar-none py-2">
                     {[1, 2, 3, 4, 5].map((n) => (
                       <div key={n} className="w-[185px] sm:w-[225px] shrink-0">
                         <MTEventCardSkeleton />
-                      </div>
-                    ))}
-                  </div>
-                ) : error ? (
-                  <MTEmptyState
-                    type="general"
+                    </div>
+                  ))}
+                </div>
+              ) : error ? (
+                <MTEmptyState
+                  type="general"
                     title={language === 'mr' ? 'काहीतरी चूक झाली.' : 'Something went wrong.'}
                     description={language === 'mr' ? 'कृपया पुन्हा प्रयत्न करा.' : 'Please try again.'}
-                    actionText={language === 'mr' ? 'पुन्हा प्रयत्न करा' : 'Retry'}
-                    onAction={fetchEvents}
-                  />
+                  actionText={language === 'mr' ? 'पुन्हा प्रयत्न करा' : 'Retry'}
+                  onAction={fetchEvents}
+                />
                 ) : sortedEvents.length === 0 ? (
-                  <MTEmptyState
-                    type="events"
+                <MTEmptyState
+                  type="events"
                     title={
                       language === 'mr'
                         ? 'सध्या या शहरात कार्यक्रम उपलब्ध नाहीत.'
                         : 'No events available in this city right now.'
                     }
-                    description={
-                      language === 'mr'
+                  description={
+                    language === 'mr'
                         ? 'शहर किंवा श्रेणी बदलून पहा.'
                         : 'Try another city or category.'
                     }
@@ -1359,15 +1365,15 @@ export default function HomePage() {
                       setSelectedCity('महाराष्ट्र (All)');
                       handleResetFilters();
                     }}
-                  />
-                ) : (
+                />
+              ) : (
                   <div className="flex overflow-x-auto gap-3 sm:gap-3.5 pb-2 scrollbar-none snap-x snap-mandatory">
                     {sortedEvents.slice(0, 5).map((evt) => (
                       <div key={evt.id} className="w-[170px] sm:w-[215px] shrink-0 snap-start">
-                        <EventCard
-                          event={evt}
-                          language={language}
-                          onSelect={handleSelectEvent}
+                    <EventCard
+                      event={evt}
+                      language={language}
+                      onSelect={handleSelectEvent}
                           onBook={handleBookEvent}
                         />
                       </div>
@@ -1394,9 +1400,9 @@ export default function HomePage() {
                             +{sortedEvents.length - 5} {language === 'mr' ? 'आणखी' : 'more'}
                           </span>
                         </button>
-                      </div>
-                    )}
-                  </div>
+                </div>
+              )}
+            </div>
                 )}
               </section>
 
@@ -1443,12 +1449,12 @@ export default function HomePage() {
                               </div>
                               <span className="text-xs font-bold px-3 py-1 rounded-full bg-orange-100 text-[#c2410c]">
                                 {language === 'mr' ? `आज ${v.showCount || 2} प्रयोग` : `${v.showCount || 2} Shows Today`}
-                              </span>
+                </span>
                             </div>
 
                             <h3 className="text-lg font-extrabold text-[#141b2b]">
                               {language === 'mr' ? (v.nameMr || v.name) : v.name}
-                            </h3>
+                </h3>
                             <p className="text-xs text-[#64748b] flex items-center gap-1 mt-1">
                               <MapPin className="w-3.5 h-3.5 text-[#ea580c] shrink-0" />
                               <span className="truncate">{v.address || v.city}</span>
@@ -1469,7 +1475,7 @@ export default function HomePage() {
                               <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-[#64748b]">
                                 वाहनतळ
                               </span>
-                            </div>
+              </div>
                           </div>
 
                           <Link
@@ -1496,7 +1502,7 @@ export default function HomePage() {
                             ? 'आम्ही लवकरच या शहरातील अधिक नाट्यगृहे जोडत आहोत. महाराष्ट्रातील इतर प्रमुख नाट्यगृहे पाहण्यासाठी खालील बटण दाबा.'
                             : 'We are expanding to more venues across Maharashtra. Explore other active theatres.'}
                         </p>
-                        <button
+              <button
                           type="button"
                           onClick={() => setSelectedCity('महाराष्ट्र (All)')}
                           className="mt-4 px-4 py-2 text-xs font-bold rounded-xl bg-[#ea580c] hover:bg-[#c2410c] text-white shadow-xs transition cursor-pointer"
@@ -1603,11 +1609,11 @@ export default function HomePage() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setPartnerModalOpen(true)}
+                onClick={() => setPartnerModalOpen(true)}
                   className="px-5 py-2.5 rounded-xl bg-[#ea580c] hover:bg-[#c2410c] text-white text-xs font-bold transition shadow-sm whitespace-nowrap cursor-pointer active:scale-95 shrink-0"
-                >
+              >
                   {language === 'mr' ? 'कार्यक्रम नोंदवा (Post Event)' : 'Post Event'}
-                </button>
+              </button>
               </section>
             </div>
           </div>
@@ -1641,7 +1647,7 @@ export default function HomePage() {
                   <img src="/logo.png" alt="MahaTicket" className="w-full h-full object-contain" />
                 </div>
 
-                <div>
+          <div>
                   <h3 className="text-lg font-black tracking-tight">
                     <span className="text-[#ea580c]">महा</span>
                     <span className="text-white">टिकिट</span>
@@ -1651,7 +1657,7 @@ export default function HomePage() {
                   <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-orange-400">
                     Maharashtra's Ticketing Platform
                   </p>
-                </div>
+            </div>
               </div>
 
               <p className="mt-4 max-w-sm text-sm leading-6 text-slate-400">
@@ -1681,7 +1687,7 @@ export default function HomePage() {
                   <span className="text-xs font-black text-white tracking-wide mt-0.5 font-sans">
                     Google Play Store
                   </span>
-                </div>
+          </div>
               </a>
               {/* Trust badges */}
               <div className="mt-5 flex flex-wrap gap-2">
@@ -1761,12 +1767,12 @@ export default function HomePage() {
                   About Us
                 </Link>
 
-                <button
-                  onClick={() => setPartnerModalOpen(true)}
+            <button
+              onClick={() => setPartnerModalOpen(true)}
                   className="block transition hover:text-orange-400"
-                >
+            >
                   Partner With Us
-                </button>
+            </button>
 
                 <Link
                   href="/contact"
@@ -1788,7 +1794,7 @@ export default function HomePage() {
                 >
                   Terms & Conditions
                 </Link>
-              </div>
+          </div>
             </div>
 
             {/* Support */}

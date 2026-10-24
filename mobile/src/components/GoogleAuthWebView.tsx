@@ -26,15 +26,37 @@ type Props = {
   onSuccess?: () => void;
 };
 
+function base64UrlToUtf8(b64url: string): string {
+  const padded = b64url + '='.repeat((4 - (b64url.length % 4)) % 4);
+  const b64 = padded.replace(/-/g, '+').replace(/_/g, '/');
+  if (typeof globalThis.atob === 'function') {
+    return globalThis.atob(b64);
+  }
+  // RN Hermes fallback without Node Buffer / @types/node
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+  let str = '';
+  let i = 0;
+  const input = b64.replace(/[^A-Za-z0-9+/=]/g, '');
+  while (i < input.length) {
+    const enc1 = chars.indexOf(input.charAt(i++));
+    const enc2 = chars.indexOf(input.charAt(i++));
+    const enc3 = chars.indexOf(input.charAt(i++));
+    const enc4 = chars.indexOf(input.charAt(i++));
+    const chr1 = (enc1 << 2) | (enc2 >> 4);
+    const chr2 = ((enc2 & 15) << 4) | (enc3 >> 2);
+    const chr3 = ((enc3 & 3) << 6) | enc4;
+    str += String.fromCharCode(chr1);
+    if (enc3 !== 64) str += String.fromCharCode(chr2);
+    if (enc4 !== 64) str += String.fromCharCode(chr3);
+  }
+  return str;
+}
+
 function decodeTokenUser(token: string): any | null {
   try {
     const payloadPart = token.split('.')[0];
     if (!payloadPart) return null;
-    const padded = payloadPart + '='.repeat((4 - (payloadPart.length % 4)) % 4);
-    const b64 = padded.replace(/-/g, '+').replace(/_/g, '/');
-    const json =
-      typeof atob === 'function' ? atob(b64) : Buffer.from(b64, 'base64').toString('utf8');
-    const data = JSON.parse(json);
+    const data = JSON.parse(base64UrlToUtf8(payloadPart));
     if (!data?.email || !data?.id) return null;
     if (data.exp && Date.now() > Number(data.exp)) return null;
     return data;

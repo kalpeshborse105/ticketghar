@@ -13,6 +13,7 @@ export async function GET(request: Request) {
     const dateFilter = searchParams.get('date');
     const featuredOnly = searchParams.get('featured') === 'true';
     const lite = searchParams.get('lite') === '1';
+    const organizerIdParam = searchParams.get('organizerId');
 
     const conditions = [eq(events.status, 'published')];
 
@@ -22,6 +23,10 @@ export async function GET(request: Request) {
 
     if (featuredOnly) {
       conditions.push(eq(events.featured, 1));
+    }
+
+    if (organizerIdParam && !Number.isNaN(Number(organizerIdParam))) {
+      conditions.push(eq(events.organizerId, Number(organizerIdParam)));
     }
 
     if (city && city.toLowerCase() !== 'all' && city.toLowerCase() !== 'महाराष्ट्र (all)') {

@@ -1702,6 +1702,7 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
             <h3 className="text-base font-bold text-[#141B2B] mb-3">थेट गेट स्कॅनर</h3>
             <AdminScanner
               scannerUserId={currentUser?.id || 1}
+              scannerOrganizerId={currentUser?.organizerId}
               initialGateName="मुख्य प्रवेशद्वार (Gate 1)"
               onTicketVerified={(ticket) => {
                 triggerToast(`तिकीट ${ticket?.code || ''} वैध ठरले!`);

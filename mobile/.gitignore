@@ -76,6 +76,10 @@ yarn-error.log
 !.yarn/sdks
 !.yarn/versions
 
-#ignore apk and aab files
+#ignore apk and aab files (Play releases live in mobile/releases and are force-tracked from root)
 *.apk
 *.aab
+!releases/
+!releases/*.apk
+!releases/*.aab
+releases/_*/

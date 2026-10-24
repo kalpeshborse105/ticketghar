@@ -19,6 +19,18 @@ mobile/ios/build/
 mobile/.env
 build_out
 .vercel
-#ignore apk and aab files
+#ignore apk and aab files (keep Play release artifacts under mobile/releases)
 *.apk
 *.aab
+!mobile/releases/
+!mobile/releases/*.apk
+!mobile/releases/*.aab
+mobile/releases/_*/
+mobile/.gradle-user/
+mobile/.gradle-home/
+.vscode/
+mobile/android/.vscode/
+
+# Extracted APK native libs (not part of source; break 16 KB audits if mistaken for app input)
+/base/
+/base/lib/

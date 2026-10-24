@@ -38,10 +38,14 @@ export interface VerifyResult {
   ticket?: {
     code: string;
     seat: string;
+    seats?: string;
     attendee: string;
     event?: string;
     eventMr?: string;
+    venue?: string;
     showtime?: string;
+    showtimeLabel?: string;
+    sessionId?: number | null;
   };
   scannedAt?: string;
 }
@@ -50,6 +54,8 @@ interface AdminScannerProps {
   scannerUserId?: number | string;
   scannerOrganizerId?: number | string;
   targetEventId?: number | string;
+  targetSessionId?: number | string;
+  events?: Array<{ id: number | string; title?: string; titleMr?: string; sessions?: Array<{ id: number | string; sessionStartTime?: string }> }>;
   initialGateName?: string;
   onTicketVerified?: (ticket: any) => void;
   onViewVerifiedList?: () => void;
@@ -121,12 +127,16 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
   scannerUserId,
   scannerOrganizerId,
   targetEventId: initialTargetEventId,
+  targetSessionId: initialTargetSessionId,
+  events: eventsProp,
   initialGateName = 'Main Entry Gate 1',
   onTicketVerified,
   onViewVerifiedList,
 }) => {
   const [gateName, setGateName] = useState(initialGateName);
   const [targetEventId, setTargetEventId] = useState<string | number | undefined>(initialTargetEventId);
+  const [targetSessionId, setTargetSessionId] = useState<string | number | undefined>(initialTargetSessionId);
+  const [loadedEvents, setLoadedEvents] = useState<AdminScannerProps['events']>(eventsProp || []);
   const [cameraActive, setCameraActive] = useState(false);
   const [cameras, setCameras] = useState<CameraDevice[]>([]);
   const [selectedCameraId, setSelectedCameraId] = useState<string>('');
@@ -183,9 +193,47 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
     };
   }, []);
 
+  // Load organizer events + sessions for exact showtime scoping
+  useEffect(() => {
+    if (eventsProp && eventsProp.length > 0) {
+      setLoadedEvents(eventsProp);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const qs = scannerOrganizerId ? `?organizerId=${encodeURIComponent(String(scannerOrganizerId))}` : '';
+        const res = await fetch(`/api/events${qs}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const list = Array.isArray(data?.events) ? data.events : Array.isArray(data) ? data : [];
+        if (!cancelled) setLoadedEvents(list);
+      } catch (err) {
+        console.warn('AdminScanner events load failed:', err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [eventsProp, scannerOrganizerId]);
+
+  const selectedEvent = (loadedEvents || []).find((e) => String(e.id) === String(targetEventId));
+  const sessionOptions = selectedEvent?.sessions || [];
+
   // Process code verification against database
   const verifyCode = useCallback(async (rawCode: string) => {
     if (!rawCode || isVerifying || isCooldownRef.current) return;
+
+    if (!targetEventId || !targetSessionId) {
+      setCurrentOverlay({
+        valid: false,
+        scanResult: 'SCOPE_REQUIRED',
+        message: 'स्कॅन करण्यापूर्वी कार्यक्रम व शो वेळ निवडा (Select event & showtime first).',
+      });
+      if (soundEnabled) playScanSound('error');
+      return;
+    }
+
     isCooldownRef.current = true;
     setIsVerifying(true);
 
@@ -199,6 +247,8 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
           scannerUserId: scannerUserId || 1,
           scannerOrganizerId: scannerOrganizerId,
           targetEventId: targetEventId,
+          targetSessionId: targetSessionId,
+          requireScope: true,
           scannerDevice: typeof navigator !== 'undefined' ? `${navigator.userAgent.slice(0, 30)}` : 'Admin Terminal',
         }),
       });
@@ -256,7 +306,7 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
         isCooldownRef.current = false;
       }, 1500);
     }
-  }, [gateName, scannerUserId, scannerOrganizerId, targetEventId, soundEnabled, isVerifying, onTicketVerified]);
+  }, [gateName, scannerUserId, scannerOrganizerId, targetEventId, targetSessionId, soundEnabled, isVerifying, onTicketVerified]);
 
   // Start Camera
   const startCamera = async (cameraId?: string) => {
@@ -433,14 +483,62 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
         </div>
       </header>
 
-      {/* Dark Console Bar (Stitch Exact) */}
+      {/* Dark Console Bar — event + showtime lock (exact match required) */}
       <div className="bg-[#141B2B] text-white p-4 flex flex-col gap-2.5 shadow-md">
+        <div className="grid grid-cols-1 gap-2">
+          <label className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">कार्यक्रम / Event</label>
+          <select
+            value={targetEventId ? String(targetEventId) : ''}
+            onChange={(e) => {
+              const next = e.target.value || undefined;
+              setTargetEventId(next);
+              setTargetSessionId(undefined);
+            }}
+            className="w-full bg-[#1E293B] border border-slate-600 rounded-lg px-3 py-2 text-sm text-white"
+          >
+            <option value="">निवडा (Select event)</option>
+            {(loadedEvents || []).map((ev) => (
+              <option key={String(ev.id)} value={String(ev.id)}>
+                {ev.titleMr || ev.title || `Event #${ev.id}`}
+              </option>
+            ))}
+          </select>
+          <label className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">शो वेळ / Showtime</label>
+          <select
+            value={targetSessionId ? String(targetSessionId) : ''}
+            onChange={(e) => setTargetSessionId(e.target.value || undefined)}
+            disabled={!targetEventId}
+            className="w-full bg-[#1E293B] border border-slate-600 rounded-lg px-3 py-2 text-sm text-white disabled:opacity-50"
+          >
+            <option value="">निवडा (Select showtime)</option>
+            {sessionOptions.map((s) => (
+              <option key={String(s.id)} value={String(s.id)}>
+                {s.sessionStartTime
+                  ? new Date(s.sessionStartTime).toLocaleString('en-IN', {
+                      timeZone: 'Asia/Kolkata',
+                      weekday: 'short',
+                      day: 'numeric',
+                      month: 'short',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      hour12: true,
+                    })
+                  : `Session #${s.id}`}
+              </option>
+            ))}
+          </select>
+          {(!targetEventId || !targetSessionId) && (
+            <p className="text-[11px] text-amber-300">
+              स्कॅन सुरू करण्यापूर्वी कार्यक्रम व अचूक शो वेळ निवडा — इतर दिनांक/वेळेची तिकिटे नाकारली जातील.
+            </p>
+          )}
+        </div>
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <Ticket className="w-5 h-5 text-[#FD6B36] shrink-0" />
-            <button className="flex items-center gap-1.5 text-left truncate font-bold text-base text-white">
-              <span className="truncate">नियम व अटी लागू</span>
-            </button>
+            <span className="truncate font-bold text-sm text-white">
+              {selectedEvent?.titleMr || selectedEvent?.title || 'Gate Scanner'}
+            </span>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {cameraActive && (
@@ -601,34 +699,55 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
                   </div>
                 )}
 
-                <div className="p-4 flex flex-col gap-3 bg-[#FFF7ED]/50">
+                  <div className="p-4 flex flex-col gap-3 bg-[#FFF7ED]/50">
                   <div className="flex justify-between items-start">
                     <div>
                       <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">प्रेक्षक / ATTENDEE</span>
                       <h2 className="text-base font-bold text-[#141B2B]">
-                        {currentOverlay.ticket?.attendee || 'अनिकेत जोशी'}
+                        {currentOverlay.ticket?.attendee || '—'}
                       </h2>
-                      <p className="text-xs text-slate-500 font-medium">Aniket Joshi</p>
+                      <p className="text-xs text-slate-500 font-medium truncate max-w-[160px]">
+                        {currentOverlay.ticket?.eventMr || currentOverlay.ticket?.event || '—'}
+                      </p>
                     </div>
                     <div className="text-right">
                       <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">आसन / SEATS</span>
                       <p className="text-base font-bold text-[#EA580C]">
-                        {currentOverlay.ticket?.seat || 'स्टॉल ए • E8, E9'}
+                        {currentOverlay.ticket?.seats || currentOverlay.ticket?.seat || '—'}
                       </p>
-                      <span className="inline-block bg-orange-100 text-[#EA580C] px-2 py-0.5 rounded text-[11px] font-bold">
-                        २ व्यक्ती (2 Pax)
-                      </span>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 pt-1">
                     <div className="bg-white p-2.5 rounded-lg border border-slate-200 flex flex-col">
-                      <span className="text-[10px] text-slate-500">गेट & तिकीट ID</span>
+                      <span className="text-[10px] text-slate-500">तिकीट ID</span>
                       <span className="text-xs font-semibold text-[#141B2B] truncate">
-                        {gateName || 'गेट २'} • {currentOverlay.ticketCode || '#MT-2025-88492'}
+                        {currentOverlay.ticket?.code || currentOverlay.ticketCode || '—'}
                       </span>
                     </div>
                     <div className="bg-white p-2.5 rounded-lg border border-slate-200 flex flex-col">
+                      <span className="text-[10px] text-slate-500">शो वेळ / Showtime</span>
+                      <span className="text-xs font-semibold text-[#141B2B]">
+                        {currentOverlay.ticket?.showtimeLabel ||
+                          (currentOverlay.ticket?.showtime
+                            ? new Date(currentOverlay.ticket.showtime).toLocaleString('en-IN', {
+                                timeZone: 'Asia/Kolkata',
+                                day: 'numeric',
+                                month: 'short',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                hour12: true,
+                              })
+                            : '—')}
+                      </span>
+                    </div>
+                    <div className="bg-white p-2.5 rounded-lg border border-slate-200 flex flex-col col-span-2">
+                      <span className="text-[10px] text-slate-500">स्थळ / Venue</span>
+                      <span className="text-xs font-semibold text-[#141B2B] truncate">
+                        {currentOverlay.ticket?.venue || '—'}
+                      </span>
+                    </div>
+                    <div className="bg-white p-2.5 rounded-lg border border-slate-200 flex flex-col col-span-2">
                       <span className="text-[10px] text-slate-500">प्रवेश स्थिती</span>
                       <span className={`text-xs font-semibold flex items-center gap-1 ${
                         currentOverlay.valid ? 'text-emerald-700' : 'text-rose-700'
@@ -636,7 +755,7 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
                         <span className={`w-1.5 h-1.5 rounded-full ${
                           currentOverlay.valid ? 'bg-emerald-500' : 'bg-rose-500'
                         }`} />
-                        {currentOverlay.valid ? 'प्रवेश मंजूर' : 'प्रवेश नाकारला'}
+                        {currentOverlay.valid ? 'प्रवेश मंजूर' : currentOverlay.message || 'प्रवेश नाकारला'}
                       </span>
                     </div>
                   </div>
@@ -653,7 +772,14 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
                       onClick={() =>
                         setScannerPopup({
                           title: 'तिकीट तपशील (Ticket Details)',
-                          message: `नाव: ${currentOverlay.ticket?.attendee || 'अनिकेत जोशी'}\nकोड: ${currentOverlay.ticketCode || 'MT-88492'}`,
+                          message: [
+                            `नाव: ${currentOverlay.ticket?.attendee || '—'}`,
+                            `आसन: ${currentOverlay.ticket?.seats || currentOverlay.ticket?.seat || '—'}`,
+                            `कार्यक्रम: ${currentOverlay.ticket?.eventMr || currentOverlay.ticket?.event || '—'}`,
+                            `वेळ: ${currentOverlay.ticket?.showtimeLabel || '—'}`,
+                            `स्थळ: ${currentOverlay.ticket?.venue || '—'}`,
+                            `कोड: ${currentOverlay.ticket?.code || currentOverlay.ticketCode || '—'}`,
+                          ].join('\n'),
                         })
                       }
                       className="py-2.5 px-4 bg-[#EA580C] text-white hover:bg-[#C2410C] active:scale-95 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1 shadow-xs cursor-pointer"

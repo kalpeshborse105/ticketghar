@@ -411,54 +411,96 @@ export default function EventDetailPage() {
     fetchEvent();
   }, [eventId]);
 
-  // Deep link or bot direct action: ?book=true or custom event opens seat map immediately
+  // Deep link / TicketMitra: ?book=true | ?mitraCheckout=1 | sessionStorage payload → seat map / pay
   useEffect(() => {
     if (!event || !event.sessions || event.sessions.length === 0) return;
 
-    const openBooking = () => {
+    const openBooking = (preferredSessionId?: number | string) => {
+      const qsSession = preferredSessionId
+        ? event.sessions.find((s: any) => Number(s.id) === Number(preferredSessionId))
+        : null;
       const activeSession =
-        event.sessions.find((s: any) => s.status === 'active') || event.sessions[0];
+        qsSession ||
+        event.sessions.find((s: any) => s.status === 'active') ||
+        event.sessions[0];
       if (activeSession) {
         setSelectedSession(activeSession);
         setSeatMapOpen(true);
       }
     };
 
+    const applyCheckoutPayload = (payload: any) => {
+      if (!payload?.sessionId || !payload?.holdToken) return false;
+      const sess =
+        event.sessions.find((s: any) => Number(s.id) === Number(payload.sessionId)) ||
+        ({
+          id: payload.sessionId,
+          sessionStartTime: payload.sessionStartTime,
+          venue: event.venue,
+        } as any);
+      setSelectedSession(sess);
+      const seatIds: number[] = payload.seatIds || [];
+      const seatCodes: string[] = payload.seatCodes || [];
+      setCheckoutHoldData({
+        sessionId: Number(payload.sessionId),
+        holdToken: payload.holdToken,
+        holdExpiresAt:
+          payload.holdExpiresAt || new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+        seatIds,
+        heldSeats: seatIds.map((id, i) => ({
+          seatId: id,
+          seatCode: seatCodes[i] || String(id),
+        })),
+        faceValueTotal: Number(payload.faceValue || payload.faceValueTotal || 0),
+        pricing: payload.pricing,
+      });
+      setSeatMapOpen(false);
+      setCheckoutOpen(true);
+      return true;
+    };
+
     if (typeof window !== 'undefined') {
       const qs = new URLSearchParams(window.location.search);
-      if (qs.get('book') === 'true') {
-        openBooking();
+      const sessionIdQs = qs.get('sessionId') || undefined;
+
+      // Pending checkout from TicketMitra (works from any page via redirect)
+      if (qs.get('mitraCheckout') === '1') {
+        try {
+          const raw = sessionStorage.getItem('tikitmitra_checkout');
+          if (raw) {
+            const payload = JSON.parse(raw);
+            if (applyCheckoutPayload(payload)) {
+              sessionStorage.removeItem('tikitmitra_checkout');
+              // strip query without full reload
+              window.history.replaceState({}, '', `/events/${eventId}`);
+            }
+          }
+        } catch {
+          /* ignore */
+        }
+      } else if (qs.get('book') === 'true') {
+        try {
+          const rawSeat = sessionStorage.getItem('tikitmitra_seatmap');
+          if (rawSeat) {
+            const seatPayload = JSON.parse(rawSeat);
+            sessionStorage.removeItem('tikitmitra_seatmap');
+            openBooking(seatPayload?.sessionId || sessionIdQs || undefined);
+          } else {
+            openBooking(sessionIdQs || undefined);
+          }
+        } catch {
+          openBooking(sessionIdQs || undefined);
+        }
       }
 
       const botListener = (e: any) => {
         if (!e.detail?.eventId || String(e.detail.eventId) === String(eventId)) {
-          openBooking();
+          openBooking(e.detail?.sessionId);
         }
       };
 
       const checkoutListener = (e: any) => {
-        const payload = e?.detail;
-        if (!payload?.sessionId || !payload?.holdToken) return;
-        if (event && event.sessions) {
-          const sess =
-            event.sessions.find((s: any) => Number(s.id) === Number(payload.sessionId)) ||
-            ({
-              id: payload.sessionId,
-              sessionStartTime: payload.sessionStartTime,
-              venue: event.venue,
-            } as any);
-          setSelectedSession(sess);
-        }
-        setCheckoutHoldData({
-          holdToken: payload.holdToken,
-          holdExpiresAt: payload.holdExpiresAt || new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-          seatIds: payload.seatIds || [],
-          seatCodes: payload.seatCodes || [],
-          faceValue: payload.faceValue || 0,
-          pricing: payload.pricing,
-        });
-        setSeatMapOpen(false);
-        setCheckoutOpen(true);
+        applyCheckoutPayload(e?.detail);
       };
 
       window.addEventListener('tikitmitra_open_seatmap', botListener);

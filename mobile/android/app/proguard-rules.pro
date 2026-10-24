@@ -1,21 +1,60 @@
-# Add project specific ProGuard rules here.
-# By default, the flags in this file are appended to flags specified
-# in /usr/local/Cellar/android-sdk/24.3.3/tools/proguard/proguard-android.txt
-# You can edit the include path and order by changing the proguardFiles
-# directive in build.gradle.
+# MahaTicket — R8 keep rules (Play DEX obfuscation / shrinking)
 
-# Razorpay SDK ProGuard Rules
--keepattributes *Annotation*
+-keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod,SourceFile,LineNumberTable
+-keepattributes RuntimeVisibleAnnotations,RuntimeVisibleParameterAnnotations
+
+# React Native core
+-keep class com.facebook.react.** { *; }
+-keep class com.facebook.hermes.** { *; }
+-keep class com.facebook.jni.** { *; }
+-keep class com.facebook.soloader.** { *; }
+-keep class com.facebook.react.turbomodule.** { *; }
+-dontwarn com.facebook.react.**
+-dontwarn com.facebook.hermes.**
+
+# Keep native methods (JNI)
+-keepclasseswithmembernames class * {
+    native <methods>;
+}
+
+# Reanimated / Gesture Handler / Screens / Worklets / Safe Area
+-keep class com.swmansion.reanimated.** { *; }
+-keep class com.swmansion.gesturehandler.** { *; }
+-keep class com.swmansion.rnscreens.** { *; }
+-keep class com.swmansion.worklets.** { *; }
+-keep class com.th3rdwave.safeareacontext.** { *; }
+-dontwarn com.swmansion.**
+
+# Vector icons / SVG / WebView / AsyncStorage
+-keep class com.oblador.vectoricons.** { *; }
+-keep class com.horcrux.svg.** { *; }
+-keep class com.reactnativecommunity.webview.** { *; }
+-keep class com.reactnativecommunity.asyncstorage.** { *; }
+
+# Razorpay Checkout (reflection + activities)
 -dontwarn com.razorpay.**
 -keep class com.razorpay.** {*;}
--optimizations !class/loading/*
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
+-keepattributes JavascriptInterface
+-keepclassmembers class * {
+    @com.razorpay.** *;
+}
 -keepclasseswithmembers class * {
-    public void onPaymentCheck(boolean);
     public void onPaymentSuccess(java.lang.String);
     public void onPaymentError(int, java.lang.String);
 }
 
-# React Native & Vector Icons
--keep class com.oblador.vectoricons.** { *; }
--keep class com.swmansion.gesturehandler.** { *; }
--keep class com.swmansion.reanimated.** { *; }
+# OkHttp / Okio (used by RN networking)
+-dontwarn okhttp3.**
+-dontwarn okio.**
+-keep class okhttp3.** { *; }
+-keep interface okhttp3.** { *; }
+
+# Kotlin metadata used by some SDKs
+-dontwarn kotlin.**
+-keep class kotlin.Metadata { *; }
+
+# App package entry points
+-keep class com.kalpkrutinfotech.mahaticket.** { *; }

@@ -3,10 +3,26 @@
  * Official production site: https://mahaticket.kalpkrutinfotech.com/
  */
 
+/** Official production site — never use bare mahaticket.com */
 const PRODUCTION_APP_URL = 'https://mahaticket.kalpkrutinfotech.com';
 
 function stripQuotes(value: string): string {
   return value.trim().replace(/^['"]|['"]$/g, '');
+}
+
+/** Rewrite mistaken bare mahaticket.com (or www) to the real Kalpkrut domain. */
+function normalizeAppBaseUrl(url: string): string {
+  const cleaned = url.replace(/\/$/, '');
+  try {
+    const u = new URL(cleaned);
+    const host = u.hostname.toLowerCase();
+    if (host === 'mahaticket.com' || host === 'www.mahaticket.com') {
+      return PRODUCTION_APP_URL;
+    }
+  } catch {
+    /* keep as-is */
+  }
+  return cleaned;
 }
 
 export function getAppBaseUrl(): string {
@@ -15,11 +31,11 @@ export function getAppBaseUrl(): string {
   );
 
   if (raw) {
-    return raw.replace(/\/$/, '');
+    return normalizeAppBaseUrl(raw);
   }
 
   if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL.replace(/\/$/, '')}`;
+    return normalizeAppBaseUrl(`https://${process.env.VERCEL_URL}`);
   }
 
   if (process.env.NODE_ENV === 'production') {

@@ -12,6 +12,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   BackHandler,
   Dimensions,
@@ -252,42 +253,54 @@ export default function BookingConfirmedScreen({ navigation, route }: any) {
 
   const [emailing, setEmailing] = useState(false);
 
-  const handleEmailTicket = async () => {
+  const handleEmailTicket = () => {
     if (emailing) return;
-    setEmailing(true);
-    try {
-      const code = primaryTicketCode || resolvedOrderNum;
-      const pdfToken =
-        (order as any)?.pdfDownloadToken ||
-        (route.params as any)?.pdfDownloadToken ||
-        (route.params as any)?.order?.pdfDownloadToken;
-      const res = await api.sendTicketEmail(
-        code,
-        (order as any)?.userEmail || (route.params as any)?.order?.userEmail || undefined,
-        pdfToken || undefined
-      );
-      if (res && res.success) {
-        Toast.show({
-          type: 'success',
-          text1: 'ईमेल पाठवले (Email Sent)',
-          text2: 'आपले ई-तिकीट आणि पास आपल्या ईमेलवर पाठवले आहे.',
-        });
-      } else {
-        Toast.show({
-          type: 'info',
-          text1: 'ईमेल सूचना',
-          text2: res?.message || 'तिकीट ईमेल विनंती स्वीकारली गेली आहे.',
-        });
-      }
-    } catch {
-      Toast.show({
-        type: 'error',
-        text1: 'ईमेल पाठवता आले नाही',
-        text2: 'कृपया काही वेळात पुन्हा प्रयत्न करा.',
-      });
-    } finally {
-      setEmailing(false);
+    const to =
+      (order as any)?.userEmail ||
+      (route.params as any)?.order?.userEmail ||
+      '';
+    if (!to) {
+      Toast.show({ type: 'error', text1: 'ईमेल उपलब्ध नाही' });
+      return;
     }
+    Alert.alert('ईमेल पाठवायचा?', `तिकीट PDF या पत्त्यावर पाठवला जाईल:\n${to}`, [
+      { text: 'रद्द', style: 'cancel' },
+      {
+        text: 'पाठवा',
+        onPress: async () => {
+          setEmailing(true);
+          try {
+            const code = primaryTicketCode || resolvedOrderNum;
+            const pdfToken =
+              (order as any)?.pdfDownloadToken ||
+              (route.params as any)?.pdfDownloadToken ||
+              (route.params as any)?.order?.pdfDownloadToken;
+            const res = await api.sendTicketEmail(code, to, pdfToken || undefined);
+            if (res && (res.success || (res as any).sent)) {
+              Toast.show({
+                type: 'success',
+                text1: 'ईमेल पाठवले (Email Sent)',
+                text2: to,
+              });
+            } else {
+              Toast.show({
+                type: 'error',
+                text1: 'ईमेल अयशस्वी',
+                text2: res?.message || res?.error || 'पुन्हा प्रयत्न करा',
+              });
+            }
+          } catch {
+            Toast.show({
+              type: 'error',
+              text1: 'ईमेल पाठवता आले नाही',
+              text2: 'कृपया काही वेळात पुन्हा प्रयत्न करा.',
+            });
+          } finally {
+            setEmailing(false);
+          }
+        },
+      },
+    ]);
   };
 
   return (
@@ -506,6 +519,18 @@ export default function BookingConfirmedScreen({ navigation, route }: any) {
                 <Icon name="file-pdf-box" size={24} color="#FFFFFF" />
               </View>
               <Text style={styles.iconActionLabel}>PDF</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={handleEmailTicket}
+              style={styles.iconActionBtnItem}
+              activeOpacity={0.8}
+              disabled={emailing}
+            >
+              <View style={[styles.iconCircle, { backgroundColor: '#0F172A' }]}>
+                <Icon name={emailing ? 'loading' : 'email-outline'} size={22} color="#FFFFFF" />
+              </View>
+              <Text style={styles.iconActionLabel}>Mail</Text>
             </TouchableOpacity>
 
             {/* My Tickets */}

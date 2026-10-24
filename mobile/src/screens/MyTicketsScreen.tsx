@@ -410,21 +410,38 @@ export default function MyTicketsScreen({ navigation }: any) {
 
                   <View style={styles.webSecondaryActionsRow}>
                     <TouchableOpacity
-                      onPress={() => handleDownloadOrderPdf(item)}
-                      style={styles.webDownloadPdfBtn}
+                      onPress={() => {
+                        const code =
+                          item.tickets?.[0]?.ticketCode || item.orderNumber || '';
+                        const url = `${WEB_ORIGIN}/tickets/${encodeURIComponent(code)}`;
+                        const text = encodeURIComponent(
+                          `🎟️ MahaTicket Pass\n${item.event?.titleMr || item.event?.title || 'Event'}\n${url}`
+                        );
+                        Linking.openURL(`whatsapp://send?text=${text}`).catch(() =>
+                          handleShareOrder(item)
+                        );
+                      }}
+                      style={styles.webIconOnlyBtn}
                       activeOpacity={0.85}
+                      accessibilityLabel="WhatsApp"
                     >
-                      <Icon name="file-pdf-box" size={16} color="#EA580C" style={{ marginRight: 4 }} />
-                      <Text style={styles.webDownloadPdfText}>Download PDF</Text>
+                      <Icon name="whatsapp" size={20} color="#25D366" />
                     </TouchableOpacity>
-
                     <TouchableOpacity
                       onPress={() => handleShareOrder(item)}
-                      style={styles.webShareBtn}
+                      style={styles.webIconOnlyBtn}
                       activeOpacity={0.85}
+                      accessibilityLabel="Share"
                     >
-                      <Icon name="share-variant" size={16} color="#0F172A" style={{ marginRight: 4 }} />
-                      <Text style={styles.webShareText}>Share</Text>
+                      <Icon name="share-variant" size={20} color="#0F172A" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => handleDownloadOrderPdf(item)}
+                      style={styles.webIconOnlyBtn}
+                      activeOpacity={0.85}
+                      accessibilityLabel="Download PDF"
+                    >
+                      <Icon name="download" size={20} color="#EA580C" />
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -470,7 +487,8 @@ export default function MyTicketsScreen({ navigation }: any) {
               keyboardShouldPersistTaps="handled"
               bounces
               contentContainerStyle={{
-                paddingBottom: 40 + Math.max(insets.bottom, 12),
+                // Keep icon actions (WhatsApp / Share / PDF / Mail) above tab bar
+                paddingBottom: 96 + Math.max(insets.bottom, 16),
                 paddingTop: 2,
                 paddingHorizontal: 2,
                 flexGrow: 1,
@@ -552,6 +570,12 @@ export default function MyTicketsScreen({ navigation }: any) {
                 ticketIndex={1}
                 totalTickets={selectedOrder?.tickets?.length || selectedOrder?.ticketCount}
                 pdfDownloadToken={(selectedOrder as any)?.pdfDownloadToken}
+                userEmail={
+                  (selectedOrder as any)?.userEmail ||
+                  user?.email ||
+                  (selectedOrder as any)?.email ||
+                  null
+                }
                 onClose={() => setQrVisible(false)}
                 onHome={() => {
                   setQrVisible(false);
@@ -919,37 +943,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
   },
-  webDownloadPdfBtn: {
-    flex: 1,
-    flexDirection: 'row',
+  webIconOnlyBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFF7ED',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#FED7AA',
-    borderRadius: 10,
-    paddingVertical: 8,
-  },
-  webDownloadPdfText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#EA580C',
-  },
-  webShareBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 10,
-    paddingVertical: 8,
-  },
-  webShareText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#0F172A',
+    borderColor: '#E2E8F0',
   },
 
   modalBg: { flex: 1, backgroundColor: 'rgba(15,23,42,0.96)' },

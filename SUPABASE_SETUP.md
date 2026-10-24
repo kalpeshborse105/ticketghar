@@ -94,7 +94,34 @@ You should see seeded Maharashtra demo events (titles prefixed `[SEED]`).
 
 ## 8. Production environment
 
-Set `APP_URL` / `NEXT_PUBLIC_APP_URL` to your public domain (e.g. `https://mahaticket.kalpkrutinfotech.com`).
+Set `APP_URL` / `NEXT_PUBLIC_APP_URL` to the **only** public domain:
+
+`https://mahaticket.kalpkrutinfotech.com`
+
+Do **not** use bare `mahaticket.com` (that domain is not ours).
+
+### Supabase Dashboard (Auth → URL Configuration)
+
+1. **Site URL:** `https://mahaticket.kalpkrutinfotech.com`
+2. **Redirect URLs** (allow list), include at least:
+   - `https://mahaticket.kalpkrutinfotech.com/**`
+   - `https://mahaticket.kalpkrutinfotech.com/auth/callback`
+   - `https://mahaticket.kalpkrutinfotech.com/auth/mobile-done`
+   - `mahaticket://**` (Android deep link return)
+3. Remove any `https://mahaticket.com/**` entries if present.
+
+### Google Cloud OAuth (if using GOOGLE_CLIENT_ID)
+
+Authorized redirect URI must be:
+
+`https://mahaticket.kalpkrutinfotech.com/api/auth/google/callback`
+
+### Vercel
+
+Set Production env:
+
+- `APP_URL=https://mahaticket.kalpkrutinfotech.com`
+- `NEXT_PUBLIC_APP_URL=https://mahaticket.kalpkrutinfotech.com`
 
 Do not hardcode localhost or brand-foreign domains in UI.
 

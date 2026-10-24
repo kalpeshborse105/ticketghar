@@ -9,7 +9,6 @@ import {
   Share2,
   Calendar,
   MapPin,
-  Ticket,
   ShieldCheck,
   X,
   Mail,
@@ -43,6 +42,7 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
     'idle'
   );
   const [emailMessage, setEmailMessage] = useState('');
+  const [emailConfirmOpen, setEmailConfirmOpen] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -54,16 +54,16 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
     try {
       const existingStr = localStorage.getItem('mahaticket_offline_orders') || '[]';
       const existing = JSON.parse(existingStr);
-      const toSave = {
-        ...order,
-        event,
-        tickets,
-        pricing,
+        const toSave = {
+          ...order,
+          event,
+          tickets,
+          pricing,
         userEmail: order?.userEmail || order?.email,
         session: bookingResult.session || order?.session,
         sessionId: bookingResult.sessionId || order?.sessionId || bookingResult.session?.id,
-        savedAt: new Date().toISOString(),
-      };
+          savedAt: new Date().toISOString(),
+        };
       const next = [toSave, ...existing.filter((o: any) => o.orderNumber !== order.orderNumber)].slice(
         0,
         20
@@ -76,6 +76,7 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
   }, [order, event, tickets, pricing]);
 
   const primaryTicket = tickets[0]?.ticketCode;
+  const recipientEmail = (order?.userEmail || order?.email || '').trim();
   const eventTitle = language === 'mr' ? event?.titleMr || event?.title : event?.title;
   const venueObj =
     event?.venue ||
@@ -92,81 +93,7 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
   const seatsList = tickets.map((tk: any) => tk.seatCode).join(', ');
   const ticketUrl = primaryTicket ? getTicketShareUrl(primaryTicket) : '';
 
-  // Auto-email on mount (server also sends on confirm). Requires session or pdfDownloadToken.
-  useEffect(() => {
-    if (!primaryTicket || !order?.userEmail) return;
-    let cancelled = false;
-    (async () => {
-      const pdfToken =
-        (order as any)?.pdfDownloadToken ||
-        (bookingResult as any)?.pdfDownloadToken ||
-        (bookingResult as any)?.order?.pdfDownloadToken ||
-        null;
-      const sessionToken =
-        typeof window !== 'undefined' ? localStorage.getItem('mahaticket_token') : null;
-      if (!pdfToken && !sessionToken) {
-        setEmailStatus('pending');
-        setEmailMessage(
-          language === 'mr'
-            ? 'तिकीट निश्चित. ईमेल सर्व्हरवरून पाठवला जाईल.'
-            : 'Booking confirmed. Email will be sent by the server.'
-        );
-        return;
-      }
-      setEmailStatus('sending');
-      try {
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-        if (sessionToken && sessionToken.includes('.')) {
-          headers.Authorization = `Bearer ${sessionToken}`;
-        }
-        const res = await fetch(`/api/tickets/${primaryTicket}/email`, {
-          method: 'POST',
-          credentials: 'include',
-          headers,
-          body: JSON.stringify({
-            email: order.userEmail,
-            ...(pdfToken ? { pdfDownloadToken: pdfToken } : {}),
-          }),
-        });
-        const data = await res.json();
-        if (cancelled) return;
-        if (data.sent) {
-          setEmailStatus('sent');
-          const attachNote =
-            data.attached === false
-              ? language === 'mr'
-                ? ' (PDF जोडले नाही — पुन्हा प्रयत्न करा)'
-                : ' (sent without PDF — retry)'
-              : '';
-          setEmailMessage(
-            language === 'mr'
-              ? `ईमेल पाठवला: ${data.recipient || order.userEmail}${attachNote}`
-              : `Email sent to ${data.recipient || order.userEmail}${attachNote}`
-          );
-        } else if (data.configured === false) {
-          setEmailStatus('pending');
-          setEmailMessage(
-            language === 'mr'
-              ? 'तिकीट निश्चित. ईमेल सेवा लवकरच सुरू होईल.'
-              : 'Booking confirmed. SMTP delivery queued.'
-          );
-        } else {
-          setEmailStatus('failed');
-          setEmailMessage(
-            language === 'mr' ? 'तिकीट निश्चित. ईमेल पुन्हा पाठवा.' : 'Booking confirmed. You can retry email.'
-          );
-        }
-      } catch {
-        if (!cancelled) {
-          setEmailStatus('failed');
-          setEmailMessage(language === 'mr' ? 'तिकीट निश्चित.' : 'Booking confirmed.');
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [primaryTicket, order?.userEmail, language, bookingResult, order]);
+  // Email is user-triggered only (Mail icon → confirm). Server may still email on first payment confirm.
 
   const handleWhatsApp = () => {
     if (!primaryTicket) return;
@@ -275,7 +202,7 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
         return;
       }
 
-      const blob = await res.blob();
+        const blob = await res.blob();
       if (!blob || blob.size < 100) {
         setDownloadError(
           language === 'mr' ? 'PDF रिकामी किंवा अवैध आहे.' : 'PDF file is empty or invalid.'
@@ -283,12 +210,12 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
         return;
       }
 
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
       a.download = `MahaTicket-${order.orderNumber || primaryTicket}.pdf`;
       document.body.appendChild(a);
-      a.click();
+        a.click();
       document.body.removeChild(a);
       // Delay revoke so the browser can finish starting the download
       setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
@@ -313,9 +240,11 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
     }
   };
 
-  const handleRetryEmail = async () => {
-    if (!primaryTicket) return;
+  const handleSendEmail = async () => {
+    if (!primaryTicket || !recipientEmail) return;
+    setEmailConfirmOpen(false);
     setEmailStatus('sending');
+    setEmailMessage(language === 'mr' ? 'ईमेल पाठवत आहे…' : 'Sending email…');
     try {
       const pdfToken =
         (order as any)?.pdfDownloadToken ||
@@ -333,30 +262,24 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
         credentials: 'include',
         headers,
         body: JSON.stringify({
-          email: order.userEmail,
+          email: recipientEmail,
           ...(pdfToken ? { pdfDownloadToken: pdfToken } : {}),
         }),
       });
       const data = await res.json();
-      if (res.ok && data.sent) {
+      if (res.ok && (data.sent || data.success)) {
         setEmailStatus('sent');
-        const attachNote =
-          data.attached === false
-            ? language === 'mr'
-              ? ' (PDF जोडले नाही)'
-              : ' (without PDF)'
-            : '';
         setEmailMessage(
           language === 'mr'
-            ? `ईमेल पाठवला: ${data.recipient}${attachNote}`
-            : `Email sent to ${data.recipient}${attachNote}`
+            ? `ईमेल पाठवला: ${data.recipient || recipientEmail}`
+            : `Email sent to ${data.recipient || recipientEmail}`
         );
       } else if (data.status === 'not_configured') {
         setEmailStatus('pending');
         setEmailMessage(
           language === 'mr'
-            ? 'ईमेल सेवा सध्या उपलब्ध नाही. आपण PDF थेट डाउनलोड करू शकता.'
-            : 'Email service is not configured. You can download the PDF pass directly.'
+            ? 'ईमेल सेवा सध्या उपलब्ध नाही.'
+            : 'Email service is not configured.'
         );
       } else {
         setEmailStatus('failed');
@@ -364,16 +287,16 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
       }
     } catch {
       setEmailStatus('failed');
-      setEmailMessage('Failed to trigger email.');
+      setEmailMessage(language === 'mr' ? 'ईमेल अयशस्वी.' : 'Failed to send email.');
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6">
-      <div className="relative w-full max-w-xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] border border-slate-200">
+    <div className="fixed inset-0 z-[100] overflow-y-auto bg-black/85 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-6">
+      <div className="relative w-full max-w-xl bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col h-[min(92dvh,900px)] max-h-[92dvh] mb-[max(0px,env(safe-area-inset-bottom))] border border-slate-200">
 
         {/* Top Celebration Bar */}
-        <div className="px-5 py-3.5 bg-[#ea580c] text-white flex items-center justify-between">
+        <div className="px-5 py-3.5 bg-[#ea580c] text-white flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
             <CheckCircle className="w-5 h-5 text-white" />
             <div>
@@ -443,43 +366,28 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
           </div>
         </div>
 
-        {/* Email delivery status banner */}
-        {emailMessage ? (
-          <div className="px-4 py-2 border-t border-slate-200 bg-orange-50/60 text-xs text-slate-700 flex items-center justify-between gap-2">
-            <span>
-              {emailStatus === 'sent' ? '✓ ' : emailStatus === 'pending' ? '⏳ ' : emailStatus === 'failed' ? '! ' : ''}
+        {/* Sticky footer: icon-only actions — clear of mobile bottom nav / safe area */}
+        <div className="shrink-0 border-t border-slate-200 bg-white z-30 pb-[max(calc(env(safe-area-inset-bottom)+0.75rem),1rem)]">
+          {emailMessage ? (
+            <div className="px-4 py-1.5 bg-orange-50/70 text-[11px] text-slate-700 border-b border-orange-100/80 truncate">
+              {emailStatus === 'sent' ? '✓ ' : emailStatus === 'sending' ? '⏳ ' : emailStatus === 'failed' ? '! ' : ''}
               {emailMessage}
-            </span>
-            {(emailStatus === 'failed' || emailStatus === 'pending') && (
-              <button
-                type="button"
-                onClick={handleRetryEmail}
-                className="text-[#ea580c] font-bold shrink-0 hover:underline"
-              >
-                Retry
-              </button>
-            )}
-          </div>
-        ) : null}
+            </div>
+          ) : null}
 
-        {/* Bottom Actions: Circular icon buttons for WhatsApp, Share, Download + My Tickets CTA */}
-        <div className="p-3 sm:p-4 border-t border-slate-200 bg-white flex flex-wrap sm:flex-nowrap items-center justify-between gap-2.5 sm:gap-3 shrink-0 pb-[max(env(safe-area-inset-bottom),0.875rem)]">
-          {/* Circular Icon Action Buttons */}
-          <div className="flex items-center gap-2.5">
-            {/* WhatsApp Icon Button */}
+          <div className="px-4 py-3 flex items-center justify-center gap-3 sm:gap-4">
             <button
               type="button"
               onClick={handleWhatsApp}
-              title="WhatsApp वर पाठवा (Share on WhatsApp)"
+              title="WhatsApp"
               aria-label="WhatsApp"
-              className="w-10 h-10 rounded-full bg-[#25D366] hover:bg-[#20ba59] text-white flex items-center justify-center shadow-sm transition active:scale-95 cursor-pointer"
+              className="w-12 h-12 rounded-full bg-[#25D366] hover:bg-[#20ba59] text-white flex items-center justify-center shadow-md transition active:scale-95 cursor-pointer"
             >
-              <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24" aria-hidden>
                 <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.885-9.888 9.885m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L0 24l6.335-1.662c1.746.953 3.71 1.456 5.711 1.457h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" />
               </svg>
             </button>
 
-            {/* Share Native / Link Icon Button */}
             <button
               type="button"
               onClick={async () => {
@@ -492,7 +400,7 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
                     });
                     return;
                   } catch {
-                    // fall through
+                    /* fall through */
                   }
                 }
                 if (typeof navigator !== 'undefined' && navigator.clipboard && ticketUrl) {
@@ -501,56 +409,88 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
                   setTimeout(() => setCopySuccess(false), 3000);
                 }
               }}
-              title="शेअर करा (Share)"
+              title="Share"
               aria-label="Share"
-              className="relative w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 flex items-center justify-center shadow-xs transition active:scale-95 cursor-pointer"
+              className="relative w-12 h-12 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 flex items-center justify-center shadow-md transition active:scale-95 cursor-pointer"
             >
-              <Share2 className="w-4 h-4" />
+              <Share2 className="w-5 h-5" />
               {copySuccess && (
-                <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[11px] font-semibold py-1 px-2.5 rounded-lg whitespace-nowrap shadow-md animate-fadeIn z-50">
-                  {language === 'mr' ? 'लिंक कॉपी झाली!' : 'Link copied!'}
+                <span className="absolute -top-9 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] font-semibold py-1 px-2 rounded-md whitespace-nowrap shadow-md z-50">
+                  ✓
                 </span>
               )}
             </button>
 
-            {/* Download PDF Icon Button */}
             <button
               type="button"
               onClick={handleDownloadPDF}
               disabled={isDownloading}
-              title="PDF डाउनलोड करा (Download PDF)"
+              title="Download PDF"
               aria-label="Download PDF"
-              className="w-10 h-10 rounded-full bg-[#ea580c] hover:bg-[#c2410c] text-white flex items-center justify-center shadow-sm transition active:scale-95 disabled:opacity-50 cursor-pointer"
+              className="w-12 h-12 rounded-full bg-[#ea580c] hover:bg-[#c2410c] text-white flex items-center justify-center shadow-md transition active:scale-95 disabled:opacity-50 cursor-pointer"
             >
               {isDownloading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Loader2 className="w-5 h-5 animate-spin" />
               ) : downloadSuccess ? (
-                <CheckCircle2 className="w-4 h-4 text-white" />
+                <CheckCircle2 className="w-5 h-5 text-white" />
               ) : (
-                <Download className="w-4 h-4" />
+                <Download className="w-5 h-5" />
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setEmailConfirmOpen(true)}
+              disabled={emailStatus === 'sending' || !recipientEmail}
+              title="Email ticket"
+              aria-label="Email ticket"
+              className="w-12 h-12 rounded-full bg-slate-800 hover:bg-slate-900 text-white flex items-center justify-center shadow-md transition active:scale-95 disabled:opacity-50 cursor-pointer"
+            >
+              {emailStatus === 'sending' ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Mail className="w-5 h-5" />
               )}
             </button>
           </div>
           {downloadError ? (
-            <p className="mt-2 text-center text-xs font-semibold text-red-600 px-2" role="alert">
+            <p className="px-4 pb-2 text-center text-[11px] font-semibold text-red-600" role="alert">
               {downloadError}
             </p>
           ) : null}
-
-          {/* Primary View My Tickets Redirect Button */}
-          <button
-            type="button"
-            onClick={() => {
-              onClose();
-              if (typeof window !== 'undefined') window.location.href = '/my-tickets';
-            }}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-full bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-md transition active:scale-95 cursor-pointer"
-          >
-            <span>{language === 'mr' ? 'माझी तिकिटे पहा' : 'View My Tickets'}</span>
-            <Ticket className="w-3.5 h-3.5 text-orange-400" />
-          </button>
         </div>
       </div>
+
+      {emailConfirmOpen ? (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl space-y-3">
+            <h3 className="text-sm font-bold text-slate-900">
+              {language === 'mr' ? 'ईमेल पाठवायचा?' : 'Send ticket email?'}
+            </h3>
+            <p className="text-xs text-slate-600">
+              {language === 'mr'
+                ? `तिकीट PDF या पत्त्यावर पाठवला जाईल: ${recipientEmail || '—'}`
+                : `PDF ticket will be sent to: ${recipientEmail || '—'}`}
+            </p>
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setEmailConfirmOpen(false)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold"
+              >
+                {language === 'mr' ? 'रद्द' : 'Cancel'}
+              </button>
+              <button
+                type="button"
+                onClick={handleSendEmail}
+                className="flex-1 py-2.5 rounded-xl bg-[#ea580c] text-white text-xs font-bold"
+              >
+                {language === 'mr' ? 'पाठवा' : 'Send'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };

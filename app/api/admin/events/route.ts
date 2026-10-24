@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
 import { events, venues, organizers, eventSessions, ticketTypes, auditLogs } from '@/src/db/schema.ts';
-import { eq, desc, and } from 'drizzle-orm';
+import { eq, desc, and, inArray } from 'drizzle-orm';
 import { requireAdmin, verifyAdminSession } from '@/src/lib/admin-auth.ts';
 import { generateSessionInventory } from '@/src/lib/inventory-engine.ts';
 
@@ -44,11 +44,26 @@ export async function GET(request: NextRequest) {
           .orderBy(desc(events.createdAt))
       : await query;
 
+    const eventIds = list.map((item) => item.event.id);
+    const sessionsByEvent: Record<number, typeof eventSessions.$inferSelect[]> = {};
+    if (eventIds.length > 0) {
+      const allSessions = await db
+        .select()
+        .from(eventSessions)
+        .where(inArray(eventSessions.eventId, eventIds))
+        .orderBy(eventSessions.sessionStartTime);
+      for (const s of allSessions) {
+        if (!sessionsByEvent[s.eventId]) sessionsByEvent[s.eventId] = [];
+        sessionsByEvent[s.eventId].push(s);
+      }
+    }
+
     const formatted = list.map((item) => ({
       ...item.event,
       venue: item.venue,
       organizer: item.organizer,
       event: item.event,
+      sessions: sessionsByEvent[item.event.id] || [],
     }));
 
     return NextResponse.json({ events: formatted });

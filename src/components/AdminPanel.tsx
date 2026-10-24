@@ -34,19 +34,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       {/* Top Header Navigation */}
       <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-[#E2E8F0] shadow-xs">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3">
             {onBack && (
-              <button
-                onClick={onBack}
+          <button
+            onClick={onBack}
                 className="p-2 rounded-xl hover:bg-slate-100 text-[#64748B] hover:text-[#141B2B] transition"
                 title="मागे जा"
-              >
+          >
                 <ArrowLeft className="w-5 h-5" />
-              </button>
+          </button>
             )}
-            <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2">
               <span className="text-2xl">🎭</span>
-              <div>
+                <div>
                 <h1 className="text-base font-black text-[#141B2B] leading-none">
                   महाटिकिट <span className="text-[#A33900]">कंट्रोल हब</span>
                 </h1>
@@ -54,16 +54,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   {currentRole === 'SUPER_ADMIN'
                     ? 'सुपर अ‍ॅडमिनिस्ट्रेशन व ऑपरेशन्स केंद्र'
                     : 'नाट्य निर्माते व अधिकृत आयोजक कन्सोल'}
-                </p>
+                  </p>
+                </div>
               </div>
-            </div>
-          </div>
+                  </div>
 
           {/* Role Header Info / Badge */}
           <div className="flex items-center gap-3">
             {!isInitialOrg ? (
               <div className="bg-[#FFF7ED] border border-[#FFEDD5] p-1 rounded-xl flex items-center gap-1 shadow-inner">
-                <button
+                  <button
                   onClick={() => setCurrentRole('SUPER_ADMIN')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                     currentRole === 'SUPER_ADMIN'
@@ -73,8 +73,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 >
                   <ShieldCheck className="w-3.5 h-3.5" />
                   <span>सुपर अ‍ॅडमिन (Admin)</span>
-                </button>
-                <button
+                            </button>
+                  <button
                   onClick={() => setCurrentRole('ORGANIZER')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                     currentRole === 'ORGANIZER'
@@ -84,25 +84,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 >
                   <Building2 className="w-3.5 h-3.5" />
                   <span>आयोजक व्ह्यू (Organizer View)</span>
-                </button>
-              </div>
+                              </button>
+                </div>
             ) : (
               <div className="bg-orange-100 border border-orange-200 text-[#A33900] px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5">
                 <Building2 className="w-4 h-4 text-[#A33900]" />
                 <span>अधिकृत आयोजक कन्सोल (Organizer Access)</span>
-              </div>
-            )}
+            </div>
+          )}
 
             {onLogout && (
-              <button
+                <button
                 onClick={onLogout}
                 className="text-xs font-semibold text-[#64748B] hover:text-[#A33900] px-3 py-1.5 rounded-lg border border-[#E2E8F0] hover:bg-slate-50 transition cursor-pointer"
-              >
+                >
                 लॉगआउट
-              </button>
+                </button>
             )}
-          </div>
-        </div>
+                </div>
+                </div>
       </header>
 
       {/* Render the Separate Dedicated Workflow */}
@@ -121,8 +121,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             onBack={onBack}
             onLogout={onLogout}
           />
-        )}
-      </main>
+          )}
+        </main>
     </div>
   );
 };

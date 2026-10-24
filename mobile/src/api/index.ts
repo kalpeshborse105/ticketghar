@@ -1751,12 +1751,17 @@ export const api = {
     ticketCode: string,
     email?: string,
     pdfDownloadToken?: string
-  ): Promise<{ success: boolean; message?: string; error?: string }> => {
-    return request<any>(`/api/tickets/${encodeURIComponent(ticketCode)}/email`, {
+  ): Promise<{ success: boolean; sent?: boolean; message?: string; error?: string }> => {
+    const res = await request<any>(`/api/tickets/${encodeURIComponent(ticketCode)}/email`, {
       method: 'POST',
       body: JSON.stringify({ email, pdfDownloadToken }),
       timeout: 15000,
     });
+    return {
+      ...res,
+      success: !!(res?.success || res?.sent),
+      sent: !!(res?.sent || res?.success),
+    };
   },
 };
 

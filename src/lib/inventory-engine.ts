@@ -230,53 +230,53 @@ export async function createTemporarySeatHold(params: {
       );
 
     const sessionInventories = await tx
-      .select({
-        invId: seatInventory.id,
-        seatId: seatInventory.seatId,
-        status: seatInventory.status,
-        heldBy: seatInventory.heldByUserId,
-        holdExpires: seatInventory.holdExpiresAt,
-        ticketTypeId: seatInventory.ticketTypeId,
-        price: ticketTypes.price,
-        seatCode: seats.seatCode,
-        tier: seats.tier,
-        sectionId: seats.sectionId,
-      })
-      .from(seatInventory)
-      .innerJoin(ticketTypes, eq(seatInventory.ticketTypeId, ticketTypes.id))
-      .innerJoin(seats, eq(seatInventory.seatId, seats.id))
-      .where(
-        and(
-          eq(seatInventory.sessionId, sessionId),
+    .select({
+      invId: seatInventory.id,
+      seatId: seatInventory.seatId,
+      status: seatInventory.status,
+      heldBy: seatInventory.heldByUserId,
+      holdExpires: seatInventory.holdExpiresAt,
+      ticketTypeId: seatInventory.ticketTypeId,
+      price: ticketTypes.price,
+      seatCode: seats.seatCode,
+      tier: seats.tier,
+      sectionId: seats.sectionId,
+    })
+    .from(seatInventory)
+    .innerJoin(ticketTypes, eq(seatInventory.ticketTypeId, ticketTypes.id))
+    .innerJoin(seats, eq(seatInventory.seatId, seats.id))
+    .where(
+      and(
+        eq(seatInventory.sessionId, sessionId),
           inArray(seatInventory.seatId, sortedSeatIds)
-        )
-      );
+      )
+    );
 
     if (sessionInventories.length < sortedSeatIds.length) {
       throw new Error('One or more selected seats are not available in this show. Please select valid seats.');
-    }
+  }
 
-    for (const inv of sessionInventories) {
-      if (inv.status === 'booked') {
-        throw new Error(`Seat ${inv.seatCode} is already booked.`);
-      }
+  for (const inv of sessionInventories) {
+    if (inv.status === 'booked') {
+      throw new Error(`Seat ${inv.seatCode} is already booked.`);
+    }
       if (inv.status === 'held' && inv.heldBy !== holdToken) {
-        if (inv.holdExpires && new Date(inv.holdExpires) > now) {
-          throw new Error(`Seat ${inv.seatCode} is currently held by another user.`);
-        }
+      if (inv.holdExpires && new Date(inv.holdExpires) > now) {
+        throw new Error(`Seat ${inv.seatCode} is currently held by another user.`);
       }
     }
+  }
 
     const heldRows = await tx
-      .update(seatInventory)
-      .set({
-        status: 'held',
+    .update(seatInventory)
+    .set({
+      status: 'held',
         heldByUserId: holdToken,
-        holdExpiresAt: expiresAt,
-      })
-      .where(
-        and(
-          eq(seatInventory.sessionId, sessionId),
+      holdExpiresAt: expiresAt,
+    })
+    .where(
+      and(
+        eq(seatInventory.sessionId, sessionId),
           inArray(seatInventory.seatId, sortedSeatIds),
           or(
             eq(seatInventory.status, 'available'),
@@ -294,16 +294,16 @@ export async function createTemporarySeatHold(params: {
       );
     }
 
-    const faceValueTotal = sessionInventories.reduce((sum, item) => sum + item.price, 0);
+  const faceValueTotal = sessionInventories.reduce((sum, item) => sum + item.price, 0);
 
-    return {
+  return {
       heldSeatIds: heldRows.map((r) => r.seatId).sort((a, b) => a - b),
-      heldSeats: sessionInventories.map((i) => ({
-        seatId: i.seatId,
-        seatCode: i.seatCode,
-        price: i.price,
-        tier: i.tier,
-      })),
+    heldSeats: sessionInventories.map((i) => ({
+      seatId: i.seatId,
+      seatCode: i.seatCode,
+      price: i.price,
+      tier: i.tier,
+    })),
       faceValueTotal,
     };
   });
@@ -589,34 +589,34 @@ export async function confirmBookingOrder(params: {
   }
 
   if (!order) {
-    const randomSuffix = Math.floor(10000 + Math.random() * 90000);
+  const randomSuffix = Math.floor(10000 + Math.random() * 90000);
     const orderNumber = `MT-${new Date().getFullYear()}-${randomSuffix}`;
 
     const [newOrder] = await db
-      .insert(orders)
-      .values({
-        orderNumber,
-        userId,
-        userEmail,
-        userPhone,
-        userName,
-        eventId,
-        sessionId,
+    .insert(orders)
+    .values({
+      orderNumber,
+      userId,
+      userEmail,
+      userPhone,
+      userName,
+      eventId,
+      sessionId,
         ticketCount: pricing.ticketCount || seatIds.length || 1,
-        ticketFaceValueTotal: pricing.ticketFaceValueTotal,
-        platformFeeTotal: pricing.platformFeeTotal,
-        taxTotal: pricing.taxTotal,
+      ticketFaceValueTotal: pricing.ticketFaceValueTotal,
+      platformFeeTotal: pricing.platformFeeTotal,
+      taxTotal: pricing.taxTotal,
         gatewayCostEstimate: pricing.gatewayCostEstimate || 0,
         discountTotal: pricing.discountTotal || 0,
-        grandTotal: pricing.grandTotal,
-        currency: 'INR',
-        paymentStatus: 'captured',
-        orderStatus: 'confirmed',
+      grandTotal: pricing.grandTotal,
+      currency: 'INR',
+      paymentStatus: 'captured',
+      orderStatus: 'confirmed',
         razorpayOrderId: paymentDetails.razorpayOrderId || null,
         razorpayPaymentId: paymentDetails.razorpayPaymentId || null,
-        idempotencyKey: paymentDetails.idempotencyKey || `idem_${orderNumber}`,
-      })
-      .returning();
+      idempotencyKey: paymentDetails.idempotencyKey || `idem_${orderNumber}`,
+    })
+    .returning();
     order = newOrder;
   }
 
@@ -706,40 +706,40 @@ export async function confirmBookingOrder(params: {
       });
     }
   } else {
-    for (let idx = 0; idx < currentSeats.length; idx++) {
-      const s = currentSeats[idx];
+  for (let idx = 0; idx < currentSeats.length; idx++) {
+    const s = currentSeats[idx];
       const ticketCode = `MT-TK-${order.id}-${s.seatCode.replace(/[^A-Za-z0-9]/g, '')}-${idx + 1}`;
 
-      // Cryptographic signature: HMAC SHA256 of ticketCode + eventId + sessionId + seatCode
-      const rawData = `${ticketCode}|${eventId}|${sessionId}|${s.seatCode}|${userName}`;
-      const securityHash = crypto
-        .createHmac('sha256', TICKET_SECRET)
-        .update(rawData)
-        .digest('hex');
+    // Cryptographic signature: HMAC SHA256 of ticketCode + eventId + sessionId + seatCode
+    const rawData = `${ticketCode}|${eventId}|${sessionId}|${s.seatCode}|${userName}`;
+    const securityHash = crypto
+      .createHmac('sha256', TICKET_SECRET)
+      .update(rawData)
+      .digest('hex');
 
-      const [ticketRecord] = await db
-        .insert(tickets)
-        .values({
-          ticketCode,
-          orderId: order.id,
-          sessionId,
-          ticketTypeId: s.ticketTypeId,
-          seatId: s.seatId,
-          seatCode: s.seatCode,
-          attendeeName: userName,
-          faceValue: s.price,
-          securityHash,
+    const [ticketRecord] = await db
+      .insert(tickets)
+      .values({
+        ticketCode,
+        orderId: order.id,
+        sessionId,
+        ticketTypeId: s.ticketTypeId,
+        seatId: s.seatId,
+        seatCode: s.seatCode,
+        attendeeName: userName,
+        faceValue: s.price,
+        securityHash,
           qrPayload: groupQrPayload,
-          status: 'valid',
-        })
-        .returning();
+        status: 'valid',
+      })
+      .returning();
 
-      generatedTickets.push({
-        ...ticketRecord,
+    generatedTickets.push({
+      ...ticketRecord,
         qrDataUrl: groupQrDataUrl,
         groupQrPayload,
         groupQrDataUrl,
-      });
+    });
     }
   }
 
@@ -755,50 +755,63 @@ export async function confirmBookingOrder(params: {
   const settleRef = `SETTLE-${new Date().getFullYear()}-${targetOrgId.toString().padStart(3, '0')}-${order.id}`;
 
   try {
-    await db.insert(settlements).values({
-      settlementReference: settleRef,
+  await db.insert(settlements).values({
+    settlementReference: settleRef,
       organizerId: targetOrgId,
       eventId: eventRecord.id,
-      totalGrossTicketSales: pricing.ticketFaceValueTotal,
-      totalPlatformFeesCollected: pricing.platformFeeTotal,
-      totalPaymentGatewayCost: pricing.gatewayCostEstimate,
-      totalTaxCollected: pricing.taxTotal,
-      platformCommissionEarned,
-      totalRefundDeductions: 0,
-      netPayableToOrganizer,
-      status: 'pending',
-    });
+    totalGrossTicketSales: pricing.ticketFaceValueTotal,
+    totalPlatformFeesCollected: pricing.platformFeeTotal,
+    totalPaymentGatewayCost: pricing.gatewayCostEstimate,
+    totalTaxCollected: pricing.taxTotal,
+    platformCommissionEarned,
+    totalRefundDeductions: 0,
+    netPayableToOrganizer,
+    status: 'pending',
+  });
   } catch (settleErr) {
     console.warn('[Booking] Settlement record notice:', settleErr);
   }
 
   // 8. Audit log for financial & booking integrity
   try {
-    await db.insert(auditLogs).values({
-      actorId: `user-${userId}`,
-      actorRole: 'customer',
-      action: 'ORDER_CONFIRMED',
-      entityType: 'order',
-      entityId: order.orderNumber,
-      details: JSON.stringify({
-        orderId: order.id,
-        seats: currentSeats.map((c) => c.seatCode),
-        grandTotal: pricing.grandTotal,
-        organizerNet: netPayableToOrganizer,
-      }),
-    });
+  await db.insert(auditLogs).values({
+    actorId: `user-${userId}`,
+    actorRole: 'customer',
+    action: 'ORDER_CONFIRMED',
+    entityType: 'order',
+    entityId: order.orderNumber,
+    details: JSON.stringify({
+      orderId: order.id,
+      seats: currentSeats.map((c) => c.seatCode),
+      grandTotal: pricing.grandTotal,
+      organizerNet: netPayableToOrganizer,
+    }),
+  });
   } catch (auditErr) {
     console.warn('[Booking] Audit log notice:', auditErr);
   }
 
-  // 9. Instant booking confirmation email dispatch via SMTP / Resend
+  // 9. Booking confirmation email WITH PDF attachment.
+  // Must await on serverless (Vercel) — fire-and-forget often kills PDF generation mid-flight.
   if (generatedTickets.length > 0 && userEmail) {
-    sendBookingTicketEmail({
-      ticketCode: generatedTickets[0].ticketCode,
-      recipientEmail: userEmail,
-    }).catch((emailErr) => {
-      console.warn('[Booking] Background email dispatch error:', emailErr);
-    });
+    try {
+      const emailResult = await Promise.race([
+        sendBookingTicketEmail({
+          ticketCode: generatedTickets[0].ticketCode,
+          recipientEmail: userEmail,
+        }),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 18000)),
+      ]);
+      if (!emailResult) {
+        console.warn('[Booking] Email dispatch timed out after 18s (PDF may be missing)');
+      } else if (!emailResult.attached) {
+        console.warn('[Booking] Email sent without PDF attachment:', emailResult.message || emailResult.error);
+      } else {
+        console.log('[Booking] Email+PDF attached OK:', emailResult.recipient);
+      }
+    } catch (emailErr) {
+      console.warn('[Booking] Email dispatch error:', emailErr);
+    }
   }
 
   // Invalidate Redis/memory seats cache immediately so newly booked seats are reflected

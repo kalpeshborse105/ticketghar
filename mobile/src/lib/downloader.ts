@@ -1,6 +1,6 @@
 /**
  * Native ticket pass downloader for MahaTicket.
- * Prefer authenticated DownloadManager (Bearer) or short-lived ?t= token URLs.
+ * Prefer authenticated DownloadModule (Bearer) or short-lived ?t= token URLs.
  */
 import { NativeModules, Platform, ToastAndroid, Linking, Share } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -32,6 +32,19 @@ function withSingleDownloadFlag(url: string): string {
   }
 }
 
+function withPdfToken(url: string, pdfToken?: string | null): string {
+  if (!pdfToken) return url;
+  try {
+    const u = new URL(url);
+    u.searchParams.set('t', pdfToken);
+    return u.toString();
+  } catch {
+    return url.includes('?')
+      ? `${url}&t=${encodeURIComponent(pdfToken)}`
+      : `${url}?t=${encodeURIComponent(pdfToken)}`;
+  }
+}
+
 export async function downloadTicketPdf(params: {
   url: string;
   filename: string;
@@ -56,23 +69,14 @@ export async function downloadTicketPdf(params: {
       pdfToken,
     } = params;
 
-    let url = params.url;
-    if (pdfToken) {
-      try {
-        const u = new URL(url);
-        u.searchParams.set('t', pdfToken);
-        url = u.toString();
-      } catch {
-        url = url.includes('?') ? `${url}&t=${encodeURIComponent(pdfToken)}` : `${url}?t=${encodeURIComponent(pdfToken)}`;
-      }
-    }
+    let url = withPdfToken(params.url, pdfToken);
     url = withSingleDownloadFlag(url);
     const safeFilename = (filename || 'MahaTicket-Pass.pdf').replace(/[^a-zA-Z0-9._-]/g, '_');
     const authHeader = await resolveAuthHeader();
 
     if (Platform.OS === 'android' && TicketDownloader) {
       try {
-        ToastAndroid.show('तिकीट PDF डाऊनलोड सुरू झाले... (Download folder)', ToastAndroid.LONG);
+        ToastAndroid.show('तिकीट PDF डाऊनलोड सुरू...', ToastAndroid.SHORT);
         if (typeof TicketDownloader.downloadFileWithAuth === 'function') {
           await TicketDownloader.downloadFileWithAuth(
             url,
@@ -84,13 +88,26 @@ export async function downloadTicketPdf(params: {
         } else {
           await TicketDownloader.downloadFile(url, safeFilename, title, description);
         }
+        ToastAndroid.show('PDF Downloads फोल्डरमध्ये सेव्ह झाले ✓', ToastAndroid.LONG);
         return true;
       } catch (err: unknown) {
-        console.warn('Native DownloadManager error, falling back:', err);
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn('Native PDF download error:', msg);
+        if (Platform.OS === 'android') {
+          ToastAndroid.show(
+            msg.includes('PDF') || msg.includes('HTTP')
+              ? 'PDF अयशस्वी — लॉगिन तपासा किंवा पुन्हा प्रयत्न करा'
+              : 'PDF डाऊनलोड अयशस्वी. पुन्हा प्रयत्न करा.',
+            ToastAndroid.LONG
+          );
+        }
+        // Fall through to browser only if we have a token (avoids empty auth downloads)
+        if (!pdfToken && !authHeader) {
+          return false;
+        }
       }
     }
 
-    // Fallback: open URL that includes short-lived token when available
     try {
       await Linking.openURL(url);
       return true;

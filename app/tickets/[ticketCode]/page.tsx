@@ -7,13 +7,11 @@ import { QRCodeSVG } from 'qrcode.react';
 import {
   Download,
   Share2,
-  MapPin,
-  Calendar,
+  Mail,
   Ticket,
   ArrowLeft,
   Loader2,
   ShieldCheck,
-  Printer,
   CheckCircle2,
 } from 'lucide-react';
 import { getTicketShareUrl } from '@/src/lib/public-url';
@@ -80,6 +78,9 @@ export default function PublicTicketPage() {
   const [error, setError] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
+  const [emailConfirmOpen, setEmailConfirmOpen] = useState(false);
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailNote, setEmailNote] = useState<string | null>(null);
 
   useEffect(() => {
     if (!ticketCode) return;
@@ -151,9 +152,21 @@ export default function PublicTicketPage() {
     }
   };
 
-  const handlePrint = () => {
-    if (typeof window !== 'undefined') {
-      window.print();
+  const handleShare = async () => {
+    const url = data?.publicShareUrl || getTicketShareUrl(ticketCode);
+    const title = data?.event.titleMr || data?.event.title || 'MahaTicket Pass';
+    try {
+      if (typeof navigator !== 'undefined' && navigator.share) {
+        await navigator.share({ title, text: title, url });
+        return;
+      }
+    } catch {
+      /* fall through */
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      window.open(url, '_blank');
     }
   };
 
@@ -166,6 +179,40 @@ export default function PublicTicketPage() {
       `🎟️ MahaTicket (महाटिकिट) Admission Pass\n\n🎭 ${eventName}\n📍 ${venueName}\n🎫 Seats: ${seats}\n🔢 Booking ID: ${data?.order.orderNumber}\n\nView official ticket: ${url}`
     );
     window.open(`https://wa.me/?text=${text}`, '_blank');
+  };
+
+  const handleConfirmSendEmail = async () => {
+    if (!ticketCode || !data) return;
+    setEmailConfirmOpen(false);
+    setEmailSending(true);
+    setEmailNote(null);
+    try {
+      const sessionToken =
+        typeof window !== 'undefined' ? localStorage.getItem('mahaticket_token') : null;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (sessionToken && sessionToken.includes('.')) {
+        headers.Authorization = `Bearer ${sessionToken}`;
+      }
+      const res = await fetch(`/api/tickets/${encodeURIComponent(ticketCode)}/email`, {
+        method: 'POST',
+        credentials: 'include',
+        headers,
+        body: JSON.stringify({
+          email: data.order.email,
+          ...(data.pdfDownloadToken ? { pdfDownloadToken: data.pdfDownloadToken } : {}),
+        }),
+      });
+      const json = await res.json();
+      if (res.ok && json.sent) {
+        setEmailNote(`✓ ईमेल पाठवला: ${json.recipient || data.order.email || ''}`);
+      } else {
+        setEmailNote(json.error || json.message || 'ईमेल अयशस्वी');
+      }
+    } catch {
+      setEmailNote('ईमेल अयशस्वी');
+    } finally {
+      setEmailSending(false);
+    }
   };
 
   if (loading) {
@@ -216,7 +263,7 @@ export default function PublicTicketPage() {
   const isUsed = data.ticket.status === 'used';
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 py-8 px-3 sm:px-6">
+    <div className="min-h-screen bg-slate-50 text-slate-900 py-8 px-3 sm:px-6 pb-36 md:pb-8">
       <div className="max-w-xl mx-auto space-y-4">
         {/* Navigation & Brand */}
         <div className="flex items-center justify-between px-1">
@@ -253,48 +300,91 @@ export default function PublicTicketPage() {
           onShare={handleShareWhatsApp}
         />
 
-        {/* Action Buttons (Download, Print, WhatsApp) */}
-        <div className="flex flex-wrap items-center gap-2 print:hidden">
+      </div>
+
+      {/* Icon-only actions — fixed above mobile bottom nav */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 print:hidden md:static md:mt-2">
+        {emailNote ? (
+          <p className="mx-auto max-w-xl text-center text-[11px] font-semibold text-slate-700 px-3 pb-1">
+            {emailNote}
+          </p>
+        ) : null}
+        <div className="mx-auto max-w-xl flex items-center justify-center gap-3 px-4 pt-2 pb-[max(calc(env(safe-area-inset-bottom)+4.5rem),1.25rem)] md:pb-4 bg-gradient-to-t from-slate-50 via-slate-50/95 to-transparent md:bg-transparent">
           <button
+            type="button"
+            onClick={handleShareWhatsApp}
+            title="WhatsApp"
+            aria-label="WhatsApp"
+            className="w-12 h-12 rounded-full bg-[#25D366] hover:bg-[#20ba59] text-white flex items-center justify-center shadow-md transition active:scale-95"
+          >
+            <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24" aria-hidden>
+              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.885-9.888 9.885m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L0 24l6.335-1.662c1.746.953 3.71 1.456 5.711 1.457h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={handleShare}
+            title="Share"
+            aria-label="Share"
+            className="w-12 h-12 rounded-full bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 flex items-center justify-center shadow-md transition active:scale-95"
+          >
+            <Share2 className="w-5 h-5" />
+          </button>
+          <button
+            type="button"
             onClick={handleDownloadPdf}
             disabled={isDownloading}
-            className="flex-1 min-w-[140px] flex items-center justify-center gap-2 px-4 py-3 bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md transition active:scale-95 disabled:opacity-50"
+            title="Download PDF"
+            aria-label="Download PDF"
+            className="w-12 h-12 rounded-full bg-orange-600 hover:bg-orange-700 text-white flex items-center justify-center shadow-md transition active:scale-95 disabled:opacity-50"
           >
             {isDownloading ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>PDF डाऊनलोड होत आहे...</span>
-              </>
+              <Loader2 className="w-5 h-5 animate-spin" />
             ) : downloadSuccess ? (
-              <>
-                <CheckCircle2 className="w-4 h-4" />
-                <span>PDF Downloaded!</span>
-              </>
+              <CheckCircle2 className="w-5 h-5" />
             ) : (
-              <>
-                <Download className="w-4 h-4" />
-                <span>Download PDF Ticket</span>
-              </>
+              <Download className="w-5 h-5" />
             )}
           </button>
-
           <button
-            onClick={handlePrint}
-            className="flex items-center justify-center gap-1.5 px-4 py-3 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-semibold text-xs rounded-xl shadow-xs transition"
+            type="button"
+            onClick={() => setEmailConfirmOpen(true)}
+            disabled={emailSending || !data.order.email}
+            title="Email"
+            aria-label="Email"
+            className="w-12 h-12 rounded-full bg-slate-800 hover:bg-slate-900 text-white flex items-center justify-center shadow-md transition active:scale-95 disabled:opacity-50"
           >
-            <Printer className="w-4 h-4" />
-            <span>Print Pass</span>
-          </button>
-
-          <button
-            onClick={handleShareWhatsApp}
-            className="flex items-center justify-center gap-1.5 px-4 py-3 bg-[#25D366] hover:bg-[#20ba59] text-white font-semibold text-xs rounded-xl shadow-xs transition"
-          >
-            <Share2 className="w-4 h-4" />
-            <span>WhatsApp</span>
+            {emailSending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Mail className="w-5 h-5" />}
           </button>
         </div>
       </div>
+
+      {emailConfirmOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 print:hidden">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl space-y-3">
+            <h3 className="text-sm font-bold text-slate-900">ईमेल पाठवायचा?</h3>
+            <p className="text-xs text-slate-600">
+              तिकीट PDF या पत्त्यावर पाठवला जाईल: {data.order.email || '—'}
+            </p>
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setEmailConfirmOpen(false)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold"
+              >
+                रद्द
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmSendEmail}
+                className="flex-1 py-2.5 rounded-xl bg-orange-600 text-white text-xs font-bold"
+              >
+                पाठवा
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

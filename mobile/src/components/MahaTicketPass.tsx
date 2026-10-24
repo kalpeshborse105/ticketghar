@@ -10,6 +10,7 @@
  */
 import React from 'react';
 import {
+  Alert,
   Linking,
   Platform,
   Share,
@@ -48,6 +49,8 @@ export interface MahaTicketPassProps {
   style?: ViewStyle;
   /** Short-lived server token for authorized PDF download */
   pdfDownloadToken?: string | null;
+  /** Optional recipient for user-confirmed email send */
+  userEmail?: string | null;
 }
 
 export function MahaTicketPass({
@@ -69,6 +72,7 @@ export function MahaTicketPass({
   onHome,
   style,
   pdfDownloadToken,
+  userEmail,
 }: MahaTicketPassProps) {
   const resolvedOrderNum = orderNumber || ticketCode || 'MT-PASS';
   const resolvedTotal = grandTotal !== undefined && grandTotal !== null && Number(grandTotal) > 0
@@ -145,6 +149,48 @@ export function MahaTicketPass({
     });
   };
 
+  const handleEmailTicket = () => {
+    const to = (userEmail || '').trim();
+    if (!to) {
+      Toast.show({
+        type: 'error',
+        text1: 'ईमेल उपलब्ध नाही',
+        text2: 'लॉगिन ईमेल तपासा.',
+      });
+      return;
+    }
+    Alert.alert(
+      'ईमेल पाठवायचा?',
+      `तिकीट PDF या पत्त्यावर पाठवला जाईल:\n${to}`,
+      [
+        { text: 'रद्द', style: 'cancel' },
+        {
+          text: 'पाठवा',
+          onPress: async () => {
+            try {
+              Toast.show({ type: 'info', text1: 'ईमेल पाठवत आहे…' });
+              const res = await api.sendTicketEmail(ticketCode, to, pdfDownloadToken || undefined);
+              if (res?.success || (res as any)?.sent) {
+                Toast.show({ type: 'success', text1: 'ईमेल पाठवला', text2: to });
+              } else {
+                Toast.show({
+                  type: 'error',
+                  text1: 'ईमेल अयशस्वी',
+                  text2: res?.error || res?.message || 'पुन्हा प्रयत्न करा',
+                });
+              }
+            } catch (e: any) {
+              Toast.show({
+                type: 'error',
+                text1: 'ईमेल अयशस्वी',
+                text2: e?.message || 'पुन्हा प्रयत्न करा',
+              });
+            }
+          },
+        },
+      ]
+    );
+  };
 
   return (
     <View style={[styles.container, style]}>
@@ -280,60 +326,52 @@ export function MahaTicketPass({
         </View>
       </View>
 
-      {/* ══════ UNIFIED ACTION BUTTONS ROW ══════ */}
+      {/* Icon-only actions (no labels) — clear of tab bar */}
       <View style={styles.iconActionsRow}>
-        {/* WhatsApp Share */}
         <TouchableOpacity
           onPress={handleWhatsAppShare}
           style={styles.iconActionBtnItem}
           activeOpacity={0.8}
+          accessibilityLabel="WhatsApp"
         >
           <View style={[styles.iconCircle, { backgroundColor: '#25D366' }]}>
             <Icon name="whatsapp" size={24} color="#FFFFFF" />
           </View>
-          <Text style={styles.iconActionLabel}>WhatsApp</Text>
         </TouchableOpacity>
 
-        {/* Share Ticket */}
         <TouchableOpacity
           onPress={handleShare}
           style={styles.iconActionBtnItem}
           activeOpacity={0.8}
+          accessibilityLabel="Share"
         >
           <View style={[styles.iconCircle, { backgroundColor: '#0284C7' }]}>
             <Icon name="share-variant" size={21} color="#FFFFFF" />
           </View>
-          <Text style={styles.iconActionLabel}>Share</Text>
         </TouchableOpacity>
 
-        {/* Download PDF */}
         <TouchableOpacity
           onPress={handleDownloadPdf}
           style={styles.iconActionBtnItem}
           activeOpacity={0.8}
+          accessibilityLabel="Download PDF"
         >
-          <View style={[styles.iconCircle, { backgroundColor: '#DC2626' }]}>
-            <Icon name="file-pdf-box" size={23} color="#FFFFFF" />
+          <View style={[styles.iconCircle, { backgroundColor: '#EA580C' }]}>
+            <Icon name="download" size={22} color="#FFFFFF" />
           </View>
-          <Text style={styles.iconActionLabel}>PDF</Text>
         </TouchableOpacity>
 
-      </View>
-
-      {/* Primary CTA — matches web "माझी तिकिटे पहा" */}
-      {(onClose || onHome) ? (
         <TouchableOpacity
-          onPress={() => {
-            if (onClose) onClose();
-            else if (onHome) onHome();
-          }}
-          style={styles.myTicketsCta}
-          activeOpacity={0.88}
+          onPress={handleEmailTicket}
+          style={styles.iconActionBtnItem}
+          activeOpacity={0.8}
+          accessibilityLabel="Email ticket"
         >
-          <Icon name="ticket-confirmation" size={18} color="#FFFFFF" />
-          <Text style={styles.myTicketsCtaText}>माझी तिकिटे पहा</Text>
+          <View style={[styles.iconCircle, { backgroundColor: '#0F172A' }]}>
+            <Icon name="email-outline" size={22} color="#FFFFFF" />
+          </View>
         </TouchableOpacity>
-      ) : null}
+      </View>
     </View>
   );
 }
@@ -604,18 +642,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 16,
-    marginTop: 6,
-    marginBottom: 8,
+    gap: 20,
+    marginTop: 10,
+    marginBottom: 4,
+    paddingVertical: 6,
   },
   iconActionBtnItem: {
     alignItems: 'center',
-    gap: 4,
   },
   iconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000000',
@@ -623,28 +661,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 4,
     elevation: 3,
-  },
-  iconActionLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#334155',
-  },
-  myTicketsCta: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#0F172A',
-    borderRadius: 999,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    marginBottom: 8,
-  },
-  myTicketsCtaText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '800',
   },
 });
 

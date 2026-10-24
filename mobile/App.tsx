@@ -132,7 +132,7 @@ export default function App() {
             }}
           >
             <RootNavigator />
-          </NavigationContainer>
+    </NavigationContainer>
         </ErrorBoundary>
         <Toast />
       </SafeAreaProvider>
