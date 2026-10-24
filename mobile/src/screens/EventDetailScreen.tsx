@@ -16,6 +16,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  BackHandler,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -111,6 +112,15 @@ export default function EventDetailScreen({ navigation, route }: any) {
       navigation.navigate('Main');
     }
   };
+
+  useEffect(() => {
+    const onBackPress = () => {
+      handleBack();
+      return true;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, [navigation]);
 
   const loadEventData = React.useCallback(() => {
     const cached = useEventsStore.getState().events.find((e) => e.id === Number(eventId));
@@ -2261,6 +2271,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
     color: '#0F172A',
+    lineHeight: 22,
+    includeFontPadding: true,
+    paddingBottom: 2,
   },
   theatreAddressRow: {
     flexDirection: 'row',
@@ -2517,7 +2530,15 @@ const styles = StyleSheet.create({
   },
   venueNameCol: { flex: 1, marginRight: 8 },
   venueCardTitle: { fontSize: 11.5, fontWeight: '800', color: '#64748B' },
-  venueNameOrange: { fontSize: 15, fontWeight: '900', color: '#EA580C', marginTop: 2 },
+  venueNameOrange: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#EA580C',
+    marginTop: 2,
+    lineHeight: 24,
+    includeFontPadding: true,
+    paddingBottom: 2,
+  },
   mapBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2843,8 +2864,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
-  bookCtaText: { color: '#FFFFFF', fontSize: 14.5, fontWeight: '900' },
-  bookCtaSub: { color: '#FFEDD5', fontSize: 10, fontWeight: '700', marginTop: 1 },
+  bookCtaText: {
+    color: '#FFFFFF',
+    fontSize: 14.5,
+    fontWeight: '900',
+    lineHeight: 22,
+    includeFontPadding: true,
+    paddingBottom: 2,
+  },
+  bookCtaSub: {
+    color: '#FFEDD5',
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 1,
+    lineHeight: 16,
+    includeFontPadding: true,
+  },
   notifyBottomBtn: {
     flexDirection: 'row',
     alignItems: 'center',

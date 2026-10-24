@@ -16,6 +16,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  BackHandler,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -415,6 +416,20 @@ export default function CheckoutScreen({ navigation, route }: any) {
     });
     return unsub;
   }, [navigation, paying, sessionId, holdToken, seatIds]);
+
+  // Hardware back press listener for Android
+  useEffect(() => {
+    const onHardwareBack = () => {
+      if (checkoutModal) {
+        setCheckoutModal(null);
+        return true;
+      }
+      handleDiscardAndBack();
+      return true;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onHardwareBack);
+    return () => sub.remove();
+  }, [checkoutModal, handleDiscardAndBack]);
 
   const applyCouponCode = async (codeToApply: string) => {
     const code = codeToApply.trim().toUpperCase();

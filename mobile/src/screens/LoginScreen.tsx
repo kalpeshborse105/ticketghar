@@ -21,6 +21,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  BackHandler,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, RADIUS, SPACING, SHADOWS } from '../theme';
@@ -62,6 +63,23 @@ export default function LoginScreen({ navigation, route }: any) {
       }
     }
   }, [isAuthenticated, navigation, route.params]);
+
+  useEffect(() => {
+    const onBackPress = () => {
+      if (step !== 'email') {
+        transitionTo('email');
+        return true;
+      }
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      } else {
+        navigation.replace('Main');
+      }
+      return true;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, [step, navigation]);
 
   const slideX = useRef(new Animated.Value(0)).current;
   const otpRef = useRef<TextInput>(null);
@@ -264,6 +282,26 @@ export default function LoginScreen({ navigation, route }: any) {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        {/* Top Back Button */}
+        <View style={styles.topBarRow}>
+          <TouchableOpacity
+            style={styles.backBtnCircle}
+            activeOpacity={0.7}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            onPress={() => {
+              if (step !== 'email') {
+                transitionTo('email');
+              } else if (navigation.canGoBack()) {
+                navigation.goBack();
+              } else {
+                navigation.replace('Main');
+              }
+            }}
+          >
+            <Icon name="arrow-left" size={22} color="#0F172A" />
+          </TouchableOpacity>
+        </View>
+
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.logoBadge}>
@@ -536,8 +574,29 @@ const styles = StyleSheet.create({
   scroll: {
     flexGrow: 1,
     paddingHorizontal: 24,
-    paddingTop: height * 0.05,
+    paddingTop: height * 0.03,
     paddingBottom: 32,
+  },
+
+  topBarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  backBtnCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
 
   header: { alignItems: 'center', marginBottom: 24 },

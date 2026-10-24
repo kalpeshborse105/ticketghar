@@ -19,7 +19,10 @@ import {
   Text,
   TouchableOpacity,
   View,
+  BackHandler,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import Toast from 'react-native-toast-message';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, RADIUS, SPACING, SHADOWS } from '../theme';
@@ -113,6 +116,34 @@ export default function HomeScreen({ navigation }: any) {
   const [heroBannerIdx, setHeroBannerIdx] = useState(0);
   const [cityPickerOpen, setCityPickerOpen] = useState(false);
   const bannerRef = useRef<FlatList>(null);
+  const lastBackPressRef = useRef(0);
+
+  // Conventional double-tap-to-exit on root home screen
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        if (cityPickerOpen) {
+          setCityPickerOpen(false);
+          return true;
+        }
+        const now = Date.now();
+        if (now - lastBackPressRef.current < 2000) {
+          BackHandler.exitApp();
+          return true;
+        }
+        lastBackPressRef.current = now;
+        Toast.show({
+          type: 'info',
+          text1: language === 'mr' ? 'बाहेर पडण्यासाठी पुन्हा मागे दाबा' : 'Press back again to exit',
+          visibilityTime: 1800,
+        });
+        return true;
+      };
+
+      const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => sub.remove();
+    }, [cityPickerOpen, language])
+  );
 
   const selectCity = useCallback(
     (cityId: string) => {

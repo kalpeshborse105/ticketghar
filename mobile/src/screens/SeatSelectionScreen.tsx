@@ -23,6 +23,7 @@ import AnimatedRe, {
   useAnimatedStyle,
   withTiming,
 } from 'react-native-reanimated';
+import { useFocusEffect } from '@react-navigation/native';
 import { COLORS, RADIUS, SHADOWS } from '../theme';
 import {
   api,
@@ -306,13 +307,42 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
   const isFetchingRef = useRef(false);
 
   const handleBackPress = useCallback(() => {
+    if (showDiscardModal) {
+      setShowDiscardModal(false);
+      return true;
+    }
+    if (showTimeoutModal) {
+      setShowTimeoutModal(false);
+      return true;
+    }
+    if (showHelpModal) {
+      setShowHelpModal(false);
+      return true;
+    }
+    if (errorModalMsg) {
+      setErrorModalMsg(null);
+      return true;
+    }
     if (selected.length > 0) {
       setShowDiscardModal(true);
       return true;
     }
-    navigation.goBack();
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate('EventDetail', { eventId, sessionId });
+    }
     return true;
-  }, [navigation, selected.length]);
+  }, [
+    navigation,
+    selected.length,
+    showDiscardModal,
+    showTimeoutModal,
+    showHelpModal,
+    errorModalMsg,
+    eventId,
+    sessionId,
+  ]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
@@ -465,11 +495,17 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
           'हा प्रयोग उपलब्ध नाही. कृपया मागे जाऊन वैध प्रयोग निवडा.\n(This show session was not found. Please go back and pick a show.)'
         );
       } else if (!cached) {
-        setError(
-          /timed out|timeout|slow|network/i.test(msg)
-            ? 'आसन नकाशा लोड होण्यास वेळ लागत आहे. कृपया "पुन्हा प्रयत्न करा" दाबा. (Seat map load is slow. Tap Retry seats.)'
-            : msg || 'आसन नकाशा उपलब्ध नाही. कृपया पुन्हा प्रयत्न करा.'
-        );
+        if (/timed out|timeout|slow|network/i.test(msg)) {
+          setError(
+            'आसन नकाशा लोड होण्यास वेळ लागत आहे. कृपया "पुन्हा प्रयत्न करा" दाबा. (Seat map load is slow. Tap Retry seats.)'
+          );
+        } else if (/held|आरक्षित|taken/i.test(msg)) {
+          setError(
+            'हे आसन नुकतेच दुसऱ्या ग्राहकाने आरक्षित केले आहे. कृपया दुसरे आसन निवडा.'
+          );
+        } else {
+          setError('आसनांची माहिती लोड झाली नाही. कृपया पुन्हा प्रयत्न करा.');
+        }
       }
     } finally {
       isFetchingRef.current = false;
@@ -479,12 +515,18 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
 
   useEffect(() => {
     loadSeats();
-    pollRef.current = setInterval(() => fetchSeats(true), POLL_INTERVAL);
-    return () => {
-      if (abortCtrlRef.current) abortCtrlRef.current.abort();
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, [loadSeats, fetchSeats]);
+  }, [loadSeats]);
+
+  // Refresh seat availability automatically whenever returning to this screen
+  useFocusEffect(
+    useCallback(() => {
+      fetchSeats(true);
+      const poll = setInterval(() => fetchSeats(true), POLL_INTERVAL);
+      return () => {
+        clearInterval(poll);
+      };
+    }, [fetchSeats])
+  );
 
   const sectionViews = useMemo<SectionView[]>(() => {
     const layoutSections = Array.isArray(layoutConfig?.sections) ? layoutConfig.sections : [];
@@ -907,12 +949,15 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
     if (cast) return cast;
     if (routeEvent?.cast) return routeEvent.cast;
     if (routeEvent?.artist) return routeEvent.artist;
-    return 'प्रसाद ओक • मुक्ता बर्वे';
+    return '';
   }, [cast, routeEvent]);
 
   const fullVenueLine = useMemo(() => {
-    const name = venueName || routeEvent?.venue?.name || 'बाळ गंधर्व रंगमंदिर';
-    const addr = venueAddress || routeEvent?.venue?.address || 'JM Road, पुणे';
+    const name = venueName || routeEvent?.venue?.name || '';
+    const addr = venueAddress || routeEvent?.venue?.address || '';
+    if (!name && !addr) return 'नाट्यगृह माहिती लवकरच (Venue TBA)';
+    if (!addr) return name;
+    if (!name) return addr;
     if (name.includes(addr)) return name;
     return `${name}, ${addr}`;
   }, [venueName, venueAddress, routeEvent]);
@@ -1730,11 +1775,16 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#0F172A',
     marginTop: 1,
+    lineHeight: 24,
+    includeFontPadding: true,
+    paddingVertical: 2,
   },
   castText: {
     fontSize: 11.5,
     color: '#475569',
     fontWeight: '600',
+    lineHeight: 16,
+    includeFontPadding: true,
   },
   dateTimeRow: {
     flexDirection: 'row',
@@ -1750,6 +1800,9 @@ const styles = StyleSheet.create({
     color: '#334155',
     fontWeight: '700',
     flex: 1,
+    lineHeight: 18,
+    includeFontPadding: true,
+    paddingVertical: 1,
   },
   venueRow: {
     flexDirection: 'row',
@@ -1765,6 +1818,9 @@ const styles = StyleSheet.create({
     color: '#64748B',
     fontWeight: '600',
     flex: 1,
+    lineHeight: 18,
+    includeFontPadding: true,
+    paddingVertical: 1,
   },
 
   // Showtimes switcher
@@ -2312,6 +2368,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#0F172A',
     flex: 1,
+    lineHeight: 20,
+    includeFontPadding: true,
+    paddingVertical: 1,
   },
   pricingSummaryRow: {
     flexDirection: 'row',
@@ -2321,6 +2380,8 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '900',
     color: '#0F172A',
+    lineHeight: 26,
+    includeFontPadding: true,
   },
   gstNoteText: {
     fontSize: 11,
@@ -2357,7 +2418,9 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '900',
-    lineHeight: 18,
+    lineHeight: 20,
+    includeFontPadding: true,
+    paddingVertical: 2,
   },
   proceedButtonTextDisabled: {
     color: '#64748B',
