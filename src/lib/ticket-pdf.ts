@@ -19,18 +19,16 @@ export type TicketPdfInput = {
 };
 
 const DEVANAGARI_FONT_CANDIDATES = [
-  path.join(process.cwd(), 'public', 'fonts', 'NotoSansDevanagari-Regular.ttf'),
   path.join(process.cwd(), 'public', 'fonts', 'NotoSansDevanagari-unhinted.ttf'),
-  path.join(process.cwd(), 'assets', 'fonts', 'NotoSansDevanagari-Regular.ttf'),
   path.join(process.cwd(), 'assets', 'fonts', 'NotoSansDevanagari-unhinted.ttf'),
-  path.resolve(__dirname, '../../../../public/fonts/NotoSansDevanagari-Regular.ttf'),
-  path.resolve(__dirname, '../../../public/fonts/NotoSansDevanagari-Regular.ttf'),
-  path.resolve(__dirname, '../../public/fonts/NotoSansDevanagari-Regular.ttf'),
-  path.resolve(__dirname, '../public/fonts/NotoSansDevanagari-Regular.ttf'),
-  path.resolve(__dirname, './public/fonts/NotoSansDevanagari-Regular.ttf'),
-  path.resolve(__dirname, '../../../../assets/fonts/NotoSansDevanagari-Regular.ttf'),
-  path.resolve(__dirname, '../../../assets/fonts/NotoSansDevanagari-Regular.ttf'),
-  path.resolve(__dirname, '../../assets/fonts/NotoSansDevanagari-Regular.ttf'),
+  path.join(process.cwd(), 'public', 'fonts', 'NotoSansDevanagari-Regular.ttf'),
+  path.join(process.cwd(), 'assets', 'fonts', 'NotoSansDevanagari-Regular.ttf'),
+  path.resolve(__dirname, '../../../../public/fonts/NotoSansDevanagari-unhinted.ttf'),
+  path.resolve(__dirname, '../../../public/fonts/NotoSansDevanagari-unhinted.ttf'),
+  path.resolve(__dirname, '../../public/fonts/NotoSansDevanagari-unhinted.ttf'),
+  path.resolve(__dirname, '../../../../assets/fonts/NotoSansDevanagari-unhinted.ttf'),
+  path.resolve(__dirname, '../../../assets/fonts/NotoSansDevanagari-unhinted.ttf'),
+  path.resolve(__dirname, '../../assets/fonts/NotoSansDevanagari-unhinted.ttf'),
 ];
 
 const UNICODE_FONT_NAME = 'MahaTicketUnicode';
@@ -121,17 +119,17 @@ async function generateTicketPdfBufferInternal(
   }
 
   const pickFont = (text: string, bold = false) => {
-    if (bodyFont === UNICODE_FONT_NAME) {
-      return bold ? bodyFontBold : bodyFont;
+    if (hasDevanagari(text) && bodyFont === UNICODE_FONT_NAME) {
+      return bodyFontBold || bodyFont;
     }
     return bold ? 'Helvetica-Bold' : 'Helvetica';
   };
 
   const sanitizeForFont = (text: string) => {
-    if (bodyFont === UNICODE_FONT_NAME) {
-      return text;
+    if (hasDevanagari(text)) {
+      return bodyFont === UNICODE_FONT_NAME ? text : (toAsciiSafeString(text) || 'Event Admission');
     }
-    return toAsciiSafeString(text) || 'Event Admission';
+    return text;
   };
 
   const pageWidth = doc.page.width;

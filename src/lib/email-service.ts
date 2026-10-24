@@ -127,18 +127,20 @@ export async function sendBookingTicketEmail(
     }
 
     let qrDataUrl = '';
+    let qrPngBuffer: Buffer | null = null;
     try {
-      qrDataUrl = await QRCode.toDataURL(ticketLink, {
-        margin: 1,
+      qrPngBuffer = await QRCode.toBuffer(ticketLink, {
+        type: 'png',
         width: 180,
-        color: { dark: '#000000', light: '#ffffff' },
+        margin: 1,
+        errorCorrectionLevel: 'M',
+        color: { dark: '#0F172A', light: '#FFFFFF' },
       });
+      qrDataUrl = `data:image/png;base64,${qrPngBuffer.toString('base64')}`;
     } catch (e) {
-      console.warn('[email-service] Failed to generate QR data URL:', e);
+      console.warn('[email-service] Failed to generate QR buffer:', e);
     }
-    const qrImageTag = qrDataUrl
-      ? `<img src="${qrDataUrl}" alt="Gate Entry QR" />`
-      : '';
+    const qrImageTag = `<img src="cid:ticket-qr-code" alt="Gate Entry QR" width="160" height="160" />`;
 
     htmlContent = htmlContent
       .replace(/\{\{EVENT_TITLE\}\}/g, eventRecord?.event.titleMr || eventRecord?.event.title || 'Event')
@@ -225,6 +227,14 @@ export async function sendBookingTicketEmail(
       };
 
       const attachments: any[] = [];
+      if (qrPngBuffer && qrPngBuffer.length > 0) {
+        attachments.push({
+          filename: 'qrcode.png',
+          content: qrPngBuffer,
+          contentType: 'image/png',
+          cid: 'ticket-qr-code',
+        });
+      }
       if (pdfBuffer && pdfBuffer.length > 0) {
         attachments.push({
           filename: `MahaTicket-${ticketRecord.order.orderNumber}.pdf`,

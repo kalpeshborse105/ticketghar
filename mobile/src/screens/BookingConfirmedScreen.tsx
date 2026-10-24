@@ -209,7 +209,7 @@ export default function BookingConfirmedScreen({ navigation, route }: any) {
     await downloadTicketPdf({
       url: `${pdfUrl}?download=1`,
       filename: `MahaTicket-${resolvedOrderNum}.pdf`,
-      title: `${resolvedEventTitle} - Ticket Pass`,
+      title: `MahaTicket - ${resolvedOrderNum}`,
       description: `Seats: ${formattedSeats} • Order #${resolvedOrderNum}`,
       pdfToken: (order as any)?.pdfDownloadToken || (route.params as any)?.pdfDownloadToken || (route.params as any)?.order?.pdfDownloadToken,
     });

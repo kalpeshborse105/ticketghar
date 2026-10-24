@@ -171,10 +171,11 @@ export function MahaTicketPass({
             </View>
           </View>
 
-          <View style={styles.validStatusBadge}>
-            <Icon name="shield-check" size={13} color={statusColor} />
-            <Text style={styles.validStatusText}>{statusLabel}</Text>
-          </View>
+          {isCancelled ? (
+            <View style={styles.validStatusBadge}>
+              <Text style={styles.validStatusText}>Cancelled</Text>
+            </View>
+          ) : null}
         </LinearGradient>
 
         {/* Ticket Upper Body */}
@@ -261,7 +262,7 @@ export function MahaTicketPass({
           <View style={styles.qrInnerBox}>
             <QRCode
               value={qrPayload}
-              size={140}
+              size={135}
               backgroundColor="#FFFFFF"
               color="#111827"
             />
@@ -276,17 +277,6 @@ export function MahaTicketPass({
           <Text style={styles.qrTicketCodeText}>
             PASS ID: #{resolvedOrderNum}
           </Text>
-
-          {/* Compact Security Shield Badge */}
-          <View style={styles.securityBox}>
-            <View style={styles.securityHeader}>
-              <Icon name="shield-check" size={14} color="#EA580C" />
-              <Text style={styles.securityTitle}>सुरक्षित डिजिटल तिकीट पडताळणी</Text>
-            </View>
-            <Text style={styles.securityText}>
-              • हे तिकीट एनक्रिप्टेड (MTSEC) असून अधिकृत गेट ऑपरेटरद्वारे स्कॅन केले जाते.
-            </Text>
-          </View>
         </View>
       </View>
 
@@ -356,20 +346,20 @@ const styles = StyleSheet.create({
   ticketCard: {
     width: '100%',
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 16,
     overflow: 'hidden',
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.18,
-    shadowRadius: 14,
-    elevation: 8,
-    marginBottom: 16,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 6,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
   ticketHeaderGradient: {
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 9,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -380,15 +370,14 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   ticketIconBox: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
+    width: 26,
+    height: 26,
+    borderRadius: 7,
     backgroundColor: 'rgba(255,255,255,0.22)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   brandTitle: {
-    // Match web: महाटिकिट M-TICKET PASS
     fontSize: 9.5,
     fontWeight: '900',
     color: 'rgba(255,255,255,0.92)',
@@ -405,7 +394,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 3,
     paddingHorizontal: 8,
-    paddingVertical: 3.5,
+    paddingVertical: 3,
     borderRadius: 100,
     backgroundColor: 'rgba(0,0,0,0.25)',
     borderWidth: 1,
@@ -417,7 +406,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   ticketBody: {
-    padding: 14,
+    padding: 12,
     backgroundColor: '#FFFFFF',
   },
   tagRow: {
@@ -574,14 +563,14 @@ const styles = StyleSheet.create({
   qrContainer: {
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    paddingTop: 4,
+    paddingHorizontal: 12,
+    paddingBottom: 8,
+    paddingTop: 2,
   },
   qrInnerBox: {
-    padding: 10,
+    padding: 6,
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: 10,
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
     shadowColor: '#000000',
@@ -589,75 +578,51 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 4,
     elevation: 2,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   qrInstructions: {
     fontSize: 11,
     fontWeight: '900',
     color: '#EA580C',
     textAlign: 'center',
-    marginBottom: 2,
+    marginBottom: 1,
   },
   qrSubInstructions: {
-    fontSize: 10,
+    fontSize: 9.5,
     color: '#64748B',
     textAlign: 'center',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   qrTicketCodeText: {
     fontSize: 10,
     fontWeight: '800',
     color: '#94A3B8',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    marginBottom: 8,
-  },
-  securityBox: {
-    width: '100%',
-    padding: 10,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  securityHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    marginBottom: 3,
-  },
-  securityTitle: {
-    fontSize: 10.5,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  securityText: {
-    fontSize: 9.5,
-    color: '#64748B',
-    lineHeight: 14,
+    marginBottom: 2,
   },
   iconActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 18,
+    gap: 16,
     marginTop: 6,
-    marginBottom: 16,
+    marginBottom: 8,
   },
   iconActionBtnItem: {
     alignItems: 'center',
-    gap: 5,
+    gap: 4,
   },
   iconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 3,
   },
   iconActionLabel: {
     fontSize: 11,

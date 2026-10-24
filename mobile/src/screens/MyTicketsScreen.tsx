@@ -59,7 +59,8 @@ export default function MyTicketsScreen({ navigation }: any) {
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
-        if (selectedOrder) {
+        if (qrVisible) {
+          setQrVisible(false);
           setSelectedOrder(null);
           return true;
         }
@@ -71,12 +72,20 @@ export default function MyTicketsScreen({ navigation }: any) {
           setTicketPopupModal(null);
           return true;
         }
+        if (selectedOrder) {
+          setSelectedOrder(null);
+          return true;
+        }
+        if (navigation.canGoBack()) {
+          navigation.goBack();
+          return true;
+        }
         navigation.navigate('Home');
         return true;
       };
       const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
       return () => sub.remove();
-    }, [selectedOrder, mitraModalVisible, ticketPopupModal, navigation])
+    }, [qrVisible, selectedOrder, mitraModalVisible, ticketPopupModal, navigation])
   );
 
   const fetchTickets = useCallback(
@@ -116,7 +125,7 @@ export default function MyTicketsScreen({ navigation }: any) {
     await downloadTicketPdf({
       url: `${pdfUrl}?download=1`,
       filename: `MahaTicket-${resolvedOrderNum}.pdf`,
-      title: `${order.event?.titleMr || order.event?.title || 'MahaTicket'} - Ticket Pass`,
+      title: `MahaTicket - ${resolvedOrderNum}`,
       description: `Order #${resolvedOrderNum}`,
       pdfToken: (order as any)?.pdfDownloadToken,
     });
@@ -470,22 +479,28 @@ export default function MyTicketsScreen({ navigation }: any) {
         visible={qrVisible}
         transparent
         animationType="slide"
-        onRequestClose={() => setQrVisible(false)}
+        onRequestClose={() => {
+          setQrVisible(false);
+          setSelectedOrder(null);
+        }}
       >
         <View style={styles.modalBg}>
-          <View style={[styles.fullScreenTicket, { paddingTop: Math.max(insets.top, 16) }]}>
+          <View style={[styles.fullScreenTicket, { paddingTop: Math.max(insets.top, 6) }]}>
             {/* Modal Top Bar */}
             <View style={styles.modalTopBar}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Icon name="ticket-confirmation" size={20} color={COLORS.primary} />
-                <Text style={styles.modalTopTitle}>M-Ticket Pass (डिजिटल पास)</Text>
+                <Icon name="ticket-confirmation" size={18} color={COLORS.primary} />
+                <Text style={styles.modalTopTitle}>M-Ticket Pass</Text>
               </View>
               <TouchableOpacity
-                onPress={() => setQrVisible(false)}
+                onPress={() => {
+                  setQrVisible(false);
+                  setSelectedOrder(null);
+                }}
                 style={styles.modalCloseCircle}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <Icon name="close" size={20} color="#0F172A" />
+                <Icon name="close" size={18} color="#0F172A" />
               </TouchableOpacity>
             </View>
 
@@ -495,9 +510,9 @@ export default function MyTicketsScreen({ navigation }: any) {
               keyboardShouldPersistTaps="handled"
               bounces
               contentContainerStyle={{
-                paddingBottom: 120 + Math.max(insets.bottom, 12),
-                paddingTop: 8,
-                paddingHorizontal: 4,
+                paddingBottom: 40 + Math.max(insets.bottom, 12),
+                paddingTop: 2,
+                paddingHorizontal: 2,
                 flexGrow: 1,
               }}
             >
@@ -965,10 +980,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 12,
+    paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   modalTopTitle: {
     fontSize: 15,
