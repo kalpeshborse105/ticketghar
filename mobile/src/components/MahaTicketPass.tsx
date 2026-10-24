@@ -8,9 +8,8 @@
  * - High-contrast QR presentation zone with scan instructions & security card
  * - Action buttons: WhatsApp (with PDF), Share (with PDF), Download PDF, and Close
  */
-import React, { useState } from 'react';
+import React from 'react';
 import {
-  ActivityIndicator,
   Linking,
   Platform,
   Share,
@@ -146,40 +145,6 @@ export function MahaTicketPass({
     });
   };
 
-  const [sendingEmail, setSendingEmail] = useState(false);
-
-  const handleSendEmail = async () => {
-    if (sendingEmail) return;
-    setSendingEmail(true);
-    try {
-      const res = await api.sendTicketEmail(
-        ticketCode || resolvedOrderNum,
-        undefined,
-        pdfDownloadToken || undefined
-      );
-      if (res && res.success) {
-        Toast.show({
-          type: 'success',
-          text1: 'ईमेल पाठवले (Email Sent)',
-          text2: 'आपले ई-तिकीट आणि पास आपल्या ईमेलवर पाठवले आहे.',
-        });
-      } else {
-        Toast.show({
-          type: 'info',
-          text1: 'ईमेल सूचना',
-          text2: res?.message || 'तिकीट ईमेल पाठवण्याची विनंती स्वीकारली गेली आहे.',
-        });
-      }
-    } catch {
-      Toast.show({
-        type: 'error',
-        text1: 'ईमेल पाठवता आले नाही',
-        text2: 'कृपया इंटरनेट तपासा आणि पुन्हा प्रयत्न करा.',
-      });
-    } finally {
-      setSendingEmail(false);
-    }
-  };
 
   return (
     <View style={[styles.container, style]}>
@@ -363,22 +328,6 @@ export function MahaTicketPass({
           <Text style={styles.iconActionLabel}>PDF</Text>
         </TouchableOpacity>
 
-        {/* Email Ticket */}
-        <TouchableOpacity
-          onPress={handleSendEmail}
-          disabled={sendingEmail}
-          style={styles.iconActionBtnItem}
-          activeOpacity={0.8}
-        >
-          <View style={[styles.iconCircle, { backgroundColor: '#7C3AED' }]}>
-            {sendingEmail ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <Icon name="email-fast-outline" size={21} color="#FFFFFF" />
-            )}
-          </View>
-          <Text style={styles.iconActionLabel}>ईमेल</Text>
-        </TouchableOpacity>
       </View>
 
       {/* Primary CTA — matches web "माझी तिकिटे पहा" */}

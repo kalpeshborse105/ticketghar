@@ -6,6 +6,7 @@ import { tickets, orders, events, venues, eventSessions } from '@/src/db/schema'
 import { eq } from 'drizzle-orm';
 import { getTicketShareUrl } from './public-url';
 import { generateTicketPdfBuffer } from './ticket-pdf';
+import QRCode from 'qrcode';
 
 interface SendTicketEmailParams {
   ticketCode: string;
@@ -125,6 +126,20 @@ export async function sendBookingTicketEmail(
 </html>`;
     }
 
+    let qrDataUrl = '';
+    try {
+      qrDataUrl = await QRCode.toDataURL(ticketLink, {
+        margin: 1,
+        width: 180,
+        color: { dark: '#000000', light: '#ffffff' },
+      });
+    } catch (e) {
+      console.warn('[email-service] Failed to generate QR data URL:', e);
+    }
+    const qrImageTag = qrDataUrl
+      ? `<img src="${qrDataUrl}" alt="Gate Entry QR" />`
+      : '';
+
     htmlContent = htmlContent
       .replace(/\{\{EVENT_TITLE\}\}/g, eventRecord?.event.titleMr || eventRecord?.event.title || 'Event')
       .replace(/\{\{EVENT_CATEGORY\}\}/g, eventRecord?.event.categoryMr || eventRecord?.event.category || 'Event')
@@ -135,7 +150,8 @@ export async function sendBookingTicketEmail(
       .replace(/\{\{ATTENDEE_NAME\}\}/g, ticketRecord.ticket.attendeeName || ticketRecord.order.userName)
       .replace(/\{\{GRAND_TOTAL\}\}/g, (ticketRecord.order.grandTotal / 100).toFixed(0))
       .replace(/\{\{TICKET_CODE\}\}/g, ticketRecord.ticket.ticketCode)
-      .replace(/\{\{QR_DATA_URL\}\}/g, '')
+      .replace(/\{\{QR_DATA_URL\}\}/g, qrDataUrl)
+      .replace(/\{\{QR_IMAGE_TAG\}\}/g, qrImageTag)
       .replace(/\{\{TICKET_LINK\}\}/g, ticketLink);
 
     // 3. Generate PDF pass attachment (retry once — do not silently drop attachment)

@@ -76,6 +76,18 @@ function hasDevanagari(text: string): boolean {
  * Note: pdfkit does not apply full Indic shaping; conjunct forms may be imperfect.
  */
 export async function generateTicketPdfBuffer(input: TicketPdfInput): Promise<Buffer> {
+  try {
+    return await generateTicketPdfBufferInternal(input, true);
+  } catch (err) {
+    console.warn('[ticket-pdf] Unicode PDF generation failed, falling back to ASCII mode:', err);
+    return await generateTicketPdfBufferInternal(input, false);
+  }
+}
+
+async function generateTicketPdfBufferInternal(
+  input: TicketPdfInput,
+  allowUnicode = true
+): Promise<Buffer> {
   const safeTitle = toSafePdfString(input.eventTitle, 'Live Show Admission');
   const safeVenue = toSafePdfString(input.venueName, 'Auditorium Venue');
   const safeAttendee = toSafePdfString(input.attendeeName, 'Valued Customer');
@@ -95,7 +107,7 @@ export async function generateTicketPdfBuffer(input: TicketPdfInput): Promise<Bu
 
   const done = collectPdf(doc);
 
-  const unicodeFontPath = resolveDevanagariFontPath();
+  const unicodeFontPath = allowUnicode ? resolveDevanagariFontPath() : null;
   let bodyFont = 'Helvetica';
   let bodyFontBold = 'Helvetica-Bold';
   if (unicodeFontPath) {
@@ -106,8 +118,6 @@ export async function generateTicketPdfBuffer(input: TicketPdfInput): Promise<Bu
     } catch (err) {
       console.error('[ticket-pdf] Failed to register Devanagari font:', err);
     }
-  } else {
-    console.warn('[ticket-pdf] NotoSansDevanagari-Regular.ttf missing; Marathi glyphs may not render');
   }
 
   const pickFont = (text: string, bold = false) => {

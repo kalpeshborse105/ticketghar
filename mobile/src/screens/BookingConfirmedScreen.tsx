@@ -508,23 +508,6 @@ export default function BookingConfirmedScreen({ navigation, route }: any) {
               <Text style={styles.iconActionLabel}>PDF</Text>
             </TouchableOpacity>
 
-            {/* Email Ticket */}
-            <TouchableOpacity
-              onPress={handleEmailTicket}
-              disabled={emailing}
-              style={styles.iconActionBtnItem}
-              activeOpacity={0.8}
-            >
-              <View style={[styles.iconCircle, { backgroundColor: '#7C3AED' }]}>
-                {emailing ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Icon name="email-fast-outline" size={22} color="#FFFFFF" />
-                )}
-              </View>
-              <Text style={styles.iconActionLabel}>ईमेल</Text>
-            </TouchableOpacity>
-
             {/* My Tickets */}
             <TouchableOpacity
               onPress={() =>

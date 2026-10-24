@@ -19,7 +19,8 @@
     "mobile:start": "npm --prefix mobile start",
     "mobile:android": "npm --prefix mobile run android",
     "clean": "next clean",
-    "db:seed-pune": "tsx scripts/seed-pune-catalog.ts"
+    "db:seed-pune": "tsx scripts/seed-pune-catalog.ts",
+    "postinstall": "node scripts/patch-fontkit.js"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
