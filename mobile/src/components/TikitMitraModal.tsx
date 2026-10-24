@@ -221,7 +221,7 @@ export function TikitMitraModal({
     // 2. Open interactive seat map
     if (option.type === 'open_seatmap' && option.payload) {
       onClose();
-      navigation.navigate('Seats', {
+      (navigation as any).navigate('SeatSelection', {
         sessionId: option.payload.sessionId,
         eventId: option.payload.eventId,
       });
@@ -231,14 +231,14 @@ export function TikitMitraModal({
     // 3. My tickets navigation
     if (option.type === 'my_tickets') {
       onClose();
-      navigation.navigate('Main', { screen: 'Tickets' });
+      (navigation as any).navigate('Main', { screen: 'Tickets' });
       return;
     }
 
     // 4. Explore categories
     if (option.type === 'explore_category') {
       onClose();
-      navigation.navigate('Explore');
+      (navigation as any).navigate('Main', { screen: 'Explore' });
       return;
     }
 

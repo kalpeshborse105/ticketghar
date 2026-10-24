@@ -263,7 +263,7 @@ export default function BookingConfirmedScreen({ navigation, route }: any) {
         (route.params as any)?.order?.pdfDownloadToken;
       const res = await api.sendTicketEmail(
         code,
-        order?.userEmail || undefined,
+        (order as any)?.userEmail || (route.params as any)?.order?.userEmail || undefined,
         pdfToken || undefined
       );
       if (res && res.success) {

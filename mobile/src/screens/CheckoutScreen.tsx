@@ -41,11 +41,14 @@ function cleanIndianMobile(raw?: string | null): string {
   return digits;
 }
 
-function formatPaymentErrorMessage(err: any): { title: string; message: string } {
+function formatPaymentErrorMessage(err: any, language: string = 'mr'): { title: string; message: string } {
+  const isMr = language === 'mr';
   if (!err) {
     return {
-      title: 'Payment Incomplete (व्यवहार अपूर्ण)',
-      message: 'Payment could not be completed. Your seats are still held active. Please retry.\n\nपेमेंट पूर्ण होऊ शकले नाही. आपले सीट अजूनही सुरक्षित (hold) आहेत, कृपया पुन्हा प्रयत्न करा.',
+      title: isMr ? 'पेमेंट पूर्ण होऊ शकले नाही' : 'Payment Incomplete',
+      message: isMr
+        ? 'पेमेंट पूर्ण होऊ शकले नाही. आपले सीट सुरक्षित आहेत, कृपया पुन्हा प्रयत्न करा.'
+        : 'Payment could not be completed. Your seats remain held active. Please retry.',
     };
   }
 
@@ -61,8 +64,7 @@ function formatPaymentErrorMessage(err: any): { title: string; message: string }
   }
 
   const rzp = parsed?.error || parsed;
-  const reason = rzp?.reason;
-  const desc = rzp?.description || parsed?.data?.details;
+  const desc = rzp?.description || parsed?.data?.details || plainMsg;
   const isCancelled =
     rzp?.code === 2 ||
     /cancel|dismiss|back pressed|back_pressed/i.test(rawStr) ||
@@ -70,52 +72,45 @@ function formatPaymentErrorMessage(err: any): { title: string; message: string }
 
   if (isCancelled) {
     return {
-      title: 'Payment Cancelled (पेमेंट रद्द झाले)',
-      message: 'You cancelled the payment. Your seats are still held active! You can retry now.\n\nआपण पेमेंट रद्द केले आहे. आपले सीट अजूनही सुरक्षित आहेत, आपण पुन्हा प्रयत्न करू शकता.',
+      title: isMr ? 'पेमेंट रद्द केले' : 'Payment Cancelled',
+      message: isMr
+        ? 'आपण पेमेंट रद्द केले आहे. आपले सीट सुरक्षित आहेत, आपण पुन्हा प्रयत्न करू शकता.'
+        : 'You cancelled the payment. Your seats remain held active and you can retry now.',
     };
   }
 
   if (/authenti|razorpay.*key|KEY_SECRET|KEY_ID/i.test(plainMsg + rawStr)) {
     return {
-      title: 'Payment Gateway Error (गेटवे त्रुटी)',
-      message:
-        'Payment gateway connection is temporarily unavailable. Your seats are still held active. Please retry in a few moments.\n\nपेमेंट गेटवेशी जोडणी तात्पुरती उपलब्ध नाही. आपले सीट अजूनही सुरक्षित (hold) आहेत. कृपया पुन्हा प्रयत्न करा.',
+      title: isMr ? 'पेमेंट गेटवे सूचना' : 'Payment Gateway Notice',
+      message: isMr
+        ? 'पेमेंट गेटवेशी जोडणी करताना व्यत्यय आला. आपले सीट सुरक्षित आहेत. कृपया पुन्हा प्रयत्न करा.'
+        : 'Payment gateway connection was interrupted. Your seats remain safely held. Please retry.',
     };
   }
 
   if (/timeout|timed out|network|slow|econnreset|aborterror/i.test(plainMsg + rawStr)) {
     return {
-      title: 'नेटवर्क विलंबाची त्रुटी (Connection Timeout)',
-      message:
-        'नेटवर्क विलंबाने विनंती पूर्ण होऊ शकली नाही. आपले सीट अजूनही सुरक्षित (hold) आहेत. कृपया पुन्हा प्रयत्न करा.\n\n(Request timed out. Your seats are still held active. Please retry.)',
-    };
-  }
-
-  if (plainMsg && plainMsg.length > 8 && !plainMsg.startsWith('{') && !/Network error/i.test(plainMsg)) {
-    return {
-      title: 'Payment Failed (पेमेंट अयशस्वी)',
-      message: `${plainMsg}\n\nआपले सीट अजूनही सुरक्षित आहेत. कृपया पुन्हा प्रयत्न करा.`,
+      title: isMr ? 'नेटवर्क विलंबाची त्रुटी' : 'Connection Timeout',
+      message: isMr
+        ? 'नेटवर्क विलंबाने विनंती पूर्ण होऊ शकली नाही. आपले सीट सुरक्षित आहेत, कृपया पुन्हा प्रयत्न करा.'
+        : 'Request timed out due to network delay. Your seats remain held. Please retry.',
     };
   }
 
   if (desc && desc !== 'undefined' && typeof desc === 'string' && desc.length > 3 && !desc.startsWith('{')) {
     return {
-      title: 'Payment Failed (पेमेंट अयशस्वी)',
-      message: `${desc}\n\nआपले सीट अजूनही सुरक्षित आहेत. कृपया पुन्हा प्रयत्न करा.`,
-    };
-  }
-
-  if (reason === 'payment_error' || rzp?.code === 'BAD_REQUEST_ERROR') {
-    return {
-      title: 'Payment Failed (पेमेंट अयशस्वी)',
-      message: 'Bank authentication or payment processing was unsuccessful. Your seats are still held. Please retry with UPI, card, or net banking.\n\nबँक किंवा UPI व्यवहार यशस्वी झाला नाही. आपले सीट अजूनही सुरक्षित आहेत. कृपया पुन्हा प्रयत्न करा.',
+      title: isMr ? 'पेमेंट अयशस्वी' : 'Payment Failed',
+      message: isMr
+        ? `${desc}\nआपले सीट सुरक्षित आहेत, कृपया पुन्हा प्रयत्न करा.`
+        : `${desc}\nYour seats remain held. Please retry.`,
     };
   }
 
   return {
-    title: 'Payment Failed (पेमेंट अयशस्वी)',
-    message:
-      'We were unable to complete the transaction. Your seats are still held. Please retry.\n\nव्यवहार पूर्ण होऊ शकला नाही. आपले सीट अजूनही सुरक्षित (hold) आहेत — कृपया पुन्हा प्रयत्न करा.',
+    title: isMr ? 'पेमेंट पूर्ण होऊ शकले नाही' : 'Payment Incomplete',
+    message: isMr
+      ? 'व्यवहार पूर्ण करताना त्रुटी आली. आपले सीट सुरक्षित आहेत, कृपया पुन्हा प्रयत्न करा.'
+      : 'We could not complete the transaction. Your seats remain safely held. Please retry.',
   };
 }
 
@@ -335,24 +330,24 @@ export default function CheckoutScreen({ navigation, route }: any) {
       : `${ticketCount} seat${ticketCount === 1 ? '' : 's'} selected`;
 
   // Release hold on back — while paying, seats stay locked (no seat-map edit mid-payment)
-  const handleDiscardAndBack = async () => {
+  const handleDiscardAndBack = () => {
     if (paying) {
       setCheckoutModal({
         visible: true,
         type: 'warning',
-        title: 'Payment in progress',
-        message: 'Please complete or cancel Razorpay first. Seats stay held until then.',
+        title: language === 'mr' ? 'पेमेंट सुरू आहे' : 'Payment in progress',
+        message:
+          language === 'mr'
+            ? 'कृपया पेमेंट पूर्ण करा किंवा रद्द करा. तोपर्यंत सीट आरक्षित राहतील.'
+            : 'Please complete or cancel Razorpay first. Seats stay held until then.',
         primaryButtonText: 'OK',
         onPrimaryPress: () => setCheckoutModal(null),
       });
       return;
     }
-    try {
-      if (sessionId && holdToken && !String(holdToken).startsWith('app-hold-')) {
-        await api.releaseHold({ sessionId, holdToken, seatIds });
-      }
-    } catch {
-      // Hold TTL still frees seats server-side
+    // Fire-and-forget release in background so navigation happens instantly without lag
+    if (sessionId && holdToken && !String(holdToken).startsWith('app-hold-')) {
+      api.releaseHold({ sessionId, holdToken, seatIds }).catch(() => null);
     }
     try {
       useCartStore.getState().clearCart();
@@ -736,20 +731,22 @@ export default function CheckoutScreen({ navigation, route }: any) {
 
       // Normal failure BEFORE customer was charged
       setStage('idle');
-      const { title, message } = formatPaymentErrorMessage(err);
+      const { title, message } = formatPaymentErrorMessage(err, language);
       setCheckoutModal({
         visible: true,
         type: 'error',
-        title: title || 'पेमेंट त्रुटी (Payment Error)',
+        title: title || (language === 'mr' ? 'पेमेंट त्रुटी' : 'Payment Error'),
         message:
           message ||
-          'पेमेंट पूर्ण करताना त्रुटी आली. आपले सीट सुरक्षित आहेत, कृपया पुन्हा प्रयत्न करा.',
-        primaryButtonText: 'पुन्हा प्रयत्न करा (Retry)',
+          (language === 'mr'
+            ? 'पेमेंट पूर्ण करताना त्रुटी आली. आपले सीट सुरक्षित आहेत, कृपया पुन्हा प्रयत्न करा.'
+            : 'Payment could not be completed. Your seats remain held, please retry.'),
+        primaryButtonText: language === 'mr' ? 'पुन्हा प्रयत्न करा' : 'Retry',
         onPrimaryPress: () => setCheckoutModal(null),
-        secondaryButtonText: 'मागे जा (Go to Seats)',
+        secondaryButtonText: language === 'mr' ? 'मागे जा' : 'Go Back',
         onSecondaryPress: () => {
           setCheckoutModal(null);
-          navigation.goBack();
+          handleDiscardAndBack();
         },
       });
     } finally {
@@ -1366,7 +1363,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.bg },
-  scroll: { paddingHorizontal: SPACING.base, gap: SPACING.md, paddingBottom: 110 },
+  scroll: { paddingHorizontal: SPACING.base, gap: SPACING.md, paddingBottom: 140 },
 
   timerPillBanner: {
     paddingHorizontal: SPACING.base,

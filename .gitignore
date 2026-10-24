@@ -19,3 +19,5 @@ mobile/ios/build/
 mobile/.env
 build_out
 .vercel
+.apk
+.aab

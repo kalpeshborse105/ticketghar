@@ -121,7 +121,7 @@ export default function HomeScreen({ navigation }: any) {
   const bannerRef = useRef<FlatList>(null);
   const lastBackPressRef = useRef(0);
 
-  // Confirmation dialog on root home screen back press
+  // Graceful back navigation on root home screen:
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
@@ -129,30 +129,27 @@ export default function HomeScreen({ navigation }: any) {
           setCityPickerOpen(false);
           return true;
         }
-        Alert.alert(
-          language === 'mr' ? 'MahaTicket मधून बाहेर पडायचे?' : 'Exit MahaTicket?',
-          language === 'mr'
-            ? 'तुम्हाला खात्री आहे की तुम्ही ॲप बंद करू इच्छिता?'
-            : 'Are you sure you want to close the app?',
-          [
-            {
-              text: language === 'mr' ? 'रद्द करा' : 'Cancel',
-              style: 'cancel',
-            },
-            {
-              text: language === 'mr' ? 'बाहेर पडा' : 'Exit',
-              style: 'destructive',
-              onPress: () => BackHandler.exitApp(),
-            },
-          ],
-          { cancelable: true }
-        );
+        if (navigation.canGoBack()) {
+          navigation.goBack();
+          return true;
+        }
+        const now = Date.now();
+        if (now - lastBackPressRef.current < 2000) {
+          BackHandler.exitApp();
+          return true;
+        }
+        lastBackPressRef.current = now;
+        Toast.show({
+          type: 'info',
+          text1: language === 'mr' ? 'बाहेर पडण्यासाठी पुन्हा बॅक दाबा' : 'Press back again to exit',
+          visibilityTime: 1800,
+        });
         return true;
       };
 
       const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
       return () => sub.remove();
-    }, [cityPickerOpen, language])
+    }, [cityPickerOpen, language, navigation])
   );
 
   const selectCity = useCallback(
@@ -1103,6 +1100,8 @@ export default function HomeScreen({ navigation }: any) {
             </ScrollView>
           </Pressable>
         </Pressable>
+      </Modal>
+
       {/* Floating TikitMitra AI Assistant Button */}
       <TouchableOpacity
         style={[styles.floatingTikitMitraFab, { bottom: insets.bottom + 20 }]}

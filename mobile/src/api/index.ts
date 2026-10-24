@@ -48,7 +48,9 @@ export async function resolveApiBase(): Promise<string> {
 
   if (storedOk) {
     resolvedBase = storedOk;
-    fetch(`${storedOk}/api/health`, { signal: AbortSignal.timeout(1500) })
+    fetch(`${storedOk}/api/health`, {
+      signal: typeof (AbortSignal as any).timeout === 'function' ? (AbortSignal as any).timeout(1500) : undefined,
+    })
       .then((res) => {
         if (!res.ok) {
           resolvedBase = PROD_API_URL;
@@ -65,7 +67,7 @@ export async function resolveApiBase(): Promise<string> {
   if (__DEV__) {
     try {
       const devRes = await fetch('http://10.0.2.2:3000/api/health', {
-        signal: AbortSignal.timeout(500),
+        signal: typeof (AbortSignal as any).timeout === 'function' ? (AbortSignal as any).timeout(500) : undefined,
       });
       if (devRes.ok) {
         resolvedBase = 'http://10.0.2.2:3000';
