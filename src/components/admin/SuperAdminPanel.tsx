@@ -75,11 +75,15 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
   const [eventTitleMr, setEventTitleMr] = useState('');
   const [eventTitleEn, setEventTitleEn] = useState('');
   const [eventCategory, setEventCategory] = useState('plays');
-  const [eventVenueId, setEventVenueId] = useState<number>(1);
+  const [eventVenueId, setEventVenueId] = useState<number>(0);
   const [eventBasePrice, setEventBasePrice] = useState<number>(300);
   const [eventBadge, setEventBadge] = useState<string>('हाऊसफुल्ल');
   const [eventDescriptionMr, setEventDescriptionMr] = useState('');
   const [eventPosterUrl, setEventPosterUrl] = useState('');
+  const [eventGalleryUrls, setEventGalleryUrls] = useState<string[]>([]);
+  const [imageUploading, setImageUploading] = useState(false);
+  const [imageUploadError, setImageUploadError] = useState<string | null>(null);
+  const [venueSearchInForm, setVenueSearchInForm] = useState('');
 
   // Venue Master Directory Filters & Import State
   const [venueSearch, setVenueSearch] = useState('');
@@ -180,9 +184,9 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
 
       if (venuesRes.ok) {
         const vnData = await venuesRes.json();
-        if (Array.isArray(vnData.venues) && vnData.venues.length > 0) {
+        if (Array.isArray(vnData.venues)) {
           setVenuesList(vnData.venues);
-          if (!venueForDesigner) {
+          if (!venueForDesigner && vnData.venues.length > 0) {
             setVenueForDesigner(vnData.venues[0]);
           }
         }
@@ -417,27 +421,68 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
     }
   };
 
+  const uploadEventImage = async (file: File, kind: 'cover' | 'gallery') => {
+    setImageUploading(true);
+    setImageUploadError(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('kind', kind);
+      if (editingEvent?.id) fd.append('eventId', String(editingEvent.id));
+      const res = await fetch('/api/admin/uploads', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok || !data.url) {
+        throw new Error(data.error || 'Upload failed');
+      }
+      if (kind === 'cover') {
+        setEventPosterUrl(data.url);
+      } else {
+        setEventGalleryUrls((prev) => [...prev, data.url].slice(0, 12));
+      }
+      triggerToast(kind === 'cover' ? '✓ फीचर्ड पोस्टर अपलोड झाले' : '✓ गॅलरी इमेज अपलोड झाली');
+    } catch (err: any) {
+      setImageUploadError(err?.message || 'अपलोड अयशस्वी');
+    } finally {
+      setImageUploading(false);
+    }
+  };
+
   const handleSaveEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!eventTitleMr.trim()) return;
+    if (!eventVenueId) {
+      triggerToast('कृपया नाट्यगृह निवडा');
+      return;
+    }
 
     setIsProcessing(true);
     try {
-      const selectedVenue = venuesList.find(v => v.id === Number(eventVenueId)) || venuesList[0];
+      const selectedVenue = venuesList.find(v => v.id === Number(eventVenueId));
+      if (!selectedVenue) {
+        triggerToast('वैध नाट्यगृह निवडा — ड्रॉपडाउन रिफ्रेश करा');
+        setIsProcessing(false);
+        return;
+      }
       const payload: any = {
         title: eventTitleEn.trim() || eventTitleMr.trim(),
         titleMr: eventTitleMr.trim(),
         category: eventCategory,
-        venueId: selectedVenue ? selectedVenue.id : 1,
+        venueId: selectedVenue.id,
         organizerId: 1,
         description: eventDescriptionMr,
         descriptionMr: eventDescriptionMr,
-        posterUrl: eventPosterUrl.trim() || 'https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?w=600',
+        posterUrl: eventPosterUrl.trim() || '',
+        galleryUrls: eventGalleryUrls,
         status: 'published',
         ticketPrice: eventBasePrice * 100,
         tag: eventBadge || null,
         actorId: currentUser?.email || 'admin',
       };
+      if (!payload.posterUrl) {
+        triggerToast('फीचर्ड पोस्टर अपलोड करा किंवा URL भरा');
+        setIsProcessing(false);
+        return;
+      }
 
       if (editingEvent) {
         payload.eventId = editingEvent.id;
@@ -1014,6 +1059,11 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                   setEventTitleEn('');
                   setEventDescriptionMr('');
                   setEventPosterUrl('');
+                  setEventGalleryUrls([]);
+                  setEventVenueId(0);
+                  setVenueSearchInForm('');
+                  setImageUploadError(null);
+                  void fetchAllData();
                   setShowAddEventModal(true);
                 }}
                 className="bg-[#A33900] hover:bg-[#832600] text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-sm"
@@ -1110,6 +1160,18 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                           setEventBadge(ev.tag || 'हाऊसफुल्ल');
                           setEventDescriptionMr(ev.descriptionMr || '');
                           setEventPosterUrl(ev.posterUrl || '');
+                          try {
+                            const g =
+                              typeof (ev as any).galleryUrls === 'string'
+                                ? JSON.parse((ev as any).galleryUrls || '[]')
+                                : (ev as any).galleryUrls || [];
+                            setEventGalleryUrls(Array.isArray(g) ? g.filter(Boolean) : []);
+                          } catch {
+                            setEventGalleryUrls([]);
+                          }
+                          setVenueSearchInForm('');
+                          setImageUploadError(null);
+                          void fetchAllData();
                           setShowAddEventModal(true);
                         }}
                         className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-[#FFF7ED] text-[#A33900] hover:bg-orange-100 border border-orange-200 transition"
@@ -1786,18 +1848,46 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
               </div>
 
               <div>
-                <label className="font-bold text-[#141B2B] block mb-1">नाट्यगृह</label>
+                <label className="font-bold text-[#141B2B] block mb-1">नाट्यगृह (DB)</label>
+                <input
+                  type="search"
+                  value={venueSearchInForm}
+                  onChange={(e) => setVenueSearchInForm(e.target.value)}
+                  placeholder="नाट्यगृह / शहर शोधा…"
+                  className="w-full px-3 py-2 mb-1.5 rounded-xl border border-[#E2E8F0]"
+                />
                 <select
-                  value={eventVenueId}
-                  onChange={e => setEventVenueId(Number(e.target.value))}
+                  value={eventVenueId || ''}
+                  onChange={(e) => setEventVenueId(Number(e.target.value) || 0)}
+                  required
                   className="w-full px-3 py-2 rounded-xl border border-[#E2E8F0] bg-white"
                 >
-                  {venuesList.map(v => (
-                    <option key={v.id} value={v.id}>
-                      {v.nameMr} ({v.city})
-                    </option>
-                  ))}
+                  <option value="">— नाट्यगृह निवडा —</option>
+                  {venuesList
+                    .filter((v) => {
+                      const q = venueSearchInForm.trim().toLowerCase();
+                      if (!q) return true;
+                      return (
+                        (v.nameMr || '').toLowerCase().includes(q) ||
+                        (v.name || '').toLowerCase().includes(q) ||
+                        (v.city || '').toLowerCase().includes(q) ||
+                        (v.address || '').toLowerCase().includes(q)
+                      );
+                    })
+                    .map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.nameMr || v.name} — {v.city}
+                        {v.address ? ` · ${v.address}` : ''}
+                      </option>
+                    ))}
                 </select>
+                <button
+                  type="button"
+                  onClick={() => void fetchAllData()}
+                  className="mt-1 text-[11px] font-bold text-[#A33900] hover:underline"
+                >
+                  नाट्यगृह यादी रिफ्रेश करा
+                </button>
               </div>
 
               <div>
@@ -1828,15 +1918,78 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                 </div>
               </div>
 
-              <div>
-                <label className="font-bold text-[#141B2B] block mb-1">पोस्टर इमेज URL</label>
+              <div className="space-y-2">
+                <label className="font-bold text-[#141B2B] block">फीचर्ड पोस्टर (कार्ड / होम)</label>
+                {eventPosterUrl ? (
+                  <div className="relative w-full h-36 rounded-xl overflow-hidden border border-[#E2E8F0] bg-slate-50">
+                    <img src={eventPosterUrl} alt="Featured poster" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setEventPosterUrl('')}
+                      className="absolute top-2 right-2 bg-black/60 text-white text-[10px] font-bold px-2 py-1 rounded-lg"
+                    >
+                      काढा
+                    </button>
+                  </div>
+                ) : null}
+                <label className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-dashed border-[#A33900]/50 bg-[#FFF7ED] text-[#A33900] font-bold cursor-pointer hover:bg-orange-50">
+                  <UploadCloud className="w-4 h-4" />
+                  {imageUploading ? 'अपलोड होत आहे…' : 'पोस्टर अपलोड करा'}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="hidden"
+                    disabled={imageUploading}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) void uploadEventImage(f, 'cover');
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
                 <input
-                  type="text"
+                  type="url"
                   value={eventPosterUrl}
-                  onChange={e => setEventPosterUrl(e.target.value)}
-                  placeholder="https://images.unsplash.com/..."
+                  onChange={(e) => setEventPosterUrl(e.target.value)}
+                  placeholder="किंवा पोस्टर URL (पर्यायी)"
                   className="w-full px-3 py-2 rounded-xl border border-[#E2E8F0]"
                 />
+
+                <label className="font-bold text-[#141B2B] block pt-1">इव्हेंट गॅलरी (तपशील स्लाइडर)</label>
+                {eventGalleryUrls.length > 0 ? (
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {eventGalleryUrls.map((url) => (
+                      <div key={url} className="relative w-20 h-20 shrink-0 rounded-lg overflow-hidden border border-slate-200">
+                        <img src={url} alt="" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setEventGalleryUrls((prev) => prev.filter((u) => u !== url))}
+                          className="absolute inset-x-0 bottom-0 bg-black/70 text-white text-[9px] font-bold py-0.5"
+                        >
+                          काढा
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                <label className="flex items-center justify-center gap-2 w-full py-2 rounded-xl border border-dashed border-slate-300 text-slate-600 font-bold cursor-pointer hover:bg-slate-50">
+                  <Plus className="w-4 h-4" />
+                  गॅलरी इमेज जोडा
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="hidden"
+                    disabled={imageUploading}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) void uploadEventImage(f, 'gallery');
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+                {imageUploadError ? (
+                  <p className="text-[11px] text-red-600 font-semibold">{imageUploadError}</p>
+                ) : null}
               </div>
 
               <div>

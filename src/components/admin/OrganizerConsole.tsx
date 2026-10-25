@@ -601,67 +601,17 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
               <h3 className="text-base font-bold text-[#141B2B] leading-tight">
                 गेट स्कॅनर व हजेरी ट्रॅकर
               </h3>
-              <p className="text-xs text-[#64748B]">रात्रीचा शो: 'नियम व अटी लागू'</p>
+              <p className="text-xs text-[#64748B]">निवडलेल्या शोसाठी थेट QR पडताळणी</p>
             </div>
             <span className="w-3 h-3 rounded-full bg-[#16A34A]"></span>
           </div>
 
-          <div className="flex items-center gap-5 py-2">
-            {/* Circular Progress Wheel Inline SVG */}
-            <div className="relative w-24 h-24 shrink-0 flex items-center justify-center">
-              <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
-                <path
-                  className="text-slate-100"
-                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="3.5"
-                />
-                <path
-                  className="text-[#A33900]"
-                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeDasharray="78, 100"
-                  strokeLinecap="round"
-                  strokeWidth="3.5"
-                />
-              </svg>
-              <div className="absolute flex flex-col items-center justify-center text-center">
-                <span className="text-xl font-black text-[#141B2B] leading-none">७८%</span>
-                <span className="text-[10px] text-[#64748B] mt-0.5">दाखल</span>
-              </div>
-            </div>
-
-            {/* Progress Text Details */}
-            <div className="flex-1 min-w-0">
-              <span className="text-sm font-bold text-[#141B2B] block">४८४ / ६२० प्रेक्षक</span>
-              <span className="text-xs text-[#64748B] block mt-0.5">सभागृहात दाखल झाले आहेत</span>
-              <div className="mt-2">
-                <span className="text-xs bg-[#FFF7ED] text-[#A33900] font-bold px-2 py-0.5 rounded-lg">
-                  १३६ अजून येणे बाकी
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Breakdown by Gates */}
-          <div className="grid grid-cols-3 gap-2 mt-4 bg-[#F1F3FF] rounded-xl p-3 text-center">
-            <div>
-              <span className="text-[11px] text-[#64748B] block">गेट १ (ऑडिटोरियम)</span>
-              <span className="text-sm font-bold text-[#141B2B] mt-0.5 block">३१२</span>
-              <span className="text-[10px] text-[#16A34A] font-semibold">६४% वाटा</span>
-            </div>
-            <div>
-              <span className="text-[11px] text-[#64748B] block">गेट २ (बाल्कनी)</span>
-              <span className="text-sm font-bold text-[#141B2B] mt-0.5 block">१७२</span>
-              <span className="text-[10px] text-[#16A34A] font-semibold">३६% वाटा</span>
-            </div>
-            <div>
-              <span className="text-[11px] text-[#64748B] block">बाकी प्रेक्षक</span>
-              <span className="text-sm font-bold text-[#AC3400] mt-0.5 block">१३६</span>
-              <span className="text-[10px] text-[#A33900] font-semibold">प्रतिक्षित</span>
-            </div>
+          <div className="py-3 px-1">
+            <p className="text-sm text-[#141B2B] font-semibold">लाइव्ह हजेरी गेट स्कॅनर मध्ये दिसते</p>
+            <p className="text-xs text-[#64748B] mt-1 leading-relaxed">
+              कार्यक्रम + अचूक शो वेळ निवडून QR / ऑर्डर ID स्कॅन करा. फक्त त्या शोशी जुळणारी तिकिटेच मंजूर होतील —
+              इतर दिनांक/वेळेची तिकिटे अधिकृत संदेशासह नाकारली जातील.
+            </p>
           </div>
 
           {/* Quick Scan Action Button */}

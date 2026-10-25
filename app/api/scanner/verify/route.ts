@@ -131,7 +131,7 @@ export async function POST(request: Request) {
         return NextResponse.json({
           valid: false,
           scanResult: 'WRONG_EVENT',
-          message: `हे तिकीट या कार्यक्रमाचे नाही! (Wrong Event: तिकीट '${event.titleMr || event.title}' चे आहे).`,
+          message: `हे तिकीट या कार्यक्रमाचे नाही! तिकीट '${event.titleMr || event.title}' चे आहे. आयोजक / प्रशासनशी संपर्क साधा.`,
           ticket: ticketPassSummary({
             code: order.orderNumber,
             attendee: order.userName,
@@ -149,7 +149,7 @@ export async function POST(request: Request) {
         return NextResponse.json({
           valid: false,
           scanResult: 'WRONG_SESSION',
-          message: `हे तिकीट या शो वेळेचे नाही! (Wrong showtime: ${formatShowtimeIst(session.sessionStartTime)})`,
+          message: `तिकीट या निवडलेल्या शो वेळेशी जुळत नाही. तिकीट वेळ: ${formatShowtimeIst(session.sessionStartTime)}. कृपया योग्य शो निवडा किंवा आयोजक / प्रशासनशी संपर्क साधा.`,
           ticket: ticketPassSummary({
             code: order.orderNumber,
             attendee: order.userName,
@@ -334,13 +334,23 @@ export async function POST(request: Request) {
     } else if (targetCode.startsWith('{')) {
       try {
         const parsed = JSON.parse(targetCode);
-        if (parsed.code) targetCode = parsed.code.trim();
-        else if (parsed.ord) targetCode = parsed.ord.trim();
-      } catch {}
+        targetCode = String(
+          parsed.ticketCode || parsed.code || parsed.ord || parsed.orderNumber || parsed.bookingId || ''
+        ).trim();
+        if (!targetCode) {
+          return NextResponse.json({
+            valid: false,
+            scanResult: 'INVALID_TICKET',
+            message: 'QR मधील तिकीट कोड वाचता आला नाही. मॅन्युअल ऑर्डर / तिकीट क्रमांक वापरा.',
+          });
+        }
+      } catch {
+        /* keep raw */
+      }
     }
 
-    // Look up ticket in PostgreSQL
-    const ticketRows = await db
+    // Look up ticket in PostgreSQL (exact ticket code)
+    let ticketRows = await db
       .select({
         ticket: tickets,
         order: orders,
@@ -355,11 +365,161 @@ export async function POST(request: Request) {
       .leftJoin(venues, eq(events.venueId, venues.id))
       .where(eq(tickets.ticketCode, targetCode));
 
+    // Manual fallback: booking / order number (e.g. MT-2026-22814)
+    if (ticketRows.length === 0) {
+      const orderRows = await db
+        .select({
+          order: orders,
+          session: eventSessions,
+          event: events,
+          venue: venues,
+        })
+        .from(orders)
+        .innerJoin(eventSessions, eq(orders.sessionId, eventSessions.id))
+        .innerJoin(events, eq(orders.eventId, events.id))
+        .leftJoin(venues, eq(events.venueId, venues.id))
+        .where(eq(orders.orderNumber, targetCode))
+        .limit(1);
+
+      if (orderRows.length > 0) {
+        const { order: ord, session: sess, event: ev, venue: ven } = orderRows[0];
+        const venueNameOrd = ven?.nameMr || ven?.name || '';
+
+        if (targetEventId && Number(ord.eventId) !== Number(targetEventId)) {
+          return NextResponse.json({
+            valid: false,
+            scanResult: 'WRONG_EVENT',
+            message: `हे तिकीट या कार्यक्रमाचे नाही! (Wrong Event: '${ev.titleMr || ev.title}'). आयोजक / प्रशासनशी संपर्क साधा.`,
+            ticket: ticketPassSummary({
+              code: ord.orderNumber,
+              attendee: ord.userName,
+              eventTitle: ev.title,
+              eventTitleMr: ev.titleMr,
+              venueName: venueNameOrd,
+              showtime: sess.sessionStartTime,
+              sessionId: sess.id,
+            }),
+          });
+        }
+        if (targetSessionId && Number(ord.sessionId) !== Number(targetSessionId)) {
+          return NextResponse.json({
+            valid: false,
+            scanResult: 'WRONG_SESSION',
+            message: `तिकीट या निवडलेल्या शो वेळेशी जुळत नाही. तिकीट वेळ: ${formatShowtimeIst(sess.sessionStartTime)}. कृपया योग्य शो निवडा किंवा आयोजक / प्रशासनशी संपर्क साधा.`,
+            ticket: ticketPassSummary({
+              code: ord.orderNumber,
+              attendee: ord.userName,
+              eventTitle: ev.title,
+              eventTitleMr: ev.titleMr,
+              venueName: venueNameOrd,
+              showtime: sess.sessionStartTime,
+              sessionId: sess.id,
+            }),
+          });
+        }
+        if (scannerOrganizerId && Number(ev.organizerId) !== Number(scannerOrganizerId)) {
+          return NextResponse.json({
+            valid: false,
+            scanResult: 'WRONG_ORGANIZER',
+            message: 'हे तिकीट तुमच्या आयोजक खात्याशी संबंधित नाही. प्रशासनशी संपर्क साधा.',
+          });
+        }
+        if (ord.paymentStatus !== 'captured') {
+          return NextResponse.json({
+            valid: false,
+            scanResult: 'UNPAID',
+            message: 'या बुकिंगचे पेमेंट पूर्ण झालेले नाही. प्रवेश मंजूर करू शकत नाही.',
+            ticket: ticketPassSummary({
+              code: ord.orderNumber,
+              attendee: ord.userName,
+              eventTitle: ev.title,
+              eventTitleMr: ev.titleMr,
+              venueName: venueNameOrd,
+              showtime: sess.sessionStartTime,
+              sessionId: sess.id,
+            }),
+          });
+        }
+
+        const orderTickets = await db.select().from(tickets).where(eq(tickets.orderId, ord.id));
+        if (orderTickets.length === 0) {
+          return NextResponse.json({
+            valid: false,
+            scanResult: 'NO_TICKETS',
+            message: 'या ऑर्डरसाठी तिकिटे सापडली नाहीत. प्रशासनशी संपर्क साधा.',
+          });
+        }
+
+        // Order ID / booking QR: check in ALL seats in the party (same as MTGRP)
+        const allSeatsOrd = orderTickets.map((t) => t.seatCode).filter(Boolean);
+        const validParty = orderTickets.filter((t) => t.status === 'valid');
+        if (validParty.length === 0) {
+          return NextResponse.json({
+            valid: false,
+            scanResult: 'ALREADY_USED',
+            message: 'या ऑर्डरची सर्व तिकिटे आधीच वापरली गेली आहेत (Already Scanned).',
+            isGroup: true,
+            totalSeats: orderTickets.length,
+            seatCodes: allSeatsOrd,
+            ticket: ticketPassSummary({
+              code: ord.orderNumber,
+              seats: allSeatsOrd.join(', '),
+              attendee: ord.userName,
+              eventTitle: ev.title,
+              eventTitleMr: ev.titleMr,
+              venueName: venueNameOrd,
+              showtime: sess.sessionStartTime,
+              sessionId: sess.id,
+            }),
+          });
+        }
+
+        const markedParty = await db
+          .update(tickets)
+          .set({ status: 'used' })
+          .where(and(eq(tickets.orderId, ord.id), eq(tickets.status, 'valid')))
+          .returning({ id: tickets.id });
+
+        const [partyScan] = await db
+          .insert(ticketScans)
+          .values({
+            ticketId: validParty[0].id,
+            ticketCode: ord.orderNumber,
+            scannedByUserId: scannerUserId || null,
+            scannerDevice: scannerDevice || 'Gate Terminal Pro',
+            scanResult: 'SUCCESS',
+            gateName: gateName || 'Main Entry Gate 1',
+          })
+          .returning();
+
+        return NextResponse.json({
+          valid: true,
+          scanResult: 'SUCCESS',
+          message: `ग्रुप प्रवेश मान्य! ${markedParty.length} आसने चेक-इन (Group entry: ${markedParty.length} seats)`,
+          isGroup: true,
+          totalSeats: markedParty.length,
+          seatCodes: allSeatsOrd,
+          ticket: ticketPassSummary({
+            code: ord.orderNumber,
+            seats: allSeatsOrd.join(', '),
+            attendee: ord.userName,
+            eventTitle: ev.title,
+            eventTitleMr: ev.titleMr,
+            venueName: venueNameOrd,
+            showtime: sess.sessionStartTime,
+            sessionId: sess.id,
+          }),
+          scannedAt: partyScan.scannedAt,
+        });
+      }
+    }
+
     if (ticketRows.length === 0) {
       return NextResponse.json({
         valid: false,
         scanResult: 'INVALID_TICKET',
-        message: 'अवैध तिकीट! प्रणालीमध्ये या क्रमांकाची नोंद नाही (Ticket not recognized).',
+        message:
+          'अवैध तिकीट / ऑर्डर क्रमांक! प्रणालीमध्ये नोंद नाही. QR पुन्हा स्कॅन करा किंवा आयोजक / प्रशासनशी संपर्क साधा.',
         ticketCode: targetCode,
       });
     }
@@ -400,7 +560,7 @@ export async function POST(request: Request) {
       return NextResponse.json({
         valid: false,
         scanResult: 'WRONG_SESSION',
-        message: `हे तिकीट या शो वेळेचे नाही! (Wrong showtime: ${formatShowtimeIst(session.sessionStartTime)})`,
+        message: `तिकीट या निवडलेल्या शो वेळेशी जुळत नाही. तिकीट वेळ: ${formatShowtimeIst(session.sessionStartTime)}. कृपया योग्य शो निवडा किंवा आयोजक / प्रशासनशी संपर्क साधा.`,
         ticket: ticketPassSummary({
           code: ticket.ticketCode,
           seat: ticket.seatCode,

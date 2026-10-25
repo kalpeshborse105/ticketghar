@@ -203,6 +203,19 @@ export async function createTemporarySeatHold(params: {
     throw new Error('Please select at least one seat.');
   }
 
+  const [holdSession] = await db
+    .select()
+    .from(eventSessions)
+    .where(eq(eventSessions.id, sessionId))
+    .limit(1);
+  if (!holdSession) {
+    throw new Error('Showtime not found.');
+  }
+  const { isSessionBookable } = await import('@/src/lib/session-lifecycle.ts');
+  if (!isSessionBookable(holdSession)) {
+    throw new Error('हे शो संपले आहे / बुकिंग बंद आहे (This showtime is no longer bookable).');
+  }
+
   const sortedSeatIds = [...seatIds].sort((a, b) => a - b);
 
   if (sortedSeatIds.length > MAX_SEATS_PER_BOOKING) {

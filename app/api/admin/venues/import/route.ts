@@ -116,10 +116,11 @@ export async function POST(request: NextRequest) {
             cityId: cand.cityId ? Number(cand.cityId) : null,
             totalCapacity: cand.totalCapacity ? Number(cand.totalCapacity) : 500,
             facilities: cand.facilities ? JSON.stringify(cand.facilities) : null,
-            ownershipType: cand.ownershipType || 'public_theatre',
+            ownershipType: cand.ownershipType || 'municipal',
             verificationStatus: cand.verificationStatus || 'unverified',
             isTemplate: 1,
-            hasSeatLayout: 1,
+            // Capacity is as provided by admin — seat layout must be configured separately
+            hasSeatLayout: 0,
           })
           .returning();
 

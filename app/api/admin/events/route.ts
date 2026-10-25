@@ -277,6 +277,19 @@ export async function PATCH(request: NextRequest) {
     if (descriptionMr !== undefined) updatePayload.descriptionMr = descriptionMr;
     if (posterUrl !== undefined) updatePayload.posterUrl = posterUrl;
     if (bannerUrl !== undefined) updatePayload.bannerUrl = bannerUrl;
+    if (body.galleryUrls !== undefined) {
+      updatePayload.galleryUrls =
+        typeof body.galleryUrls === 'string'
+          ? body.galleryUrls
+          : body.galleryUrls
+            ? JSON.stringify(body.galleryUrls)
+            : null;
+    }
+    if (body.venueId !== undefined) {
+      updatePayload.venueId = Number(body.venueId);
+    }
+    if (body.category !== undefined) updatePayload.category = body.category;
+    if (body.categoryMr !== undefined) updatePayload.categoryMr = body.categoryMr;
     if (castCrew !== undefined) {
       updatePayload.castCrew = typeof castCrew === 'string' ? castCrew : castCrew ? JSON.stringify(castCrew) : null;
     }

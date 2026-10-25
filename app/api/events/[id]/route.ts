@@ -2,14 +2,17 @@ import { NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
 import { events, venues, organizers, eventSessions, ticketTypes, venueSections, seatInventory, seats } from '@/src/db/schema.ts';
 import { eq, and, sql } from 'drizzle-orm';
+import { expirePastSessions, isSessionBookable } from '@/src/lib/session-lifecycle.ts';
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await expirePastSessions();
     const { id } = await params;
     const eventId = parseInt(id, 10);
+    const includeEnded = new URL(request.url).searchParams.get('includeEnded') === '1';
 
     if (isNaN(eventId)) {
       return NextResponse.json({ error: 'Invalid event ID' }, { status: 400 });
@@ -207,7 +210,10 @@ export async function GET(
       new Set([...fetchedImages.map((img) => img.url), ...parsedGalleryUrls])
     );
 
-    const isInformational = sessionDetails.length === 0;
+    const bookableSessions = includeEnded
+      ? sessionDetails
+      : sessionDetails.filter((s) => isSessionBookable(s));
+    const isInformational = bookableSessions.length === 0;
 
     return NextResponse.json({
       event: {
@@ -217,7 +223,8 @@ export async function GET(
           sections,
         },
         organizer: item.organizer,
-        sessions: sessionDetails,
+        sessions: bookableSessions,
+        hasBookableSessions: bookableSessions.some((s) => Number(s.availableInventoryCount || 0) > 0),
         rating: finalRating,
         ratingCount: finalCount,
         ratingCountStr: `${(finalCount / 1000).toFixed(1)}k`,

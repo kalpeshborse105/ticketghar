@@ -35,6 +35,9 @@ export interface VerifyResult {
   ticketCode?: string;
   alreadyScannedAt?: string;
   previousGate?: string;
+  isGroup?: boolean;
+  totalSeats?: number;
+  seatCodes?: string[];
   ticket?: {
     code: string;
     seat: string;
@@ -157,6 +160,13 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
     duplicate: 0,
     rejected: 0,
   });
+  const [attendance, setAttendance] = useState<{
+    checkedIn: number;
+    totalTickets: number;
+    remaining: number;
+    percent: number;
+    capacity: number;
+  } | null>(null);
 
   // Recent scans list
   const [recentScans, setRecentScans] = useState<Array<VerifyResult & { timestamp: number }>>([]);
@@ -219,6 +229,67 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
 
   const selectedEvent = (loadedEvents || []).find((e) => String(e.id) === String(targetEventId));
   const sessionOptions = selectedEvent?.sessions || [];
+  const selectedSession = sessionOptions.find((s) => String(s.id) === String(targetSessionId));
+  const selectedShowLabel = selectedSession?.sessionStartTime
+    ? new Date(selectedSession.sessionStartTime).toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      })
+    : null;
+
+  // Live DB attendance for selected showtime
+  useEffect(() => {
+    if (!targetSessionId) {
+      setAttendance(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/scanner/attendance?sessionId=${encodeURIComponent(String(targetSessionId))}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) {
+          setAttendance({
+            checkedIn: Number(data.checkedIn || 0),
+            totalTickets: Number(data.totalTickets || 0),
+            remaining: Number(data.remaining || 0),
+            percent: Number(data.percent || 0),
+            capacity: Number(data.capacity || 0),
+          });
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [targetSessionId, metrics.valid]);
+
+  const denyBannerLabel = (result?: string) => {
+    switch (result) {
+      case 'ALREADY_USED':
+        return '⚠ आधीच वापरलेले (DUPLICATE)';
+      case 'WRONG_SESSION':
+        return '✗ चुकीची शो वेळ (WRONG SHOW)';
+      case 'WRONG_EVENT':
+        return '✗ चुकीचा कार्यक्रम (WRONG EVENT)';
+      case 'UNPAID':
+        return '✗ पेमेंट अपूर्ण (UNPAID)';
+      case 'SCOPE_REQUIRED':
+        return '⚠ शो निवडा (SELECT SHOW)';
+      case 'WRONG_ORGANIZER':
+        return '✗ अनधिकृत आयोजक';
+      default:
+        return '✗ अवैध / न जुळणारे तिकीट';
+    }
+  };
 
   // Process code verification against database
   const verifyCode = useCallback(async (rawCode: string) => {
@@ -304,7 +375,7 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
       // Brief cooldown before next camera scan to prevent double reading
       setTimeout(() => {
         isCooldownRef.current = false;
-      }, 1500);
+      }, 700);
     }
   }, [gateName, scannerUserId, scannerOrganizerId, targetEventId, targetSessionId, soundEnabled, isVerifying, onTicketVerified]);
 
@@ -568,15 +639,17 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
           </div>
         </div>
         <div className="flex items-center justify-between text-xs text-slate-300 pt-0.5">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span className="font-semibold text-white">आज ५:०० PM शो</span>
-            <span>•</span>
-            <span className="bg-[#EA580C]/25 text-orange-200 px-2 py-0.5 rounded-full text-[11px] font-semibold border border-orange-500/30">
-              {gateName || 'गेट २ (Stall Entry)'}
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+            <span className="font-semibold text-white truncate">
+              {selectedShowLabel || 'शो वेळ निवडा (Select showtime)'}
+            </span>
+            <span className="shrink-0">•</span>
+            <span className="bg-[#EA580C]/25 text-orange-200 px-2 py-0.5 rounded-full text-[11px] font-semibold border border-orange-500/30 shrink-0">
+              {gateName || 'मुख्य प्रवेशद्वार'}
             </span>
           </div>
-          <div className="flex items-center gap-1 text-[11px] text-slate-300">
+          <div className="flex items-center gap-1 text-[11px] text-slate-300 shrink-0">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
             <span>Online Sync</span>
           </div>
@@ -692,7 +765,7 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
                     <div className="flex items-center gap-2">
                       <XCircle className="w-5 h-5 stroke-[2.5]" />
                       <span className="text-sm font-bold tracking-wide">
-                        {currentOverlay.scanResult === 'ALREADY_USED' ? '⚠ आधीच वापरलेले (DUPLICATE)' : '✗ अवैध तिकीट (INVALID)'}
+                        {denyBannerLabel(currentOverlay.scanResult)}
                       </span>
                     </div>
                     <span className="bg-white/20 px-2 py-0.5 rounded text-[10px] font-bold tracking-wider">DENIED</span>
@@ -715,6 +788,11 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
                       <p className="text-base font-bold text-[#EA580C]">
                         {currentOverlay.ticket?.seats || currentOverlay.ticket?.seat || '—'}
                       </p>
+                      {(currentOverlay.isGroup || (currentOverlay.totalSeats || 0) > 1) && (
+                        <p className="text-[11px] font-bold text-emerald-700 mt-0.5">
+                          पार्टी: {currentOverlay.totalSeats || currentOverlay.seatCodes?.length || '—'} जण चेक-इन
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -794,33 +872,41 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
           </div>
         )}
 
-        {/* Gate Attendance Progress Card (Stitch Exact) */}
+        {/* Live attendance from DB for selected showtime */}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex flex-col gap-2">
           <div className="flex justify-between items-end">
             <div>
               <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">गेट उपस्थिती / ATTENDANCE</span>
               <div className="flex items-baseline gap-1 mt-0.5">
-                <span className="text-xl font-bold text-[#141B2B]">{438 + metrics.valid}</span>
-                <span className="text-xs text-slate-500">/ 650 तिकीटे</span>
+                <span className="text-xl font-bold text-[#141B2B]">
+                  {attendance ? attendance.checkedIn : '—'}
+                </span>
+                <span className="text-xs text-slate-500">
+                  / {attendance ? attendance.totalTickets : '—'} तिकीटे
+                </span>
               </div>
             </div>
             <div className="text-right">
               <span className="text-lg font-extrabold text-[#EA580C]">
-                {Math.min(100, Math.round(((438 + metrics.valid) / 650) * 100))}%
+                {attendance ? `${attendance.percent}%` : '—'}
               </span>
-              <span className="text-[11px] text-emerald-600 block font-semibold">Fast Flowing</span>
+              <span className="text-[11px] text-slate-500 block font-semibold">
+                {targetSessionId ? 'लाइव्ह DB' : 'शो निवडा'}
+              </span>
             </div>
           </div>
           <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden flex">
             <div
               className="h-full bg-[#EA580C] rounded-full transition-all duration-500"
-              style={{ width: `${Math.min(100, Math.round(((438 + metrics.valid) / 650) * 100))}%` }}
+              style={{ width: `${attendance ? Math.min(100, attendance.percent) : 0}%` }}
             />
           </div>
           <div className="flex justify-between items-center text-[11px] text-slate-500 pt-0.5">
-            <span>स्टॉल: {280 + metrics.valid}/350</span>
-            <span>बाल्कनी: 158/300</span>
-            <span className="text-[#EA580C] font-semibold">गती: ~14 scans/min</span>
+            <span>बाकी: {attendance ? attendance.remaining : '—'}</span>
+            <span>सत्र स्कॅन: {metrics.valid} ✓ / {metrics.rejected} ✗</span>
+            <span className="text-[#EA580C] font-semibold">
+              {attendance?.capacity ? `क्षमता: ${attendance.capacity}` : 'Live'}
+            </span>
           </div>
         </div>
 
@@ -832,14 +918,14 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
               <h3 className="font-bold text-xs sm:text-sm">मॅन्युअल कोड पडताळणी (Fallback Entry)</h3>
             </div>
             <p className="text-[11px] text-slate-500">
-              QR कोड स्कॅन होत नसल्यास किंवा कॅमेरा त्रुटी असल्यास तिकीट कोड हाताने भरा.
+              QR अयशस्वी झाल्यास तिकीट कोड किंवा ऑर्डर ID (उदा. MT-2026-22814) टाका — निवडलेल्या शोशी जुळले तरच प्रवेश.
             </p>
             <form onSubmit={handleManualSubmit} className="flex gap-2 pt-1">
               <input
                 type="text"
                 value={manualCode}
                 onChange={(e) => setManualCode(e.target.value)}
-                placeholder="उदा. MT-2025-XXXXX"
+                placeholder="तिकीट कोड / ऑर्डर ID"
                 className="flex-1 bg-slate-50 text-[#141B2B] font-mono text-xs px-3 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-[#EA580C]"
               />
               <button
@@ -872,10 +958,13 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
                     )}
                     <div>
                       <h4 className="text-xs font-bold text-[#141B2B]">
-                        {scan.ticket?.attendee || scan.ticketCode || 'अनिकेत जोशी'}
+                        {scan.ticket?.attendee || scan.ticket?.code || scan.ticketCode || '—'}
                       </h4>
                       <p className="text-[10px] text-slate-500">
-                        {scan.ticket?.seat ? `आसन: ${scan.ticket.seat}` : '#MT-88491'} • {new Date(scan.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {scan.ticket?.seat || scan.ticket?.seats
+                          ? `आसन: ${scan.ticket?.seats || scan.ticket?.seat}`
+                          : scan.scanResult || '—'}{' '}
+                        • {new Date(scan.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </p>
                     </div>
                   </div>
@@ -887,28 +976,9 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
                 </div>
               ))
             ) : (
-              <>
-                <div className="bg-white p-3 rounded-xl flex items-center justify-between shadow-2xs border border-slate-100">
-                  <div className="flex items-center gap-2.5">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                    <div>
-                      <h4 className="text-xs font-bold text-[#141B2B]">रोहन देशपांडे • B12</h4>
-                      <p className="text-[10px] text-slate-500">#MT-88491 • ५:१० PM</p>
-                    </div>
-                  </div>
-                  <span className="bg-slate-100 px-2 py-0.5 rounded text-[10px] font-semibold text-slate-700">Gate 2</span>
-                </div>
-                <div className="bg-white p-3 rounded-xl flex items-center justify-between shadow-2xs border border-slate-100">
-                  <div className="flex items-center gap-2.5">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                    <div>
-                      <h4 className="text-xs font-bold text-[#141B2B]">प्रियांका कुलकर्णी • C4, C5</h4>
-                      <p className="text-[10px] text-slate-500">#MT-88490 • ५:०८ PM</p>
-                    </div>
-                  </div>
-                  <span className="bg-slate-100 px-2 py-0.5 rounded text-[10px] font-semibold text-slate-700">Gate 2</span>
-                </div>
-              </>
+              <p className="text-[11px] text-slate-500 py-3 text-center bg-white rounded-xl border border-dashed border-slate-200">
+                अद्याप स्कॅन नाही — पहिले तिकीट स्कॅन केल्यावर येथे दिसेल.
+              </p>
             )}
           </div>
         </div>
@@ -916,7 +986,7 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
         {/* Protocol Footer */}
         <div className="pt-2 text-center">
           <p className="text-[11px] text-slate-400">
-            MahaTicket Verified FastGate Protocol v4.2 • बाळ गंधर्व रंगमंदिर, पुणे
+            MahaTicket FastGate • निवडलेल्या कार्यक्रम + शो वेळेशीच तिकीट जुळते
           </p>
         </div>
       </div>

@@ -2,10 +2,15 @@ import { NextResponse } from 'next/server';
 import { db, pool } from '@/src/db/index.ts';
 import { events, venues, organizers, eventSessions, ticketTypes } from '@/src/db/schema.ts';
 import { eq, and, desc, inArray, sql } from 'drizzle-orm';
+import { expirePastSessions, isSessionBookable } from '@/src/lib/session-lifecycle.ts';
 
 export async function GET(request: Request) {
   try {
+    // Auto-disable ended showtimes before listing (customer + organizer scanner lists)
+    await expirePastSessions();
+
     const { searchParams } = new URL(request.url);
+    const includeEnded = searchParams.get('includeEnded') === '1';
     const city = searchParams.get('city');
     const category = searchParams.get('category');
     const search = searchParams.get('search');
@@ -109,7 +114,6 @@ export async function GET(request: Request) {
         ticketTypesBySessionId[t.sessionId].push(t);
       });
 
-      const nowMs = Date.now() + 5 * 60 * 1000;
       const sessionsByEventId: Record<number, any[]> = {};
       allSessions.forEach((s) => {
         if (!sessionsByEventId[s.eventId]) sessionsByEventId[s.eventId] = [];
@@ -137,12 +141,13 @@ export async function GET(request: Request) {
 
       allEventsList = dbEvents.map((item) => {
         const evId = item.event.id;
-        const sessions = sessionsByEventId[evId] || [];
+        const sessionsRaw = sessionsByEventId[evId] || [];
+        // Public/mobile: only bookable (future/active) showtimes — past shows hidden
+        const sessions = includeEnded
+          ? sessionsRaw
+          : sessionsRaw.filter((s) => isSessionBookable(s));
         const upcoming = sessions
-          .filter((s) => {
-            const t = new Date(s.sessionStartTime).getTime();
-            return !Number.isNaN(t) && t > nowMs && s.status !== 'cancelled' && s.status !== 'completed';
-          })
+          .filter((s) => isSessionBookable(s))
           .sort(
             (a, b) =>
               new Date(a.sessionStartTime).getTime() - new Date(b.sessionStartTime).getTime()
@@ -231,6 +236,11 @@ export async function GET(request: Request) {
     if (maxPrice && !isNaN(Number(maxPrice)) && Number(maxPrice) > 0) {
       const maxPricePaise = Number(maxPrice) * 100;
       allEventsList = allEventsList.filter((item) => (item.minPrice || 0) <= maxPricePaise);
+    }
+
+    // Hide events with no upcoming bookable showtimes (unless organizer list / includeEnded)
+    if (!includeEnded && !organizerIdParam) {
+      allEventsList = allEventsList.filter((item) => item.hasBookableSessions);
     }
 
     if (dateFilter && dateFilter !== 'all') {
