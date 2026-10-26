@@ -151,8 +151,8 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
     }
   };
 
-  const handleZoomIn = () => setZoomLevel((prev) => Math.min(1.5, Number((prev + 0.1).toFixed(2))));
-  const handleZoomOut = () => setZoomLevel((prev) => Math.max(0.8, Number((prev - 0.1).toFixed(2))));
+  const handleZoomIn = () => setZoomLevel((prev) => Math.min(2.0, Number((prev + 0.15).toFixed(2))));
+  const handleZoomOut = () => setZoomLevel((prev) => Math.max(0.55, Number((prev - 0.15).toFixed(2))));
   const handleResetZoom = () => setZoomLevel(1);
 
   // Countdown timer ticking down
@@ -498,7 +498,7 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
             <button
               type="button"
               onClick={handleZoomOut}
-              disabled={zoomLevel <= 0.8}
+              disabled={zoomLevel <= 0.55}
               className="p-1 rounded hover:bg-slate-100 disabled:opacity-30"
               title="Zoom Out"
             >
@@ -514,7 +514,7 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
           <button
               type="button"
               onClick={handleZoomIn}
-              disabled={zoomLevel >= 1.5}
+              disabled={zoomLevel >= 2.0}
               className="p-1 rounded hover:bg-slate-100 disabled:opacity-30"
               title="Zoom In"
             >
@@ -554,6 +554,71 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
 
         {/* Interactive Seating Hall (BookMyShow style: unified auditorium canvas) */}
         <div className="flex-1 overflow-y-auto overflow-x-auto p-4 sm:p-6 bg-[#F8FAFC] relative touch-pan-x touch-pan-y">
+          {/* BMS-style mini overview map (always visible while layout loaded) */}
+          {!loading && !error && seats.length > 0 && (
+            <div
+              className="absolute bottom-4 right-4 z-20 w-[118px] rounded-xl border border-slate-300 bg-white/95 shadow-lg backdrop-blur-sm p-1.5 pointer-events-auto"
+              aria-label="Seat map overview"
+            >
+              <div className="text-[9px] font-bold text-slate-500 tracking-wide uppercase text-center mb-1">
+                {language === 'mr' ? 'नकाशा' : 'Map'}
+              </div>
+              <div className="relative h-[88px] overflow-hidden rounded-md bg-slate-50 border border-slate-200">
+                <div
+                  className="absolute inset-0 flex flex-col items-center justify-center gap-[2px] p-1 origin-center transition-transform duration-150"
+                  style={{ transform: `scale(${Math.min(1, 1 / zoomLevel)})` }}
+                >
+                  {displaySections.slice(0, 4).map((sec) => {
+                    const rowEntries = Object.entries(sec.rows || {}).slice(0, 6);
+                    return (
+                      <div key={`mini-${sec.id}`} className="flex flex-col gap-[1px] items-center">
+                        {rowEntries.map(([rowLabel, rowSeats]: [string, any]) => (
+                          <div key={`mini-${sec.id}-${rowLabel}`} className="flex gap-[1px]">
+                            {(rowSeats as any[]).slice(0, 14).map((seat: any) => {
+                              const selected = selectedSeatIds.includes(seat.id);
+                              const busy =
+                                seat.status === 'booked' ||
+                                seat.status === 'held' ||
+                                seat.status === 'blocked';
+                              return (
+                                <span
+                                  key={seat.id}
+                                  className={`block w-[3px] h-[3px] rounded-[0.5px] ${
+                                    selected
+                                      ? 'bg-[#EA580C]'
+                                      : busy
+                                        ? 'bg-slate-300'
+                                        : 'bg-slate-400'
+                                  }`}
+                                />
+                              );
+                            })}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* Viewport frame — grows when zoomed in */}
+                <div
+                  className="absolute border-2 border-[#EA580C] rounded-sm pointer-events-none bg-orange-500/10"
+                  style={{
+                    left: `${Math.max(4, 50 - 45 / zoomLevel)}%`,
+                    top: `${Math.max(4, 50 - 40 / zoomLevel)}%`,
+                    width: `${Math.min(92, 90 / zoomLevel)}%`,
+                    height: `${Math.min(92, 80 / zoomLevel)}%`,
+                  }}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleResetZoom}
+                className="mt-1 w-full text-[9px] font-bold text-[#EA580C] hover:underline"
+              >
+                {language === 'mr' ? 'रीसेट' : 'Reset view'}
+              </button>
+            </div>
+          )}
           {loading ? (
             <div className="h-full min-h-[300px] flex flex-col items-center justify-center space-y-3 text-slate-500">
               <div className="w-10 h-10 border-3 border-[#EA580C] border-t-transparent rounded-full animate-spin" />

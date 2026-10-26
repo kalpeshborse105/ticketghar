@@ -16,7 +16,15 @@ interface User {
   phone?: string;
   phoneNumber?: string;
   avatarUrl?: string;
-  role?: 'customer' | 'organizer' | 'admin';
+  role?:
+    | 'customer'
+    | 'organizer'
+    | 'admin'
+    | 'super_admin'
+    | 'scanner'
+    | 'manager'
+    | 'operations'
+    | 'finance';
 }
 
 interface AuthState {
@@ -66,6 +74,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   clearAuth: async () => {
+    try {
+      await api.logout();
+    } catch {
+      /* still clear local session */
+    }
     await AsyncStorage.multiRemove([
       '@mahaticket_user',
       '@mahaticket_session_token',

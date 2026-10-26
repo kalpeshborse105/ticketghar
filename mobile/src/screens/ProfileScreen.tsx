@@ -60,10 +60,14 @@ export default function ProfileScreen({ navigation }: any) {
   const [googleAuthUrl, setGoogleAuthUrl] = useState('');
   const [googleAuthVisible, setGoogleAuthVisible] = useState(false);
 
-  const userRole = user?.role || 'customer';
+  const userRole = (user?.role || 'customer').toLowerCase();
   const isOrganizer = userRole === 'organizer';
-  const isAdmin = userRole === 'admin';
-  const isOrganizerOrAdmin = isOrganizer || isAdmin;
+  const isAdmin = userRole === 'admin' || userRole === 'super_admin';
+  const isScannerStaff =
+    userRole === 'scanner' ||
+    userRole === 'manager' ||
+    userRole === 'operations';
+  const isOrganizerOrAdmin = isOrganizer || isAdmin || isScannerStaff;
 
   React.useEffect(() => {
     if (isAuthenticated) {
@@ -159,7 +163,13 @@ export default function ProfileScreen({ navigation }: any) {
                     color={COLORS.primary} 
                   />
                   <Text style={styles.roleBadgeText}>
-                    {isAdmin ? 'ADMIN' : 'ORGANIZER'}
+                    {isAdmin
+                      ? 'ADMIN'
+                      : userRole === 'scanner'
+                        ? 'SCANNER'
+                        : isOrganizer
+                          ? 'ORGANIZER'
+                          : 'STAFF'}
                   </Text>
                 </View>
               )}

@@ -304,7 +304,14 @@ export default function HomeScreen({ navigation }: any) {
   }, [events]);
 
   // Strict check: only organizers and admins see the scanner shortcut
-  const isOrganizerOrAdmin = user?.role === 'organizer' || user?.role === 'admin';
+  const isOrganizerOrAdmin = !!user && (
+    user.role === 'organizer' ||
+    user.role === 'admin' ||
+    user.role === 'super_admin' ||
+    user.role === 'scanner' ||
+    user.role === 'manager' ||
+    user.role === 'operations'
+  );
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>

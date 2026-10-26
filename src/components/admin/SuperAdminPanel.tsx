@@ -398,6 +398,14 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
 
   const handleReject = async () => {
     if (!pendingEvent) return;
+    const reason =
+      (typeof window !== 'undefined'
+        ? window.prompt(
+            'नाकारण्याचे कारण लिहा (Rejection reason):',
+            'Incomplete event details / policy mismatch'
+          )
+        : null) || 'Rejected by admin';
+    if (!String(reason).trim()) return;
     setIsProcessing(true);
     try {
       const res = await fetch('/api/admin/events', {
@@ -406,6 +414,7 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
         body: JSON.stringify({
           eventId: pendingEvent.id,
           status: 'rejected',
+          rejectionReason: String(reason).trim().slice(0, 2000),
           actorId: currentUser?.email || 'admin',
         }),
       });

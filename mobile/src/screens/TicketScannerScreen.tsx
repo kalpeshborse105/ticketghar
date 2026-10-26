@@ -17,7 +17,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-toast-message';
 import { RADIUS, SHADOWS } from '../theme';
-import { api, EventItem, OrderItem, SessionItem, filterUpcomingSessions } from '../api';
+import {
+  api,
+  EventItem,
+  OrderItem,
+  SessionItem,
+  canScanTickets,
+  filterScannableSessions,
+} from '../api';
 import { useAuthStore } from '../store';
 
 const PUBLIC_TICKET_BASE_URL = 'https://mahaticket.kalpkrutinfotech.com/tickets';
@@ -111,8 +118,7 @@ interface ScanLog {
 export default function TicketScannerScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
-  const isOrganizerOrAdmin =
-    !!user && (user.role === 'organizer' || user.role === 'admin');
+  const isOrganizerOrAdmin = canScanTickets(user?.role);
 
   const [ticketInput, setTicketInput] = useState('');
   const [verifying, setVerifying] = useState(false);
@@ -131,9 +137,9 @@ export default function TicketScannerScreen({ navigation }: any) {
   } | null>(null);
 
   const selectedEvent = scannerEvents.find((e) => e.id === selectedEventId) || null;
-  const scopedSessions: SessionItem[] = filterUpcomingSessions(selectedEvent?.sessions || []).length
-    ? filterUpcomingSessions(selectedEvent?.sessions || [])
-    : ((selectedEvent?.sessions || []) as SessionItem[]);
+  const scopedSessions: SessionItem[] = filterScannableSessions(
+    selectedEvent?.sessions || []
+  ) as SessionItem[];
 
   const laserAnim = useRef(new Animated.Value(0)).current;
   const resultScaleAnim = useRef(new Animated.Value(0.95)).current;
@@ -176,7 +182,7 @@ export default function TicketScannerScreen({ navigation }: any) {
           if (list.length && !selectedEventId) {
             setSelectedEventId(list[0].id);
             const sess =
-              filterUpcomingSessions(list[0].sessions || [])[0] || list[0].sessions?.[0];
+              filterScannableSessions(list[0].sessions || [])[0] || list[0].sessions?.[0];
             if (sess?.id) setSelectedSessionId(sess.id);
           }
         })
@@ -512,7 +518,7 @@ export default function TicketScannerScreen({ navigation }: any) {
                   onPress={() => {
                     setSelectedEventId(ev.id);
                     const sess =
-                      filterUpcomingSessions(ev.sessions || [])[0] || ev.sessions?.[0];
+                      filterScannableSessions(ev.sessions || [])[0] || ev.sessions?.[0];
                     setSelectedSessionId(sess?.id || null);
                   }}
                 >
