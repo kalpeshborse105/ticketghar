@@ -1,0 +1,35 @@
+---
+description: MahaTicket product, data, and architecture memory for every session
+alwaysApply: true
+---
+
+# MahaTicket (TicketGhar) — project memory
+
+## Product
+
+- Own Maharashtra ticketing product with **BookMyShow-like UX**, not a BMS clone feed.
+- Stack: Next.js web + admin, React Native Android (`com.kalpkrutinfotech.mahaticket`), Postgres via Drizzle, same `/api/*` for web and Android.
+- Primary AI developer for this app should preserve web↔Android parity and real DB wiring (no static showcase admin).
+
+## Hard data rules
+
+- **Do not scrape BookMyShow or TicketKhidkee/TicketKhidki** (no competitor ticket inventory, posters, seat maps, or anti-bot feeds).
+- Catalog sources allowed: owner-approved curated imports, licensed APIs (e.g. TMDB metadata if keyed), admin CRUD, civic/cultural public venue facts.
+- Product focus: **movies + Marathi natya (TicketKhidkee-style events)** across Maharashtra cities on **real venues** in our DB.
+- Never invent sellable showtimes/prices just to fill the homepage.
+- Never hard-delete events/orders/tickets/scans/settlements/reviews/users for “cleanup”. Prefer `unpublished` / `completed`.
+- Treat hosted Supabase (`*.pooler.supabase.com`) as **production** unless owner confirms staging.
+- Prices are **paise**. Event statuses include `published` | `unpublished` | `completed` | `cancelled` | draft workflow values in `src/db/schema.ts`.
+
+## Cleanup / venues
+
+- Soft-unpublish only zero-dependency demo fillers after preview approval.
+- Venue master: correct real names/addresses; mark unverified placeholders; do not auto-merge venues with FKs.
+- Seat layouts are often **approximate templates** — do not treat `total_capacity` as verified inventory unless sourced.
+
+## Ops pointers
+
+- Audit package: `docs/DB_AUDIT_REPORT.md`, `docs/DATA_CLEANUP_PREVIEW.sql`
+- Venue candidates: `data/maharashtra_venues_candidates.json`
+- Authorized shows: `data/authorized_event_import_template.csv`
+- Gate scanner requires **event + showtime** selected before QR verify.

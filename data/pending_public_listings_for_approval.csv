@@ -1,0 +1,8 @@
+approval_id,event_title_en,event_title_mr,venue_name,venue_city,session_date_ist,session_start_time_ist,price_inr_from,listing_source,booking_status,notes
+PEND-001,Punha nakki bhetu,पुन्हा नक्की भेटू,Bal Gandharva Rang Mandir,Pune,2026-10-31,17:00,300,owner-approved 2026-10-26,imported_published,Imported via scripts/import-approved-maharashtra-catalog.ts (event ~96)
+PEND-002,Subhedar Guest House,सुभेदार गेस्ट हाऊस,Bal Gandharva Rang Mandir,Pune,2026-11-01,12:30,300,owner-approved 2026-10-26,imported_published,Imported
+PEND-003,SHIKAYLA GELO EK,शिकायला गेलो एक,Bal Gandharva Rang Mandir,Pune,2026-11-13,12:30,400,owner-approved 2026-10-26,imported_published,Imported
+PEND-004,Sambhavami Yugey Yugey,संभवामि युगे युगे,Bal Gandharva Rang Mandir,Pune,2026-11-16,12:30,500,owner-approved 2026-10-26,imported_published,Imported
+PEND-005,Katha Saptakachi,कथा सप्ताकाची,Yashwantrao Chavan Natyagruha,Pune,2026-11-02,21:30,199,owner-approved 2026-10-26,imported_published,Imported
+PEND-006,Aamne Saamne - Marathi Play,आमने सामने,Ram Krishna More Auditorium,Pune,2026-10-30,21:30,400,owner-approved 2026-10-26,imported_published,Imported
+PEND-007,Hi Dosti Tutaychi Naay,ही दोस्ती तुटायची नाय,Vithal Tupe Sabhagruh,Pune,2026-10-24,21:30,349,skipped-past-date,skipped,Past showtime — not imported

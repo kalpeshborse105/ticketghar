@@ -30,14 +30,24 @@ Users, orders, payments, tickets, ticket scans, audit logs, settlements, financi
 - Inventory snapshot: `docs/EVENTS_INVENTORY_2026-10-26.json`.
 - **No hard DELETE** of events/orders/tickets.
 
-## Formal audit package (2026-10-26 — mutations NOT run)
+## Formal audit package + owner-approved apply (2026-10-26)
 
 See:
 
 - `docs/DB_AUDIT_REPORT.md`
-- `docs/DATA_CLEANUP_PREVIEW.sql` (**preview only — await owner approval**)
+- `docs/DATA_CLEANUP_PREVIEW.sql`
 - `docs/MAHARASHTRA_VENUE_SOURCES.md`
 - `data/maharashtra_venues_candidates.json`
 - `data/authorized_event_import_template.csv`
+- `data/pending_public_listings_for_approval.csv` (public listings — **not** auto-imported as sellable)
 
-BookMyShow scrape: **not done** (unauthorized).
+### Applied after owner approval
+
+- Soft-unpublished remaining zero-dep filler (**#95**)
+- Historical published+orders+no-future → **`completed`** (15 events; orders/tickets kept)
+- Venue name/city fixes (Dinanath, Yashwantrao, Bal Gandharva capacity 989, Ravindra 911)
+- 18 generic Town Hall / Cultural Hall placeholders → `verification_status=unverified`
+- Added verified NCPA halls + real Pune/Mumbai civic theatres
+- Moved **Ramayan** off Dhule Cultural Hall → Yashwantrao Chavan Natyagruha; **Jailer 2** → PVR INOX Pavilion
+
+BookMyShow inventory scrape/import as sellable tickets: **not done** (policy). Public listing titles saved for owner approval only.
