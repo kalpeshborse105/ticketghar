@@ -1,18 +1,20 @@
 import { NextResponse } from 'next/server';
+import { clearCustomerSessionCookie } from '@/src/lib/auth-service';
 import { createClient } from '@/src/lib/supabase/server.ts';
 
+/**
+ * Unified logout — clears MahaTicket session cookie + Supabase auth.
+ * Prefer `/api/auth/flow/logout` for new clients; this route stays compatible.
+ */
 export async function POST() {
   try {
-    const supabase = await createClient();
+    await clearCustomerSessionCookie();
 
-    const { error } = await supabase.auth.signOut();
-
-    if (error) {
-      console.error('Supabase logout error:', error);
-      return NextResponse.json(
-        { error: error.message || 'Logout failed' },
-        { status: 400 }
-      );
+    try {
+      const supabase = await createClient();
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.warn('Supabase logout notice:', error);
     }
 
     return NextResponse.json({

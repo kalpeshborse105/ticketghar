@@ -100,9 +100,18 @@ export async function GET(
         : ticketRecord.ticket.seatCode;
 
     const publicUrl = getTicketShareUrl(ticketRecord.ticket.ticketCode);
-    const securePayload = eventRecord?.event?.id
-      ? generateSecureTicketQr(ticketRecord.ticket.ticketCode, eventRecord.event.id)
-      : publicUrl;
+    let securePayload = publicUrl;
+    try {
+      if (eventRecord?.event?.id) {
+        securePayload = generateSecureTicketQr(
+          ticketRecord.ticket.ticketCode,
+          eventRecord.event.id
+        );
+      }
+    } catch (qrErr) {
+      console.warn('[PDF] Secure QR generation failed; using share URL:', qrErr);
+      securePayload = publicUrl;
+    }
 
     const pdfBuffer = await generateTicketPdfBuffer({
       ticketCode: ticketRecord.ticket.ticketCode,
@@ -116,12 +125,15 @@ export async function GET(
         eventRecord?.venue?.name ||
         'Auditorium Venue',
       showtime,
-      seatCode: seatsSummary,
-      attendeeName: ticketRecord.ticket.attendeeName || ticketRecord.order.userName,
-      faceValuePaise: ticketRecord.order.grandTotal,
-      status: ticketRecord.ticket.status,
-      qrPayload: securePayload,
-      securityHash: ticketRecord.ticket.securityHash,
+      seatCode: seatsSummary || 'General / Reserved',
+      attendeeName:
+        ticketRecord.ticket.attendeeName ||
+        ticketRecord.order.userName ||
+        'Valued Customer',
+      faceValuePaise: Number(ticketRecord.order.grandTotal) || 0,
+      status: ticketRecord.ticket.status || 'valid',
+      qrPayload: securePayload || publicUrl,
+      securityHash: ticketRecord.ticket.securityHash || undefined,
     });
 
     const filename = `MahaTicket-${ticketRecord.order.orderNumber}.pdf`;

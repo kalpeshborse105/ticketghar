@@ -162,7 +162,13 @@ export async function calculatePricing(
 
     if (couponList.length > 0) {
       const c = couponList[0];
-      if (grossSubtotal >= c.minOrderValue) {
+      const used = Number(c.usedCount) || 0;
+      const limit = c.usageLimit != null ? Number(c.usageLimit) : null;
+      const withinUsage = limit == null || used < limit;
+      const now = Date.now();
+      const startsOk = !c.startsAt || new Date(c.startsAt).getTime() <= now;
+      const endsOk = !c.endsAt || new Date(c.endsAt).getTime() >= now;
+      if (withinUsage && startsOk && endsOk && grossSubtotal >= c.minOrderValue) {
         if (c.discountType === 'percentage') {
           const discount = Math.round((grossSubtotal * c.discountValue) / 10000);
           discountTotal = Math.min(discount, c.maxDiscount);
@@ -798,10 +804,34 @@ export async function confirmBookingOrder(params: {
       seats: currentSeats.map((c) => c.seatCode),
       grandTotal: pricing.grandTotal,
       organizerNet: netPayableToOrganizer,
+      coupon: pricing.appliedCoupon || null,
     }),
   });
   } catch (auditErr) {
     console.warn('[Booking] Audit log notice:', auditErr);
+  }
+
+  // 8b. Increment coupon used_count once per successful confirm (idempotent retries skip via early return)
+  if (pricing.appliedCoupon) {
+    try {
+      await db
+        .update(coupons)
+        .set({
+          usedCount: sql`COALESCE(${coupons.usedCount}, 0) + 1`,
+        })
+        .where(
+          and(
+            eq(coupons.code, pricing.appliedCoupon),
+            eq(coupons.active, 1),
+            or(
+              isNull(coupons.usageLimit),
+              sql`COALESCE(${coupons.usedCount}, 0) < ${coupons.usageLimit}`
+            )
+          )
+        );
+    } catch (couponErr) {
+      console.warn('[Booking] Coupon used_count update notice:', couponErr);
+    }
   }
 
   // 9. Booking confirmation email WITH PDF attachment.

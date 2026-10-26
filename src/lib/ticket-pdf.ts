@@ -205,7 +205,7 @@ async function generateTicketPdfBufferInternal(
   const rightRows: [string, string][] = [
     ['Attendee Name', safeAttendee],
     ['Seats Assigned', safeSeat],
-    ['Total Amount', `INR ${(input.faceValuePaise / 100).toFixed(2)} (PAID)`],
+    ['Total Amount', `INR ${((Number(input.faceValuePaise) || 0) / 100).toFixed(2)} (PAID)`],
   ];
 
   let leftY = currentY;
@@ -244,20 +244,10 @@ async function generateTicketPdfBufferInternal(
   currentY += 18;
 
   // 6. Central Unified QR Code (BookMyShow Style)
-  // Encodes the verified public URL so phone cameras and scanners directly open the ticket pass!
+  // Prefer HTTP share URL for reliable encode + camera open; MTSEC is often too long for dense QR.
   const publicShareUrl = getTicketShareUrl(input.ticketCode);
-  const qrTarget = input.qrPayload.startsWith('http') ? input.qrPayload : publicShareUrl;
-
-  const qrPng = await QRCode.toBuffer(qrTarget, {
-    type: 'png',
-    width: 200,
-    margin: 2,
-    errorCorrectionLevel: 'M',
-    color: {
-      dark: '#0F172A',
-      light: '#FFFFFF',
-    },
-  });
+  const rawPayload = typeof input.qrPayload === 'string' ? input.qrPayload.trim() : '';
+  const qrTarget = rawPayload.startsWith('http') ? rawPayload : publicShareUrl;
 
   const qrSize = 150;
   const qrX = margin + (contentWidth - qrSize) / 2;
@@ -267,7 +257,39 @@ async function generateTicketPdfBufferInternal(
     .rect(qrX - 10, currentY - 5, qrSize + 20, qrSize + 20)
     .fillAndStroke('#F8FAFC', '#CBD5E1');
 
-  doc.image(qrPng, qrX, currentY + 5, { width: qrSize, height: qrSize });
+  try {
+    const qrPng = await QRCode.toBuffer(qrTarget || publicShareUrl, {
+      type: 'png',
+      width: 200,
+      margin: 2,
+      errorCorrectionLevel: 'M',
+      color: {
+        dark: '#0F172A',
+        light: '#FFFFFF',
+      },
+    });
+    doc.image(qrPng, qrX, currentY + 5, { width: qrSize, height: qrSize });
+  } catch (qrErr) {
+    console.warn('[ticket-pdf] QR encode failed, retrying with share URL:', qrErr);
+    try {
+      const fallbackPng = await QRCode.toBuffer(publicShareUrl, {
+        type: 'png',
+        width: 200,
+        margin: 2,
+        errorCorrectionLevel: 'M',
+      });
+      doc.image(fallbackPng, qrX, currentY + 5, { width: qrSize, height: qrSize });
+    } catch {
+      doc
+        .fillColor('#0F172A')
+        .fontSize(10)
+        .font('Helvetica')
+        .text(input.ticketCode || input.orderNumber, qrX, currentY + qrSize / 2, {
+          width: qrSize,
+          align: 'center',
+        });
+    }
+  }
 
   currentY += qrSize + 28;
 

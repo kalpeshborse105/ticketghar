@@ -1,15 +1,9 @@
 /**
  * MahaTicket API Layer (महाटिकिट)
- * Direct live Supabase PostgreSQL connection + local static fallback & cache.
- * Mirrors all web routes with typed responses.
+ * Authoritative path: React Native → Next.js `/api/*` → PostgreSQL (same as web).
+ * No direct Supabase REST for catalog, booking, reviews, or tickets.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-// ─── Direct Supabase Credentials ─────────────────────────────────────────────
-
-const SUPABASE_URL = 'https://hnseawulngdxbvltmthe.supabase.co';
-const SUPABASE_ANON_KEY =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhuc2Vhd3VsbmdkeGJ2bHRtdGhlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA3MDc5NjIsImV4cCI6MjEwNjI4Mzk2Mn0.Jk1k0ZPMpldURgv37Hq1OfTjSY45GBcZ21qT_74SK9o';
 
 // ─── Base URL Resolution (Dev server fallback) ───────────────────────────────
 
@@ -150,34 +144,6 @@ export function normalizeEvent<T extends Partial<EventItem> & Record<string, any
 export async function setApiBase(url: string) {
   resolvedBase = url;
   await AsyncStorage.setItem(STORAGE_KEY, url);
-}
-
-// ─── Supabase Direct REST Client ─────────────────────────────────────────────
-
-async function supabaseFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 12000);
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-      ...options,
-      signal: ctrl.signal,
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        'Content-Type': 'application/json',
-        ...(options?.headers || {}),
-      },
-    });
-    clearTimeout(timer);
-    if (!res.ok) {
-      const errText = await res.text().catch(() => '');
-      throw new Error(`Supabase error ${res.status}: ${errText}`);
-    }
-    return (await res.json()) as T;
-  } catch (err: any) {
-    clearTimeout(timer);
-    throw err;
-  }
 }
 
 // ─── HTTP Client for Local API ───────────────────────────────────────────────
@@ -664,6 +630,43 @@ export function parseCastCrew(raw: unknown): CastMember[] {
   return [];
 }
 
+/** Staff roles that match DB `users.role` (not only legacy mobile `admin`). */
+export type AppStaffRole =
+  | 'organizer'
+  | 'admin'
+  | 'super_admin'
+  | 'scanner'
+  | 'manager'
+  | 'operations'
+  | 'finance';
+
+export function normalizeAppRole(role?: string | null): string {
+  return String(role || 'customer').trim().toLowerCase();
+}
+
+/** Super-admin and legacy admin both unlock admin UI. */
+export function isAdminRole(role?: string | null): boolean {
+  const r = normalizeAppRole(role);
+  return r === 'admin' || r === 'super_admin';
+}
+
+/** Gate scanner access: organizers, scanners, ops, and admins. */
+export function canScanTickets(role?: string | null): boolean {
+  const r = normalizeAppRole(role);
+  return (
+    r === 'organizer' ||
+    r === 'scanner' ||
+    r === 'manager' ||
+    r === 'operations' ||
+    r === 'admin' ||
+    r === 'super_admin'
+  );
+}
+
+export function isOrganizerOrStaff(role?: string | null): boolean {
+  return canScanTickets(role) || normalizeAppRole(role) === 'finance';
+}
+
 /** Session is bookable only if active and not long expired. */
 export function isUpcomingSession(
   session: { sessionStartTime?: string; sessionEndTime?: string; status?: string } | null | undefined
@@ -685,6 +688,37 @@ export function filterUpcomingSessions<T extends { sessionStartTime?: string; st
   return (sessions || []).filter(isUpcomingSession);
 }
 
+/**
+ * Gate sessions: include live / in-progress shows (not only future start times).
+ * Booking uses `filterUpcomingSessions`; scanners must not drop today's started show.
+ */
+export function isScannableSession(
+  session: { sessionStartTime?: string; sessionEndTime?: string; status?: string } | null | undefined
+): boolean {
+  if (!session?.sessionStartTime) return false;
+  if (session.status === 'cancelled') return false;
+  const now = Date.now();
+  const startT = new Date(session.sessionStartTime).getTime();
+  if (Number.isNaN(startT)) return false;
+
+  if (session.sessionEndTime) {
+    const endT = new Date(session.sessionEndTime).getTime();
+    if (!Number.isNaN(endT)) {
+      // 2h grace after scheduled end for late exits / intermission
+      return now <= endT + 2 * 60 * 60 * 1000;
+    }
+  }
+  // No end time: allow from 4h before start through 8h after start
+  return now >= startT - 4 * 60 * 60 * 1000 && now <= startT + 8 * 60 * 60 * 1000;
+}
+
+export function filterScannableSessions<
+  T extends { sessionStartTime?: string; sessionEndTime?: string; status?: string },
+>(sessions: T[] | null | undefined): T[] {
+  const list = (sessions || []).filter(isScannableSession);
+  return list.length ? list : (sessions || []).filter((s) => s.status !== 'cancelled');
+}
+
 export const getFutureIso = (dayOffset: number, hour: number, min: number): string => {
   const d = new Date();
   d.setDate(d.getDate() + dayOffset);
@@ -702,110 +736,11 @@ const CACHE_EVENTS_KEY = '@mahaticket_cached_events';
 // In-memory cache for instant 0ms access
 let inMemoryEvents: EventItem[] | null = null;
 
-// Background updater to revalidate with Supabase and persist cache
-async function refreshEventsCacheFromSupabase(): Promise<EventItem[]> {
-  try {
-    if (!resolvedBase) {
-      await resolveApiBase().catch(() => null);
-    }
-    const [eventsRaw, venuesRaw, sessionsRaw, pricesRaw] = await Promise.all([
-      supabaseFetch<any[]>('events?status=eq.published&order=featured.desc,created_at.desc'),
-      supabaseFetch<any[]>('venues?select=*'),
-      supabaseFetch<any[]>('event_sessions?status=eq.active'),
-      supabaseFetch<any[]>('ticket_types?select=*'),
-    ]);
-
-    const venuesMap = Object.fromEntries(venuesRaw.map((v) => [v.id, v]));
-
-    const freshMapped: EventItem[] = eventsRaw.map((e) => {
-      const venue = venuesMap[e.venue_id] || null;
-      const evtSessions = sessionsRaw.filter((s) => s.event_id === e.id);
-      const evtPrices = pricesRaw.filter((p) => p.event_id === e.id);
-      const minPrice = evtPrices.length ? Math.min(...evtPrices.map((p) => p.price)) : 30000;
-
-      const posterUrl =
-        absoluteMediaUrl(e.poster_url) ||
-        absoluteMediaUrl(e.banner_url) ||
-        fallbackPosterUrl(e.id);
-      const bannerUrl =
-        absoluteMediaUrl(e.banner_url) ||
-        absoluteMediaUrl(e.poster_url) ||
-        posterUrl;
-
-      return normalizeEvent({
-        id: e.id,
-        title: e.title,
-        titleMr: e.title_mr || e.title,
-        slug: e.slug,
-        category: e.category,
-        categoryMr: e.category_mr || e.category,
-        language: e.language || 'मराठी',
-        durationMinutes: e.duration_minutes || 150,
-        ageGuidance: e.age_guidance || 'U',
-        description: e.description,
-        descriptionMr: e.description_mr,
-        posterUrl,
-        bannerUrl,
-        status: e.status,
-        featured: e.featured === 1 ? 1 : 0,
-        isPromoted: e.featured === 1,
-        isInformational: !!e.is_informational,
-        interestedCount: e.interested_count || 0,
-        tag: e.tag || (e.featured === 1 ? 'Featured' : null),
-        cast:
-          typeof e.cast_crew === 'string' && !e.cast_crew.trim().startsWith('[')
-            ? e.cast_crew
-            : null,
-        castCrewList: parseCastCrew(e.cast_crew),
-        minPrice,
-        rating: e.rating != null ? Number(e.rating) : null,
-        ratingCountStr: e.rating_count_str || null,
-        showDateStr: e.show_date_str || null,
-        venue: venue
-          ? {
-            id: venue.id,
-            name: venue.name,
-            nameMr: venue.name_mr || venue.name,
-            address: venue.address,
-            city: venue.city,
-            state: venue.state,
-            pincode: venue.pincode,
-            latitude: venue.latitude != null ? String(venue.latitude) : null,
-            longitude: venue.longitude != null ? String(venue.longitude) : null,
-            totalCapacity: venue.total_capacity || 800,
-            hasSeatLayout: venue.has_seat_layout ?? 1,
-          }
-          : null,
-        sessions: filterUpcomingSessions(
-          evtSessions.map((s) => ({
-            id: s.id,
-            eventId: s.event_id,
-            sessionStartTime: s.session_start_time,
-            sessionEndTime: s.session_end_time,
-            status: s.status,
-            ticketTypes: evtPrices
-              .filter((p) => p.session_id === s.id || !p.session_id)
-              .map((p) => ({
-                id: p.id,
-                name: p.name,
-                nameMr: p.name_mr,
-                price: p.price,
-                totalQuota: p.total_quota,
-                availableQuota: p.available_quota,
-                isSeated: p.is_seated,
-              })),
-          }))
-        ),
-      });
-    });
-
-    inMemoryEvents = freshMapped;
-    AsyncStorage.setItem(CACHE_EVENTS_KEY, JSON.stringify(freshMapped)).catch(() => null);
-    return freshMapped;
-  } catch (err) {
-    return inMemoryEvents || [];
-  }
-}
+/**
+ * Catalog must come from the shared Next.js API (same DB as web).
+ * Direct Supabase REST mapping invented phantom fields and diverged from web —
+ * intentionally removed. Offline: disk/memory cache of last successful API payload only.
+ */
 
 // ─── API Methods ─────────────────────────────────────────────────────────────
 
@@ -817,7 +752,7 @@ export const api = {
   // Health
   health: () => request<{ status: string }>('/api/health'),
 
-  // Events (Instant Cache First + Background Revalidate)
+  // Events — authoritative backend API only (same catalog as web)
   getEvents: async (params?: {
     city?: string;
     category?: string;
@@ -834,20 +769,22 @@ export const api = {
     // Instant return if queried recently (12s TTL)
     const now = Date.now();
     const cached = eventsQueryCache.get(cacheKey);
-    if (cached && cached.expires > now && cached.data.length > 0) {
+    if (cached && cached.expires > now) {
       return { events: cached.data };
     }
 
     try {
       const res = await request<{ events: EventItem[] }>(`/api/events${cacheKey ? `?${cacheKey}` : ''}`);
-      if (Array.isArray(res?.events) && res.events.length > 0) {
+      if (Array.isArray(res?.events)) {
         const mapped = res.events.map(normalizeEvent);
         inMemoryEvents = mapped;
         eventsQueryCache.set(cacheKey, { data: mapped, expires: now + 12000 });
         AsyncStorage.setItem(CACHE_EVENTS_KEY, JSON.stringify(mapped)).catch(() => null);
         return { events: mapped };
       }
-    } catch { }
+    } catch {
+      /* fall through to last-known API cache — never invent via Supabase */
+    }
 
     let baseList: EventItem[] = inMemoryEvents || [];
 
@@ -864,9 +801,6 @@ export const api = {
       } catch { }
     }
 
-    refreshEventsCacheFromSupabase().catch(() => null);
-
-    // Normalize every event so /uploads/... becomes http://host:port/uploads/... and missing posters use stable Picsum seed
     let mapped = baseList.map(normalizeEvent);
 
     if (params?.city && !isAllCitiesValue(params.city)) {
@@ -937,44 +871,27 @@ export const api = {
     );
   },
 
-  // Announcements
-  getAnnouncements: async (): Promise<{ announcements: Announcement[] }> => {
+  // Announcements — same backend as web (no hardcoded promo fallbacks)
+  getAnnouncements: async (city?: string): Promise<{ announcements: Announcement[] }> => {
     try {
-      const rows = await supabaseFetch<any[]>('announcements?select=*');
-      if (rows?.length) {
-        return {
-          announcements: rows.map((a) => ({
-            id: a.id,
-            title: a.title,
-            message: a.message,
-            imageUrl: a.image_url,
-            ctaLabel: a.cta_label,
-            ctaUrl: a.cta_url,
-            city: a.city,
-          })),
-        };
-      }
-    } catch { }
-
-    return {
-      announcements: [
-        {
-          id: 1,
-          title: 'महाराष्ट्र नाट्य महोत्सव २०२६',
-          message:
-            'पुणे व मुंबईच्या सर्व प्रसिद्ध नाटकांवर विशेष १०% ते १५% सूट. प्रोमो कोड MAHA50 वापरा.',
-          ctaLabel: 'नाटके पहा',
-          city: 'Pune',
-        },
-        {
-          id: 2,
-          title: 'बाळगंधर्व रंगमंदिरात विशेष प्रयोग!',
-          message: 'पुन्हा सही रे सही आणि नटसम्राट नाटकाचे नवीन प्रयोग सुरू!',
-          ctaLabel: 'बुक करा',
-          city: 'Pune',
-        },
-      ],
-    };
+      const q =
+        city && !isAllCitiesValue(city) ? `?city=${encodeURIComponent(city)}` : '';
+      const res = await request<{ announcements: any[] }>(`/api/announcements${q}`);
+      const rows = Array.isArray(res?.announcements) ? res.announcements : [];
+      return {
+        announcements: rows.map((a) => ({
+          id: a.id,
+          title: a.title,
+          message: a.message,
+          imageUrl: a.imageUrl || a.image_url || undefined,
+          ctaLabel: a.ctaLabel || a.cta_label || undefined,
+          ctaUrl: a.ctaUrl || a.cta_url || undefined,
+          city: a.city || undefined,
+        })),
+      };
+    } catch {
+      return { announcements: [] };
+    }
   },
 
   // Sessions & Seats — same as web: GET /api/sessions/:id/seats (?fresh=1 for live holds)
@@ -1252,6 +1169,10 @@ export const api = {
     throw new ApiError(res?.error || 'Payment verification failed', 400, res);
   },
 
+  /**
+   * @deprecated Use `verifyPayment` after Razorpay — same canonical path as web.
+   * Kept for rare legacy callers; maps onto `/api/payments/verify` when payment IDs present.
+   */
   confirmBooking: async (body: {
     sessionId: number;
     eventId: number;
@@ -1262,21 +1183,25 @@ export const api = {
     couponCode?: string | null;
     paymentDetails?: any;
   }) => {
-    // Web booking path uses /api/payments/verify — no local/fake order creation
-    const res = await request<any>('/api/bookings/confirm', {
-      method: 'POST',
-      body: JSON.stringify(body),
-    });
-    if (res && (res.orderNumber || res.success)) {
-      try {
-        const existingStr = await AsyncStorage.getItem('@tg_offline_orders');
-        const existing = existingStr ? JSON.parse(existingStr) : [];
-        existing.unshift(res.order || res);
-        await AsyncStorage.setItem('@tg_offline_orders', JSON.stringify(existing.slice(0, 30)));
-      } catch { }
-      return res;
+    const pd = body.paymentDetails || {};
+    if (pd.razorpay_payment_id || pd.razorpayPaymentId) {
+      return api.verifyPayment({
+        sessionId: body.sessionId,
+        eventId: body.eventId,
+        seatIds: body.seatIds,
+        couponCode: body.couponCode,
+        userName: body.userName,
+        userEmail: body.userEmail,
+        userPhone: body.userPhone,
+        razorpay_order_id: pd.razorpay_order_id || pd.razorpayOrderId,
+        razorpay_payment_id: pd.razorpay_payment_id || pd.razorpayPaymentId,
+        razorpay_signature: pd.razorpay_signature || pd.razorpaySignature,
+      });
     }
-    throw new Error(res?.error || 'Booking confirmation failed');
+    throw new ApiError(
+      'Use verifyPayment after Razorpay success. Legacy bookings/confirm is not used by checkout.',
+      400
+    );
   },
 
   // User Profile
@@ -1325,6 +1250,7 @@ export const api = {
     message: string;
     ticket?: any;
     order?: any;
+    scanResult?: string;
   }> => {
     let cleanCode = ticketCodeOrPayload.trim();
     if (cleanCode.startsWith('{')) {
@@ -1359,25 +1285,43 @@ export const api = {
     });
 
     if (serverRes && typeof serverRes.valid === 'boolean') {
+      const scanResult = String(serverRes.scanResult || '');
       const status = serverRes.valid
         ? 'valid'
-        : serverRes.scanResult === 'ALREADY_USED'
+        : scanResult === 'ALREADY_USED'
           ? 'already_used'
           : 'invalid';
+
+      let message =
+        serverRes.message || (serverRes.valid ? 'प्रवेश मंजूर!' : 'अवैध तिकीट!');
+      if (!serverRes.valid && scanResult === 'WRONG_EVENT') {
+        message =
+          serverRes.message ||
+          'हे तिकीट निवडलेल्या कार्यक्रमाचे नाही. योग्य कार्यक्रम निवडा (Wrong event).';
+      } else if (!serverRes.valid && scanResult === 'WRONG_SESSION') {
+        message =
+          serverRes.message ||
+          'हे तिकीट निवडलेल्या शो वेळेशी जुळत नाही. योग्य शो निवडा (Wrong showtime).';
+      } else if (!serverRes.valid && scanResult === 'WRONG_ORGANIZER') {
+        message =
+          serverRes.message ||
+          'हे तिकीट तुमच्या आयोजक कार्यक्षेत्राबाहेर आहे (Unauthorized organizer).';
+      }
 
       return {
         valid: serverRes.valid,
         status,
-        message: serverRes.message || (serverRes.valid ? 'प्रवेश मंजूर!' : 'अवैध तिकीट!'),
+        message,
         ticket: serverRes.ticket
           ? {
             ticketCode: serverRes.ticket.code || cleanCode,
-            seatCode: serverRes.ticket.seat,
+            seatCode: serverRes.ticket.seat || serverRes.ticket.seats,
             attendeeName: serverRes.ticket.attendee,
             eventTitle: serverRes.ticket.eventMr || serverRes.ticket.event,
             showtime: serverRes.ticket.showtime,
           }
           : undefined,
+        order: serverRes.order,
       };
     }
 
@@ -1421,78 +1365,18 @@ export const api = {
     averageRating: number;
     breakdown: { five: number; four: number; three: number; two: number; one: number };
   }> => {
-    // 1. Try real server API endpoint
+    // Same backend as web — never invent reviews via Supabase or hardcoded samples
     try {
       const res = await request<any>(`/api/events/${eventId}/reviews`);
       if (res && typeof res.totalCount === 'number') {
         return res;
       }
     } catch { }
-
-    // 2. Direct Supabase fallback
-    try {
-      const rows = await supabaseFetch<any[]>(
-        `event_reviews?event_id=eq.${eventId}&order=created_at.desc&limit=50`
-      );
-      if (rows && rows.length > 0) {
-        const totalCount = rows.length;
-        const sum = rows.reduce((acc, r) => acc + (r.rating || 5), 0);
-        const avg = totalCount > 0 ? Number((sum / totalCount).toFixed(1)) : 4.8;
-        return {
-          reviews: rows.map((r) => ({
-            id: r.id,
-            author: r.user_name || 'प्रेक्षक',
-            email: r.user_email || '',
-            city: r.city || 'पुणे',
-            rating: r.rating || 5,
-            date: r.created_at ? new Date(r.created_at).toLocaleDateString('mr-IN') : 'आत्ताच',
-            comment: r.comment || '',
-            verified: r.verified_attendance === 1,
-          })),
-          totalCount,
-          averageRating: avg,
-          breakdown: { five: 80, four: 15, three: 5, two: 0, one: 0 },
-        };
-      }
-    } catch { }
-
-    // Authentic fallback with Marathi theatre audience reviews
     return {
-      reviews: [
-        {
-          id: 1,
-          author: 'सचिन कुलकर्णी',
-          email: 'sachin.kulkarni@gmail.com',
-          city: 'पुणे',
-          rating: 5,
-          date: 'आज',
-          comment: 'अप्रतिम नाटक! सर्व कलाकारांचा अभिनय आणि संवादफेक लाजवाब आहे.',
-          verified: true,
-        },
-        {
-          id: 2,
-          author: 'प्रिया देशमुख',
-          email: 'priya.deshmukh@gmail.com',
-          city: 'मुंबई',
-          rating: 5,
-          date: 'काल',
-          comment: 'खूपच सुरेख अनुभव. संगीत आणि प्रकाशयोजना मनाला भिडणारी होती. नक्की पहा!',
-          verified: true,
-        },
-        {
-          id: 3,
-          author: 'रोहित पाटील',
-          email: 'rohit.patil@gmail.com',
-          city: 'नाशिक',
-          rating: 4,
-          date: '२ दिवसांपूर्वी',
-          comment: 'कुटुंबासोबत आवर्जून पाहावे असा प्रयोग. शेवटपर्यंत खिळवून ठेवतो.',
-          verified: true,
-        },
-      ],
-      totalCount: 108,
-      averageRating: 4.8,
-      breakdown: { five: 85, four: 12, three: 3, two: 0, one: 0 },
+      reviews: [],
+      totalCount: 0,
+      averageRating: 0,
+      breakdown: { five: 0, four: 0, three: 0, two: 0, one: 0 },
     };
   },
 
@@ -1511,48 +1395,35 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(data),
       });
-      if (res) {
-        if (res.error) {
-          return { success: false, message: res.error };
-        }
-        if (res.success || res.review) {
-          return { success: true, message: 'आपले परीक्षण यशस्वीपणे नोंदवले गेले!', review: res.review };
-        }
+      if (res?.error) {
+        return { success: false, message: res.error };
       }
+      if (res?.success || res?.review) {
+        return {
+          success: true,
+          message: res.message || 'आपले परीक्षण यशस्वीपणे नोंदवले गेले!',
+          review: res.review,
+        };
+      }
+      return { success: false, message: res?.error || 'Review submission failed' };
     } catch (err: any) {
       if (err?.status === 409 || err?.message?.includes('आधीच') || err?.message?.includes('already')) {
-        return { success: false, message: 'तुम्ही या कार्यक्रमाचे परीक्षण आधीच नोंदवले आहे (Already reviewed).' };
+        return {
+          success: false,
+          message: 'तुम्ही या कार्यक्रमाचे परीक्षण आधीच नोंदवले आहे (Already reviewed).',
+        };
       }
+      if (err?.status === 401) {
+        return {
+          success: false,
+          message: 'परीक्षण नोंदवण्यासाठी कृपया लॉगिन करा (Login required).',
+        };
+      }
+      return {
+        success: false,
+        message: err?.message || 'Review submission failed. Please try again.',
+      };
     }
-
-    try {
-      // Direct Supabase fallback - check duplicate first
-      const existing = await supabaseFetch<any[]>(
-        `event_reviews?event_id=eq.${eventId}&user_email=eq.${encodeURIComponent(data.userEmail.toLowerCase())}&limit=1`
-      );
-      if (existing && existing.length > 0) {
-        return { success: false, message: 'तुम्ही या कार्यक्रमाचे परीक्षण आधीच नोंदवले आहे (Already reviewed).' };
-      }
-
-      const inserted = await supabaseFetch<any[]>('event_reviews', {
-        method: 'POST',
-        headers: { Prefer: 'return=representation' },
-        body: JSON.stringify({
-          event_id: eventId,
-          user_name: data.userName,
-          user_email: data.userEmail.toLowerCase(),
-          city: data.city || 'पुणे',
-          rating: data.rating,
-          comment: data.comment,
-          verified_attendance: 1,
-        }),
-      });
-      if (inserted && inserted.length > 0) {
-        return { success: true, message: 'आपले परीक्षण यशस्वीपणे नोंदवले गेले!', review: inserted[0] };
-      }
-    } catch { }
-
-    return { success: true, message: 'आपले परीक्षण नोंदवले गेले!' };
   },
 
   updateProfile: async (data: {
@@ -1702,8 +1573,22 @@ export const api = {
       { method: 'POST', body: JSON.stringify({ phone, otp }) }
     ),
 
-  logout: () =>
-    request<{ success: boolean }>('/api/auth/logout', { method: 'POST' }),
+  logout: async (): Promise<{ success: boolean }> => {
+    // Canonical session clear (cookie + Supabase) — same as web flow logout
+    try {
+      return await request<{ success: boolean }>('/api/auth/flow/logout', {
+        method: 'POST',
+      });
+    } catch {
+      try {
+        return await request<{ success: boolean }>('/api/auth/logout', {
+          method: 'POST',
+        });
+      } catch {
+        return { success: true };
+      }
+    }
+  },
 
   // Notifications
   getNotifications: () =>

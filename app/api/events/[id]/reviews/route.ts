@@ -160,6 +160,17 @@ export async function POST(
       }
     }
 
+    // Never invent user_id=1 — reviews require a real users row
+    if (!effectiveUserId) {
+      return NextResponse.json(
+        {
+          error:
+            'परीक्षण नोंदवण्यासाठी कृपया लॉगिन करा (Login required — no matching user account)',
+        },
+        { status: 401 }
+      );
+    }
+
     const numRating = Number(rating);
     if (!numRating || numRating < 1 || numRating > 5) {
       return NextResponse.json(
@@ -221,7 +232,7 @@ export async function POST(
        RETURNING *`,
       [
         eventId,
-        effectiveUserId || 1,
+        effectiveUserId,
         effectiveEmail.toLowerCase(),
         effectiveName,
         city?.trim() || 'पुणे',

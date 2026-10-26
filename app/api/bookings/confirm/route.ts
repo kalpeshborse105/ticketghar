@@ -1,3 +1,8 @@
+/**
+ * LEGACY booking confirmation path.
+ * Canonical client path after Razorpay success: POST `/api/payments/verify`.
+ * Kept for e2e / older callers — do not dual-call from web or Android checkout.
+ */
 import { NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
 import { users, events, eventSessions, seatInventory, ticketTypes, orders, tickets } from '@/src/db/schema.ts';

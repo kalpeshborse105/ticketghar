@@ -147,6 +147,11 @@ export async function setCustomerSessionCookie(user: CustomerSessionUser) {
 export async function clearCustomerSessionCookie() {
   const cookieStore = await cookies();
   cookieStore.delete(AUTH_COOKIE_NAME);
+  try {
+    cookieStore.delete('mahaticket_logged_in');
+  } catch {
+    /* ignore */
+  }
 }
 
 /**

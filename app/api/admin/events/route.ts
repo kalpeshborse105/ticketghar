@@ -244,6 +244,7 @@ export async function PATCH(request: NextRequest) {
       status,
       featured,
       actorId,
+      rejectionReason,
     } = body;
 
     if (!eventId) {
@@ -312,6 +313,18 @@ export async function PATCH(request: NextRequest) {
     }
     if (body.tag !== undefined) {
       updatePayload.tag = body.tag || null;
+    }
+
+    // Persist rejection reason when rejecting; clear when approving/publishing
+    if (rejectionReason !== undefined) {
+      updatePayload.rejectionReason =
+        typeof rejectionReason === 'string' && rejectionReason.trim()
+          ? rejectionReason.trim().slice(0, 2000)
+          : null;
+    } else if (status === 'rejected' && !updatePayload.rejectionReason) {
+      updatePayload.rejectionReason = 'Rejected by admin';
+    } else if (status === 'published' || status === 'approved') {
+      updatePayload.rejectionReason = null;
     }
 
     const [updated] = await db

@@ -39,7 +39,7 @@ import { Button, MTPopupModal } from '../components';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const MAP_MIN_SCALE = 1;
+const MAP_MIN_SCALE = 0.65;
 const MAP_MAX_SCALE = 2.75;
 /** Live hold sync — same spirit as web fresh seat refresh */
 const POLL_INTERVAL = 8000;
@@ -741,7 +741,8 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
         })
         .onEnd(() => {
           mapSavedScale.value = mapScale.value;
-          if (mapScale.value <= 1.02) {
+          // Snap only when nearly 100% — keep intentional zoom-out / zoom-in
+          if (mapScale.value >= 0.98 && mapScale.value <= 1.02) {
             mapScale.value = withTiming(1);
             mapSavedScale.value = 1;
             mapTX.value = withTiming(0);
@@ -759,7 +760,8 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
         .averageTouches(true)
         .minDistance(12)
         .onUpdate((e) => {
-          if (mapSavedScale.value <= 1.02) return;
+          const nearOne = mapSavedScale.value >= 0.98 && mapSavedScale.value <= 1.02;
+          if (nearOne) return;
           mapTX.value = mapSavedTX.value + e.translationX;
           mapTY.value = mapSavedTY.value + e.translationY;
         })
@@ -1152,6 +1154,8 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
           </View>
         ) : (
           <View style={styles.seatingPlanContainer}>
+            <GestureDetector gesture={mapGesture}>
+              <AnimatedRe.View style={[styles.theatreMapViewport, mapAnimStyle]}>
             {/* ── 3D Perspective Stage / Cinema Screen with Ambient Glow ── */}
             <View style={styles.stageTheaterBox}>
               <Svg width={SCREEN_WIDTH - 32} height={74} viewBox="0 0 340 74" fill="none">
@@ -1214,8 +1218,8 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
               </View>
             </View>
 
-            {/* ── Auditorium map: clean horizontal & vertical scrolling matching web ── */}
-            <View style={styles.theatreMapViewport}>
+            {/* ── Auditorium map: pinch/pan + BMS mini overview ── */}
+            <View>
               {sectionViews.map((section) => {
                 const renderRowsGrid = (
                   <ScrollView
@@ -1313,6 +1317,57 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
                   </View>
                 );
               })}
+            </View>
+              </AnimatedRe.View>
+            </GestureDetector>
+
+            {/* BMS-style mini overview map */}
+            <View style={styles.miniMapCard} pointerEvents="box-none">
+              <Text style={styles.miniMapTitle}>
+                {language === 'mr' ? 'नकाशा' : 'Map'}
+              </Text>
+              <View style={styles.miniMapCanvas}>
+                {sectionViews.slice(0, 4).map((section) => (
+                  <View key={`mini-${section.key}`} style={styles.miniMapSection}>
+                    {section.rows.slice(0, 6).map((row) => (
+                      <View key={`mini-${section.key}-${row.label}`} style={styles.miniMapRow}>
+                        {row.seats.slice(0, 14).map((seat) => {
+                          const isSelected = selected.includes(seat.seatId);
+                          const isBooked =
+                            seat.status === 'booked' ||
+                            seat.status === 'held' ||
+                            seat.status === 'blocked';
+                          return (
+                            <View
+                              key={seat.seatId}
+                              style={[
+                                styles.miniMapDot,
+                                isSelected && styles.miniMapDotSelected,
+                                isBooked && !isSelected && styles.miniMapDotBooked,
+                              ]}
+                            />
+                          );
+                        })}
+                      </View>
+                    ))}
+                  </View>
+                ))}
+              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  mapScale.value = withTiming(1);
+                  mapSavedScale.value = 1;
+                  mapTX.value = withTiming(0);
+                  mapTY.value = withTiming(0);
+                  mapSavedTX.value = 0;
+                  mapSavedTY.value = 0;
+                }}
+                hitSlop={8}
+              >
+                <Text style={styles.miniMapReset}>
+                  {language === 'mr' ? 'रीसेट · पिंच झूम' : 'Reset · pinch zoom'}
+                </Text>
+              </TouchableOpacity>
             </View>
 
             {/* ── 6. Trust & Security Footer Badge ── */}
@@ -1899,11 +1954,73 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'stretch',
   },
+  miniMapCard: {
+    position: 'absolute',
+    right: 12,
+    bottom: 56,
+    width: 112,
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 12,
+    padding: 6,
+    zIndex: 20,
+    ...SHADOWS.sm,
+  },
+  miniMapTitle: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#64748B',
+    textAlign: 'center',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  miniMapCanvas: {
+    height: 78,
+    borderRadius: 8,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+    overflow: 'hidden',
+  },
+  miniMapSection: {
+    alignItems: 'center',
+    gap: 1,
+  },
+  miniMapRow: {
+    flexDirection: 'row',
+    gap: 1,
+  },
+  miniMapDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 0.5,
+    backgroundColor: '#94A3B8',
+  },
+  miniMapDotSelected: {
+    backgroundColor: '#EA580C',
+  },
+  miniMapDotBooked: {
+    backgroundColor: '#CBD5E1',
+  },
+  miniMapReset: {
+    marginTop: 4,
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#EA580C',
+    textAlign: 'center',
+  },
 
   // 5. Stage Screen & Auditorium Seating Plan
   seatingPlanContainer: {
     marginTop: 6,
     overflow: 'hidden',
+    position: 'relative',
   },
   stageTheaterBox: {
     alignItems: 'center',
