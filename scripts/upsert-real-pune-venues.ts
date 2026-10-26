@@ -87,11 +87,20 @@ async function main() {
       );
       console.log('updated', v.name, found.rows[0].id);
     } else {
+      const loc = await p.query(
+        `SELECT c.id AS city_id, c.district_id
+         FROM cities c
+         WHERE LOWER(TRIM(c.name)) = LOWER(TRIM($1))
+         LIMIT 1`,
+        [v.city]
+      );
+      const cityId = loc.rows[0]?.city_id ?? null;
+      const districtId = loc.rows[0]?.district_id ?? null;
       const ins = await p.query(
-        `INSERT INTO venues (name, name_mr, address, city, state, total_capacity, has_seat_layout, verification_status, is_template, ownership_type)
-         VALUES ($1,$2,$3,$4,'Maharashtra', COALESCE($5, 600), 0, 'verified', 1, 'public_theatre')
+        `INSERT INTO venues (name, name_mr, address, city, state, district_id, city_id, total_capacity, has_seat_layout, verification_status, is_template, ownership_type)
+         VALUES ($1,$2,$3,$4,'Maharashtra',$5,$6, COALESCE($7, 600), 0, 'verified', 1, 'public_theatre')
          RETURNING id`,
-        [v.name, v.nameMr, v.address, v.city, v.capacity]
+        [v.name, v.nameMr, v.address, v.city, districtId, cityId, v.capacity]
       );
       console.log('inserted', v.name, ins.rows[0].id);
     }

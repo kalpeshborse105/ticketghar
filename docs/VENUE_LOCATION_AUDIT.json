@@ -1,0 +1,1210 @@
+{
+  "generatedAt": "2026-10-26T17:52:49.591Z",
+  "hostFamily": "aws-0-ap-south-1.pooler.supabase.com",
+  "counts": {
+    "venues": 66,
+    "null_city_id": 65,
+    "null_district_id": 8,
+    "districts": 36,
+    "cities": 65,
+    "talukas": 359
+  },
+  "namedTargets": [
+    {
+      "id": 1,
+      "name": "Bal Gandharva Rang Mandir",
+      "name_mr": "बाळ गंधर्व रंगमंदिर",
+      "city": "Pune",
+      "address": "J.M. Road / Jangli Maharaj Road, Shivajinagar, Pune",
+      "district_id": 26,
+      "city_id": null,
+      "verification_status": "verified",
+      "is_template": 1,
+      "total_capacity": 989,
+      "district_name": "Pune",
+      "city_fk_name": null,
+      "city_district_id": null
+    },
+    {
+      "id": 2,
+      "name": "Dinanath Mangeshkar Natyagruha",
+      "name_mr": "दीनानाथ मंगेशकर नाट्यगृह",
+      "city": "Mumbai",
+      "address": "Vile Parle East, Mumbai",
+      "district_id": 26,
+      "city_id": null,
+      "verification_status": "verified",
+      "is_template": 1,
+      "total_capacity": 900,
+      "district_name": "Pune",
+      "city_fk_name": null,
+      "city_district_id": null
+    },
+    {
+      "id": 3,
+      "name": "Yashwantrao Chavan Natyagruha",
+      "name_mr": "यशवंतराव चव्हाण नाट्यगृह",
+      "city": "Pune",
+      "address": "Kothrud, Pune",
+      "district_id": 26,
+      "city_id": null,
+      "verification_status": "verified",
+      "is_template": 1,
+      "total_capacity": 700,
+      "district_name": "Pune",
+      "city_fk_name": null,
+      "city_district_id": null
+    },
+    {
+      "id": 4,
+      "name": "Dr. Kashinath Ghanekar Natyagruha",
+      "name_mr": "डॉ. काशिनाथ घाणेकर नाट्यगृह",
+      "city": "Thane",
+      "address": "Ghodbunder Road, Hiranandani Meadows, Thane West",
+      "district_id": 26,
+      "city_id": null,
+      "verification_status": "verified",
+      "is_template": 1,
+      "total_capacity": 800,
+      "district_name": "Pune",
+      "city_fk_name": null,
+      "city_district_id": null
+    },
+    {
+      "id": 5,
+      "name": "PVR INOX: The Pavillion Mall",
+      "name_mr": "पीव्हीआर आयनॉक्स: द पॅव्हेलियन मॉल",
+      "city": "Pune",
+      "address": "Senapati Bapat Road, Shivajinagar, Pune",
+      "district_id": 17,
+      "city_id": null,
+      "verification_status": "verified",
+      "is_template": 1,
+      "total_capacity": 1100,
+      "district_name": "Mumbai City",
+      "city_fk_name": null,
+      "city_district_id": null
+    },
+    {
+      "id": 6,
+      "name": "Cinepolis: Westend Mall",
+      "name_mr": "सिनेपोलिस: वेस्टएंड मॉल",
+      "city": "Pune",
+      "address": "Parihar Chowk, Aundh, Pune",
+      "district_id": 17,
+      "city_id": null,
+      "verification_status": "verified",
+      "is_template": 1,
+      "total_capacity": 900,
+      "district_name": "Mumbai City",
+      "city_fk_name": null,
+      "city_district_id": null
+    },
+    {
+      "id": 7,
+      "name": "PVR INOX: R City Mall",
+      "name_mr": "पीव्हीआर आयनॉक्स: आर सिटी मॉल",
+      "city": "Mumbai",
+      "address": "LBS Marg, Ghatkopar West, Mumbai",
+      "district_id": 17,
+      "city_id": null,
+      "verification_status": "verified",
+      "is_template": 1,
+      "total_capacity": 600,
+      "district_name": "Mumbai City",
+      "city_fk_name": null,
+      "city_district_id": null
+    },
+    {
+      "id": 12,
+      "name": "Dinanath Mangeshkar Natyagruha",
+      "name_mr": "दीनानाथ मंगेशकर नाट्यगृह",
+      "city": "Mumbai",
+      "address": "Vile Parle East, Mumbai",
+      "district_id": 33,
+      "city_id": null,
+      "verification_status": "verified",
+      "is_template": 1,
+      "total_capacity": 950,
+      "district_name": "Thane",
+      "city_fk_name": null,
+      "city_district_id": null
+    },
+    {
+      "id": 23,
+      "name": "Bal Gandharva Natya Mandir Sangli",
+      "name_mr": "बाळगंधर्व नाट्य मंदिर सांगली",
+      "city": "Sangli",
+      "address": "Sangli",
+      "district_id": 29,
+      "city_id": null,
+      "verification_status": "verified",
+      "is_template": 1,
+      "total_capacity": 750,
+      "district_name": "Sangli",
+      "city_fk_name": null,
+      "city_district_id": null
+    },
+    {
+      "id": 24,
+      "name": "Yashwantrao Chavan Auditorium Satara",
+      "name_mr": "यशवंतराव चव्हाण सभागृह सातारा",
+      "city": "Satara",
+      "address": "Satara",
+      "district_id": 30,
+      "city_id": null,
+      "verification_status": "verified",
+      "is_template": 1,
+      "total_capacity": 650,
+      "district_name": "Satara",
+      "city_fk_name": null,
+      "city_district_id": null
+    },
+    {
+      "id": 53,
+      "name": "Yashwantrao Chavan Natyagruha",
+      "name_mr": "यशवंतराव चव्हाण नाट्यगृह",
+      "city": "Pune",
+      "address": "Kothrud, Pune",
+      "district_id": 26,
+      "city_id": null,
+      "verification_status": "verified",
+      "is_template": 1,
+      "total_capacity": 114,
+      "district_name": "Pune",
+      "city_fk_name": null,
+      "city_district_id": null
+    }
+  ],
+  "incorrectDistrictHeuristic": [
+    {
+      "id": 2,
+      "name": "Dinanath Mangeshkar Natyagruha",
+      "city_text": "Mumbai",
+      "stored_district": "Pune",
+      "expected_district": "Mumbai City",
+      "stored_district_id": 26,
+      "expected_district_id": 17
+    },
+    {
+      "id": 4,
+      "name": "Dr. Kashinath Ghanekar Natyagruha",
+      "city_text": "Thane",
+      "stored_district": "Pune",
+      "expected_district": "Thane",
+      "stored_district_id": 26,
+      "expected_district_id": 33
+    },
+    {
+      "id": 5,
+      "name": "PVR INOX: The Pavillion Mall",
+      "city_text": "Pune",
+      "stored_district": "Mumbai City",
+      "expected_district": "Pune",
+      "stored_district_id": 17,
+      "expected_district_id": 26
+    },
+    {
+      "id": 6,
+      "name": "Cinepolis: Westend Mall",
+      "city_text": "Pune",
+      "stored_district": "Mumbai City",
+      "expected_district": "Pune",
+      "stored_district_id": 17,
+      "expected_district_id": 26
+    },
+    {
+      "id": 9,
+      "name": "Prabodhankar Thackeray Natya Mandir",
+      "city_text": "Mumbai",
+      "stored_district": "Mumbai Suburban",
+      "expected_district": "Mumbai City",
+      "stored_district_id": 18,
+      "expected_district_id": 17
+    },
+    {
+      "id": 10,
+      "name": "Mysore Association Hall",
+      "city_text": "Mumbai",
+      "stored_district": "Mumbai Suburban",
+      "expected_district": "Mumbai City",
+      "stored_district_id": 18,
+      "expected_district_id": 17
+    },
+    {
+      "id": 12,
+      "name": "Dinanath Mangeshkar Natyagruha",
+      "city_text": "Mumbai",
+      "stored_district": "Thane",
+      "expected_district": "Mumbai City",
+      "stored_district_id": 33,
+      "expected_district_id": 17
+    }
+  ],
+  "missingCityLinkCount": 65,
+  "missingCityLinkSample": [
+    {
+      "id": 1,
+      "name": "Bal Gandharva Rang Mandir",
+      "city": "Pune"
+    },
+    {
+      "id": 2,
+      "name": "Dinanath Mangeshkar Natyagruha",
+      "city": "Mumbai"
+    },
+    {
+      "id": 3,
+      "name": "Yashwantrao Chavan Natyagruha",
+      "city": "Pune"
+    },
+    {
+      "id": 4,
+      "name": "Dr. Kashinath Ghanekar Natyagruha",
+      "city": "Thane"
+    },
+    {
+      "id": 5,
+      "name": "PVR INOX: The Pavillion Mall",
+      "city": "Pune"
+    },
+    {
+      "id": 6,
+      "name": "Cinepolis: Westend Mall",
+      "city": "Pune"
+    },
+    {
+      "id": 7,
+      "name": "PVR INOX: R City Mall",
+      "city": "Mumbai"
+    },
+    {
+      "id": 8,
+      "name": "NCPA Experimental Theatre",
+      "city": "Mumbai"
+    },
+    {
+      "id": 9,
+      "name": "Prabodhankar Thackeray Natya Mandir",
+      "city": "Mumbai"
+    },
+    {
+      "id": 10,
+      "name": "Mysore Association Hall",
+      "city": "Mumbai"
+    },
+    {
+      "id": 11,
+      "name": "Kalidas Natya Mandir",
+      "city": "Thane"
+    },
+    {
+      "id": 12,
+      "name": "Dinanath Mangeshkar Natyagruha",
+      "city": "Mumbai"
+    },
+    {
+      "id": 13,
+      "name": "Thane Municipal Corporation Hall",
+      "city": "Thane"
+    },
+    {
+      "id": 14,
+      "name": "Suresh Bhat Auditorium",
+      "city": "Nagpur"
+    },
+    {
+      "id": 15,
+      "name": "Vasantrao Deshpande Hall",
+      "city": "Nagpur"
+    },
+    {
+      "id": 16,
+      "name": "Kasturchand Park Open Theatre",
+      "city": "Nagpur"
+    },
+    {
+      "id": 17,
+      "name": "Kalidas Kala Mandir",
+      "city": "Nashik"
+    },
+    {
+      "id": 18,
+      "name": "Mahakavi Kalidas Natya Mandir",
+      "city": "Nashik"
+    },
+    {
+      "id": 19,
+      "name": "Sant Eknath Rang Mandir",
+      "city": "Chhatrapati Sambhajinagar"
+    },
+    {
+      "id": 20,
+      "name": "Town Hall Aurangabad",
+      "city": "Chhatrapati Sambhajinagar"
+    },
+    {
+      "id": 21,
+      "name": "Shahu Smarak Bhavan",
+      "city": "Kolhapur"
+    },
+    {
+      "id": 22,
+      "name": "Bhalji Pendharkar Kala Mandir",
+      "city": "Kolhapur"
+    },
+    {
+      "id": 23,
+      "name": "Bal Gandharva Natya Mandir Sangli",
+      "city": "Sangli"
+    },
+    {
+      "id": 24,
+      "name": "Yashwantrao Chavan Auditorium Satara",
+      "city": "Satara"
+    },
+    {
+      "id": 25,
+      "name": "Indira Gandhi Indoor Stadium Hall",
+      "city": "Solapur"
+    },
+    {
+      "id": 26,
+      "name": "Lokmanya Tilak Natya Mandir",
+      "city": "Solapur"
+    },
+    {
+      "id": 27,
+      "name": "Ahmednagar Municipal Hall",
+      "city": "Ahmednagar"
+    },
+    {
+      "id": 28,
+      "name": "Jalgaon Natya Mandir",
+      "city": "Jalgaon"
+    },
+    {
+      "id": 30,
+      "name": "Nandurbar Town Hall",
+      "city": "Nandurbar"
+    },
+    {
+      "id": 31,
+      "name": "Hanuman Vyayam Prasarak Mandal Hall",
+      "city": "Amravati"
+    },
+    {
+      "id": 32,
+      "name": "Akola Municipal Auditorium",
+      "city": "Akola"
+    },
+    {
+      "id": 33,
+      "name": "Buldhana Cultural Centre",
+      "city": "Buldhana"
+    },
+    {
+      "id": 34,
+      "name": "Washim Town Hall",
+      "city": "Washim"
+    },
+    {
+      "id": 35,
+      "name": "Yavatmal Natya Griha",
+      "city": "Yavatmal"
+    },
+    {
+      "id": 36,
+      "name": "Wardha Gandhi Seva Sangh Hall",
+      "city": "Wardha"
+    },
+    {
+      "id": 37,
+      "name": "Bhandara Municipal Hall",
+      "city": "Bhandara"
+    },
+    {
+      "id": 38,
+      "name": "Gondia Cultural Hall",
+      "city": "Gondia"
+    },
+    {
+      "id": 39,
+      "name": "Chandrapur Town Hall",
+      "city": "Chandrapur"
+    },
+    {
+      "id": 40,
+      "name": "Gadchiroli District Auditorium",
+      "city": "Gadchiroli"
+    },
+    {
+      "id": 41,
+      "name": "Latur Municipal Natya Mandir",
+      "city": "Latur"
+    }
+  ],
+  "cityDistrictConflict": [],
+  "exactNameCityDupes": [
+    {
+      "key": "dinanath mangeshkar natyagruha|mumbai",
+      "ids": [
+        2,
+        12
+      ]
+    },
+    {
+      "key": "yashwantrao chavan natyagruha|pune",
+      "ids": [
+        3,
+        53
+      ]
+    }
+  ],
+  "fuzzySameNormalizedName": [
+    {
+      "key": "dinanath mangeshkar natyagruha",
+      "ids": [
+        2,
+        12
+      ],
+      "cities": [
+        "Mumbai",
+        "Mumbai"
+      ],
+      "names": [
+        "Dinanath Mangeshkar Natyagruha",
+        "Dinanath Mangeshkar Natyagruha"
+      ]
+    },
+    {
+      "key": "yashwantrao chavan natyagruha",
+      "ids": [
+        3,
+        53
+      ],
+      "cities": [
+        "Pune",
+        "Pune"
+      ],
+      "names": [
+        "Yashwantrao Chavan Natyagruha",
+        "Yashwantrao Chavan Natyagruha"
+      ]
+    }
+  ],
+  "candidateClassifications": {
+    "already_exists_correct": 1,
+    "already_exists_bad_mapping": 60,
+    "alternate_spelling": 0,
+    "duplicate_candidate": 0,
+    "new_ready": 0,
+    "new_missing_location": 0,
+    "unverified": 0,
+    "in_live_db_flag": 58,
+    "not_in_live_db": 3
+  },
+  "reconciliationSample": [
+    {
+      "candidate_id": "live-27",
+      "name": "Ahmednagar Municipal Hall",
+      "candidate_district": null,
+      "candidate_city": "Ahmednagar",
+      "matched_venue_id": 27,
+      "matched_city_id": null,
+      "existing_district_id": 1,
+      "expected_district_id": 1,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-32",
+      "name": "Akola Municipal Auditorium",
+      "candidate_district": null,
+      "candidate_city": "Akola",
+      "matched_venue_id": 32,
+      "matched_city_id": null,
+      "existing_district_id": 2,
+      "expected_district_id": 2,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-48",
+      "name": "Alibag Town Hall",
+      "candidate_district": null,
+      "candidate_city": "Alibag",
+      "matched_venue_id": 48,
+      "matched_city_id": null,
+      "existing_district_id": 27,
+      "expected_district_id": 27,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-31",
+      "name": "Hanuman Vyayam Prasarak Mandal Hall",
+      "candidate_district": null,
+      "candidate_city": "Amravati",
+      "matched_venue_id": 31,
+      "matched_city_id": null,
+      "existing_district_id": 3,
+      "expected_district_id": 3,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-45",
+      "name": "Beed Municipal Hall",
+      "candidate_district": null,
+      "candidate_city": "Beed",
+      "matched_venue_id": 45,
+      "matched_city_id": null,
+      "existing_district_id": 5,
+      "expected_district_id": null,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-37",
+      "name": "Bhandara Municipal Hall",
+      "candidate_district": null,
+      "candidate_city": "Bhandara",
+      "matched_venue_id": 37,
+      "matched_city_id": null,
+      "existing_district_id": 6,
+      "expected_district_id": null,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-33",
+      "name": "Buldhana Cultural Centre",
+      "candidate_district": null,
+      "candidate_city": "Buldhana",
+      "matched_venue_id": 33,
+      "matched_city_id": null,
+      "existing_district_id": 7,
+      "expected_district_id": null,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-39",
+      "name": "Chandrapur Town Hall",
+      "candidate_district": null,
+      "candidate_city": "Chandrapur",
+      "matched_venue_id": 39,
+      "matched_city_id": null,
+      "existing_district_id": 8,
+      "expected_district_id": null,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-19",
+      "name": "Sant Eknath Rang Mandir",
+      "candidate_district": null,
+      "candidate_city": "Chhatrapati Sambhajinagar",
+      "matched_venue_id": 19,
+      "matched_city_id": null,
+      "existing_district_id": 4,
+      "expected_district_id": null,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-20",
+      "name": "Town Hall Aurangabad",
+      "candidate_district": null,
+      "candidate_city": "Chhatrapati Sambhajinagar",
+      "matched_venue_id": 20,
+      "matched_city_id": null,
+      "existing_district_id": 4,
+      "expected_district_id": null,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-47",
+      "name": "Dharashiv Town Hall",
+      "candidate_district": null,
+      "candidate_city": "Dharashiv",
+      "matched_venue_id": 47,
+      "matched_city_id": null,
+      "existing_district_id": 23,
+      "expected_district_id": null,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-29",
+      "name": "Dhule Cultural Hall",
+      "candidate_district": null,
+      "candidate_city": "Dhule",
+      "matched_venue_id": 29,
+      "matched_city_id": 30,
+      "existing_district_id": 9,
+      "expected_district_id": null,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_correct",
+      "required_action": "none"
+    },
+    {
+      "candidate_id": "live-40",
+      "name": "Gadchiroli District Auditorium",
+      "candidate_district": null,
+      "candidate_city": "Gadchiroli",
+      "matched_venue_id": 40,
+      "matched_city_id": null,
+      "existing_district_id": 10,
+      "expected_district_id": null,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-38",
+      "name": "Gondia Cultural Hall",
+      "candidate_district": null,
+      "candidate_city": "Gondia",
+      "matched_venue_id": 38,
+      "matched_city_id": null,
+      "existing_district_id": 11,
+      "expected_district_id": null,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-44",
+      "name": "Hingoli Cultural Hall",
+      "candidate_district": null,
+      "candidate_city": "Hingoli",
+      "matched_venue_id": 44,
+      "matched_city_id": null,
+      "existing_district_id": 12,
+      "expected_district_id": null,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-28",
+      "name": "Jalgaon Natya Mandir",
+      "candidate_district": null,
+      "candidate_city": "Jalgaon",
+      "matched_venue_id": 28,
+      "matched_city_id": null,
+      "existing_district_id": 13,
+      "expected_district_id": 13,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-46",
+      "name": "Jalna Natya Mandir",
+      "candidate_district": null,
+      "candidate_city": "Jalna",
+      "matched_venue_id": 46,
+      "matched_city_id": null,
+      "existing_district_id": 14,
+      "expected_district_id": null,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-22",
+      "name": "Bhalji Pendharkar Kala Mandir",
+      "candidate_district": null,
+      "candidate_city": "Kolhapur",
+      "matched_venue_id": 22,
+      "matched_city_id": null,
+      "existing_district_id": 15,
+      "expected_district_id": 15,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-21",
+      "name": "Shahu Smarak Bhavan",
+      "candidate_district": null,
+      "candidate_city": "Kolhapur",
+      "matched_venue_id": 21,
+      "matched_city_id": null,
+      "existing_district_id": 15,
+      "expected_district_id": 15,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-41",
+      "name": "Latur Municipal Natya Mandir",
+      "candidate_district": null,
+      "candidate_city": "Latur",
+      "matched_venue_id": 41,
+      "matched_city_id": null,
+      "existing_district_id": 16,
+      "expected_district_id": null,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-58",
+      "name": "Chhabildas Hall",
+      "candidate_district": null,
+      "candidate_city": "Mumbai",
+      "matched_venue_id": 58,
+      "matched_city_id": null,
+      "existing_district_id": 17,
+      "expected_district_id": 17,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-2",
+      "name": "Dinanath Mangeshkar Natyagruha",
+      "candidate_district": null,
+      "candidate_city": "Mumbai",
+      "matched_venue_id": 2,
+      "matched_city_id": null,
+      "existing_district_id": 26,
+      "expected_district_id": 17,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-10",
+      "name": "Mysore Association Hall",
+      "candidate_district": null,
+      "candidate_city": "Mumbai",
+      "matched_venue_id": 10,
+      "matched_city_id": null,
+      "existing_district_id": 18,
+      "expected_district_id": 17,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-8",
+      "name": "NCPA Experimental Theatre",
+      "candidate_district": null,
+      "candidate_city": "Mumbai",
+      "matched_venue_id": 8,
+      "matched_city_id": null,
+      "existing_district_id": 17,
+      "expected_district_id": 17,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-9",
+      "name": "Prabodhankar Thackeray Natya Mandir",
+      "candidate_district": null,
+      "candidate_city": "Mumbai",
+      "matched_venue_id": 9,
+      "matched_city_id": null,
+      "existing_district_id": 18,
+      "expected_district_id": 17,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-7",
+      "name": "PVR INOX: R City Mall",
+      "candidate_district": null,
+      "candidate_city": "Mumbai",
+      "matched_venue_id": 7,
+      "matched_city_id": null,
+      "existing_district_id": 17,
+      "expected_district_id": 17,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-57",
+      "name": "Ravindra Natya Mandir",
+      "candidate_district": null,
+      "candidate_city": "Mumbai",
+      "matched_venue_id": 57,
+      "matched_city_id": null,
+      "existing_district_id": 17,
+      "expected_district_id": 17,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-56",
+      "name": "Shivaji Mandir",
+      "candidate_district": null,
+      "candidate_city": "Mumbai",
+      "matched_venue_id": 56,
+      "matched_city_id": null,
+      "existing_district_id": 17,
+      "expected_district_id": 17,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-16",
+      "name": "Kasturchand Park Open Theatre",
+      "candidate_district": null,
+      "candidate_city": "Nagpur",
+      "matched_venue_id": 16,
+      "matched_city_id": null,
+      "existing_district_id": 19,
+      "expected_district_id": 19,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-14",
+      "name": "Suresh Bhat Auditorium",
+      "candidate_district": null,
+      "candidate_city": "Nagpur",
+      "matched_venue_id": 14,
+      "matched_city_id": null,
+      "existing_district_id": 19,
+      "expected_district_id": 19,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-15",
+      "name": "Vasantrao Deshpande Hall",
+      "candidate_district": null,
+      "candidate_city": "Nagpur",
+      "matched_venue_id": 15,
+      "matched_city_id": null,
+      "existing_district_id": 19,
+      "expected_district_id": 19,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-42",
+      "name": "Nanded Guru Gobind Singh Hall",
+      "candidate_district": null,
+      "candidate_city": "Nanded",
+      "matched_venue_id": 42,
+      "matched_city_id": null,
+      "existing_district_id": 20,
+      "expected_district_id": null,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-30",
+      "name": "Nandurbar Town Hall",
+      "candidate_district": null,
+      "candidate_city": "Nandurbar",
+      "matched_venue_id": 30,
+      "matched_city_id": null,
+      "existing_district_id": 21,
+      "expected_district_id": null,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-17",
+      "name": "Kalidas Kala Mandir",
+      "candidate_district": null,
+      "candidate_city": "Nashik",
+      "matched_venue_id": 17,
+      "matched_city_id": null,
+      "existing_district_id": 22,
+      "expected_district_id": 22,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-18",
+      "name": "Mahakavi Kalidas Natya Mandir",
+      "candidate_district": null,
+      "candidate_city": "Nashik",
+      "matched_venue_id": 18,
+      "matched_city_id": null,
+      "existing_district_id": 22,
+      "expected_district_id": 22,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-49",
+      "name": "Panvel Cultural Centre",
+      "candidate_district": null,
+      "candidate_city": "Panvel",
+      "matched_venue_id": 49,
+      "matched_city_id": null,
+      "existing_district_id": 27,
+      "expected_district_id": null,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-43",
+      "name": "Parbhani Town Hall",
+      "candidate_district": null,
+      "candidate_city": "Parbhani",
+      "matched_venue_id": 43,
+      "matched_city_id": null,
+      "existing_district_id": 25,
+      "expected_district_id": null,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-1",
+      "name": "Bal Gandharva Rang Mandir",
+      "candidate_district": null,
+      "candidate_city": "Pune",
+      "matched_venue_id": 1,
+      "matched_city_id": null,
+      "existing_district_id": 26,
+      "expected_district_id": 26,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-54",
+      "name": "Balgandharva Tilak Smarak Mandir",
+      "candidate_district": null,
+      "candidate_city": "Pune",
+      "matched_venue_id": 54,
+      "matched_city_id": null,
+      "existing_district_id": 26,
+      "expected_district_id": 26,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-6",
+      "name": "Cinepolis: Westend Mall",
+      "candidate_district": null,
+      "candidate_city": "Pune",
+      "matched_venue_id": 6,
+      "matched_city_id": null,
+      "existing_district_id": 17,
+      "expected_district_id": 26,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-55",
+      "name": "Nehru Memorial Hall",
+      "candidate_district": null,
+      "candidate_city": "Pune",
+      "matched_venue_id": 55,
+      "matched_city_id": null,
+      "existing_district_id": 26,
+      "expected_district_id": 26,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-5",
+      "name": "PVR INOX: The Pavillion Mall",
+      "candidate_district": null,
+      "candidate_city": "Pune",
+      "matched_venue_id": 5,
+      "matched_city_id": null,
+      "existing_district_id": 17,
+      "expected_district_id": 26,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-53",
+      "name": "Yashwantrao Chavan Natya Gruha",
+      "candidate_district": null,
+      "candidate_city": "Pune",
+      "matched_venue_id": 53,
+      "matched_city_id": null,
+      "existing_district_id": 26,
+      "expected_district_id": 26,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-3",
+      "name": "Yashwantrao Chavan Natyagruha",
+      "candidate_district": null,
+      "candidate_city": "Pune",
+      "matched_venue_id": 3,
+      "matched_city_id": null,
+      "existing_district_id": 26,
+      "expected_district_id": 26,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-50",
+      "name": "Ratnagiri Lokmanya Tilak Hall",
+      "candidate_district": null,
+      "candidate_city": "Ratnagiri",
+      "matched_venue_id": 50,
+      "matched_city_id": null,
+      "existing_district_id": 28,
+      "expected_district_id": 28,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-23",
+      "name": "Bal Gandharva Natya Mandir Sangli",
+      "candidate_district": null,
+      "candidate_city": "Sangli",
+      "matched_venue_id": 23,
+      "matched_city_id": null,
+      "existing_district_id": 29,
+      "expected_district_id": 29,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-24",
+      "name": "Yashwantrao Chavan Auditorium Satara",
+      "candidate_district": null,
+      "candidate_city": "Satara",
+      "matched_venue_id": 24,
+      "matched_city_id": null,
+      "existing_district_id": 30,
+      "expected_district_id": 30,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-51",
+      "name": "Sawantwadi Palace Hall",
+      "candidate_district": null,
+      "candidate_city": "Sawantwadi",
+      "matched_venue_id": 51,
+      "matched_city_id": null,
+      "existing_district_id": 31,
+      "expected_district_id": null,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-25",
+      "name": "Indira Gandhi Indoor Stadium Hall",
+      "candidate_district": null,
+      "candidate_city": "Solapur",
+      "matched_venue_id": 25,
+      "matched_city_id": null,
+      "existing_district_id": 32,
+      "expected_district_id": 32,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    },
+    {
+      "candidate_id": "live-26",
+      "name": "Lokmanya Tilak Natya Mandir",
+      "candidate_district": null,
+      "candidate_city": "Solapur",
+      "matched_venue_id": 26,
+      "matched_city_id": null,
+      "existing_district_id": 32,
+      "expected_district_id": 32,
+      "match_method": "live_venue_id",
+      "confidence": "high",
+      "classification": "already_exists_bad_mapping",
+      "required_action": "repair_location_fks"
+    }
+  ],
+  "reconciliationFullPath": "docs/VENUE_LOCATION_RECONCILIATION.json"
+}

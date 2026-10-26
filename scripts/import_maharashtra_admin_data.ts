@@ -685,10 +685,22 @@ export async function importMaharashtraAdministrativeData(dryRun = false) {
           AND (v.district_id IS NULL OR v.city_id IS NULL);
       `);
 
-      // Special link for Pune / Mumbai if needed
+      // Aliases: Ahmednagar → Ahilyanagar, Vasai → Vasai-Virar
       await client.query(`
-        UPDATE venues SET district_id = 8 WHERE city ILIKE '%Pune%' AND district_id IS NULL;
-        UPDATE venues SET district_id = 1 WHERE city ILIKE '%Mumbai%' AND district_id IS NULL;
+        UPDATE venues v
+        SET city_id = c.id, district_id = COALESCE(v.district_id, c.district_id)
+        FROM cities c
+        WHERE v.city_id IS NULL
+          AND LOWER(TRIM(v.city)) IN ('ahmednagar', 'ahmadnagar')
+          AND LOWER(TRIM(c.name)) = 'ahilyanagar'
+      `);
+      await client.query(`
+        UPDATE venues v
+        SET city_id = c.id, district_id = COALESCE(v.district_id, c.district_id)
+        FROM cities c
+        WHERE v.city_id IS NULL
+          AND LOWER(TRIM(v.city)) IN ('vasai', 'vasai-virar', 'vasai virar')
+          AND LOWER(TRIM(c.name)) = 'vasai-virar'
       `);
     }
 

@@ -324,6 +324,12 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
     0
   );
   const bookableSeatsCount = totalSeats - blockedSeatsCount;
+  const activeSectionSeatCount = (sections[activeSectionIdx] || sections[0])?.rows.reduce(
+    (a, r) => a + r.seats.length,
+    0
+  ) || 0;
+  const dbCapacity = Number(venueToEdit?.totalCapacity || 0);
+  const capacityMismatch = dbCapacity > 0 && dbCapacity !== totalSeats;
 
   // Active section helper
   const currentSection = sections[activeSectionIdx] || sections[0];
@@ -717,11 +723,15 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
           </div>
         </div>
 
-        {/* Live Overview Stats Bar */}
+        {/* Live Overview Stats Bar — totals always = sum of designed seats */}
         <div className="px-6 py-2.5 bg-slate-900/50 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-4 sm:gap-6">
+          <div className="flex items-center gap-4 sm:gap-6 flex-wrap">
             <span className="text-slate-400">
-              एकूण क्षमता: <strong className="text-white font-mono">{totalSeats}</strong> जागा
+              एकूण क्षमता (सर्व विभाग):{' '}
+              <strong className="text-white font-mono">{totalSeats}</strong> जागा
+            </span>
+            <span className="text-sky-300">
+              सध्याचा विभाग: <strong className="font-mono">{activeSectionSeatCount}</strong>
             </span>
             <span className="text-emerald-400">
               बुकिंग उपलब्ध: <strong className="font-mono">{bookableSeatsCount}</strong>
@@ -734,6 +744,11 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
             <span className="text-slate-400">
               विभाग: <strong className="text-white">{sections.length}</strong>
             </span>
+            {capacityMismatch && (
+              <span className="text-amber-300 font-semibold">
+                DB जुनी क्षमता {dbCapacity} ≠ रचना {totalSeats} — जतन केल्यास {totalSeats} लागू
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-3 text-[11px] text-slate-400">
@@ -876,29 +891,40 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  {sections.map((sec, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => setActiveSectionIdx(idx)}
-                      className={`px-4 py-2 rounded-xl text-xs font-bold border transition flex items-center gap-2 ${
-                        idx === activeSectionIdx
-                          ? 'bg-amber-500 border-amber-400 text-slate-950 shadow-lg'
-                          : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700'
-                      }`}
-                    >
-                      <span>
-                        {sec.nameMr} ({sec.name})
-                      </span>
-                      <span className="text-[10px] font-mono opacity-80">₹{sec.basePrice}</span>
-                    </button>
-                  ))}
+                  {sections.map((sec, idx) => {
+                    const secSeats = sec.rows.reduce((a, r) => a + r.seats.length, 0);
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setActiveSectionIdx(idx)}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold border transition flex items-center gap-2 ${
+                          idx === activeSectionIdx
+                            ? 'bg-amber-500 border-amber-400 text-slate-950 shadow-lg'
+                            : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700'
+                        }`}
+                      >
+                        <span>
+                          {sec.nameMr} ({sec.name})
+                        </span>
+                        <span className="text-[10px] font-mono opacity-80">
+                          {secSeats} जागा · ₹{sec.basePrice}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
               {/* Active Section Config Panel */}
               {currentSection && (
                 <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-5">
+                  <div className="rounded-xl border border-sky-800/60 bg-sky-950/40 px-3 py-2 text-[11px] text-sky-200 leading-relaxed">
+                    या विभागात <strong className="text-white font-mono">{activeSectionSeatCount}</strong> आसने
+                    (खालील रांग रचना). एकूण क्षमता{' '}
+                    <strong className="text-white font-mono">{totalSeats}</strong> = सर्व विभागांची बेरीज.
+                    रांग/आसन वाढ-घट केल्यास एकूण आपोआप जुळते; जतन करताना DB क्षमताही {totalSeats} होते.
+                  </div>
                   <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
                     <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 flex-1 text-xs">
                       <div>

@@ -1,0 +1,724 @@
+{
+  "generatedAt": "2026-10-26T17:57:56.864Z",
+  "summary": {
+    "mode": "dry-run",
+    "hostFamily": "aws-0-ap-south-1.pooler.supabase.com",
+    "venuesAudited": 66,
+    "proposedChanges": 81,
+    "unchangedVenuesApprox": 1,
+    "unresolved": 0,
+    "byField": {
+      "city_id": 65,
+      "district_id": 14,
+      "verification_status": 2
+    }
+  },
+  "proposed": [
+    {
+      "venueId": 1,
+      "name": "Bal Gandharva Rang Mandir",
+      "field": "city_id",
+      "from": null,
+      "to": 2,
+      "reason": "Match city text \"Pune\" → cities.id=2 (Pune)"
+    },
+    {
+      "venueId": 2,
+      "name": "Dinanath Mangeshkar Natyagruha",
+      "field": "city_id",
+      "from": null,
+      "to": 1,
+      "reason": "Match city text \"Mumbai\" → cities.id=1 (Mumbai)"
+    },
+    {
+      "venueId": 2,
+      "name": "Dinanath Mangeshkar Natyagruha",
+      "field": "district_id",
+      "from": 26,
+      "to": 18,
+      "reason": "Vile Parle East landmark"
+    },
+    {
+      "venueId": 3,
+      "name": "Yashwantrao Chavan Natyagruha",
+      "field": "city_id",
+      "from": null,
+      "to": 2,
+      "reason": "Match city text \"Pune\" → cities.id=2 (Pune)"
+    },
+    {
+      "venueId": 4,
+      "name": "Dr. Kashinath Ghanekar Natyagruha",
+      "field": "city_id",
+      "from": null,
+      "to": 5,
+      "reason": "Match city text \"Thane\" → cities.id=5 (Thane)"
+    },
+    {
+      "venueId": 4,
+      "name": "Dr. Kashinath Ghanekar Natyagruha",
+      "field": "district_id",
+      "from": 26,
+      "to": 33,
+      "reason": "Thane city text; was wrongly Pune"
+    },
+    {
+      "venueId": 5,
+      "name": "PVR INOX: The Pavillion Mall",
+      "field": "city_id",
+      "from": null,
+      "to": 2,
+      "reason": "Match city text \"Pune\" → cities.id=2 (Pune)"
+    },
+    {
+      "venueId": 5,
+      "name": "PVR INOX: The Pavillion Mall",
+      "field": "district_id",
+      "from": 17,
+      "to": 26,
+      "reason": "Pavilion Mall is in Pune; was Mumbai City"
+    },
+    {
+      "venueId": 6,
+      "name": "Cinepolis: Westend Mall",
+      "field": "city_id",
+      "from": null,
+      "to": 2,
+      "reason": "Match city text \"Pune\" → cities.id=2 (Pune)"
+    },
+    {
+      "venueId": 6,
+      "name": "Cinepolis: Westend Mall",
+      "field": "district_id",
+      "from": 17,
+      "to": 26,
+      "reason": "Westend Mall is in Pune; was Mumbai City"
+    },
+    {
+      "venueId": 7,
+      "name": "PVR INOX: R City Mall",
+      "field": "city_id",
+      "from": null,
+      "to": 1,
+      "reason": "Match city text \"Mumbai\" → cities.id=1 (Mumbai)"
+    },
+    {
+      "venueId": 7,
+      "name": "PVR INOX: R City Mall",
+      "field": "district_id",
+      "from": 17,
+      "to": 18,
+      "reason": "R City Mall Ghatkopar is Mumbai Suburban"
+    },
+    {
+      "venueId": 8,
+      "name": "NCPA Experimental Theatre",
+      "field": "city_id",
+      "from": null,
+      "to": 1,
+      "reason": "Match city text \"Mumbai\" → cities.id=1 (Mumbai)"
+    },
+    {
+      "venueId": 9,
+      "name": "Prabodhankar Thackeray Natya Mandir",
+      "field": "city_id",
+      "from": null,
+      "to": 1,
+      "reason": "Match city text \"Mumbai\" → cities.id=1 (Mumbai)"
+    },
+    {
+      "venueId": 10,
+      "name": "Mysore Association Hall",
+      "field": "city_id",
+      "from": null,
+      "to": 1,
+      "reason": "Match city text \"Mumbai\" → cities.id=1 (Mumbai)"
+    },
+    {
+      "venueId": 11,
+      "name": "Kalidas Natya Mandir",
+      "field": "city_id",
+      "from": null,
+      "to": 5,
+      "reason": "Match city text \"Thane\" → cities.id=5 (Thane)"
+    },
+    {
+      "venueId": 12,
+      "name": "Dinanath Mangeshkar Natyagruha",
+      "field": "city_id",
+      "from": null,
+      "to": 1,
+      "reason": "Match city text \"Mumbai\" → cities.id=1 (Mumbai)"
+    },
+    {
+      "venueId": 12,
+      "name": "Dinanath Mangeshkar Natyagruha",
+      "field": "district_id",
+      "from": 33,
+      "to": 18,
+      "reason": "Same Dinanath landmark Vile Parle"
+    },
+    {
+      "venueId": 13,
+      "name": "Thane Municipal Corporation Hall",
+      "field": "city_id",
+      "from": null,
+      "to": 5,
+      "reason": "Match city text \"Thane\" → cities.id=5 (Thane)"
+    },
+    {
+      "venueId": 14,
+      "name": "Suresh Bhat Auditorium",
+      "field": "city_id",
+      "from": null,
+      "to": 3,
+      "reason": "Match city text \"Nagpur\" → cities.id=3 (Nagpur)"
+    },
+    {
+      "venueId": 15,
+      "name": "Vasantrao Deshpande Hall",
+      "field": "city_id",
+      "from": null,
+      "to": 3,
+      "reason": "Match city text \"Nagpur\" → cities.id=3 (Nagpur)"
+    },
+    {
+      "venueId": 16,
+      "name": "Kasturchand Park Open Theatre",
+      "field": "city_id",
+      "from": null,
+      "to": 3,
+      "reason": "Match city text \"Nagpur\" → cities.id=3 (Nagpur)"
+    },
+    {
+      "venueId": 17,
+      "name": "Kalidas Kala Mandir",
+      "field": "city_id",
+      "from": null,
+      "to": 4,
+      "reason": "Match city text \"Nashik\" → cities.id=4 (Nashik)"
+    },
+    {
+      "venueId": 18,
+      "name": "Mahakavi Kalidas Natya Mandir",
+      "field": "city_id",
+      "from": null,
+      "to": 4,
+      "reason": "Match city text \"Nashik\" → cities.id=4 (Nashik)"
+    },
+    {
+      "venueId": 19,
+      "name": "Sant Eknath Rang Mandir",
+      "field": "city_id",
+      "from": null,
+      "to": 9,
+      "reason": "Match city text \"Chhatrapati Sambhajinagar\" → cities.id=9 (Chhatrapati Sambhajinagar)"
+    },
+    {
+      "venueId": 20,
+      "name": "Town Hall Aurangabad",
+      "field": "city_id",
+      "from": null,
+      "to": 9,
+      "reason": "Match city text \"Chhatrapati Sambhajinagar\" → cities.id=9 (Chhatrapati Sambhajinagar)"
+    },
+    {
+      "venueId": 21,
+      "name": "Shahu Smarak Bhavan",
+      "field": "city_id",
+      "from": null,
+      "to": 6,
+      "reason": "Match city text \"Kolhapur\" → cities.id=6 (Kolhapur)"
+    },
+    {
+      "venueId": 22,
+      "name": "Bhalji Pendharkar Kala Mandir",
+      "field": "city_id",
+      "from": null,
+      "to": 6,
+      "reason": "Match city text \"Kolhapur\" → cities.id=6 (Kolhapur)"
+    },
+    {
+      "venueId": 23,
+      "name": "Bal Gandharva Natya Mandir Sangli",
+      "field": "city_id",
+      "from": null,
+      "to": 7,
+      "reason": "Match city text \"Sangli\" → cities.id=7 (Sangli)"
+    },
+    {
+      "venueId": 24,
+      "name": "Yashwantrao Chavan Auditorium Satara",
+      "field": "city_id",
+      "from": null,
+      "to": 22,
+      "reason": "Match city text \"Satara\" → cities.id=22 (Satara)"
+    },
+    {
+      "venueId": 25,
+      "name": "Indira Gandhi Indoor Stadium Hall",
+      "field": "city_id",
+      "from": null,
+      "to": 8,
+      "reason": "Match city text \"Solapur\" → cities.id=8 (Solapur)"
+    },
+    {
+      "venueId": 26,
+      "name": "Lokmanya Tilak Natya Mandir",
+      "field": "city_id",
+      "from": null,
+      "to": 8,
+      "reason": "Match city text \"Solapur\" → cities.id=8 (Solapur)"
+    },
+    {
+      "venueId": 27,
+      "name": "Ahmednagar Municipal Hall",
+      "field": "city_id",
+      "from": null,
+      "to": 10,
+      "reason": "Match city text \"Ahmednagar\" → cities.id=10 (Ahilyanagar)"
+    },
+    {
+      "venueId": 28,
+      "name": "Jalgaon Natya Mandir",
+      "field": "city_id",
+      "from": null,
+      "to": 29,
+      "reason": "Match city text \"Jalgaon\" → cities.id=29 (Jalgaon)"
+    },
+    {
+      "venueId": 30,
+      "name": "Nandurbar Town Hall",
+      "field": "city_id",
+      "from": null,
+      "to": 42,
+      "reason": "Match city text \"Nandurbar\" → cities.id=42 (Nandurbar)"
+    },
+    {
+      "venueId": 31,
+      "name": "Hanuman Vyayam Prasarak Mandal Hall",
+      "field": "city_id",
+      "from": null,
+      "to": 23,
+      "reason": "Match city text \"Amravati\" → cities.id=23 (Amravati)"
+    },
+    {
+      "venueId": 32,
+      "name": "Akola Municipal Auditorium",
+      "field": "city_id",
+      "from": null,
+      "to": 24,
+      "reason": "Match city text \"Akola\" → cities.id=24 (Akola)"
+    },
+    {
+      "venueId": 33,
+      "name": "Buldhana Cultural Centre",
+      "field": "city_id",
+      "from": null,
+      "to": 37,
+      "reason": "Match city text \"Buldhana\" → cities.id=37 (Buldhana)"
+    },
+    {
+      "venueId": 34,
+      "name": "Washim Town Hall",
+      "field": "city_id",
+      "from": null,
+      "to": 43,
+      "reason": "Match city text \"Washim\" → cities.id=43 (Washim)"
+    },
+    {
+      "venueId": 35,
+      "name": "Yavatmal Natya Griha",
+      "field": "city_id",
+      "from": null,
+      "to": 38,
+      "reason": "Match city text \"Yavatmal\" → cities.id=38 (Yavatmal)"
+    },
+    {
+      "venueId": 36,
+      "name": "Wardha Gandhi Seva Sangh Hall",
+      "field": "city_id",
+      "from": null,
+      "to": 32,
+      "reason": "Match city text \"Wardha\" → cities.id=32 (Wardha)"
+    },
+    {
+      "venueId": 37,
+      "name": "Bhandara Municipal Hall",
+      "field": "city_id",
+      "from": null,
+      "to": 39,
+      "reason": "Match city text \"Bhandara\" → cities.id=39 (Bhandara)"
+    },
+    {
+      "venueId": 38,
+      "name": "Gondia Cultural Hall",
+      "field": "city_id",
+      "from": null,
+      "to": 40,
+      "reason": "Match city text \"Gondia\" → cities.id=40 (Gondia)"
+    },
+    {
+      "venueId": 39,
+      "name": "Chandrapur Town Hall",
+      "field": "city_id",
+      "from": null,
+      "to": 31,
+      "reason": "Match city text \"Chandrapur\" → cities.id=31 (Chandrapur)"
+    },
+    {
+      "venueId": 40,
+      "name": "Gadchiroli District Auditorium",
+      "field": "city_id",
+      "from": null,
+      "to": 41,
+      "reason": "Match city text \"Gadchiroli\" → cities.id=41 (Gadchiroli)"
+    },
+    {
+      "venueId": 41,
+      "name": "Latur Municipal Natya Mandir",
+      "field": "city_id",
+      "from": null,
+      "to": 25,
+      "reason": "Match city text \"Latur\" → cities.id=25 (Latur)"
+    },
+    {
+      "venueId": 42,
+      "name": "Nanded Guru Gobind Singh Hall",
+      "field": "city_id",
+      "from": null,
+      "to": 26,
+      "reason": "Match city text \"Nanded\" → cities.id=26 (Nanded)"
+    },
+    {
+      "venueId": 43,
+      "name": "Parbhani Town Hall",
+      "field": "city_id",
+      "from": null,
+      "to": 36,
+      "reason": "Match city text \"Parbhani\" → cities.id=36 (Parbhani)"
+    },
+    {
+      "venueId": 44,
+      "name": "Hingoli Cultural Hall",
+      "field": "city_id",
+      "from": null,
+      "to": 44,
+      "reason": "Match city text \"Hingoli\" → cities.id=44 (Hingoli)"
+    },
+    {
+      "venueId": 45,
+      "name": "Beed Municipal Hall",
+      "field": "city_id",
+      "from": null,
+      "to": 35,
+      "reason": "Match city text \"Beed\" → cities.id=35 (Beed)"
+    },
+    {
+      "venueId": 46,
+      "name": "Jalna Natya Mandir",
+      "field": "city_id",
+      "from": null,
+      "to": 34,
+      "reason": "Match city text \"Jalna\" → cities.id=34 (Jalna)"
+    },
+    {
+      "venueId": 47,
+      "name": "Dharashiv Town Hall",
+      "field": "city_id",
+      "from": null,
+      "to": 33,
+      "reason": "Match city text \"Dharashiv\" → cities.id=33 (Dharashiv)"
+    },
+    {
+      "venueId": 48,
+      "name": "Alibag Town Hall",
+      "field": "city_id",
+      "from": null,
+      "to": 46,
+      "reason": "Match city text \"Alibag\" → cities.id=46 (Alibag)"
+    },
+    {
+      "venueId": 49,
+      "name": "Panvel Cultural Centre",
+      "field": "city_id",
+      "from": null,
+      "to": 50,
+      "reason": "Match city text \"Panvel\" → cities.id=50 (Panvel)"
+    },
+    {
+      "venueId": 50,
+      "name": "Ratnagiri Lokmanya Tilak Hall",
+      "field": "city_id",
+      "from": null,
+      "to": 28,
+      "reason": "Match city text \"Ratnagiri\" → cities.id=28 (Ratnagiri)"
+    },
+    {
+      "venueId": 51,
+      "name": "Sawantwadi Palace Hall",
+      "field": "city_id",
+      "from": null,
+      "to": 55,
+      "reason": "Match city text \"Sawantwadi\" → cities.id=55 (Sawantwadi)"
+    },
+    {
+      "venueId": 52,
+      "name": "Vasai Town Hall",
+      "field": "city_id",
+      "from": null,
+      "to": 49,
+      "reason": "Match city text \"Vasai\" → cities.id=49 (Vasai-Virar)"
+    },
+    {
+      "venueId": 53,
+      "name": "Yashwantrao Chavan Natyagruha",
+      "field": "city_id",
+      "from": null,
+      "to": 2,
+      "reason": "Match city text \"Pune\" → cities.id=2 (Pune)"
+    },
+    {
+      "venueId": 54,
+      "name": "Balgandharva Tilak Smarak Mandir",
+      "field": "city_id",
+      "from": null,
+      "to": 2,
+      "reason": "Match city text \"Pune\" → cities.id=2 (Pune)"
+    },
+    {
+      "venueId": 55,
+      "name": "Nehru Memorial Hall",
+      "field": "city_id",
+      "from": null,
+      "to": 2,
+      "reason": "Match city text \"Pune\" → cities.id=2 (Pune)"
+    },
+    {
+      "venueId": 56,
+      "name": "Shivaji Mandir",
+      "field": "city_id",
+      "from": null,
+      "to": 1,
+      "reason": "Match city text \"Mumbai\" → cities.id=1 (Mumbai)"
+    },
+    {
+      "venueId": 57,
+      "name": "Ravindra Natya Mandir",
+      "field": "city_id",
+      "from": null,
+      "to": 1,
+      "reason": "Match city text \"Mumbai\" → cities.id=1 (Mumbai)"
+    },
+    {
+      "venueId": 58,
+      "name": "Chhabildas Hall",
+      "field": "city_id",
+      "from": null,
+      "to": 1,
+      "reason": "Match city text \"Mumbai\" → cities.id=1 (Mumbai)"
+    },
+    {
+      "venueId": 59,
+      "name": "Jamshed Bhabha Theatre (NCPA)",
+      "field": "city_id",
+      "from": null,
+      "to": 1,
+      "reason": "Match city text \"Mumbai\" → cities.id=1 (Mumbai)"
+    },
+    {
+      "venueId": 59,
+      "name": "Jamshed Bhabha Theatre (NCPA)",
+      "field": "district_id",
+      "from": null,
+      "to": 17,
+      "reason": "Fill null district from city Mumbai"
+    },
+    {
+      "venueId": 60,
+      "name": "Tata Theatre (NCPA)",
+      "field": "city_id",
+      "from": null,
+      "to": 1,
+      "reason": "Match city text \"Mumbai\" → cities.id=1 (Mumbai)"
+    },
+    {
+      "venueId": 60,
+      "name": "Tata Theatre (NCPA)",
+      "field": "district_id",
+      "from": null,
+      "to": 17,
+      "reason": "Fill null district from city Mumbai"
+    },
+    {
+      "venueId": 61,
+      "name": "Godrej Dance Theatre (NCPA)",
+      "field": "city_id",
+      "from": null,
+      "to": 1,
+      "reason": "Match city text \"Mumbai\" → cities.id=1 (Mumbai)"
+    },
+    {
+      "venueId": 61,
+      "name": "Godrej Dance Theatre (NCPA)",
+      "field": "district_id",
+      "from": null,
+      "to": 17,
+      "reason": "Fill null district from city Mumbai"
+    },
+    {
+      "venueId": 62,
+      "name": "Bharat Natya Rang Mandir",
+      "field": "city_id",
+      "from": null,
+      "to": 2,
+      "reason": "Match city text \"Pune\" → cities.id=2 (Pune)"
+    },
+    {
+      "venueId": 62,
+      "name": "Bharat Natya Rang Mandir",
+      "field": "district_id",
+      "from": null,
+      "to": 26,
+      "reason": "Fill null district from city Pune"
+    },
+    {
+      "venueId": 63,
+      "name": "Ram Krishna More Auditorium",
+      "field": "city_id",
+      "from": null,
+      "to": 2,
+      "reason": "Match city text \"Pune\" → cities.id=2 (Pune)"
+    },
+    {
+      "venueId": 63,
+      "name": "Ram Krishna More Auditorium",
+      "field": "district_id",
+      "from": null,
+      "to": 26,
+      "reason": "Fill null district from city Pune"
+    },
+    {
+      "venueId": 64,
+      "name": "Vithal Tupe Sabhagruh",
+      "field": "city_id",
+      "from": null,
+      "to": 2,
+      "reason": "Match city text \"Pune\" → cities.id=2 (Pune)"
+    },
+    {
+      "venueId": 64,
+      "name": "Vithal Tupe Sabhagruh",
+      "field": "district_id",
+      "from": null,
+      "to": 26,
+      "reason": "Fill null district from city Pune"
+    },
+    {
+      "venueId": 65,
+      "name": "Sudarshan Rangmanch",
+      "field": "city_id",
+      "from": null,
+      "to": 2,
+      "reason": "Match city text \"Pune\" → cities.id=2 (Pune)"
+    },
+    {
+      "venueId": 65,
+      "name": "Sudarshan Rangmanch",
+      "field": "district_id",
+      "from": null,
+      "to": 26,
+      "reason": "Fill null district from city Pune"
+    },
+    {
+      "venueId": 66,
+      "name": "Lokshahir Annabhau Sathe Natyagruha",
+      "field": "city_id",
+      "from": null,
+      "to": 2,
+      "reason": "Match city text \"Pune\" → cities.id=2 (Pune)"
+    },
+    {
+      "venueId": 66,
+      "name": "Lokshahir Annabhau Sathe Natyagruha",
+      "field": "district_id",
+      "from": null,
+      "to": 26,
+      "reason": "Fill null district from city Pune"
+    },
+    {
+      "venueId": 12,
+      "name": "Dinanath Mangeshkar Natyagruha",
+      "field": "verification_status",
+      "from": "verified",
+      "to": "unverified",
+      "reason": "Suspected duplicate of venue #2; zero events/orders. Dinanath Mangeshkar Natyagruha Vile Parle — likely seed duplicate"
+    },
+    {
+      "venueId": 53,
+      "name": "Yashwantrao Chavan Natyagruha",
+      "field": "verification_status",
+      "from": "verified",
+      "to": "unverified",
+      "reason": "Suspected duplicate of venue #3; zero events/orders. Yashwantrao Chavan Natyagruha Pune — likely seed duplicate"
+    }
+  ],
+  "unresolved": [],
+  "suspectedDuplicates": [
+    {
+      "keepId": 2,
+      "softId": 12,
+      "note": "Dinanath Mangeshkar Natyagruha Vile Parle — likely seed duplicate"
+    },
+    {
+      "keepId": 3,
+      "softId": 53,
+      "note": "Yashwantrao Chavan Natyagruha Pune — likely seed duplicate"
+    }
+  ],
+  "cityAliases": {
+    "ahmednagar": "Ahilyanagar",
+    "ahmadnagar": "Ahilyanagar",
+    "vasai": "Vasai-Virar",
+    "vasai virar": "Vasai-Virar",
+    "aurangabad": "Chhatrapati Sambhajinagar",
+    "osmanabad": "Dharashiv"
+  },
+  "districtOverridesById": {
+    "2": {
+      "districtName": "Mumbai Suburban",
+      "reason": "Vile Parle East landmark",
+      "cityName": "Mumbai"
+    },
+    "4": {
+      "districtName": "Thane",
+      "reason": "Thane city text; was wrongly Pune",
+      "cityName": "Thane"
+    },
+    "5": {
+      "districtName": "Pune",
+      "reason": "Pavilion Mall is in Pune; was Mumbai City",
+      "cityName": "Pune"
+    },
+    "6": {
+      "districtName": "Pune",
+      "reason": "Westend Mall is in Pune; was Mumbai City",
+      "cityName": "Pune"
+    },
+    "7": {
+      "districtName": "Mumbai Suburban",
+      "reason": "R City Mall Ghatkopar is Mumbai Suburban",
+      "cityName": "Mumbai"
+    },
+    "9": {
+      "districtName": "Mumbai Suburban",
+      "reason": "Vile Parle East",
+      "cityName": "Mumbai"
+    },
+    "12": {
+      "districtName": "Mumbai Suburban",
+      "reason": "Same Dinanath landmark Vile Parle",
+      "cityName": "Mumbai"
+    }
+  }
+}

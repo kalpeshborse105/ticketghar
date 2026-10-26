@@ -23,7 +23,6 @@ import {
 } from '@/src/lib/public-url';
 import { MahaTicketCard } from '@/src/components/ui/MahaTicketCard';
 import { formatISTTime, formatISTDate } from '@/src/lib/dateUtils';
-import { generateSecureTicketQr } from '@/src/lib/ticket-crypto';
 
 interface TicketPassModalProps {
   bookingResult: any;
@@ -355,11 +354,14 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
               orderNumber={order.orderNumber}
               grandTotal={order.grandTotal}
               qrPayload={
+                // Prefer short HTTP share URL for reliable phone-camera scans.
+                // Dense MTGRP/MTSEC tokens often fail when scanned from another phone screen.
+                ticketUrl ||
+                primaryTicket ||
+                order.orderNumber ||
                 bookingResult.groupQrPayload ||
                 order.groupQrPayload ||
-                (event?.id && primaryTicket
-                  ? generateSecureTicketQr(primaryTicket, event.id)
-                  : (ticketUrl || primaryTicket || order.orderNumber))
+                ''
               }
               totalTickets={tickets.length}
             />

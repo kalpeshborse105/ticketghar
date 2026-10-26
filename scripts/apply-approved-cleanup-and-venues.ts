@@ -171,11 +171,21 @@ async function main() {
         );
         console.log('D updated NCPA', v.name, 'id', existing.rows[0].id);
       } else {
+        const loc = await client.query(
+          `SELECT id, district_id FROM cities WHERE LOWER(TRIM(name)) = 'mumbai' LIMIT 1`
+        );
         const ins = await client.query(
-          `INSERT INTO venues (name, name_mr, address, city, state, total_capacity, has_seat_layout, verification_status, is_template, ownership_type)
-           VALUES ($1,$2,$3,'Mumbai','Maharashtra',$4,0,'verified',0,'cultural_institution')
+          `INSERT INTO venues (name, name_mr, address, city, state, district_id, city_id, total_capacity, has_seat_layout, verification_status, is_template, ownership_type)
+           VALUES ($1,$2,$3,'Mumbai','Maharashtra',$4,$5,$6,0,'verified',0,'cultural_institution')
            RETURNING id`,
-          [v.name, v.nameMr, v.address, v.capacity]
+          [
+            v.name,
+            v.nameMr,
+            v.address,
+            loc.rows[0]?.district_id ?? null,
+            loc.rows[0]?.id ?? null,
+            v.capacity,
+          ]
         );
         console.log('D inserted NCPA', v.name, 'id', ins.rows[0].id);
       }

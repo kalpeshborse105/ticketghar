@@ -47,7 +47,8 @@ export function decryptSecureTicketQr(rawScanned: string): { ticketCode: string;
 
     const iv = Buffer.from(parts[2], 'hex');
     const tag = Buffer.from(parts[3], 'hex');
-    const ciphertext = parts[4];
+    // Ciphertext may theoretically contain ':' — join remainder
+    const ciphertext = parts.slice(4).join(':');
 
     const secret = getTicketSecret();
     const key = crypto.createHash('sha256').update(secret).digest();
@@ -125,7 +126,7 @@ export function decryptSecureGroupOrderQr(rawScanned: string): {
 
     const iv = Buffer.from(parts[2], 'hex');
     const tag = Buffer.from(parts[3], 'hex');
-    const ciphertext = parts[4];
+    const ciphertext = parts.slice(4).join(':');
 
     const secret = getTicketSecret();
     const key = crypto.createHash('sha256').update(secret).digest();

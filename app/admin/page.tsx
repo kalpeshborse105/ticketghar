@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { ArrowLeft, Lock, ShieldCheck, Mail, Building2, Key, Eye, EyeOff } from 'lucide-react';
 
 export default function AdminPage() {
-  const [language] = useState<Language>('mr');
+  const [language, setLanguage] = useState<Language>('mr');
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [role, setRole] = useState<'super_admin' | 'organizer' | 'scanner' | 'operations' | 'finance'>('super_admin');
   const [user, setUser] = useState<any>(null);
@@ -319,6 +319,7 @@ export default function AdminPage() {
       <div className="flex-1">
         <AdminPanel
           language={language}
+          onLanguageChange={setLanguage}
           initialRole={role}
           currentUser={user}
           onBack={() => {

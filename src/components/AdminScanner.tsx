@@ -33,6 +33,7 @@ export interface VerifyResult {
   scanResult: 'SUCCESS' | 'ALREADY_USED' | 'INVALID_TICKET' | 'TICKET_CANCELLED' | string;
   message: string;
   ticketCode?: string;
+  rawPreview?: string;
   alreadyScannedAt?: string;
   previousGate?: string;
   isGroup?: boolean;
@@ -174,6 +175,40 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const scannerContainerId = 'admin-qr-reader-container';
   const isCooldownRef = useRef(false);
+  const overlayOpenRef = useRef(false);
+  const targetEventIdRef = useRef(targetEventId);
+  const targetSessionIdRef = useRef(targetSessionId);
+  const gateNameRef = useRef(gateName);
+  const soundEnabledRef = useRef(soundEnabled);
+  const scannerUserIdRef = useRef(scannerUserId);
+  const scannerOrganizerIdRef = useRef(scannerOrganizerId);
+  const onTicketVerifiedRef = useRef(onTicketVerified);
+  const lastRawScanRef = useRef('');
+
+  useEffect(() => {
+    targetEventIdRef.current = targetEventId;
+  }, [targetEventId]);
+  useEffect(() => {
+    targetSessionIdRef.current = targetSessionId;
+  }, [targetSessionId]);
+  useEffect(() => {
+    gateNameRef.current = gateName;
+  }, [gateName]);
+  useEffect(() => {
+    soundEnabledRef.current = soundEnabled;
+  }, [soundEnabled]);
+  useEffect(() => {
+    scannerUserIdRef.current = scannerUserId;
+  }, [scannerUserId]);
+  useEffect(() => {
+    scannerOrganizerIdRef.current = scannerOrganizerId;
+  }, [scannerOrganizerId]);
+  useEffect(() => {
+    onTicketVerifiedRef.current = onTicketVerified;
+  }, [onTicketVerified]);
+  useEffect(() => {
+    overlayOpenRef.current = !!currentOverlay;
+  }, [currentOverlay]);
 
   // Load available cameras
   useEffect(() => {
@@ -306,19 +341,26 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
     }
   };
 
-  // Process code verification against database
+  // Process code verification against database (refs = no stale event/showtime after camera start)
   const verifyCode = useCallback(async (rawCode: string) => {
-    if (!rawCode || isVerifying || isCooldownRef.current) return;
+    if (!rawCode || isCooldownRef.current) return;
 
-    if (!targetEventId || !targetSessionId) {
+    const eventId = targetEventIdRef.current;
+    const sessionId = targetSessionIdRef.current;
+    if (!eventId || !sessionId) {
       setCurrentOverlay({
         valid: false,
         scanResult: 'SCOPE_REQUIRED',
         message: 'स्कॅन करण्यापूर्वी कार्यक्रम व शो वेळ निवडा (Select event & showtime first).',
       });
-      if (soundEnabled) playScanSound('error');
+      if (soundEnabledRef.current) playScanSound('error');
       return;
     }
+
+    // Ignore identical double-fire from html5-qrcode within cooldown window
+    const trimmed = rawCode.trim();
+    if (trimmed === lastRawScanRef.current && isCooldownRef.current) return;
+    lastRawScanRef.current = trimmed;
 
     isCooldownRef.current = true;
     setIsVerifying(true);
@@ -327,21 +369,41 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
       const response = await fetch('/api/scanner/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
-          ticketCodeOrPayload: rawCode.trim(),
-          gateName: gateName || 'Main Gate',
-          scannerUserId: scannerUserId || 1,
-          scannerOrganizerId: scannerOrganizerId,
-          targetEventId: targetEventId,
-          targetSessionId: targetSessionId,
+          ticketCodeOrPayload: trimmed,
+          gateName: gateNameRef.current || 'Main Gate',
+          scannerUserId: scannerUserIdRef.current || 1,
+          // Only send organizer scope when it is a real numeric id (avoid NaN false rejects)
+          scannerOrganizerId: (() => {
+            const oid = scannerOrganizerIdRef.current;
+            const n = oid != null && oid !== '' ? Number(oid) : NaN;
+            return Number.isFinite(n) && n > 0 ? n : undefined;
+          })(),
+          targetEventId: Number(eventId),
+          targetSessionId: Number(sessionId),
           requireScope: true,
-          scannerDevice: typeof navigator !== 'undefined' ? `${navigator.userAgent.slice(0, 30)}` : 'Admin Terminal',
+          scannerDevice:
+            typeof navigator !== 'undefined'
+              ? `${navigator.userAgent.slice(0, 30)}`
+              : 'Admin Terminal',
         }),
       });
 
-      const data: VerifyResult = await response.json();
+      const data: VerifyResult = await response.json().catch(() => ({
+        valid: false,
+        scanResult: 'NETWORK_ERROR',
+        message: 'सर्व्हर प्रतिसाद वाचता आला नाही',
+        rawPreview: trimmed.slice(0, 96),
+      }));
 
-      // Update metrics & history
+      if (typeof data.valid !== 'boolean') {
+        data.valid = false;
+        data.scanResult = data.scanResult || 'NETWORK_ERROR';
+        data.message = data.message || (data as any).error || 'Verification failed';
+        data.rawPreview = data.rawPreview || trimmed.slice(0, 96);
+      }
+
       setMetrics((prev) => {
         const next = { ...prev, total: prev.total + 1 };
         if (data.valid) next.valid += 1;
@@ -350,13 +412,9 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
         return next;
       });
 
-      setRecentScans((prev) => [
-        { ...data, timestamp: Date.now() },
-        ...prev.slice(0, 19),
-      ]);
+      setRecentScans((prev) => [{ ...data, timestamp: Date.now() }, ...prev.slice(0, 19)]);
 
-      // Trigger audio & haptic feedback
-      if (soundEnabled) {
+      if (soundEnabledRef.current) {
         if (data.valid) {
           playScanSound('success');
           triggerVibration([120, 80, 160]);
@@ -369,11 +427,19 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
         }
       }
 
-      // Display high-visibility overlay
       setCurrentOverlay(data);
 
-      if (data.valid && onTicketVerified) {
-        onTicketVerified(data.ticket);
+      if (data.valid && onTicketVerifiedRef.current) {
+        onTicketVerifiedRef.current(data.ticket);
+      }
+
+      // Auto-clear success so next guest can scan quickly
+      if (data.valid) {
+        setTimeout(() => {
+          setCurrentOverlay((cur) => (cur?.valid ? null : cur));
+          overlayOpenRef.current = false;
+          isCooldownRef.current = false;
+        }, 1600);
       }
     } catch (err: any) {
       console.error('Verify error:', err);
@@ -381,18 +447,18 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
         valid: false,
         scanResult: 'NETWORK_ERROR',
         message: 'सर्व्हरशी संपर्क होऊ शकला नाही (Network/Verification Error)',
-        ticketCode: rawCode,
+        ticketCode: trimmed,
+        rawPreview: trimmed.slice(0, 96),
       };
       setCurrentOverlay(fallbackResult);
-      if (soundEnabled) playScanSound('error');
+      if (soundEnabledRef.current) playScanSound('error');
     } finally {
       setIsVerifying(false);
-      // Brief cooldown before next camera scan to prevent double reading
       setTimeout(() => {
         isCooldownRef.current = false;
-      }, 700);
+      }, 450);
     }
-  }, [gateName, scannerUserId, scannerOrganizerId, targetEventId, targetSessionId, soundEnabled, isVerifying, onTicketVerified]);
+  }, []);
 
   // Start Camera
   const startCamera = async (cameraId?: string) => {
@@ -408,40 +474,28 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
       html5QrCodeRef.current = html5Qr;
 
       const config: Html5QrcodeCameraScanConfig = {
-        fps: 15,
+        fps: 20,
         qrbox: (viewfinderWidth, viewfinderHeight) => {
-          const edge = Math.min(viewfinderWidth, viewfinderHeight) * 0.72;
-          return { width: Math.max(220, edge), height: Math.max(220, edge) };
+          const edge = Math.min(viewfinderWidth, viewfinderHeight) * 0.78;
+          return { width: Math.max(240, edge), height: Math.max(240, edge) };
         },
         aspectRatio: 1.0,
+        disableFlip: false,
+      };
+
+      const onDecoded = (decodedText: string) => {
+        // Use refs so changing event/showtime after camera start still works
+        if (isCooldownRef.current || overlayOpenRef.current) return;
+        void verifyCode(decodedText);
       };
 
       const cameraSelection: any = targetCamera || { facingMode: 'environment' };
 
       try {
-        await html5Qr.start(
-          cameraSelection,
-          config,
-          (decodedText) => {
-            if (!isCooldownRef.current && !currentOverlay) {
-              void verifyCode(decodedText);
-            }
-          },
-          () => {}
-        );
+        await html5Qr.start(cameraSelection, config, onDecoded, () => {});
       } catch (errFallback) {
-        // Fallback: Try with facingMode environment or user
         console.warn('Primary camera selection failed, trying environment fallback:', errFallback);
-        await html5Qr.start(
-          { facingMode: 'environment' },
-          config,
-          (decodedText) => {
-            if (!isCooldownRef.current && !currentOverlay) {
-              void verifyCode(decodedText);
-            }
-          },
-          () => {}
-        );
+        await html5Qr.start({ facingMode: 'environment' }, config, onDecoded, () => {});
       }
 
       setCameraActive(true);
@@ -820,6 +874,12 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
                       )}
                     </div>
                   </div>
+
+                  {!currentOverlay.valid && currentOverlay.rawPreview ? (
+                    <p className="text-[10px] font-mono text-slate-500 bg-slate-50 border border-slate-100 rounded-lg px-2 py-1.5 break-all">
+                      QR वाचले: {currentOverlay.rawPreview}
+                    </p>
+                  ) : null}
 
                   <div className="grid grid-cols-2 gap-2 pt-1">
                     <div className="bg-white p-2.5 rounded-lg border border-slate-200 flex flex-col">

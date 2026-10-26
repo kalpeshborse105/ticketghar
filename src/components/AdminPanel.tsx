@@ -8,6 +8,7 @@ import { ShieldCheck, Building2, ArrowLeft } from 'lucide-react';
 
 interface AdminPanelProps {
   language: Language;
+  onLanguageChange?: (lang: Language) => void;
   initialRole?: 'SUPER_ADMIN' | 'ORGANIZER' | 'ADMIN' | 'super_admin' | 'organizer' | string;
   currentUser?: any;
   onBack?: () => void;
@@ -16,6 +17,7 @@ interface AdminPanelProps {
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
   language,
+  onLanguageChange,
   initialRole = 'SUPER_ADMIN',
   currentUser,
   onBack,
@@ -48,12 +50,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <span className="text-2xl">🎭</span>
                 <div>
                 <h1 className="text-base font-black text-[#141B2B] leading-none">
-                  महाटिकिट <span className="text-[#A33900]">कंट्रोल हब</span>
+                  {language === 'mr' ? (
+                    <>
+                      महाटिकिट <span className="text-[#A33900]">कंट्रोल हब</span>
+                    </>
+                  ) : (
+                    <>
+                      MahaTicket <span className="text-[#A33900]">Control Hub</span>
+                    </>
+                  )}
                 </h1>
                 <p className="text-[11px] text-[#64748B] mt-0.5">
                   {currentRole === 'SUPER_ADMIN'
-                    ? 'सुपर अ‍ॅडमिनिस्ट्रेशन व ऑपरेशन्स केंद्र'
-                    : 'नाट्य निर्माते व अधिकृत आयोजक कन्सोल'}
+                    ? language === 'mr'
+                      ? 'सुपर अ‍ॅडमिनिस्ट्रेशन व ऑपरेशन्स केंद्र'
+                      : 'Super admin & operations center'
+                    : language === 'mr'
+                      ? 'नाट्य निर्माते व अधिकृत आयोजक कन्सोल'
+                      : 'Organizer console'}
                   </p>
                 </div>
               </div>
@@ -61,6 +75,32 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
           {/* Role Header Info / Badge */}
           <div className="flex items-center gap-3">
+            {onLanguageChange && (
+              <div className="bg-white border border-[#E2E8F0] p-1 rounded-xl flex items-center gap-0.5 shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => onLanguageChange('mr')}
+                  className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition ${
+                    language === 'mr'
+                      ? 'bg-[#A33900] text-white'
+                      : 'text-[#64748B] hover:text-[#141B2B]'
+                  }`}
+                >
+                  मराठी
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onLanguageChange('en')}
+                  className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition ${
+                    language === 'en'
+                      ? 'bg-[#A33900] text-white'
+                      : 'text-[#64748B] hover:text-[#141B2B]'
+                  }`}
+                >
+                  English
+                </button>
+              </div>
+            )}
             {!isInitialOrg ? (
               <div className="bg-[#FFF7ED] border border-[#FFEDD5] p-1 rounded-xl flex items-center gap-1 shadow-inner">
                   <button
@@ -72,7 +112,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   }`}
                 >
                   <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>सुपर अ‍ॅडमिन (Admin)</span>
+                  <span>{language === 'mr' ? 'सुपर अ‍ॅडमिन' : 'Super Admin'}</span>
                             </button>
                   <button
                   onClick={() => setCurrentRole('ORGANIZER')}
@@ -83,13 +123,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   }`}
                 >
                   <Building2 className="w-3.5 h-3.5" />
-                  <span>आयोजक व्ह्यू (Organizer View)</span>
+                  <span>{language === 'mr' ? 'आयोजक व्ह्यू' : 'Organizer'}</span>
                               </button>
                 </div>
             ) : (
               <div className="bg-orange-100 border border-orange-200 text-[#A33900] px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5">
                 <Building2 className="w-4 h-4 text-[#A33900]" />
-                <span>अधिकृत आयोजक कन्सोल (Organizer Access)</span>
+                <span>{language === 'mr' ? 'आयोजक कन्सोल' : 'Organizer Access'}</span>
             </div>
           )}
 
@@ -98,7 +138,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 onClick={onLogout}
                 className="text-xs font-semibold text-[#64748B] hover:text-[#A33900] px-3 py-1.5 rounded-lg border border-[#E2E8F0] hover:bg-slate-50 transition cursor-pointer"
                 >
-                लॉगआउट
+                {language === 'mr' ? 'लॉगआउट' : 'Logout'}
                 </button>
             )}
                 </div>

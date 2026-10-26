@@ -32,6 +32,7 @@ import { EventItem, VenueItem } from '../../lib/types.ts';
 import { AdminScanner } from '../AdminScanner';
 import { TheatreSeatDesigner } from './TheatreSeatDesigner';
 import { RichDescriptionEditor } from './RichDescriptionEditor';
+import { AdminEventDetailModal } from './AdminEventDetailModal';
 
 interface SuperAdminPanelProps {
   language: Language;
@@ -50,6 +51,13 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showLiveAlert, setShowLiveAlert] = useState(false);
+  const [showBroadcastModal, setShowBroadcastModal] = useState(false);
+  const [broadcastTitle, setBroadcastTitle] = useState('');
+  const [broadcastMessage, setBroadcastMessage] = useState('');
+  const [broadcastCity, setBroadcastCity] = useState('');
+  const [broadcastSending, setBroadcastSending] = useState(false);
+  const [viewingEvent, setViewingEvent] = useState<EventItem | null>(null);
+  const mr = language === 'mr';
 
   // Data states
   const [eventsList, setEventsList] = useState<EventItem[]>([]);
@@ -57,6 +65,9 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
   const [sectionsList, setSectionsList] = useState<any[]>([]);
   const [isSavingSections, setIsSavingSections] = useState(false);
   const [dashboardData, setDashboardData] = useState<any>(null);
+  const [dataLoading, setDataLoading] = useState(true);
+  const [tabLoading, setTabLoading] = useState<string | null>(null);
+  const loadedTabsRef = React.useRef<Set<string>>(new Set());
   const [searchEventQuery, setSearchEventQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('all');
 
@@ -91,6 +102,7 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
   const [venueCityFilter, setVenueCityFilter] = useState('');
   const [venueStatusFilter, setVenueStatusFilter] = useState('all');
   const [venueLayoutFilter, setVenueLayoutFilter] = useState('all');
+  const [venueMappedFilter, setVenueMappedFilter] = useState<'all' | 'mapped' | 'unmapped'>('all');
   const [districtsCatalog, setDistrictsCatalog] = useState<any[]>([]);
   const [citiesCatalog, setCitiesCatalog] = useState<any[]>([]);
 
@@ -144,68 +156,224 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  const fetchAllData = async () => {
+  const sendBroadcast = async () => {
+    const title = broadcastTitle.trim();
+    const message = broadcastMessage.trim();
+    if (!title || !message) {
+      triggerToast(mr ? 'शीर्षक व संदेश आवश्यक' : 'Title and message required');
+      return;
+    }
+    setBroadcastSending(true);
     try {
-      const [eventsRes, venuesRes, dashRes, distRes, cityRes, secRes] = await Promise.all([
-        fetch('/api/admin/events'),
-        fetch('/api/admin/venues'),
-        fetch('/api/admin/dashboard'),
-        fetch('/api/locations/districts'),
-        fetch('/api/locations/cities'),
-        fetch('/api/admin/sections'),
-      ]);
-
-      if (secRes.ok) {
-        const secData = await secRes.json();
-        if (Array.isArray(secData.sections)) setSectionsList(secData.sections);
+      const res = await fetch('/api/admin/announcements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          title,
+          message,
+          city: broadcastCity.trim() || null,
+          active: 1,
+          actorId: currentUser?.id ? String(currentUser.id) : 'admin',
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        triggerToast(data.error || (mr ? 'ब्रॉडकास्ट अयशस्वी' : 'Broadcast failed'));
+        return;
       }
 
+      // Best-effort push — may no-op if Firebase not configured
+      let pushNote = '';
+      try {
+        const pushRes = await fetch('/api/notifications/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            type: 'OFFER',
+            title,
+            body: message,
+            dedupeKey: `broadcast:${data.announcement?.id || Date.now()}`,
+            deepLink: 'mahaticket://home',
+          }),
+        });
+        const pushData = await pushRes.json().catch(() => ({}));
+        if (pushRes.ok && pushData.dispatchedCount > 0) {
+          pushNote = mr
+            ? ` • पुश: ${pushData.dispatchedCount}`
+            : ` • push: ${pushData.dispatchedCount}`;
+        } else if (pushRes.ok) {
+          pushNote = mr ? ' • पुश: कॉन्फिगर नाही / ० डिव्हाइस' : ' • push: not configured / 0 devices';
+        }
+      } catch {
+        pushNote = mr ? ' • पुश स्किप' : ' • push skipped';
+      }
+
+      setShowBroadcastModal(false);
+      setShowLiveAlert(true);
+      triggerToast(
+        (mr ? 'जाहिरात सेव्ह झाली' : 'Announcement saved') + pushNote
+      );
+    } catch (e: any) {
+      triggerToast(e?.message || (mr ? 'नेटवर्क त्रुटी' : 'Network error'));
+    } finally {
+      setBroadcastSending(false);
+    }
+  };
+
+  const openEventEditor = (ev: EventItem) => {
+    setEditingEvent(ev);
+    setEventTitleMr(ev.titleMr);
+    setEventTitleEn(ev.title);
+    setEventCategory(ev.category);
+    setEventVenueId(ev.venueId);
+    setEventBasePrice((ev.minPrice || 30000) / 100);
+    setEventBadge(ev.tag || 'हाऊसफुल्ल');
+    setEventDescriptionMr(ev.descriptionMr || '');
+    setEventPosterUrl(ev.posterUrl || '');
+    try {
+      const g =
+        typeof (ev as any).galleryUrls === 'string'
+          ? JSON.parse((ev as any).galleryUrls || '[]')
+          : (ev as any).galleryUrls || [];
+      setEventGalleryUrls(Array.isArray(g) ? g.filter(Boolean) : []);
+    } catch {
+      setEventGalleryUrls([]);
+    }
+    setVenueSearchInForm('');
+    setImageUploadError(null);
+    void fetchAllData();
+    setShowAddEventModal(true);
+  };
+
+  const applyDashboardPayload = (dbData: any) => {
+    setDashboardData(dbData);
+    if (Array.isArray(dbData?.recentScans) && dbData.recentScans.length > 0) {
+      setStreamItems(
+        dbData.recentScans.map((s: any) => ({
+          id: s.ticketCode || `#TK-${s.id}`,
+          status: s.scanResult === 'SUCCESS' ? 'valid' : 'alert',
+          text: s.scanResult === 'SUCCESS' ? 'प्रवेश वैध' : 'पुनरावृत्ती अलर्ट!',
+          venue: s.gateName || 'गेट १',
+          time: new Date(s.scannedAt).toLocaleTimeString('mr-IN', {
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
+          seat: s.ticketCode || '',
+        }))
+      );
+    }
+  };
+
+  /** Progressive load: KPIs first, then heavy lists in background / on tab open */
+  const fetchDashboardFast = async () => {
+    try {
+      const dashRes = await fetch('/api/admin/dashboard', { credentials: 'include' });
+      if (dashRes.ok) applyDashboardPayload(await dashRes.json());
+    } catch (err) {
+      console.warn('Dashboard fetch error:', err);
+    }
+  };
+
+  const fetchEventsList = async (force = false) => {
+    if (!force && loadedTabsRef.current.has('events') && eventsList.length > 0) return;
+    setTabLoading('events');
+    try {
+      const eventsRes = await fetch('/api/admin/events', { credentials: 'include' });
       if (eventsRes.ok) {
         const evData = await eventsRes.json();
-        if (Array.isArray(evData.events) && evData.events.length > 0) {
-          setEventsList(evData.events);
-        }
+        if (Array.isArray(evData.events)) setEventsList(evData.events);
+        loadedTabsRef.current.add('events');
       }
+    } catch (err) {
+      console.warn('Events fetch error:', err);
+    } finally {
+      setTabLoading(null);
+    }
+  };
 
+  const fetchVenuesBundle = async (force = false) => {
+    if (!force && loadedTabsRef.current.has('venues') && venuesList.length > 0) return;
+    setTabLoading('venues');
+    try {
+      const [venuesRes, distRes, cityRes] = await Promise.all([
+        fetch('/api/admin/venues', { credentials: 'include' }),
+        fetch('/api/locations/districts', { credentials: 'include' }),
+        fetch('/api/locations/cities', { credentials: 'include' }),
+      ]);
       if (venuesRes.ok) {
         const vnData = await venuesRes.json();
         if (Array.isArray(vnData.venues)) {
           setVenuesList(vnData.venues);
-          if (!venueForDesigner && vnData.venues.length > 0) {
-            setVenueForDesigner(vnData.venues[0]);
-          }
+          setVenueForDesigner((prev) => prev || vnData.venues[0] || null);
         }
       }
-
       if (distRes.ok) {
         const distData = await distRes.json();
         if (Array.isArray(distData.districts)) setDistrictsCatalog(distData.districts);
       }
-
       if (cityRes.ok) {
         const cityData = await cityRes.json();
         if (Array.isArray(cityData.cities)) setCitiesCatalog(cityData.cities);
       }
+      loadedTabsRef.current.add('venues');
+    } catch (err) {
+      console.warn('Venues fetch error:', err);
+    } finally {
+      setTabLoading(null);
+    }
+  };
 
-      if (dashRes.ok) {
-        const dbData = await dashRes.json();
-        setDashboardData(dbData);
-        if (Array.isArray(dbData.recentScans) && dbData.recentScans.length > 0) {
-          setStreamItems(
-            dbData.recentScans.map((s: any) => ({
-              id: s.ticketCode || `#TK-${s.id}`,
-              status: s.scanResult === 'SUCCESS' ? 'valid' : 'alert',
-              text: s.scanResult === 'SUCCESS' ? 'प्रवेश वैध' : 'पुनरावृत्ती अलर्ट!',
-              venue: s.gateName || 'गेट १',
-              time: new Date(s.scannedAt).toLocaleTimeString('mr-IN', { hour: '2-digit', minute: '2-digit' }),
-              seat: s.ticketCode || '',
-            }))
-          );
-        }
+  const fetchSectionsList = async (force = false) => {
+    if (!force && loadedTabsRef.current.has('sections') && sectionsList.length > 0) return;
+    setTabLoading('sections');
+    try {
+      const secRes = await fetch('/api/admin/sections', { credentials: 'include' });
+      if (secRes.ok) {
+        const secData = await secRes.json();
+        if (Array.isArray(secData.sections)) setSectionsList(secData.sections);
+        loadedTabsRef.current.add('sections');
       }
     } catch (err) {
-      console.warn('Non-blocking admin data fetch error:', err);
+      console.warn('Sections fetch error:', err);
+    } finally {
+      setTabLoading(null);
     }
+  };
+
+  const fetchAllData = async () => {
+    setDataLoading(true);
+    loadedTabsRef.current.clear();
+    try {
+      await fetchDashboardFast();
+      // Warm events in background (scanner + event tab need them)
+      void Promise.all([fetchEventsList(true), fetchVenuesBundle(true), fetchSectionsList(true)]);
+    } finally {
+      setDataLoading(false);
+    }
+  };
+
+  const openAdminTab = (tab: typeof activeTab) => {
+    setActiveTab(tab);
+    if (tab === 'events' || tab === 'governance') void fetchEventsList();
+    if (tab === 'venues') void fetchVenuesBundle();
+    if (tab === 'sections') void fetchSectionsList();
+  };
+
+  const openVenueDesigner = async (venueLite: VenueItem | any) => {
+    try {
+      const res = await fetch(`/api/admin/venues?id=${venueLite.id}`, { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setVenueForDesigner(data.venue || data.venues?.[0] || venueLite);
+      } else {
+        setVenueForDesigner(venueLite);
+      }
+    } catch {
+      setVenueForDesigner(venueLite);
+    }
+    setShowSeatDesigner(true);
   };
 
   const handleToggleVenueVerification = async (venueId: number, currentStatus: string) => {
@@ -570,6 +738,81 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
         </div>
       )}
 
+      {viewingEvent && (
+        <AdminEventDetailModal
+          event={viewingEvent as any}
+          language={language}
+          onClose={() => setViewingEvent(null)}
+          onEdit={() => {
+            const ev = viewingEvent;
+            setViewingEvent(null);
+            openEventEditor(ev);
+          }}
+        />
+      )}
+
+      {showBroadcastModal && (
+        <div className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-2xl relative space-y-3">
+            <button
+              type="button"
+              onClick={() => setShowBroadcastModal(false)}
+              className="absolute right-3 top-3 p-1.5 rounded-full hover:bg-slate-100 text-slate-500"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <h3 className="text-base font-black text-[#141B2B] pr-8">
+              {mr ? 'ब्रॉडकास्ट जाहिरात' : 'Broadcast announcement'}
+            </h3>
+            <p className="text-[11px] text-slate-500">
+              {mr
+                ? 'डेमो नाही — जाहिरात announcements टेबलमध्ये सेव्ह होते. पुश फक्त Firebase कॉन्फिगर असेल तर.'
+                : 'Not a demo toast — saves to announcements table. Push only if Firebase is configured.'}
+            </p>
+            <label className="block text-xs font-bold text-slate-700">
+              {mr ? 'शीर्षक' : 'Title'}
+              <input
+                value={broadcastTitle}
+                onChange={(e) => setBroadcastTitle(e.target.value)}
+                className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="block text-xs font-bold text-slate-700">
+              {mr ? 'संदेश' : 'Message'}
+              <textarea
+                value={broadcastMessage}
+                onChange={(e) => setBroadcastMessage(e.target.value)}
+                rows={3}
+                className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="block text-xs font-bold text-slate-700">
+              {mr ? 'शहर (पर्यायी — रिकामे = सर्व)' : 'City (optional — empty = all)'}
+              <input
+                value={broadcastCity}
+                onChange={(e) => setBroadcastCity(e.target.value)}
+                placeholder="Pune"
+                className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2 text-sm"
+              />
+            </label>
+            <button
+              type="button"
+              disabled={broadcastSending}
+              onClick={() => void sendBroadcast()}
+              className="w-full py-2.5 rounded-xl bg-[#A33900] text-white text-xs font-bold disabled:opacity-50"
+            >
+              {broadcastSending
+                ? mr
+                  ? 'पाठवत आहे…'
+                  : 'Sending…'
+                : mr
+                  ? 'जाहिरात सेव्ह / पाठवा'
+                  : 'Save / send announcement'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Main Container */}
       <div className="max-w-4xl mx-auto px-4 py-5 space-y-4">
         {/* Top System Pulse Strip */}
@@ -597,12 +840,15 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
 
             <div className="flex items-center gap-2">
               <button
+                type="button"
                 onClick={() => {
-                  setShowLiveAlert(!showLiveAlert);
-                  triggerToast('सर्व प्रेक्षकांना तात्काळ ब्रॉडकास्ट अलर्ट पाठवला!');
+                  setBroadcastTitle(mr ? 'महाटिकिट अपडेट' : 'MahaTicket update');
+                  setBroadcastMessage('');
+                  setBroadcastCity('');
+                  setShowBroadcastModal(true);
                 }}
                 className="h-10 w-10 flex items-center justify-center rounded-xl bg-[#FFF7ED] text-[#A33900] active:scale-95 transition-transform shadow-sm hover:bg-[#FFEDD5]"
-                title="अलर्ट ब्रॉडकास्ट"
+                title={mr ? 'ब्रॉडकास्ट / जाहिरात' : 'Broadcast announcement'}
               >
                 <Megaphone className="w-5 h-5" />
               </button>
@@ -613,20 +859,25 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                 title="दैनिक अहवाल CSV डाऊनलोड"
               >
                 <Download className="w-4 h-4" />
-                <span>अहवाल</span>
+                <span>{mr ? 'अहवाल' : 'Report'}</span>
               </button>
             </div>
           </div>
         </div>
 
-        {/* Live Broadcast Toast Notification */}
+        {/* Real broadcast confirmation (only after API success) */}
         {showLiveAlert && (
-          <div className="bg-[#FFF7ED] border border-[#FFEDD5] rounded-xl p-3 flex items-center justify-between shadow-sm">
-            <div className="flex items-center gap-2 text-xs font-semibold text-[#832600]">
-              <Megaphone className="w-4 h-4 text-[#A33900]" />
-              <span>पुणे व मुंबई विभागासाठी तात्काळ नोटीफिकेशन पाठवले!</span>
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center justify-between shadow-sm">
+            <div className="flex items-center gap-2 text-xs font-semibold text-emerald-900">
+              <Megaphone className="w-4 h-4 text-emerald-700" />
+              <span>
+                {mr
+                  ? 'जाहिरात DB मध्ये सेव्ह झाली (अॅप होम अॅनाउन्समेंट).'
+                  : 'Announcement saved to DB (app home announcements).'}
+              </span>
             </div>
             <button
+              type="button"
               onClick={() => setShowLiveAlert(false)}
               className="text-[#64748B] hover:text-[#141B2B]"
             >
@@ -638,59 +889,72 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
         {/* Sub-nav Tabs */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1">
           <button
-            onClick={() => setActiveTab('governance')}
+            onClick={() => openAdminTab('governance')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition shrink-0 ${
               activeTab === 'governance'
                 ? 'bg-[#A33900] text-white shadow-sm'
                 : 'bg-white text-[#64748B] hover:bg-slate-100 border border-[#E2E8F0]'
             }`}
           >
-            गव्हर्नन्स डॅशबोर्ड
+            {mr ? 'गव्हर्नन्स डॅशबोर्ड' : 'Governance'}
           </button>
           <button
-            onClick={() => setActiveTab('events')}
+            onClick={() => openAdminTab('events')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition shrink-0 ${
               activeTab === 'events'
                 ? 'bg-[#A33900] text-white shadow-sm'
                 : 'bg-white text-[#64748B] hover:bg-slate-100 border border-[#E2E8F0]'
             }`}
           >
-            कार्यक्रम व्यवस्थापन ({eventsList.length})
+            {mr ? 'कार्यक्रम व्यवस्थापन' : 'Events'} ({eventsList.length})
           </button>
           <button
-            onClick={() => setActiveTab('venues')}
+            onClick={() => openAdminTab('venues')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition shrink-0 ${
               activeTab === 'venues'
                 ? 'bg-[#A33900] text-white shadow-sm'
                 : 'bg-white text-[#64748B] hover:bg-slate-100 border border-[#E2E8F0]'
             }`}
           >
-            नाट्यगृहे ({venuesList.length})
+            {mr ? 'नाट्यगृहे' : 'Theatres'} ({venuesList.length})
           </button>
           <button
-            onClick={() => setActiveTab('ads')}
+            onClick={() => openAdminTab('ads')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition shrink-0 ${
               activeTab === 'ads'
                 ? 'bg-[#A33900] text-white shadow-sm'
                 : 'bg-white text-[#64748B] hover:bg-slate-100 border border-[#E2E8F0]'
             }`}
           >
-            जाहिरात व्यवस्थापन
+            {mr ? 'जाहिरात व्यवस्थापन' : 'Ads'}
           </button>
           <button
-            onClick={() => setActiveTab('sections')}
+            onClick={() => openAdminTab('sections')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition shrink-0 flex items-center gap-1.5 ${
               activeTab === 'sections'
                 ? 'bg-[#A33900] text-white shadow-sm'
                 : 'bg-white text-[#64748B] hover:bg-slate-100 border border-[#E2E8F0]'
             }`}
           >
-            <span>📱 सेक्शन्स कस्टमायझेशन</span>
+            <span>{mr ? 'सेक्शन्स कस्टमायझेशन' : 'Home sections'}</span>
             <span className="text-[10px] bg-orange-100 text-[#A33900] px-1.5 py-0.2 rounded-full font-extrabold">
               {sectionsList.length || 9}
             </span>
           </button>
         </div>
+
+        {(dataLoading || tabLoading) && (
+          <div className="rounded-xl border border-orange-100 bg-orange-50/80 px-3 py-2 text-[11px] font-semibold text-[#A33900] flex items-center gap-2">
+            <span className="w-3.5 h-3.5 border-2 border-[#A33900] border-t-transparent rounded-full animate-spin" />
+            {dataLoading
+              ? mr
+                ? 'डॅशबोर्ड DB मधून लोड होत आहे…'
+                : 'Loading dashboard from DB…'
+              : mr
+                ? `${tabLoading} लोड होत आहे…`
+                : `Loading ${tabLoading}…`}
+          </div>
+        )}
 
         {/* TAB 1: GOVERNANCE DASHBOARD */}
         {activeTab === 'governance' && (
@@ -698,8 +962,12 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
             {/* Platform Metrics 2x2 Grid */}
             <div>
               <div className="flex items-center justify-between mb-2 px-1">
-                <span className="text-xs font-bold text-[#141B2B]">थेट प्लॅटफॉर्म मॅट्रिक्स</span>
-                <span className="text-[11px] text-[#64748B]">प्रत्येक ३० सेकंदांनी ताजे</span>
+                <span className="text-xs font-bold text-[#141B2B]">
+                  {mr ? 'थेट प्लॅटफॉर्म मॅट्रिक्स' : 'Live platform metrics'}
+                </span>
+                <span className="text-[11px] text-[#64748B]">
+                  {mr ? 'प्रत्येक ३० सेकंदांनी ताजे' : 'Refreshes every 30s'}
+                </span>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -995,8 +1263,7 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
 
                     <button
                       onClick={() => {
-                        setVenueForDesigner(v);
-                        setShowSeatDesigner(true);
+                        void openVenueDesigner(v);
                       }}
                       className="h-9 px-3 rounded-xl bg-[#FFF7ED] hover:bg-[#FFEDD5] text-[#A33900] flex items-center gap-1 text-xs font-bold shrink-0 transition"
                     >
@@ -1097,7 +1364,16 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
               {filteredEvents.map(ev => (
                 <div
                   key={ev.id}
-                  className="bg-white rounded-2xl p-3.5 border border-[#E2E8F0] shadow-sm flex gap-3 hover:border-[#A33900]/40 transition"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setViewingEvent(ev)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setViewingEvent(ev);
+                    }
+                  }}
+                  className="bg-white rounded-2xl p-3.5 border border-[#E2E8F0] shadow-sm flex gap-3 hover:border-[#A33900]/40 transition cursor-pointer text-left"
                 >
                   <img
                     src={ev.posterUrl}
@@ -1108,7 +1384,19 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                     <div>
                       <div className="flex items-center justify-between gap-1">
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#FFF7ED] text-[#A33900] font-bold">
-                          {ev.category === 'plays' ? 'नाटक' : ev.category}
+                          {ev.category === 'plays'
+                            ? mr
+                              ? 'नाटक'
+                              : 'Play'
+                            : ev.category === 'movies'
+                              ? mr
+                                ? 'चित्रपट'
+                                : 'Movie'
+                              : ev.category === 'music'
+                                ? mr
+                                  ? 'संगीत'
+                                  : 'Music'
+                                : ev.category}
                         </span>
                         <div className="flex items-center gap-1">
                           {ev.tag && (
@@ -1127,14 +1415,25 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                           </span>
                         </div>
                       </div>
-                      <h4 className="text-xs font-bold text-[#141B2B] mt-1 truncate">{ev.titleMr}</h4>
-                      <p className="text-[11px] text-[#64748B] truncate">🏛️ {ev.venue?.nameMr || 'नाट्यगृह'}</p>
+                      <h4 className="text-xs font-bold text-[#141B2B] mt-1 truncate">
+                        {mr ? ev.titleMr || ev.title : ev.title || ev.titleMr}
+                      </h4>
+                      <p className="text-[11px] text-[#64748B] truncate">
+                        🏛️{' '}
+                        {mr
+                          ? ev.venue?.nameMr || ev.venue?.name || 'नाट्यगृह'
+                          : ev.venue?.name || ev.venue?.nameMr || 'Theatre'}
+                      </p>
                       <p className="text-[11px] font-bold text-[#A33900] mt-0.5">
-                        किमान: ₹{(ev.minPrice || 30000) / 100} • बॅज: {ev.tag || 'सामान्य'}
+                        {mr ? 'किमान' : 'From'}: ₹{(ev.minPrice || 30000) / 100} •{' '}
+                        {mr ? 'बॅज' : 'Tag'}: {ev.tag || (mr ? 'सामान्य' : 'General')}
                       </p>
                     </div>
 
-                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E2E8F0]">
+                    <div
+                      className="flex items-center justify-end gap-2 pt-2 border-t border-[#E2E8F0]"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <button
                         type="button"
                         onClick={() => handleToggleEventStatus(ev)}
@@ -1144,38 +1443,21 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                             : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
                         }`}
                       >
-                        {ev.status === 'published' ? 'अप्रकाशित करा' : 'प्रकाशित करा'}
+                        {ev.status === 'published'
+                          ? mr
+                            ? 'अप्रकाशित करा'
+                            : 'Unpublish'
+                          : mr
+                            ? 'प्रकाशित करा'
+                            : 'Publish'}
                       </button>
 
                       <button
                         type="button"
-                        onClick={() => {
-                          setEditingEvent(ev);
-                          setEventTitleMr(ev.titleMr);
-                          setEventTitleEn(ev.title);
-                          setEventCategory(ev.category);
-                          setEventVenueId(ev.venueId);
-                          setEventBasePrice((ev.minPrice || 30000) / 100);
-                          setEventBadge(ev.tag || 'हाऊसफुल्ल');
-                          setEventDescriptionMr(ev.descriptionMr || '');
-                          setEventPosterUrl(ev.posterUrl || '');
-                          try {
-                            const g =
-                              typeof (ev as any).galleryUrls === 'string'
-                                ? JSON.parse((ev as any).galleryUrls || '[]')
-                                : (ev as any).galleryUrls || [];
-                            setEventGalleryUrls(Array.isArray(g) ? g.filter(Boolean) : []);
-                          } catch {
-                            setEventGalleryUrls([]);
-                          }
-                          setVenueSearchInForm('');
-                          setImageUploadError(null);
-                          void fetchAllData();
-                          setShowAddEventModal(true);
-                        }}
+                        onClick={() => openEventEditor(ev)}
                         className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-[#FFF7ED] text-[#A33900] hover:bg-orange-100 border border-orange-200 transition"
                       >
-                        संपादित करा
+                        {mr ? 'संपादित करा' : 'Edit'}
                       </button>
 
                       <button
@@ -1183,7 +1465,7 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                         onClick={() => handleDeleteEvent(ev.id, ev.titleMr)}
                         className="text-[11px] font-bold px-2 py-1 rounded-lg text-red-600 hover:bg-red-50 border border-red-200 transition"
                       >
-                        हटवा
+                        {mr ? 'हटवा' : 'Delete'}
                       </button>
                     </div>
                   </div>
@@ -1293,6 +1575,7 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                 className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white font-medium text-slate-700 outline-none hover:border-[#A33900]"
               >
                 <option value="">सर्व जिल्हे (All Districts)</option>
+                <option value="unmapped">⚠ जिल्हा न जोडलेले (No district)</option>
                 {districtsCatalog.map((d: any) => (
                   <option key={d.id} value={d.id}>
                     {d.nameMr} ({d.name})
@@ -1309,12 +1592,28 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
               >
                 <option value="">सर्व शहरे (All Cities)</option>
                 {citiesCatalog
-                  .filter((c: any) => !venueDistrictFilter || String(c.districtId) === String(venueDistrictFilter))
+                  .filter(
+                    (c: any) =>
+                      !venueDistrictFilter ||
+                      venueDistrictFilter === 'unmapped' ||
+                      String(c.districtId) === String(venueDistrictFilter)
+                  )
                   .map((c: any) => (
                     <option key={c.id} value={c.name}>
                       {c.nameMr} ({c.name})
                     </option>
                   ))}
+              </select>
+
+              <select
+                value={venueMappedFilter}
+                onChange={(e) => setVenueMappedFilter(e.target.value as 'all' | 'mapped' | 'unmapped')}
+                aria-label="Location mapping"
+                className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white font-medium text-slate-700 outline-none hover:border-[#A33900]"
+              >
+                <option value="all">सर्व मॅपिंग</option>
+                <option value="mapped">✓ District+City linked</option>
+                <option value="unmapped">⚠ Missing city/district ID</option>
               </select>
 
               {/* Status Filter */}
@@ -1342,7 +1641,12 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                 <option value="general">🎟️ सामान्य प्रवेश (General Admission)</option>
               </select>
 
-              {(venueSearch || venueDistrictFilter || venueCityFilter || venueStatusFilter !== 'all' || venueLayoutFilter !== 'all') && (
+              {(venueSearch ||
+                venueDistrictFilter ||
+                venueCityFilter ||
+                venueStatusFilter !== 'all' ||
+                venueLayoutFilter !== 'all' ||
+                venueMappedFilter !== 'all') && (
                 <button
                   type="button"
                   onClick={() => {
@@ -1351,6 +1655,7 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                     setVenueCityFilter('');
                     setVenueStatusFilter('all');
                     setVenueLayoutFilter('all');
+                    setVenueMappedFilter('all');
                   }}
                   className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold transition flex items-center gap-1 cursor-pointer"
                   title="फिल्टर साफ करा"
@@ -1388,7 +1693,20 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                   (venueLayoutFilter === 'seated' && v.hasSeatLayout === 1) ||
                   (venueLayoutFilter === 'general' && v.hasSeatLayout === 0);
 
-                return matchSearch && matchDistrict && matchCity && matchStatus && matchLayout;
+                const isMapped = !!(v.districtId && v.cityId);
+                const matchMapped =
+                  venueMappedFilter === 'all' ||
+                  (venueMappedFilter === 'mapped' && isMapped) ||
+                  (venueMappedFilter === 'unmapped' && !isMapped);
+
+                return (
+                  matchSearch &&
+                  (venueDistrictFilter === 'unmapped' ? !v.districtId : matchDistrict) &&
+                  matchCity &&
+                  matchStatus &&
+                  matchLayout &&
+                  matchMapped
+                );
               });
 
               if (displayList.length === 0) {
@@ -1408,7 +1726,10 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                   {displayList.map((v: any) => {
                     const isVerified = (v.verificationStatus || 'verified') === 'verified';
                     const hasLayout = v.hasSeatLayout === 1;
-                    const sectionsCount = Array.isArray(v.sections) ? v.sections.length : 0;
+                    const sectionsCount =
+                      Number(v.sectionsCount || 0) ||
+                      (Array.isArray(v.sections) ? v.sections.length : 0);
+                    const isMapped = !!(v.districtId && v.cityId);
 
                     return (
                       <div
@@ -1419,7 +1740,12 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                           {/* Header: Badges and ID */}
                           <div className="flex items-center justify-between gap-1 mb-2">
                             <span className="text-[10px] font-mono text-slate-400">#VN-{v.id}</span>
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                              {!isMapped ? (
+                                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                  ⚠ Unmapped
+                                </span>
+                              ) : null}
                               <span
                                 className={`text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
                                   isVerified
@@ -1470,10 +1796,7 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                         <div className="mt-4 pt-3 border-t border-slate-100 space-y-2">
                           <button
                             type="button"
-                            onClick={() => {
-                              setVenueForDesigner(v);
-                              setShowSeatDesigner(true);
-                            }}
+                            onClick={() => void openVenueDesigner(v)}
                             className="w-full py-2 rounded-xl bg-[#A33900] hover:bg-[#832600] text-white font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-xs cursor-pointer"
                           >
                             <Armchair className="w-3.5 h-3.5" />
@@ -1771,7 +2094,6 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
             </button>
             <AdminScanner
               scannerUserId={currentUser?.id || 1}
-              scannerOrganizerId={currentUser?.organizerId}
               events={eventsList as any}
               initialGateName="मुख्य प्रवेशद्वार (Gate 1)"
               onTicketVerified={(ticket) => {

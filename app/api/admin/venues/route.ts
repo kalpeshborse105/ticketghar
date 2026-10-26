@@ -151,69 +151,98 @@ function buildLayoutConfigFromSections(customSections: any[]) {
   };
 }
 
-// GET all venues with sections, seats, and district/city details
+// GET venues with district/city details.
+// Default = lite list (fast admin catalog). Pass ?id=N or ?full=1 for sections+seats.
 export async function GET(request: NextRequest) {
   const authError = requireAdmin(request);
   if (authError) return authError;
   try {
+    const { searchParams } = new URL(request.url);
+    const singleId = searchParams.get('id');
+    const wantFull = searchParams.get('full') === '1' || !!singleId;
+
     const venueList = await db
       .select({
         venue: venues,
         districtName: districts.name,
         districtNameMr: districts.nameMr,
+        cityName: cities.name,
         cityNameMr: cities.nameMr,
+        cityDistrictId: cities.districtId,
       })
       .from(venues)
       .leftJoin(districts, eq(venues.districtId, districts.id))
       .leftJoin(cities, eq(venues.cityId, cities.id))
+      .where(singleId ? eq(venues.id, Number(singleId)) : sql`true`)
       .orderBy(desc(venues.id));
 
-    // Attach sections and seats
-    const enriched = await Promise.all(
-      venueList.map(async (row) => {
-        const v = row.venue;
-        const sectionRows = await db
-          .select()
-          .from(venueSections)
-          .where(eq(venueSections.venueId, v.id))
-          .orderBy(asc(venueSections.id));
-
-        const sectionsWithSeats = await Promise.all(
-          sectionRows.map(async (sec) => {
-            const secSeats = await db
-              .select()
-              .from(seats)
-              .where(eq(seats.sectionId, sec.id))
-              .orderBy(asc(seats.rowLabel), asc(seats.seatNumber));
-
-            return {
-              ...sec,
-              seats: secSeats,
-            };
-          })
-        );
-
-        let parsedLayoutConfig: any = v.layoutConfig;
-        if (typeof parsedLayoutConfig === 'string') {
-          try {
-            parsedLayoutConfig = JSON.parse(parsedLayoutConfig);
-          } catch {
-            parsedLayoutConfig = {};
-          }
+    const enrichOne = async (row: (typeof venueList)[0]) => {
+      const v = row.venue;
+      let parsedLayoutConfig: any = v.layoutConfig;
+      if (typeof parsedLayoutConfig === 'string') {
+        try {
+          parsedLayoutConfig = JSON.parse(parsedLayoutConfig);
+        } catch {
+          parsedLayoutConfig = {};
         }
+      }
 
-        return {
-          ...v,
-          districtName: row.districtName,
-          districtNameMr: row.districtNameMr,
-          cityNameMr: row.cityNameMr,
-          layoutConfig: parsedLayoutConfig,
-          sections: sectionsWithSeats,
-        };
-      })
-    );
+      const base = {
+        ...v,
+        districtName: row.districtName,
+        districtNameMr: row.districtNameMr,
+        cityName: row.cityName,
+        cityNameMr: row.cityNameMr,
+        cityDistrictId: row.cityDistrictId,
+        locationMapped: !!(v.districtId && v.cityId),
+        layoutConfig: parsedLayoutConfig,
+      };
 
-    return NextResponse.json({ venues: enriched });
+      if (!wantFull) {
+        const [secCount] = await db
+          .select({ n: sql<number>`count(*)::int` })
+          .from(venueSections)
+          .where(eq(venueSections.venueId, v.id));
+        return { ...base, sectionsCount: Number(secCount?.n || 0), sections: [] as any[] };
+      }
+
+      const sectionRows = await db
+        .select()
+        .from(venueSections)
+        .where(eq(venueSections.venueId, v.id))
+        .orderBy(asc(venueSections.id));
+
+      const sectionsWithSeats = await Promise.all(
+        sectionRows.map(async (sec) => {
+          const secSeats = await db
+            .select()
+            .from(seats)
+            .where(eq(seats.sectionId, sec.id))
+            .orderBy(asc(seats.rowLabel), asc(seats.seatNumber));
+          return { ...sec, seats: secSeats };
+        })
+      );
+
+      return { ...base, sectionsCount: sectionsWithSeats.length, sections: sectionsWithSeats };
+    };
+
+    const enriched = await Promise.all(venueList.map(enrichOne));
+
+    if (singleId) {
+      if (enriched.length === 0) {
+        return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
+      }
+      return NextResponse.json({ venue: enriched[0], venues: enriched });
+    }
+
+    return NextResponse.json({
+      venues: enriched,
+      meta: {
+        total: enriched.length,
+        unmapped: enriched.filter((v) => !v.locationMapped).length,
+        mode: wantFull ? 'full' : 'lite',
+      },
+    });
   } catch (error: any) {
     console.error('Failed to fetch venues:', error);
     return NextResponse.json(
@@ -289,21 +318,68 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Look up matching city and district IDs if not explicitly passed
+    // Resolve canonical city + district IDs (prefer explicit IDs; else match free-text city)
     let resolvedDistrictId = districtId ? Number(districtId) : null;
     let resolvedCityId = cityId ? Number(cityId) : null;
 
+    const CITY_TEXT_ALIASES: Record<string, string> = {
+      ahmednagar: 'Ahilyanagar',
+      ahmadnagar: 'Ahilyanagar',
+      vasai: 'Vasai-Virar',
+      aurangabad: 'Chhatrapati Sambhajinagar',
+      osmanabad: 'Dharashiv',
+    };
+    const lookupCityName =
+      CITY_TEXT_ALIASES[trimmedCity.toLowerCase()] || trimmedCity;
+
     if (!resolvedCityId || !resolvedDistrictId) {
       const matchCity = await db
-        .select({ id: cities.id, districtId: cities.districtId })
+        .select({ id: cities.id, districtId: cities.districtId, name: cities.name })
         .from(cities)
-        .where(sql`LOWER(TRIM(${cities.name})) = LOWER(${trimmedCity})`)
+        .where(sql`LOWER(TRIM(${cities.name})) = LOWER(${lookupCityName})`)
         .limit(1);
 
       if (matchCity.length > 0) {
         resolvedCityId = resolvedCityId || matchCity[0].id;
         resolvedDistrictId = resolvedDistrictId || matchCity[0].districtId;
       }
+    }
+
+    // Reject invalid combinations (e.g. Pune venue + Mumbai City district)
+    if (resolvedCityId && resolvedDistrictId) {
+      const [cityRow] = await db
+        .select({ id: cities.id, districtId: cities.districtId, name: cities.name })
+        .from(cities)
+        .where(eq(cities.id, resolvedCityId))
+        .limit(1);
+      if (cityRow?.districtId && Number(cityRow.districtId) !== Number(resolvedDistrictId)) {
+        // Mumbai is ambiguous (City vs Suburban) — allow if city name is Mumbai
+        const isMumbaiFamily =
+          /^mumbai$/i.test(cityRow.name) &&
+          [17, 18].includes(Number(resolvedDistrictId));
+        if (!isMumbaiFamily) {
+          return NextResponse.json(
+            {
+              error: `Invalid location mapping: city "${cityRow.name}" belongs to a different district than selected. Pick matching district + city.`,
+            },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
+    if (!resolvedCityId || !resolvedDistrictId) {
+      return NextResponse.json(
+        {
+          error:
+            'District and City are required canonical links. Select district + city from the location catalog (or use an exact city name that exists in cities).',
+          missing: {
+            districtId: !resolvedDistrictId,
+            cityId: !resolvedCityId,
+          },
+        },
+        { status: 400 }
+      );
     }
 
     // Prepare layout config JSON (includes seats, per-row aisles and persisted middle gap)
@@ -363,8 +439,8 @@ export async function POST(request: NextRequest) {
             nameMr: trimmedNameMr,
             address: trimmedAddress,
             city: trimmedCity,
-            districtId: resolvedDistrictId || undefined,
-            cityId: resolvedCityId || undefined,
+            districtId: resolvedDistrictId,
+            cityId: resolvedCityId,
             verificationStatus,
             isTemplate: Number(isTemplate),
             ownershipType,
@@ -392,8 +468,8 @@ export async function POST(request: NextRequest) {
             nameMr: trimmedNameMr,
             address: trimmedAddress,
             city: trimmedCity,
-            districtId: resolvedDistrictId || null,
-            cityId: resolvedCityId || null,
+            districtId: resolvedDistrictId,
+            cityId: resolvedCityId,
             verificationStatus,
             isTemplate: Number(isTemplate),
             ownershipType,

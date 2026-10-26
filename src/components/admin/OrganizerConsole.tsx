@@ -27,6 +27,7 @@ import { Language } from '../../lib/i18n.ts';
 import { EventItem, VenueItem } from '../../lib/types.ts';
 import { AdminScanner } from '../AdminScanner';
 import { TheatreSeatDesigner } from './TheatreSeatDesigner';
+import { AdminEventDetailModal } from './AdminEventDetailModal';
 
 interface OrganizerConsoleProps {
   language: Language;
@@ -50,6 +51,14 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
   const [ordersList, setOrdersList] = useState<any[]>([]);
   const [settlementsList, setSettlementsList] = useState<any[]>([]);
   const [venueForDesigner, setVenueForDesigner] = useState<VenueItem | null>(null);
+  const [viewingEvent, setViewingEvent] = useState<EventItem | null>(null);
+  const [dataLoading, setDataLoading] = useState(true);
+  const mr = language === 'mr';
+  const numericOrganizerId = (() => {
+    const raw = currentUser?.organizerId ?? currentUser?.organizationId;
+    const n = raw != null && raw !== '' ? Number(raw) : NaN;
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+  })();
 
   const [activeTab, setActiveTab] = useState<'overview' | 'shows' | 'bookings' | 'scanner' | 'seats'>('overview');
   const [bookingSearch, setBookingSearch] = useState('');
@@ -104,21 +113,41 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  const fetchOrganizerData = async () => {
+  const openVenueDesigner = async (venueLite: VenueItem | any) => {
+    if (!venueLite?.id) {
+      setVenueForDesigner(venueLite);
+      setShowSeatDesigner(true);
+      return;
+    }
     try {
-      const [eventsRes, ordersRes, settlementsRes, venuesRes] = await Promise.all([
-        fetch('/api/admin/events'),
-        fetch('/api/admin/orders'),
-        fetch('/api/admin/settlements'),
-        fetch('/api/admin/venues'),
-      ]);
+      const res = await fetch(`/api/admin/venues?id=${venueLite.id}`, { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setVenueForDesigner(data.venue || data.venues?.[0] || venueLite);
+      } else {
+        setVenueForDesigner(venueLite);
+      }
+    } catch {
+      setVenueForDesigner(venueLite);
+    }
+    setShowSeatDesigner(true);
+  };
 
+  const fetchOrganizerData = async () => {
+    setDataLoading(true);
+    try {
+      // Events first (overview + scanner need them); orders/venues lazy-parallel after
+      const eventsRes = await fetch('/api/admin/events', { credentials: 'include' });
       if (eventsRes.ok) {
         const evData = await eventsRes.json();
-        if (Array.isArray(evData.events) && evData.events.length > 0) {
-          setEventsList(evData.events);
-        }
+        if (Array.isArray(evData.events)) setEventsList(evData.events);
       }
+
+      const [ordersRes, settlementsRes, venuesRes] = await Promise.all([
+        fetch('/api/admin/orders', { credentials: 'include' }),
+        fetch('/api/admin/settlements', { credentials: 'include' }),
+        fetch('/api/admin/venues', { credentials: 'include' }),
+      ]);
 
       if (venuesRes.ok) {
         const vnData = await venuesRes.json();
@@ -130,24 +159,22 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
 
       if (ordersRes.ok) {
         const ordData = await ordersRes.json();
-        if (Array.isArray(ordData.orders)) {
-          setOrdersList(ordData.orders);
-        }
+        if (Array.isArray(ordData.orders)) setOrdersList(ordData.orders);
       }
 
       if (settlementsRes.ok) {
         const stData = await settlementsRes.json();
-        if (Array.isArray(stData.settlements)) {
-          setSettlementsList(stData.settlements);
-        }
+        if (Array.isArray(stData.settlements)) setSettlementsList(stData.settlements);
       }
     } catch (err) {
       console.warn('Non-blocking organizer data fetch error:', err);
+    } finally {
+      setDataLoading(false);
     }
   };
 
   React.useEffect(() => {
-    fetchOrganizerData();
+    void fetchOrganizerData();
   }, []);
 
   // Compute live business metrics from database records
@@ -215,8 +242,22 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
         </div>
       )}
 
+      {viewingEvent && (
+        <AdminEventDetailModal
+          event={viewingEvent as any}
+          language={language}
+          onClose={() => setViewingEvent(null)}
+        />
+      )}
+
       {/* Main Container */}
       <div className="max-w-4xl mx-auto px-4 py-5 space-y-4">
+        {dataLoading && (
+          <div className="rounded-xl border border-orange-100 bg-orange-50/80 px-3 py-2 text-[11px] font-semibold text-[#A33900] flex items-center gap-2">
+            <span className="w-3.5 h-3.5 border-2 border-[#A33900] border-t-transparent rounded-full animate-spin" />
+            {mr ? 'आयोजक डेटा DB मधून लोड होत आहे…' : 'Loading organizer data from DB…'}
+          </div>
+        )}
         {/* Producer Welcome & Status Banner */}
         <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-[#E2E8F0]">
           <div className="flex items-center justify-between gap-3 mb-2">
@@ -312,8 +353,7 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
           <button
             onClick={() => {
               if (venuesList[0]) {
-                setVenueForDesigner(venuesList[0]);
-                setShowSeatDesigner(true);
+                void openVenueDesigner(venuesList[0]);
               } else {
                 triggerToast('नाट्यगृह लोड होत आहे...');
               }
@@ -464,8 +504,7 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
             <button
               onClick={() => {
                 if (venuesList[0]) {
-                  setVenueForDesigner(venuesList[0]);
-                  setShowSeatDesigner(true);
+                  void openVenueDesigner(venuesList[0]);
                 } else {
                   triggerToast('नाट्यगृह लोड होत आहे...');
                 }
@@ -581,8 +620,7 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
                   onClick={() => {
                     const targetVenue = venuesList[1] || venuesList[0];
                     if (targetVenue) {
-                      setVenueForDesigner(targetVenue);
-                      setShowSeatDesigner(true);
+                      void openVenueDesigner(targetVenue);
                     }
                   }}
                   className="bg-[#E1E8FD] text-[#141B2B] px-3.5 py-1.5 rounded-xl text-xs font-bold active:scale-95 transition"
@@ -833,7 +871,7 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
 
               <AdminScanner
                 scannerUserId={currentUser?.id || 1}
-                scannerOrganizerId={currentUser?.organizerId || currentUser?.organizationId}
+                scannerOrganizerId={numericOrganizerId}
                 events={eventsList as any}
                 initialGateName="मुख्य प्रवेशद्वार (Gate 1)"
                 onTicketVerified={(ticket) => {
@@ -865,7 +903,16 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
               {eventsList.map((ev) => (
                 <div
                   key={ev.id}
-                  className="bg-white rounded-2xl p-4 shadow-sm border border-[#E2E8F0] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setViewingEvent(ev)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setViewingEvent(ev);
+                    }
+                  }}
+                  className="bg-white rounded-2xl p-4 shadow-sm border border-[#E2E8F0] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 cursor-pointer hover:border-[#A33900]/40 transition text-left"
                 >
                   <div className="flex items-start gap-3.5">
                     <img
@@ -876,36 +923,54 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
                     <div>
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-[10px] bg-orange-50 text-[#EA580C] font-bold px-2 py-0.5 rounded-full border border-orange-200">
-                          {ev.category === 'plays' ? 'नाटक' : ev.category}
+                          {ev.category === 'plays' ? (mr ? 'नाटक' : 'Play') : ev.category}
                         </span>
                         <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-full border border-emerald-200">
-                          Published
+                          {ev.status || 'published'}
                         </span>
                       </div>
-                      <h4 className="text-sm font-black text-[#141B2B]">{ev.titleMr || ev.title}</h4>
-                      <p className="text-xs text-[#64748B] mt-0.5">{ev.title}</p>
-                      <p className="text-[11px] text-slate-500 mt-1">⏱ {ev.durationMinutes || 150} मिनिटे • {ev.language || 'मराठी'}</p>
+                      <h4 className="text-sm font-black text-[#141B2B]">
+                        {mr ? ev.titleMr || ev.title : ev.title || ev.titleMr}
+                      </h4>
+                      <p className="text-xs text-[#64748B] mt-0.5">
+                        {mr ? ev.title : ev.titleMr}
+                      </p>
+                      <p className="text-[11px] text-slate-500 mt-1">
+                        ⏱ {ev.durationMinutes || 150} {mr ? 'मिनिटे' : 'min'} • {ev.language || 'मराठी'}
+                      </p>
+                      <p className="text-[11px] text-slate-500">
+                        🏛 {ev.venue?.nameMr || ev.venue?.name || '—'}
+                      </p>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 w-full sm:w-auto justify-end border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100">
+                  <div
+                    className="flex items-center gap-2 w-full sm:w-auto justify-end border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <button
+                      type="button"
+                      onClick={() => setViewingEvent(ev)}
+                      className="bg-slate-100 text-slate-700 px-3.5 py-1.5 rounded-xl text-xs font-bold active:scale-95 transition"
+                    >
+                      {mr ? 'तपशील' : 'Details'}
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => {
                         const targetVenue = venuesList.find((v) => v.id === ev.venueId) || venuesList[0];
-                        if (targetVenue) {
-                          setVenueForDesigner(targetVenue);
-                          setShowSeatDesigner(true);
-                        }
+                        if (targetVenue) void openVenueDesigner(targetVenue);
                       }}
                       className="bg-[#E1E8FD] text-[#141B2B] px-3.5 py-1.5 rounded-xl text-xs font-bold active:scale-95 transition"
                     >
-                      आसन रचना
+                      {mr ? 'आसन रचना' : 'Seats'}
                     </button>
                     <button
+                      type="button"
                       onClick={() => setActiveTab('bookings')}
                       className="bg-[#FFF7ED] text-[#A33900] px-3.5 py-1.5 rounded-xl text-xs font-bold active:scale-95 transition flex items-center gap-1"
                     >
-                      <span>बुकिंग्ज</span>
+                      <span>{mr ? 'बुकिंग्ज' : 'Bookings'}</span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -1028,7 +1093,7 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
             <h3 className="text-base font-bold text-[#141B2B] mb-3">गेट स्कॅनर सुरू करा</h3>
             <AdminScanner
               scannerUserId={currentUser?.id || 1}
-              scannerOrganizerId={currentUser?.organizerId || currentUser?.organizationId}
+              scannerOrganizerId={numericOrganizerId}
               events={eventsList as any}
               initialGateName="गेट २ (बाल्कनी)"
               onTicketVerified={(ticket) => {

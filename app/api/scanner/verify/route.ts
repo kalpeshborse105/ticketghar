@@ -3,6 +3,7 @@ import { db } from '@/src/db/index.ts';
 import { tickets, ticketScans, events, orders, eventSessions, venues } from '@/src/db/schema.ts';
 import { eq, desc, and } from 'drizzle-orm';
 import { decryptSecureTicketQr, decryptSecureGroupOrderQr } from '@/src/lib/ticket-crypto.ts';
+import { normalizeScannerPayload } from '@/src/lib/scanner-payload.ts';
 
 function formatShowtimeIst(value: Date | string | null | undefined): string {
   if (!value) return '—';
@@ -76,18 +77,31 @@ export async function POST(request: Request) {
       });
     }
 
-    let targetCode = String(ticketCodeOrPayload).trim();
+    const { normalized, kind } = normalizeScannerPayload(String(ticketCodeOrPayload));
+    let targetCode = normalized;
+    const rawPreview = String(ticketCodeOrPayload).trim().slice(0, 96);
+
+    if (!targetCode) {
+      return NextResponse.json({
+        valid: false,
+        scanResult: 'INVALID_TICKET',
+        message: 'QR रिक्त / वाचता आला नाही. पुन्हा स्कॅन करा किंवा मॅन्युअल कोड टाका.',
+        rawPreview,
+      });
+    }
 
     // =========================================================================
     // 1. Check if this is an authoritative Group Order QR (MTGRP:v1:...)
     // =========================================================================
-    if (targetCode.startsWith('MTGRP:v1:')) {
+    if (targetCode.startsWith('MTGRP:v1:') || kind === 'mtgrp') {
       const groupData = decryptSecureGroupOrderQr(targetCode);
       if (!groupData || !groupData.orderNumber) {
         return NextResponse.json({
           valid: false,
           scanResult: 'INVALID_SIGNATURE',
-          message: 'अवैध किंवा बनावट ग्रुप क्युआर कोड! (Invalid or counterfeit Group QR signature).',
+          message:
+            'ग्रुप QR वाचला पण सिग्नेचर जुळला नाही — शक्यतो QR कापला गेला. तिकीट लिंक / ऑर्डर क्रमांक वापरा.',
+          rawPreview,
         });
       }
 
@@ -313,40 +327,23 @@ export async function POST(request: Request) {
     }
 
     // =========================================================================
-    // 2. Individual Ticket QR Scan (MTSEC:v1:... or ticket code)
+    // 2. Individual Ticket QR Scan (MTSEC:v1:... or ticket / order code)
     // =========================================================================
     let embeddedEventId: number | undefined;
 
-    if (targetCode.startsWith('MTSEC:v1:')) {
+    if (targetCode.startsWith('MTSEC:v1:') || kind === 'mtsec') {
       const decrypted = decryptSecureTicketQr(targetCode);
       if (!decrypted || !decrypted.ticketCode) {
         return NextResponse.json({
           valid: false,
           scanResult: 'INVALID_SIGNATURE',
-          message: 'अवैध किंवा बनावट क्युआर कोड! (Invalid or counterfeit ticket QR signature).',
+          message:
+            'तिकीट QR सिग्नेचर जुळला नाही. सार्वजनिक तिकीट लिंक किंवा MT-TK / MT-2026 कोड वापरा.',
+          rawPreview,
         });
       }
       targetCode = decrypted.ticketCode;
       embeddedEventId = decrypted.eventId;
-    } else if (targetCode.includes('/tickets/')) {
-      const parts = targetCode.split('/tickets/');
-      targetCode = decodeURIComponent(parts[1].split('?')[0].split('#')[0].trim());
-    } else if (targetCode.startsWith('{')) {
-      try {
-        const parsed = JSON.parse(targetCode);
-        targetCode = String(
-          parsed.ticketCode || parsed.code || parsed.ord || parsed.orderNumber || parsed.bookingId || ''
-        ).trim();
-        if (!targetCode) {
-          return NextResponse.json({
-            valid: false,
-            scanResult: 'INVALID_TICKET',
-            message: 'QR मधील तिकीट कोड वाचता आला नाही. मॅन्युअल ऑर्डर / तिकीट क्रमांक वापरा.',
-          });
-        }
-      } catch {
-        /* keep raw */
-      }
     }
 
     // Look up ticket in PostgreSQL (exact ticket code)
@@ -521,6 +518,7 @@ export async function POST(request: Request) {
         message:
           'अवैध तिकीट / ऑर्डर क्रमांक! प्रणालीमध्ये नोंद नाही. QR पुन्हा स्कॅन करा किंवा आयोजक / प्रशासनशी संपर्क साधा.',
         ticketCode: targetCode,
+        rawPreview,
       });
     }
 
