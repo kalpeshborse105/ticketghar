@@ -1,0 +1,83 @@
+{
+  "generatedAt": "2026-10-26T20:29:53.816Z",
+  "mode": "preflight-readonly",
+  "host": {
+    "hostFamily": "supabase-pooler",
+    "isProductionLikely": true,
+    "hostname": "aws-0-ap-south-1.pooler.supabase.com"
+  },
+  "warning": "Host looks PRODUCTION-like. Backup with pg_dump before any --apply.",
+  "clearTables": {
+    "ticket_scans": 10,
+    "tickets": 160,
+    "seat_inventory": 38096,
+    "settlements": 73,
+    "orders": 73,
+    "event_reviews": 115,
+    "event_images": 0,
+    "ticket_types": 660,
+    "event_sessions": 169,
+    "events": 70,
+    "seats": 7606,
+    "venue_sections": 186,
+    "venues": 66
+  },
+  "preserveTables": {
+    "users": 16,
+    "organizers": 4,
+    "districts": 36,
+    "talukas": 359,
+    "cities": 65,
+    "app_secrets": 2,
+    "app_runtime_config": 2,
+    "home_sections": 9
+  },
+  "optionalClearTables": {
+    "coupons": 4,
+    "announcements": 4,
+    "notification_log": 1,
+    "audit_logs": 91,
+    "partner_leads": 3
+  },
+  "clearRowTotal": 47284,
+  "unexpectedLegacyTables": [],
+  "adminLikeUsers": [
+    {
+      "id": 1,
+      "email": "admin@mahaticket.in",
+      "role": "super_admin",
+      "status": "active"
+    },
+    {
+      "id": 2,
+      "email": "operations@mahaticket.in",
+      "role": "operations",
+      "status": "active"
+    },
+    {
+      "id": 3,
+      "email": "nikpp010@gmail.com",
+      "role": "operations",
+      "status": "active"
+    },
+    {
+      "id": 12,
+      "email": "kalpeshborse105@gmail.com",
+      "role": "super_admin",
+      "status": "active"
+    }
+  ],
+  "fiveCities": [
+    "Pune",
+    "Mumbai",
+    "Nagpur",
+    "Nashik",
+    "Thane"
+  ],
+  "nextSteps": [
+    "Take external pg_dump (docs/PRODUCTION_DATABASE_BACKUP_AND_RESTORE.md)",
+    "Review docs/PRODUCTION_DATABASE_RESET_PLAN.md",
+    "Dry-run: npx tsx scripts/production-database-reset.ts",
+    "Staging apply only with explicit flags"
+  ]
+}

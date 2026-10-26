@@ -1,0 +1,41 @@
+{
+  "generatedAt": "2026-10-26T20:54:04.575Z",
+  "host": {
+    "hostFamily": "supabase-pooler",
+    "isProductionLikely": true,
+    "hostname": "aws-0-ap-south-1.pooler.supabase.com"
+  },
+  "counts": {
+    "venues": 0,
+    "venue_sections": 0,
+    "seats": 0,
+    "events": 0,
+    "event_sessions": 0,
+    "ticket_types": 0,
+    "seat_inventory": 0,
+    "orders": 0,
+    "tickets": 0,
+    "ticket_scans": 0,
+    "settlements": 0,
+    "event_reviews": 0,
+    "event_images": 0,
+    "users": 16,
+    "districts": 36,
+    "talukas": 359,
+    "cities": 65,
+    "app_secrets": 2,
+    "organizers": 4,
+    "home_sections": 9,
+    "app_runtime_config": 2
+  },
+  "fiveCitiesPresent": [
+    "Mumbai",
+    "Nagpur",
+    "Nashik",
+    "Pune",
+    "Thane"
+  ],
+  "ok": true,
+  "failures": [],
+  "note": "If ok=false, do not import theatres until reset is completed or restored."
+}

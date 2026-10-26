@@ -1,9 +1,11 @@
 /**
  * Upsert well-known real Pune/Mumbai civic theatres (names/addresses only).
  * No events, no prices, no BMS scrape.
+ * City FK: unique name match only — never LIMIT 1 on ambiguous names.
  */
 import { config } from 'dotenv';
 import pg from 'pg';
+import { resolveUniqueCity } from './lib/authoritative-location-plan.ts';
 
 config({ override: true });
 
@@ -87,15 +89,18 @@ async function main() {
       );
       console.log('updated', v.name, found.rows[0].id);
     } else {
-      const loc = await p.query(
-        `SELECT c.id AS city_id, c.district_id
-         FROM cities c
-         WHERE LOWER(TRIM(c.name)) = LOWER(TRIM($1))
-         LIMIT 1`,
-        [v.city]
-      );
-      const cityId = loc.rows[0]?.city_id ?? null;
-      const districtId = loc.rows[0]?.district_id ?? null;
+      const cityRows = (
+        await p.query(`SELECT id, name, district_id FROM cities ORDER BY id`)
+      ).rows;
+      const cityRes = resolveUniqueCity(v.city, cityRows);
+      if (!cityRes.ok) {
+        console.error(`SKIP insert ${v.name}: ${cityRes.reason}`);
+        continue;
+      }
+      // Mumbai free-text: do not copy cities.district_id (City vs Suburban ambiguity)
+      const isMumbai = v.city.trim().toLowerCase() === 'mumbai';
+      const cityId = cityRes.city.id;
+      const districtId = isMumbai ? null : cityRes.city.district_id ?? null;
       const ins = await p.query(
         `INSERT INTO venues (name, name_mr, address, city, state, district_id, city_id, total_capacity, has_seat_layout, verification_status, is_template, ownership_type)
          VALUES ($1,$2,$3,$4,'Maharashtra',$5,$6, COALESCE($7, 600), 0, 'verified', 1, 'public_theatre')
