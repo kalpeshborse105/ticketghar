@@ -834,9 +834,14 @@ export async function confirmBookingOrder(params: {
     }
   }
 
-  // 9. Booking confirmation email WITH PDF attachment.
-  // Must await on serverless (Vercel) — fire-and-forget often kills PDF generation mid-flight.
-  if (generatedTickets.length > 0 && userEmail) {
+  // 9. Do NOT auto-email on booking confirm.
+  // PDF email is user-triggered only (TicketPassModal / MahaTicketPass / BookingConfirmed "Email PDF").
+  // Set BOOKING_AUTO_EMAIL=1 only if ops explicitly want post-payment mail again.
+  if (
+    process.env.BOOKING_AUTO_EMAIL === '1' &&
+    generatedTickets.length > 0 &&
+    userEmail
+  ) {
     try {
       const emailResult = await Promise.race([
         sendBookingTicketEmail({

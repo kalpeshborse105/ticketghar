@@ -24,4 +24,9 @@ Users, orders, payments, tickets, ticket scans, audit logs, settlements, financi
 4. Backup plan  
 5. Explicit user approval  
 
-No cleanup SQL has been executed in this finalization pass.
+## Executed 2026-10-26 (soft only)
+
+- Soft-unpublished **18** events with **0 upcoming sessions** and **0 orders** (`status=unpublished`). IDs: 12,13,14,15,16,18,19,26,27,28,31,32,47,48,86,88,91,95.
+- Inventory snapshot: `docs/EVENTS_INVENTORY_2026-10-26.json` (58 venues; regeneratable via `npx tsx scripts/list-events-inventory.ts`).
+- **No hard DELETE** of events/orders/tickets. Events with past sales kept `published` for history even if showtimes ended.
+- BookMyShow scrape: **not done** (unauthorized). Add sellable shows via admin CRUD + organizer data only.

@@ -185,10 +185,8 @@ export async function GET(request: Request) {
           });
         }
         const stats = reviewStatsMap[evId];
-
-        // Ensure every event card displays an authentic star rating (4.6 - 4.9)
-        const defaultRating = Number((4.6 + ((evId * 3) % 4) * 0.1).toFixed(1));
-        const defaultCount = 380 + ((evId * 137) % 1150);
+        const realRating = stats && stats.rating > 0 ? stats.rating : null;
+        const realCount = stats && stats.count > 0 ? stats.count : 0;
 
         return {
           ...item.event,
@@ -213,8 +211,9 @@ export async function GET(request: Request) {
           showDateStr,
           showTimeStr,
           hasBookableSessions: !!nextBookable,
-          rating: stats && stats.rating > 0 ? stats.rating : defaultRating,
-          ratingCount: stats && stats.count > 0 ? stats.count : defaultCount,
+          // Only real DB reviews — never invent star counts for empty catalogs
+          rating: realRating,
+          ratingCount: realCount,
         };
       });
     }

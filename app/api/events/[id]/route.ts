@@ -173,11 +173,9 @@ export async function GET(
       console.warn('event_images fetch warning:', e);
     }
 
-    // Reliable rating fallback
-    const defaultRating = Number((4.7 + ((eventId * 3) % 3) * 0.1).toFixed(1));
-    const defaultCount = 420 + ((eventId * 137) % 980);
-    const finalRating = rating > 0 ? rating : defaultRating;
-    const finalCount = ratingCount > 0 ? ratingCount : defaultCount;
+    // Only real review aggregates — never invent ratings/counts
+    const finalRating = rating > 0 ? rating : null;
+    const finalCount = ratingCount > 0 ? ratingCount : 0;
 
     let parsedGalleryUrls: string[] = [];
     if (item.event.galleryUrls) {
@@ -227,7 +225,12 @@ export async function GET(
         hasBookableSessions: bookableSessions.some((s) => Number(s.availableInventoryCount || 0) > 0),
         rating: finalRating,
         ratingCount: finalCount,
-        ratingCountStr: `${(finalCount / 1000).toFixed(1)}k`,
+        ratingCountStr:
+          finalCount > 0
+            ? finalCount >= 1000
+              ? `${(finalCount / 1000).toFixed(1)}k`
+              : String(finalCount)
+            : null,
         images: combinedImageUrls,
         galleryImages: fetchedImages,
         castCrewList: parsedCastCrewList,

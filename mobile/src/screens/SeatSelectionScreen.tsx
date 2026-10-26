@@ -22,6 +22,7 @@ import AnimatedRe, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
+  runOnJS,
 } from 'react-native-reanimated';
 import { useFocusEffect } from '@react-navigation/native';
 import { COLORS, RADIUS, SHADOWS } from '../theme';
@@ -161,6 +162,7 @@ type SectionView = {
 /**
  * BookMyShow-style compact seat — fixed box size so full theatre fits on screen.
  */
+/** BookMyShow-style armchair seat (headrest + cushion), not a flat square. */
 const RealisticSeatIcon = React.memo(
   ({
     seat,
@@ -176,35 +178,86 @@ const RealisticSeatIcon = React.memo(
     onPress: (seat: SeatItem) => void;
   }) => {
     const num = String(seat.seatNumber ?? seat.seatCode?.replace(/\D/g, '') ?? '');
-    const fontSize = size >= 20 ? 10 : size >= 16 ? 9 : 8;
+    const w = Math.max(22, size);
+    const h = Math.round(w * 1.05);
+    const headH = Math.max(4, Math.round(w * 0.22));
+    const armW = Math.max(2, Math.round(w * 0.12));
+    const cushionW = w - armW * 2;
+    const cushionH = h - headH - 1;
+    const fontSize = w >= 26 ? 9 : w >= 22 ? 8 : 7;
 
     return (
       <Pressable
         onPress={() => onPress(seat)}
         disabled={isBooked}
-        hitSlop={{ top: 2, bottom: 2, left: 1, right: 1 }}
+        hitSlop={{ top: 3, bottom: 3, left: 2, right: 2 }}
         style={({ pressed }) => [
-          styles.bmsSeatBox,
-          {
-            width: size,
-            height: size,
-            borderRadius: Math.max(3, Math.round(size * 0.18)),
-          },
-          isSelected
-            ? styles.bmsSeatSelected
-            : isBooked
-              ? styles.bmsSeatBooked
-              : styles.bmsSeatAvailable,
-          pressed && !isBooked && { opacity: 0.85, transform: [{ scale: 0.94 }] },
+          styles.realSeatOuter,
+          { width: w, height: h },
+          pressed && !isBooked && { opacity: 0.88, transform: [{ scale: 0.94 }] },
         ]}
       >
-        {isSelected ? (
-          <Icon name="check-bold" size={Math.max(9, size * 0.42)} color="#FFFFFF" />
-        ) : isBooked ? null : (
-          <Text style={[styles.bmsSeatNum, { fontSize, color: '#15803D' }]} numberOfLines={1}>
-            {num}
-          </Text>
-        )}
+        <View
+          style={[
+            styles.realSeatHeadrest,
+            { width: cushionW + 2, height: headH },
+            isSelected
+              ? styles.realSeatHeadrestSelected
+              : isBooked
+                ? styles.realSeatHeadrestBooked
+                : styles.realSeatHeadrestAvailable,
+          ]}
+        />
+        <View style={styles.realSeatBodyRow}>
+          <View
+            style={[
+              styles.realSeatArmrest,
+              { width: armW, height: Math.round(cushionH * 0.72) },
+              isSelected
+                ? styles.realSeatArmrestSelected
+                : isBooked
+                  ? styles.realSeatArmrestBooked
+                  : styles.realSeatArmrestAvailable,
+            ]}
+          />
+          <View
+            style={[
+              styles.realSeatCushion,
+              {
+                width: cushionW,
+                height: cushionH,
+                borderRadius: Math.max(3, Math.round(w * 0.14)),
+              },
+              isSelected
+                ? styles.realSeatCushionSelected
+                : isBooked
+                  ? styles.realSeatCushionBooked
+                  : styles.realSeatCushionAvailable,
+            ]}
+          >
+            {isSelected ? (
+              <Icon name="check-bold" size={Math.max(9, w * 0.38)} color="#FFFFFF" />
+            ) : isBooked ? null : (
+              <Text
+                style={[styles.realSeatNumber, styles.realSeatNumberAvailable, { fontSize }]}
+                numberOfLines={1}
+              >
+                {num}
+              </Text>
+            )}
+          </View>
+          <View
+            style={[
+              styles.realSeatArmrest,
+              { width: armW, height: Math.round(cushionH * 0.72) },
+              isSelected
+                ? styles.realSeatArmrestSelected
+                : isBooked
+                  ? styles.realSeatArmrestBooked
+                  : styles.realSeatArmrestAvailable,
+            ]}
+          />
+        </View>
       </Pressable>
     );
   }
@@ -713,31 +766,70 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
     return { maxSeatsInRow: maxSeats, maxAislesInRow: maxAisles };
   }, [sectionViews]);
 
-  // Comfortable tap target size with smooth horizontal scroll for wide theatre rows
+  // Fit as many seats as possible; wide rows scroll horizontally (never clip)
   const seatCellSize = useMemo(() => {
-    const usable = SCREEN_WIDTH - 48;
+    const labelSpace = 44;
+    const aisleExtra = maxAislesInRow * 10;
+    const usable = SCREEN_WIDTH - 32 - labelSpace - aisleExtra;
     const fitted = Math.floor(usable / Math.max(maxSeatsInRow, 1));
-    return Math.max(24, Math.min(30, fitted));
-  }, [maxSeatsInRow]);
+    return Math.max(22, Math.min(28, fitted));
+  }, [maxSeatsInRow, maxAislesInRow]);
 
-  useEffect(() => {
+  const [showMiniMap, setShowMiniMap] = useState(false);
+  /** When true, parent ScrollViews stop stealing pan/pinch — fixes "stuck" map */
+  const [mapZoomed, setMapZoomed] = useState(false);
+  const miniMapHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const revealMiniMap = useCallback(() => {
+    if (miniMapHideTimer.current) clearTimeout(miniMapHideTimer.current);
+    setShowMiniMap(true);
+    setMapZoomed(true);
+  }, []);
+
+  const scheduleHideMiniMap = useCallback(() => {
+    if (miniMapHideTimer.current) clearTimeout(miniMapHideTimer.current);
+    miniMapHideTimer.current = setTimeout(() => {
+      setShowMiniMap(false);
+      setMapZoomed(false);
+    }, 1400);
+  }, []);
+
+  const resetMapView = useCallback(() => {
     mapScale.value = withTiming(1, { duration: 180 });
     mapSavedScale.value = 1;
     mapTX.value = withTiming(0, { duration: 180 });
     mapTY.value = withTiming(0, { duration: 180 });
     mapSavedTX.value = 0;
     mapSavedTY.value = 0;
-  }, [sessionId, maxSeatsInRow, seatCellSize]);
+    setShowMiniMap(false);
+    setMapZoomed(false);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (miniMapHideTimer.current) clearTimeout(miniMapHideTimer.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    resetMapView();
+  }, [sessionId, maxSeatsInRow, seatCellSize, resetMapView]);
 
   const pinchGesture = useMemo(
     () =>
       Gesture.Pinch()
+        .onBegin(() => {
+          runOnJS(setMapZoomed)(true);
+        })
         .onUpdate((e) => {
           const next = Math.min(
             MAP_MAX_SCALE,
             Math.max(MAP_MIN_SCALE, mapSavedScale.value * e.scale)
           );
           mapScale.value = next;
+          if (next < 0.97 || next > 1.03) {
+            runOnJS(revealMiniMap)();
+          }
         })
         .onEnd(() => {
           mapSavedScale.value = mapScale.value;
@@ -749,27 +841,44 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
             mapTY.value = withTiming(0);
             mapSavedTX.value = 0;
             mapSavedTY.value = 0;
+            runOnJS(scheduleHideMiniMap)();
+          } else {
+            runOnJS(revealMiniMap)();
           }
         }),
-    []
+    [revealMiniMap, scheduleHideMiniMap]
   );
 
   const panGesture = useMemo(
     () =>
       Gesture.Pan()
         .averageTouches(true)
-        .minDistance(12)
+        .minPointers(1)
+        .maxPointers(2)
+        .minDistance(8)
+        .onBegin(() => {
+          // Lock outer scroll as soon as map pan starts (esp. when zoomed)
+          if (mapSavedScale.value < 0.98 || mapSavedScale.value > 1.02) {
+            runOnJS(setMapZoomed)(true);
+          }
+        })
         .onUpdate((e) => {
           const nearOne = mapSavedScale.value >= 0.98 && mapSavedScale.value <= 1.02;
-          if (nearOne) return;
+          // At 100%: allow horizontal pan so wide rows aren't stuck behind ScrollView fights
+          if (nearOne && Math.abs(e.translationY) > Math.abs(e.translationX) * 1.35) {
+            return;
+          }
+          if (!nearOne) {
+            runOnJS(revealMiniMap)();
+          }
           mapTX.value = mapSavedTX.value + e.translationX;
-          mapTY.value = mapSavedTY.value + e.translationY;
+          mapTY.value = mapSavedTY.value + (nearOne ? 0 : e.translationY);
         })
         .onEnd(() => {
           mapSavedTX.value = mapTX.value;
           mapSavedTY.value = mapTY.value;
         }),
-    []
+    [revealMiniMap]
   );
 
   const mapGesture = useMemo(
@@ -974,6 +1083,8 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
+        scrollEnabled={!mapZoomed}
+        nestedScrollEnabled={!mapZoomed}
         contentContainerStyle={{
           paddingBottom: (selected.length > 0 ? 156 : 118) + (insets.bottom || 16),
         }}
@@ -1218,16 +1329,11 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
               </View>
             </View>
 
-            {/* ── Auditorium map: pinch/pan + BMS mini overview ── */}
+            {/* ── Auditorium map: pinch/pan + BMS mini overview (no nested H-Scroll — pan owns movement) ── */}
             <View>
               {sectionViews.map((section) => {
                 const renderRowsGrid = (
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    nestedScrollEnabled={true}
-                    contentContainerStyle={styles.sectionSeatsHorizontalScroll}
-                  >
+                  <View style={styles.sectionSeatsHorizontalScroll}>
                     <View style={styles.sectionSeatsGrid}>
                       {section.rows.map((row) => {
                         const aisleIndex = Math.floor(row.seats.length / 2);
@@ -1266,7 +1372,7 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
                         );
                       })}
                     </View>
-                  </ScrollView>
+                  </View>
                 );
 
                 return (
@@ -1321,54 +1427,46 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
               </AnimatedRe.View>
             </GestureDetector>
 
-            {/* BMS-style mini overview map */}
-            <View style={styles.miniMapCard} pointerEvents="box-none">
-              <Text style={styles.miniMapTitle}>
-                {language === 'mr' ? 'नकाशा' : 'Map'}
-              </Text>
-              <View style={styles.miniMapCanvas}>
-                {sectionViews.slice(0, 4).map((section) => (
-                  <View key={`mini-${section.key}`} style={styles.miniMapSection}>
-                    {section.rows.slice(0, 6).map((row) => (
-                      <View key={`mini-${section.key}-${row.label}`} style={styles.miniMapRow}>
-                        {row.seats.slice(0, 14).map((seat) => {
-                          const isSelected = selected.includes(seat.seatId);
-                          const isBooked =
-                            seat.status === 'booked' ||
-                            seat.status === 'held' ||
-                            seat.status === 'blocked';
-                          return (
-                            <View
-                              key={seat.seatId}
-                              style={[
-                                styles.miniMapDot,
-                                isSelected && styles.miniMapDotSelected,
-                                isBooked && !isSelected && styles.miniMapDotBooked,
-                              ]}
-                            />
-                          );
-                        })}
-                      </View>
-                    ))}
-                  </View>
-                ))}
-              </View>
-              <TouchableOpacity
-                onPress={() => {
-                  mapScale.value = withTiming(1);
-                  mapSavedScale.value = 1;
-                  mapTX.value = withTiming(0);
-                  mapTY.value = withTiming(0);
-                  mapSavedTX.value = 0;
-                  mapSavedTY.value = 0;
-                }}
-                hitSlop={8}
-              >
-                <Text style={styles.miniMapReset}>
-                  {language === 'mr' ? 'रीसेट · पिंच झूम' : 'Reset · pinch zoom'}
+            {/* BMS mini-map: only while zoomed / panning — auto-hides at 100% */}
+            {showMiniMap ? (
+              <View style={styles.miniMapCard} pointerEvents="box-none">
+                <Text style={styles.miniMapTitle}>
+                  {language === 'mr' ? 'नकाशा' : 'Map'}
                 </Text>
-              </TouchableOpacity>
-            </View>
+                <View style={styles.miniMapCanvas}>
+                  {sectionViews.slice(0, 4).map((section) => (
+                    <View key={`mini-${section.key}`} style={styles.miniMapSection}>
+                      {section.rows.slice(0, 6).map((row) => (
+                        <View key={`mini-${section.key}-${row.label}`} style={styles.miniMapRow}>
+                          {row.seats.slice(0, 16).map((seat) => {
+                            const isSelected = selected.includes(seat.seatId);
+                            const isBooked =
+                              seat.status === 'booked' ||
+                              seat.status === 'held' ||
+                              seat.status === 'blocked';
+                            return (
+                              <View
+                                key={seat.seatId}
+                                style={[
+                                  styles.miniMapDot,
+                                  isSelected && styles.miniMapDotSelected,
+                                  isBooked && !isSelected && styles.miniMapDotBooked,
+                                ]}
+                              />
+                            );
+                          })}
+                        </View>
+                      ))}
+                    </View>
+                  ))}
+                </View>
+                <TouchableOpacity onPress={resetMapView} hitSlop={8}>
+                  <Text style={styles.miniMapReset}>
+                    {language === 'mr' ? 'रीसेट दृश्य' : 'Reset view'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
 
             {/* ── 6. Trust & Security Footer Badge ── */}
             <View style={styles.trustBadgeContainer}>
@@ -2069,8 +2167,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
     paddingVertical: 8,
-    paddingHorizontal: 4,
-    overflow: 'hidden',
+    paddingHorizontal: 2,
+    overflow: 'visible',
     ...SHADOWS.sm,
   },
   sectionCardHeader: {
@@ -2156,34 +2254,40 @@ const styles = StyleSheet.create({
   },
 
   sectionSeatsHorizontalScroll: {
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    minWidth: '100%',
+    paddingHorizontal: 4,
+    paddingVertical: 6,
+    paddingRight: 12,
+    flexGrow: 1,
+    justifyContent: 'center',
   },
   sectionSeatsGrid: {
-    alignItems: 'center',
-    gap: 4,
+    alignItems: 'flex-start',
+    gap: 5,
+    paddingRight: 8,
   },
   seatRowWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 2,
+    flexShrink: 0,
   },
   rowLabelText: {
-    width: 18,
+    width: 20,
     fontSize: 10,
     fontWeight: '800',
     color: '#64748B',
     textAlign: 'center',
     marginRight: 4,
+    flexShrink: 0,
   },
   rowLabelTextRight: {
-    width: 18,
+    width: 20,
     fontSize: 10,
     fontWeight: '800',
     color: '#64748B',
     textAlign: 'center',
     marginLeft: 4,
+    flexShrink: 0,
   },
   rowLabelPill: {
     width: 16,
@@ -2202,8 +2306,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-start',
-    flexShrink: 1,
-    gap: 2,
+    flexShrink: 0,
+    gap: 3,
   },
 
   // BMS compact seat boxes
@@ -2240,10 +2344,10 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   realSeatHeadrestAvailable: {
-    backgroundColor: '#FB923C',
+    backgroundColor: '#16A34A',
   },
   realSeatHeadrestSelected: {
-    backgroundColor: '#9A3412',
+    backgroundColor: '#EA580C',
   },
   realSeatHeadrestBooked: {
     backgroundColor: '#CBD5E1',
@@ -2258,13 +2362,13 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   realSeatArmrestAvailable: {
-    backgroundColor: '#94A3B8',
+    backgroundColor: '#86EFAC',
   },
   realSeatArmrestSelected: {
-    backgroundColor: '#C2410C',
+    backgroundColor: '#FB923C',
   },
   realSeatArmrestBooked: {
-    backgroundColor: '#CBD5E1',
+    backgroundColor: '#E2E8F0',
   },
   realSeatCushion: {
     alignItems: 'center',
@@ -2274,10 +2378,10 @@ const styles = StyleSheet.create({
   },
   realSeatCushionAvailable: {
     backgroundColor: '#FFFFFF',
-    borderWidth: 1.4,
-    borderColor: '#94A3B8',
+    borderWidth: 1.5,
+    borderColor: '#16A34A',
     borderBottomWidth: 2.5,
-    borderBottomColor: '#64748B',
+    borderBottomColor: '#15803D',
   },
   realSeatCushionSelected: {
     backgroundColor: '#EA580C',
@@ -2285,30 +2389,25 @@ const styles = StyleSheet.create({
     borderColor: '#C2410C',
     borderBottomWidth: 2.5,
     borderBottomColor: '#9A3412',
-    shadowColor: '#EA580C',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 4,
-    elevation: 4,
   },
   realSeatCushionBooked: {
     backgroundColor: '#E2E8F0',
     borderWidth: 1,
     borderColor: '#CBD5E1',
-    opacity: 0.75,
+    opacity: 0.85,
   },
   realSeatNumber: {
     fontWeight: '800',
   },
   realSeatNumberAvailable: {
-    color: '#1E293B',
+    color: '#166534',
   },
   realSeatNumberBooked: {
     color: '#94A3B8',
   },
 
   aisleWalkway: {
-    width: 8,
+    width: 10,
     height: 1,
   },
   aisleDash: {

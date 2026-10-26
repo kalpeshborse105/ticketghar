@@ -1,0 +1,767 @@
+{
+  "generatedAt": "2026-10-26T14:02:20.419Z",
+  "venues": 58,
+  "cities": [
+    {
+      "city": "Mumbai",
+      "c": 8
+    },
+    {
+      "city": "Pune",
+      "c": 7
+    },
+    {
+      "city": "Nagpur",
+      "c": 3
+    },
+    {
+      "city": "Thane",
+      "c": 3
+    },
+    {
+      "city": "Nashik",
+      "c": 2
+    },
+    {
+      "city": "Solapur",
+      "c": 2
+    },
+    {
+      "city": "Chhatrapati Sambhajinagar",
+      "c": 2
+    },
+    {
+      "city": "Kolhapur",
+      "c": 2
+    },
+    {
+      "city": "Jalna",
+      "c": 1
+    },
+    {
+      "city": "Wardha",
+      "c": 1
+    },
+    {
+      "city": "Chandrapur",
+      "c": 1
+    },
+    {
+      "city": "Ratnagiri",
+      "c": 1
+    },
+    {
+      "city": "Akola",
+      "c": 1
+    },
+    {
+      "city": "Bhandara",
+      "c": 1
+    },
+    {
+      "city": "Washim",
+      "c": 1
+    },
+    {
+      "city": "Dharashiv",
+      "c": 1
+    },
+    {
+      "city": "Nandurbar",
+      "c": 1
+    },
+    {
+      "city": "Alibag",
+      "c": 1
+    },
+    {
+      "city": "Gondia",
+      "c": 1
+    },
+    {
+      "city": "Beed",
+      "c": 1
+    },
+    {
+      "city": "Nanded",
+      "c": 1
+    },
+    {
+      "city": "Satara",
+      "c": 1
+    },
+    {
+      "city": "Gadchiroli",
+      "c": 1
+    },
+    {
+      "city": "Amravati",
+      "c": 1
+    },
+    {
+      "city": "Vasai",
+      "c": 1
+    }
+  ],
+  "eventCount": 35,
+  "events": [
+    {
+      "id": 9,
+      "status": "published",
+      "title": "पुन्हा सही रे सही",
+      "titleEn": "Punha Sahi Re Sahi",
+      "category": "plays",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 8,
+      "upcoming": 0,
+      "orders": 2,
+      "slug": "punha-sahi-re-sahi-1792262544854-0"
+    },
+    {
+      "id": 10,
+      "status": "published",
+      "title": "घाशीराम कोतवाल",
+      "titleEn": "Ghashiram Kotwal",
+      "category": "plays",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 10,
+      "upcoming": 0,
+      "orders": 8,
+      "slug": "ghashiram-kotwal-1792262557456-1"
+    },
+    {
+      "id": 11,
+      "status": "published",
+      "title": "सूर नवा ध्यास नवा",
+      "titleEn": "Sur Nava Dhyas Nava",
+      "category": "music",
+      "venue": "PVR INOX: The Pavillion Mall",
+      "city": "Pune",
+      "sessions": 2,
+      "upcoming": 0,
+      "orders": 1,
+      "slug": "sur-nava-dhyas-nava-1792262557784-2"
+    },
+    {
+      "id": 12,
+      "status": "unpublished",
+      "title": "आई शपथ",
+      "titleEn": "Aai Shapath",
+      "category": "comedy",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 2,
+      "upcoming": 0,
+      "orders": 0,
+      "slug": "aai-shapath-1792262558360-3"
+    },
+    {
+      "id": 13,
+      "status": "unpublished",
+      "title": "लावणी वैभव",
+      "titleEn": "Lavani Vaibhav",
+      "category": "cultural",
+      "venue": "Shahu Smarak Bhavan",
+      "city": "Kolhapur",
+      "sessions": 2,
+      "upcoming": 0,
+      "orders": 0,
+      "slug": "lavani-vaibhav-1792262558687-4"
+    },
+    {
+      "id": 14,
+      "status": "unpublished",
+      "title": "वारली चित्रकला कार्यशाळा",
+      "titleEn": "Warli Art Workshop",
+      "category": "workshops",
+      "venue": "Kalidas Natya Mandir",
+      "city": "Thane",
+      "sessions": 2,
+      "upcoming": 0,
+      "orders": 0,
+      "slug": "warli-art-workshop-1792262559880-5"
+    },
+    {
+      "id": 15,
+      "status": "unpublished",
+      "title": "सैराट इकोज",
+      "titleEn": "Sairat Echoes",
+      "category": "music",
+      "venue": "Bal Gandharva Natya Mandir Sangli",
+      "city": "Sangli",
+      "sessions": 2,
+      "upcoming": 0,
+      "orders": 0,
+      "slug": "sairat-echoes-1792262561012-6"
+    },
+    {
+      "id": 16,
+      "status": "unpublished",
+      "title": "नाशिक द्राक्ष काढणी रात्र",
+      "titleEn": "Nashik Grape Harvest Night",
+      "category": "music",
+      "venue": "Kalidas Kala Mandir",
+      "city": "Nashik",
+      "sessions": 2,
+      "upcoming": 0,
+      "orders": 0,
+      "slug": "nashik-grape-harvest-night-1792262562632-7"
+    },
+    {
+      "id": 18,
+      "status": "unpublished",
+      "title": "संगीत शारदा",
+      "titleEn": "Sangeet Sharada",
+      "category": "plays",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 2,
+      "upcoming": 0,
+      "orders": 0,
+      "slug": "pune-sangeet-sharada"
+    },
+    {
+      "id": 19,
+      "status": "unpublished",
+      "title": "नटसम्राट",
+      "titleEn": "Natasamrat",
+      "category": "movies",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 2,
+      "upcoming": 0,
+      "orders": 0,
+      "slug": "pune-natasamrat"
+    },
+    {
+      "id": 20,
+      "status": "published",
+      "title": "पुणे स्टँडअप नाईट",
+      "titleEn": "Pune Standup Night",
+      "category": "comedy",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 2,
+      "upcoming": 0,
+      "orders": 1,
+      "slug": "pune-pune-standup-night"
+    },
+    {
+      "id": 21,
+      "status": "published",
+      "title": "बालगंधर्व संगीत संध्या",
+      "titleEn": "Balgandharva Music Evening",
+      "category": "music",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 2,
+      "upcoming": 0,
+      "orders": 1,
+      "slug": "pune-balgandharva-music-evening"
+    },
+    {
+      "id": 26,
+      "status": "unpublished",
+      "title": "आई रिटायर होतेय",
+      "titleEn": "Aai Retire Hote",
+      "category": "plays",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 2,
+      "upcoming": 0,
+      "orders": 0,
+      "slug": "aai-retire-hote"
+    },
+    {
+      "id": 27,
+      "status": "unpublished",
+      "title": "ती फुलराणी",
+      "titleEn": "Ti Phulrani",
+      "category": "plays",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 2,
+      "upcoming": 0,
+      "orders": 0,
+      "slug": "ti-phulrani"
+    },
+    {
+      "id": 28,
+      "status": "unpublished",
+      "title": "वऱ्हाड निघालं लंडनला",
+      "titleEn": "Varhad Nighalay Londonla",
+      "category": "comedy",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 2,
+      "upcoming": 0,
+      "orders": 0,
+      "slug": "varhad-nighalay-londonla"
+    },
+    {
+      "id": 29,
+      "status": "published",
+      "title": "एका लग्नाची पुढची गोष्ट",
+      "titleEn": "Eka Lagnachi Pudhchi Gosht",
+      "category": "plays",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 2,
+      "upcoming": 0,
+      "orders": 1,
+      "slug": "eka-lagnachi-pudhchi-gosht"
+    },
+    {
+      "id": 30,
+      "status": "published",
+      "title": "सूर नवा ध्यास नवा",
+      "titleEn": "Sur Nava Dhyas Nava",
+      "category": "music",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 2,
+      "upcoming": 0,
+      "orders": 7,
+      "slug": "sur-nava-dhyas-nava"
+    },
+    {
+      "id": 31,
+      "status": "unpublished",
+      "title": "मामाच्या गोव्याला जाऊया",
+      "titleEn": "Mamachya Govyala Jauya",
+      "category": "plays",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 0,
+      "upcoming": 0,
+      "orders": 0,
+      "slug": "mamachya-govyala-jauya"
+    },
+    {
+      "id": 32,
+      "status": "unpublished",
+      "title": "छापा काटा",
+      "titleEn": "Chhapa Kata",
+      "category": "plays",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 2,
+      "upcoming": 0,
+      "orders": 0,
+      "slug": "chhapa-kata"
+    },
+    {
+      "id": 33,
+      "status": "published",
+      "title": "फोक लोक",
+      "titleEn": "Folk Lok",
+      "category": "music",
+      "venue": "Dhule Cultural Hall",
+      "city": "Dhule",
+      "sessions": 1,
+      "upcoming": 0,
+      "orders": 1,
+      "slug": "folk-lok-1792485534044"
+    },
+    {
+      "id": 34,
+      "status": "published",
+      "title": "दांडिया रास महोत्सव २०२६",
+      "titleEn": "Dandiya Nights 2026",
+      "category": "cultural",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 3,
+      "upcoming": 0,
+      "orders": 7,
+      "slug": "dandiya-nights-2026"
+    },
+    {
+      "id": 47,
+      "status": "unpublished",
+      "title": "नटसम्राट",
+      "titleEn": "Natsamrat",
+      "category": "plays",
+      "venue": "Dinanath Mangeshkar Natyagruha",
+      "city": "Mumbai",
+      "sessions": 6,
+      "upcoming": 0,
+      "orders": 0,
+      "slug": "natsamrat"
+    },
+    {
+      "id": 48,
+      "status": "unpublished",
+      "title": "आम्ही आणि आमचे बाप",
+      "titleEn": "Aamhi Aani Aamche Baap",
+      "category": "plays",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 0,
+      "upcoming": 0,
+      "orders": 0,
+      "slug": "aamhi-aani-aamche-baap"
+    },
+    {
+      "id": 49,
+      "status": "published",
+      "title": "वसंतोत्सव २०२६ (भव्य शास्त्रीय संगीतोत्सव)",
+      "titleEn": "Vasantotsav 2026 Live",
+      "category": "music",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 6,
+      "upcoming": 0,
+      "orders": 4,
+      "slug": "vasantotsav-2026"
+    },
+    {
+      "id": 84,
+      "status": "published",
+      "title": "पुष्पा २: द रुल (महा-चित्रपट)",
+      "titleEn": "Pushpa 2: The Rule",
+      "category": "movies",
+      "venue": "PVR INOX: The Pavillion Mall",
+      "city": "Pune",
+      "sessions": 4,
+      "upcoming": 0,
+      "orders": 2,
+      "slug": "pushpa-2-the-rule"
+    },
+    {
+      "id": 85,
+      "status": "published",
+      "title": "जुना फर्निचर (सुपरहिट कौटुंबिक कथा)",
+      "titleEn": "Juna Furniture",
+      "category": "movies",
+      "venue": "Cinepolis: Westend Mall",
+      "city": "Pune",
+      "sessions": 4,
+      "upcoming": 0,
+      "orders": 11,
+      "slug": "juna-furniture"
+    },
+    {
+      "id": 86,
+      "status": "unpublished",
+      "title": "कांतारा: चॅप्टर १ (दैवी लोकगाथा)",
+      "titleEn": "Kantara: Chapter 1",
+      "category": "movies",
+      "venue": "PVR INOX: R City Mall",
+      "city": "Mumbai",
+      "sessions": 4,
+      "upcoming": 0,
+      "orders": 0,
+      "slug": "kantara-chapter-1"
+    },
+    {
+      "id": 87,
+      "status": "published",
+      "title": "बाईपण भारी देवा २",
+      "titleEn": "Baipan Bhaari Deva 2",
+      "category": "movies",
+      "venue": "PVR INOX: The Pavillion Mall",
+      "city": "Pune",
+      "sessions": 4,
+      "upcoming": 0,
+      "orders": 11,
+      "slug": "baipan-bhaari-deva-2"
+    },
+    {
+      "id": 88,
+      "status": "unpublished",
+      "title": "अवतार: फायर अँड ॲश (आयमॅक्स ३डी)",
+      "titleEn": "Avatar: Fire and Ash (IMAX 3D)",
+      "category": "movies",
+      "venue": "PVR INOX: R City Mall",
+      "city": "Mumbai",
+      "sessions": 4,
+      "upcoming": 0,
+      "orders": 0,
+      "slug": "avatar-fire-and-ash"
+    },
+    {
+      "id": 90,
+      "status": "published",
+      "title": "जर तर ची गोष्ट",
+      "titleEn": "Jar Tar Chi Goshta",
+      "category": "plays",
+      "venue": "Yashwantrao Chavan Natyagruha",
+      "city": "Pune",
+      "sessions": 4,
+      "upcoming": 0,
+      "orders": 7,
+      "slug": "jar-tar-chi-goshta"
+    },
+    {
+      "id": 91,
+      "status": "unpublished",
+      "title": "अलबत्या गलबत्या (बालनाट्य)",
+      "titleEn": "Albattya Galbattya",
+      "category": "plays",
+      "venue": "Dr. Kashinath Ghanekar Natyagruha",
+      "city": "Thane",
+      "sessions": 4,
+      "upcoming": 0,
+      "orders": 0,
+      "slug": "albattya-galbattya"
+    },
+    {
+      "id": 92,
+      "status": "published",
+      "title": "श्री तशी सौ (कौटुंबिक महानाटक)",
+      "titleEn": "Shree Tashi Sau",
+      "category": "plays",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 2,
+      "upcoming": 0,
+      "orders": 7,
+      "slug": "shree-tashi-sau-1792686743"
+    },
+    {
+      "id": 93,
+      "status": "published",
+      "title": "जेलर २",
+      "titleEn": "Jailer 2",
+      "category": "plays",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 1,
+      "upcoming": 1,
+      "orders": 2,
+      "slug": "jailer-2-1792871826246"
+    },
+    {
+      "id": 94,
+      "status": "published",
+      "title": "रामायण",
+      "titleEn": "Ramayan",
+      "category": "plays",
+      "venue": "Dhule Cultural Hall",
+      "city": "Dhule",
+      "sessions": 1,
+      "upcoming": 1,
+      "orders": 0,
+      "slug": "ramayan-1792872154710"
+    },
+    {
+      "id": 95,
+      "status": "unpublished",
+      "title": "पुन्हा सही रे सही",
+      "titleEn": "Punha Sahi Re Sahi",
+      "category": "plays",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 0,
+      "upcoming": 0,
+      "orders": 0,
+      "slug": "punha-sahi-re-sahi"
+    }
+  ],
+  "noUpcoming": [
+    {
+      "id": 9,
+      "status": "published",
+      "title": "Punha Sahi Re Sahi",
+      "orders": 2
+    },
+    {
+      "id": 10,
+      "status": "published",
+      "title": "Ghashiram Kotwal",
+      "orders": 8
+    },
+    {
+      "id": 11,
+      "status": "published",
+      "title": "Sur Nava Dhyas Nava",
+      "orders": 1
+    },
+    {
+      "id": 12,
+      "status": "unpublished",
+      "title": "Aai Shapath",
+      "orders": 0
+    },
+    {
+      "id": 13,
+      "status": "unpublished",
+      "title": "Lavani Vaibhav",
+      "orders": 0
+    },
+    {
+      "id": 14,
+      "status": "unpublished",
+      "title": "Warli Art Workshop",
+      "orders": 0
+    },
+    {
+      "id": 15,
+      "status": "unpublished",
+      "title": "Sairat Echoes",
+      "orders": 0
+    },
+    {
+      "id": 16,
+      "status": "unpublished",
+      "title": "Nashik Grape Harvest Night",
+      "orders": 0
+    },
+    {
+      "id": 18,
+      "status": "unpublished",
+      "title": "Sangeet Sharada",
+      "orders": 0
+    },
+    {
+      "id": 19,
+      "status": "unpublished",
+      "title": "Natasamrat",
+      "orders": 0
+    },
+    {
+      "id": 20,
+      "status": "published",
+      "title": "Pune Standup Night",
+      "orders": 1
+    },
+    {
+      "id": 21,
+      "status": "published",
+      "title": "Balgandharva Music Evening",
+      "orders": 1
+    },
+    {
+      "id": 26,
+      "status": "unpublished",
+      "title": "Aai Retire Hote",
+      "orders": 0
+    },
+    {
+      "id": 27,
+      "status": "unpublished",
+      "title": "Ti Phulrani",
+      "orders": 0
+    },
+    {
+      "id": 28,
+      "status": "unpublished",
+      "title": "Varhad Nighalay Londonla",
+      "orders": 0
+    },
+    {
+      "id": 29,
+      "status": "published",
+      "title": "Eka Lagnachi Pudhchi Gosht",
+      "orders": 1
+    },
+    {
+      "id": 30,
+      "status": "published",
+      "title": "Sur Nava Dhyas Nava",
+      "orders": 7
+    },
+    {
+      "id": 31,
+      "status": "unpublished",
+      "title": "Mamachya Govyala Jauya",
+      "orders": 0
+    },
+    {
+      "id": 32,
+      "status": "unpublished",
+      "title": "Chhapa Kata",
+      "orders": 0
+    },
+    {
+      "id": 33,
+      "status": "published",
+      "title": "Folk Lok",
+      "orders": 1
+    },
+    {
+      "id": 34,
+      "status": "published",
+      "title": "Dandiya Nights 2026",
+      "orders": 7
+    },
+    {
+      "id": 47,
+      "status": "unpublished",
+      "title": "Natsamrat",
+      "orders": 0
+    },
+    {
+      "id": 48,
+      "status": "unpublished",
+      "title": "Aamhi Aani Aamche Baap",
+      "orders": 0
+    },
+    {
+      "id": 49,
+      "status": "published",
+      "title": "Vasantotsav 2026 Live",
+      "orders": 4
+    },
+    {
+      "id": 84,
+      "status": "published",
+      "title": "Pushpa 2: The Rule",
+      "orders": 2
+    },
+    {
+      "id": 85,
+      "status": "published",
+      "title": "Juna Furniture",
+      "orders": 11
+    },
+    {
+      "id": 86,
+      "status": "unpublished",
+      "title": "Kantara: Chapter 1",
+      "orders": 0
+    },
+    {
+      "id": 87,
+      "status": "published",
+      "title": "Baipan Bhaari Deva 2",
+      "orders": 11
+    },
+    {
+      "id": 88,
+      "status": "unpublished",
+      "title": "Avatar: Fire and Ash (IMAX 3D)",
+      "orders": 0
+    },
+    {
+      "id": 90,
+      "status": "published",
+      "title": "Jar Tar Chi Goshta",
+      "orders": 7
+    },
+    {
+      "id": 91,
+      "status": "unpublished",
+      "title": "Albattya Galbattya",
+      "orders": 0
+    },
+    {
+      "id": 92,
+      "status": "published",
+      "title": "Shree Tashi Sau",
+      "orders": 7
+    },
+    {
+      "id": 95,
+      "status": "unpublished",
+      "title": "Punha Sahi Re Sahi",
+      "orders": 0
+    }
+  ],
+  "safeUnpublish": [],
+  "publishedCount": 17,
+  "unpublishedCount": 18
+}

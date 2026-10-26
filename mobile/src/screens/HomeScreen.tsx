@@ -119,7 +119,7 @@ export default function HomeScreen({ navigation }: any) {
   const [cityPickerOpen, setCityPickerOpen] = useState(false);
   const [tikitMitraOpen, setTikitMitraOpen] = useState(false);
   const bannerRef = useRef<FlatList>(null);
-  // Hardware back: close overlays / pop stack; at root let MainActivity move app to background
+  // Hardware back: close overlays → stack back → confirm exit (do not silently kill app)
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
@@ -135,8 +135,19 @@ export default function HomeScreen({ navigation }: any) {
           navigation.goBack();
           return true;
         }
-        // Return false → MainActivity.invokeDefaultOnBackPressed → moveTaskToBack
-        return false;
+        Alert.alert(
+          'अॅप बंद करायचे? (Exit MahaTicket)',
+          'तुम्हाला महाटिकिट अॅपमधून बाहेर पडायचे आहे का?',
+          [
+            { text: 'नाही (Stay)', style: 'cancel' },
+            {
+              text: 'होय, बंद करा (Exit)',
+              style: 'destructive',
+              onPress: () => BackHandler.exitApp(),
+            },
+          ]
+        );
+        return true;
       };
 
       const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);

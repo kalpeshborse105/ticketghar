@@ -758,12 +758,15 @@ export const api = {
     category?: string;
     search?: string;
     limit?: number;
+    /** Scanner / admin: include past showtimes */
+    includeEnded?: boolean;
   }): Promise<{ events: EventItem[] }> => {
     const parts: string[] = [];
     if (params?.city && !isAllCitiesValue(params.city)) parts.push(`city=${encodeURIComponent(params.city)}`);
     if (params?.category && params.category !== 'all') parts.push(`category=${encodeURIComponent(params.category)}`);
     if (params?.search?.trim()) parts.push(`search=${encodeURIComponent(params.search.trim())}`);
     if (params?.limit) parts.push(`limit=${encodeURIComponent(String(params.limit))}`);
+    if (params?.includeEnded) parts.push('includeEnded=1');
     const cacheKey = parts.join('&');
 
     // Instant return if queried recently (12s TTL)
@@ -1117,15 +1120,15 @@ export const api = {
         res
       );
     } catch (e: any) {
-      if (e instanceof ApiError) throw e;
-      const detail = e?.data?.details || e?.message || '';
-      if (/authenti/i.test(String(detail))) {
+      const detail = String(e?.data?.details || e?.data?.error || e?.message || '');
+      if (/authenti/i.test(detail)) {
         throw new ApiError(
           'Razorpay server keys invalid (Authentication failed). Production needs matching RAZORPAY_KEY_ID + RAZORPAY_KEY_SECRET.\n\nसर्व्हरवरील Razorpay की चुकीच्या आहेत — पेमेंट सुरू होऊ शकत नाही.',
           401,
           e?.data
         );
       }
+      if (e instanceof ApiError) throw e;
       throw new ApiError(String(detail || 'Payment order failed'), e?.status || 500, e?.data);
     }
   },

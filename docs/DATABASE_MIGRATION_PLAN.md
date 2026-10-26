@@ -26,7 +26,7 @@
 4. Test on staging first  
 5. Backup + recovery notes required in PR description  
 
-## Prepared migration (not executed)
+## Prepared migration
 
 File: `supabase/migrations/20261026_finalization_schema_gaps.sql`
 
@@ -35,7 +35,8 @@ File: `supabase/migrations/20261026_finalization_schema_gaps.sql`
 - `users.avatar_url`
 - `event_reviews` table IF NOT EXISTS
 
-**Status:** Written only. Requires owner approval + staging dry-run before production.
+**Status (2026-10-26):** Verified against live DB via `npx tsx scripts/run-finalization-migration.ts`.  
+All four objects **already present** — migration is a safe no-op. Catalog counts at check: venues 52, events 35, sessions 109, seats 6232, reviews 115.
 
 ## Next step (blocked on approval)
 

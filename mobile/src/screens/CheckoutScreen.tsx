@@ -79,12 +79,18 @@ function formatPaymentErrorMessage(err: any, language: string = 'mr'): { title: 
     };
   }
 
-  if (/authenti|razorpay.*key|KEY_SECRET|KEY_ID/i.test(plainMsg + rawStr)) {
+  // Only treat as server key misconfig when create-order explicitly says so —
+  // do not swallow generic Razorpay SDK / network errors as "gateway interrupted".
+  if (
+    /RAZORPAY_KEY|KEY_SECRET|सर्व्हरवरील Razorpay की|server keys invalid|matching RAZORPAY_KEY/i.test(
+      plainMsg + rawStr
+    )
+  ) {
     return {
       title: isMr ? 'पेमेंट गेटवे सूचना' : 'Payment Gateway Notice',
       message: isMr
-        ? 'पेमेंट गेटवेशी जोडणी करताना व्यत्यय आला. आपले सीट सुरक्षित आहेत. कृपया पुन्हा प्रयत्न करा.'
-        : 'Payment gateway connection was interrupted. Your seats remain safely held. Please retry.',
+        ? 'पेमेंट गेटवे कॉन्फिगरेशन तपासा (टेस्ट की). आपले सीट सुरक्षित आहेत. कृपया पुन्हा प्रयत्न करा.'
+        : 'Payment gateway keys need a check (test mode). Your seats remain held. Please retry.',
     };
   }
 
@@ -478,24 +484,29 @@ export default function CheckoutScreen({ navigation, route }: any) {
 
       setRazorpayOrder(orderData.orderId, 0);
 
-      // Step 2: Open native Razorpay Checkout
+      // Amount must be server paise only — never invent from UI rupee display
+      const amountPaise = Math.round(Number(orderData.amount));
+      if (!Number.isFinite(amountPaise) || amountPaise < 100) {
+        throw new Error('Invalid payment amount from server. Please reselect seats.');
+      }
+
+      // Step 2: Open native Razorpay Checkout (10-digit contact; order_id binds amount)
       setStage('opening_gateway');
       const paymentSuccessData = await RazorpayCheckout.open({
-        key: orderData.keyId,
-        amount: Number(orderData.amount ?? grandTotal),
+        key: String(orderData.keyId),
+        amount: amountPaise,
         currency: orderData.currency || 'INR',
         name: 'MahaTicket',
         description: String(eventTitle || 'Event tickets').slice(0, 255),
-        order_id: orderData.orderId,
+        order_id: String(orderData.orderId),
         prefill: {
-          name: name.trim(),
-          email: email.trim().toLowerCase(),
-          contact: cleanPhone.startsWith('+91')
-            ? cleanPhone
-            : `+91${cleanPhone.replace(/^0+/, '')}`,
+          name: name.trim().slice(0, 100),
+          email: email.trim().toLowerCase().slice(0, 100),
+          contact: cleanPhone.replace(/\D/g, '').slice(-10),
         },
         theme: { color: '#EA580C' },
-        retry: { enabled: true, max_count: 2 },
+        retry: { enabled: true, max_count: 1 },
+        remember_customer: false,
       });
 
       // CRITICAL: Customer money debited by Razorpay! Immediately mark paymentDoneRef so back/discard NEVER releases seats.
@@ -934,14 +945,14 @@ export default function CheckoutScreen({ navigation, route }: any) {
 
                 <View style={styles.ticketMetaRow}>
                   <Icon name="map-marker-outline" size={15} color={COLORS.primary} />
-                  <Text style={styles.ticketMetaText} numberOfLines={1}>
+                  <Text style={styles.ticketMetaText} numberOfLines={2}>
                     {ticketMeta.venue}
                   </Text>
                 </View>
 
                 <View style={styles.ticketMetaRow}>
                   <Icon name="seat-outline" size={15} color={COLORS.primary} />
-                  <Text style={styles.ticketMetaText} numberOfLines={1}>
+                  <Text style={styles.ticketMetaText} numberOfLines={2}>
                     {seatSummary}
                   </Text>
                 </View>
@@ -989,7 +1000,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
                 ref={nameRef}
                 style={[styles.modernTextInput, paying && styles.inputLocked]}
                 placeholder={language === 'mr' ? 'प्रेक्षकाचे पूर्ण नाव' : 'Attendee full name'}
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor="#64748B"
                 value={name}
                 onChangeText={(t) => {
                   setName(t);
@@ -1018,7 +1029,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
                 ref={phoneRef}
                 style={[styles.modernTextInput, paying && styles.inputLocked]}
                 placeholder={language === 'mr' ? '१०-अंकी मोबाईल नंबर' : '10-digit mobile number'}
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor="#64748B"
                 value={phone}
                 onChangeText={(t) => {
                   setPhone(cleanIndianMobile(t));
@@ -1047,7 +1058,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
                 ref={ageRef}
                 style={[styles.modernTextInput, paying && styles.inputLocked]}
                 placeholder={language === 'mr' ? 'वय (उदा. २८)' : 'Attendee age (e.g. 28)'}
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor="#64748B"
                 value={age}
                 onChangeText={setAge}
                 keyboardType="number-pad"
@@ -1071,7 +1082,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
                 ref={emailRef}
                 style={[styles.modernTextInput, paying && styles.inputLocked]}
                 placeholder={language === 'mr' ? 'तिकीट व पावतीसाठी ईमेल' : 'For instant PDF pass & booking receipt'}
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor="#64748B"
                 value={email}
                 onChangeText={(t) => {
                   setEmail(t.trim());
@@ -1491,26 +1502,29 @@ const styles = StyleSheet.create({
   formFieldInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
     borderRadius: 12,
     paddingHorizontal: 12,
-    height: 48,
+    minHeight: 52,
   },
   modernTextInput: {
     flex: 1,
-    color: '#0F172A',
-    fontSize: 14,
+    color: '#020617',
+    fontSize: 16,
     fontWeight: '600',
-    paddingVertical: 0,
+    paddingVertical: 12,
+    includeFontPadding: false,
   },
   countryCodeBadge: {
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#F1F5F9',
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 4,
     marginRight: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   countryCodeText: {
     color: '#0F172A',

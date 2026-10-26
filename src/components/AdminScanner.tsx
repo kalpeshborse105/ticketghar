@@ -203,7 +203,7 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
     };
   }, []);
 
-  // Load organizer events + sessions for exact showtime scoping
+  // Load organizer events + sessions for exact showtime scoping (include past/today shows)
   useEffect(() => {
     if (eventsProp && eventsProp.length > 0) {
       setLoadedEvents(eventsProp);
@@ -212,11 +212,26 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
     let cancelled = false;
     (async () => {
       try {
-        const qs = scannerOrganizerId ? `?organizerId=${encodeURIComponent(String(scannerOrganizerId))}` : '';
-        const res = await fetch(`/api/events${qs}`);
+        const normalize = (data: any) =>
+          Array.isArray(data?.events) ? data.events : Array.isArray(data) ? data : [];
+
+        // Prefer admin list (all statuses + sessions); fall back to public with includeEnded
+        const adminRes = await fetch('/api/admin/events', { credentials: 'include' });
+        if (adminRes.ok) {
+          const adminData = await adminRes.json();
+          const adminList = normalize(adminData);
+          if (!cancelled && adminList.length > 0) {
+            setLoadedEvents(adminList);
+            return;
+          }
+        }
+
+        const qs = new URLSearchParams({ includeEnded: '1' });
+        if (scannerOrganizerId) qs.set('organizerId', String(scannerOrganizerId));
+        const res = await fetch(`/api/events?${qs.toString()}`, { credentials: 'include' });
         if (!res.ok) return;
         const data = await res.json();
-        const list = Array.isArray(data?.events) ? data.events : Array.isArray(data) ? data : [];
+        const list = normalize(data);
         if (!cancelled) setLoadedEvents(list);
       } catch (err) {
         console.warn('AdminScanner events load failed:', err);
@@ -530,12 +545,12 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
   const [activeTab, setActiveTab] = useState<'live' | 'manual' | 'recent'>('live');
 
   return (
-    <div className="w-full max-w-lg mx-auto bg-[#F9F9FF] min-h-screen text-[#141B2B] flex flex-col pb-16 font-sans">
+    <div className="w-full max-w-lg mx-auto bg-[#F9F9FF] min-h-[70vh] max-h-[92vh] overflow-y-auto text-[#141B2B] flex flex-col pb-8 font-sans">
       {/* Hidden file upload reader helper */}
       <div id="admin-file-reader-dummy" className="hidden" />
 
       {/* Stitch Header */}
-      <header className="sticky top-0 z-30 bg-[#FFF7ED]/95 backdrop-blur-md border-b border-[#E5E7EB] px-4 py-3 flex items-center justify-between shadow-xs">
+      <header className="sticky top-0 z-40 bg-[#FFF7ED]/95 backdrop-blur-md border-b border-[#E5E7EB] px-4 py-3 flex items-center justify-between shadow-xs">
         <div className="flex items-center gap-3 min-w-0">
           <div className="flex items-center gap-2">
             <span className="font-extrabold text-lg text-[#EA580C] tracking-tight">महाटिकिट</span>
@@ -554,8 +569,8 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
         </div>
       </header>
 
-      {/* Dark Console Bar — event + showtime lock (exact match required) */}
-      <div className="bg-[#141B2B] text-white p-4 flex flex-col gap-2.5 shadow-md">
+      {/* Sticky event + showtime lock — always visible (screenshot: picker was scrolled away) */}
+      <div className="sticky top-[52px] z-30 bg-[#141B2B] text-white p-3 flex flex-col gap-2 shadow-md border-b border-slate-700">
         <div className="grid grid-cols-1 gap-2">
           <label className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">कार्यक्रम / Event</label>
           <select
@@ -565,7 +580,7 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
               setTargetEventId(next);
               setTargetSessionId(undefined);
             }}
-            className="w-full bg-[#1E293B] border border-slate-600 rounded-lg px-3 py-2 text-sm text-white"
+            className="w-full bg-[#1E293B] border border-slate-600 rounded-lg px-3 py-2.5 text-sm text-white"
           >
             <option value="">निवडा (Select event)</option>
             {(loadedEvents || []).map((ev) => (
@@ -579,7 +594,7 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
             value={targetSessionId ? String(targetSessionId) : ''}
             onChange={(e) => setTargetSessionId(e.target.value || undefined)}
             disabled={!targetEventId}
-            className="w-full bg-[#1E293B] border border-slate-600 rounded-lg px-3 py-2 text-sm text-white disabled:opacity-50"
+            className="w-full bg-[#1E293B] border border-slate-600 rounded-lg px-3 py-2.5 text-sm text-white disabled:opacity-50"
           >
             <option value="">निवडा (Select showtime)</option>
             {sessionOptions.map((s) => (
@@ -598,6 +613,16 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
               </option>
             ))}
           </select>
+          {(loadedEvents || []).length === 0 && (
+            <p className="text-[11px] text-red-300 font-semibold">
+              कार्यक्रम यादी रिकामी — admin login / DB events तपासा.
+            </p>
+          )}
+          {targetEventId && sessionOptions.length === 0 && (
+            <p className="text-[11px] text-amber-300">
+              या कार्यक्रमासाठी शो वेळा उपलब्ध नाहीत — admin मध्ये session जोडा.
+            </p>
+          )}
           {(!targetEventId || !targetSessionId) && (
             <p className="text-[11px] text-amber-300">
               स्कॅन सुरू करण्यापूर्वी कार्यक्रम व अचूक शो वेळ निवडा — इतर दिनांक/वेळेची तिकिटे नाकारली जातील.

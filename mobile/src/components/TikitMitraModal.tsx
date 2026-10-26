@@ -138,12 +138,20 @@ export function TikitMitraModal({
         text: m.text,
       }));
 
-      const res = await api.askTikitMitra({
-        message: textToSend,
-        history: historyPayload,
-        language,
-        actionPayload,
-      });
+      const res = await Promise.race([
+        api.askTikitMitra({
+          message: textToSend,
+          history: historyPayload,
+          language,
+          actionPayload,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error('Assistant timeout — please retry')),
+            22000
+          )
+        ),
+      ]);
 
       if (res && res.success) {
         const botMsg: ChatMessage = {

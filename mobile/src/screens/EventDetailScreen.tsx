@@ -87,7 +87,7 @@ export default function EventDetailScreen({ navigation, route }: any) {
 
   // Reviews & Rating state
   const [reviews, setReviews] = useState<any[]>([]);
-  const [ratingStats, setRatingStats] = useState({ averageRating: 4.8, totalCount: 108 });
+  const [ratingStats, setRatingStats] = useState({ averageRating: 0, totalCount: 0 });
   const [userRating, setUserRating] = useState(5);
   const [userComment, setUserComment] = useState('');
   const [submittingReview, setSubmittingReview] = useState(false);
@@ -191,15 +191,19 @@ export default function EventDetailScreen({ navigation, route }: any) {
     api
       .getEventReviews(Number(eventId))
       .then((res) => {
-        if (res.reviews) setReviews(res.reviews);
-        if (res.averageRating) {
-          setRatingStats({
-            averageRating: res.averageRating,
-            totalCount: res.totalCount || res.reviews.length,
-          });
-        }
+        const list = Array.isArray(res?.reviews) ? res.reviews : [];
+        setReviews(list);
+        // averageRating can be 0 when empty — do not keep fake defaults
+        setRatingStats({
+          averageRating: Number(res?.averageRating) || 0,
+          totalCount:
+            typeof res?.totalCount === 'number' ? res.totalCount : list.length,
+        });
       })
-      .catch(() => null);
+      .catch(() => {
+        setReviews([]);
+        setRatingStats({ averageRating: 0, totalCount: 0 });
+      });
   }, [eventId]);
 
   useEffect(() => {
@@ -598,13 +602,18 @@ export default function EventDetailScreen({ navigation, route }: any) {
 
   const uniqueReviews = useMemo(() => {
     const seen = new Set<string>();
+    const selfEmail = (user?.email || '').toLowerCase();
+    const selfName = (user?.fullName || user?.name || '').toLowerCase();
     return reviews.filter((r) => {
       const key = (r.email || r.author || String(r.id)).toLowerCase();
       if (seen.has(key)) return false;
       seen.add(key);
+      // Avoid duplicate: "Your review submitted" card + same row in list
+      if (selfEmail && r.email && String(r.email).toLowerCase() === selfEmail) return false;
+      if (selfName && r.author && String(r.author).toLowerCase() === selfName) return false;
       return true;
     });
-  }, [reviews]);
+  }, [reviews, user?.email, user?.fullName, user?.name]);
 
   const selectedSessionAvailableSeats = useMemo(() => {
     if (!selectedSession) return 0;
@@ -858,7 +867,9 @@ export default function EventDetailScreen({ navigation, route }: any) {
               <View style={styles.starPill}>
                 <Icon name="star" size={16} color="#FFB800" />
                 <Text style={styles.starPillText}>
-                  {ratingStats.averageRating.toFixed(1)}/5
+                  {ratingStats.totalCount > 0
+                    ? `${ratingStats.averageRating.toFixed(1)}/5`
+                    : '—/5'}
                 </Text>
               </View>
               <View style={styles.ratingInfoCol}>
@@ -866,8 +877,13 @@ export default function EventDetailScreen({ navigation, route }: any) {
                   {language === 'mr' ? 'प्रेक्षक पसंती' : 'Audience Rating'}
                 </Text>
                 <Text style={styles.ratingSub}>
-                  {ratingStats.totalCount}+{' '}
-                  {language === 'mr' ? 'नोंदवलेले अभिप्राय' : 'Verified Reviews'}
+                  {ratingStats.totalCount > 0
+                    ? `${ratingStats.totalCount} ${
+                        language === 'mr' ? 'नोंदवलेले अभिप्राय' : 'Verified Reviews'
+                      }`
+                    : language === 'mr'
+                      ? 'अद्याप मते नाहीत'
+                      : 'No reviews yet'}
                 </Text>
               </View>
             </View>
@@ -1534,7 +1550,14 @@ export default function EventDetailScreen({ navigation, route }: any) {
           )}
 
           <View style={styles.reviewsList}>
-            {uniqueReviews.slice(0, 5).map((rev) => (
+            {uniqueReviews.length === 0 ? (
+              <Text style={styles.reviewDate}>
+                {language === 'mr'
+                  ? 'अद्याप कोणतेही परीक्षण नाही. पहिले मत नोंदवा!'
+                  : 'No reviews yet. Be the first to rate this show.'}
+              </Text>
+            ) : (
+              uniqueReviews.slice(0, 5).map((rev) => (
               <View key={rev.id} style={styles.reviewItemCard}>
                 <View style={styles.reviewUserRow}>
                   <View style={styles.reviewAvatar}>
@@ -1566,7 +1589,8 @@ export default function EventDetailScreen({ navigation, route }: any) {
                 </View>
                 <Text style={styles.reviewComment}>{rev.comment}</Text>
               </View>
-            ))}
+            ))
+            )}
           </View>
         </View>
       </Animated.ScrollView>

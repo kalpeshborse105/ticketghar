@@ -101,30 +101,15 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
   const [isImporting, setIsImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
 
-  // Ad Banners
-  const [adsList, setAdsList] = useState([
-    {
-      id: 'ad-1',
-      title: 'महानाट्य महोत्सव २०२५ मुख्य बॅनर',
-      type: 'hero',
-      sponsor: 'महाराष्ट्र पर्यटन विकास महामंडळ',
-      status: 'active'
-    },
-    {
-      id: 'ad-2',
-      title: 'संस्कृती प्रायोजक बॅनर (Footer Sponsor)',
-      type: 'footer_sponsor',
-      sponsor: 'कला व क्रीडा संचालनालय',
-      status: 'active'
-    }
-  ]);
+  // Ad Banners — loaded from dashboard/API when available; empty = no fake showcase
+  const [adsList, setAdsList] = useState<
+    { id: string; title: string; type: string; sponsor: string; status: string }[]
+  >([]);
 
-  // Live scanner feed
-  const [streamItems, setStreamItems] = useState([
-    { id: '#TK-7892', status: 'valid', text: 'प्रवेश वैध', venue: 'बालगंधर्व रंगमंदिर, पुणे • गेट क्रमांक २', time: 'आत्ताच', seat: 'सीट F-14' },
-    { id: '#TK-7840', status: 'alert', text: 'पुनरावृत्ती अलर्ट!', venue: 'प्रबोधनकार ठाकरे, बोरीवली • गेट क्रमांक ३', time: '२ सेकंद आधी', seat: 'दुपारी वापरले' },
-    { id: '#TK-7889', status: 'valid', text: 'प्रवेश वैध', venue: 'यशवंतराव चव्हाण नाट्यगृह, कोथरूड • गेट १', time: '४ सेकंद आधी', seat: 'सीट B-08' }
-  ]);
+  // Live scanner feed — real scans only (no hardcoded demo tickets)
+  const [streamItems, setStreamItems] = useState<
+    { id: string; status: string; text: string; venue: string; time: string; seat: string }[]
+  >([]);
 
   const [isSalesFrozen, setIsSalesFrozen] = useState(false);
 
@@ -912,7 +897,7 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-[#64748B] flex items-center gap-1">
                     <span className="h-2 w-2 rounded-full bg-[#16A34A] animate-pulse"></span>
-                    सक्रिय स्कॅनर्स: १८
+                    लाइव्ह DB स्कॅन
                   </span>
                   <button
                     onClick={() => setShowScannerModal(true)}
@@ -924,6 +909,11 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
               </div>
 
               <div className="bg-white rounded-2xl p-3 shadow-sm border border-[#E2E8F0] space-y-2">
+                {streamItems.length === 0 && (
+                  <p className="text-xs text-[#64748B] text-center py-6 px-3">
+                    अद्याप कोणतेही स्कॅन नाहीत — &quot;कॅमेरा उघडा&quot; वापरून खरे तिकीट पडताळा.
+                  </p>
+                )}
                 {streamItems.map((item, idx) => (
                   <div
                     key={idx}
@@ -1532,7 +1522,9 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                 <p className="text-xs text-[#64748B]">होम टॉप हिरो, मधला स्ट्रिप व फुटर स्पॉन्सर बॅनर्स</p>
               </div>
               <button
-                onClick={() => triggerToast('जाहिरात जोडणी विंडो उघडली')}
+                onClick={() =>
+                  triggerToast('जाहिरात API लवकरच — सध्या showcase नाही; फक्त DB डेटा')
+                }
                 className="bg-[#A33900] text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow-sm"
               >
                 + जाहिरात जोडा
@@ -1540,6 +1532,13 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
             </div>
 
             <div className="space-y-2">
+              {adsList.length === 0 && (
+                <div className="bg-white p-6 rounded-2xl border border-dashed border-[#E2E8F0] text-center">
+                  <p className="text-xs text-[#64748B]">
+                    कोणत्याही जाहिराती DB मध्ये नाहीत (डेमो बॅनर्स काढले). Admin CRUD जोडल्यावर येथे दिसतील.
+                  </p>
+                </div>
+              )}
               {adsList.map(ad => (
                 <div
                   key={ad.id}
@@ -1762,31 +1761,31 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
 
       {/* Gate Scanner Modal */}
       {showScannerModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-4 relative shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full max-h-[96vh] overflow-hidden relative shadow-2xl flex flex-col">
             <button
               onClick={() => setShowScannerModal(false)}
-              className="absolute right-4 top-4 p-1.5 rounded-full hover:bg-slate-100 text-[#64748B]"
+              className="absolute right-3 top-3 z-50 p-1.5 rounded-full bg-white/90 hover:bg-slate-100 text-[#64748B] shadow-sm"
             >
               <X className="w-5 h-5" />
             </button>
-            <h3 className="text-base font-bold text-[#141B2B] mb-3">थेट गेट स्कॅनर</h3>
             <AdminScanner
               scannerUserId={currentUser?.id || 1}
               scannerOrganizerId={currentUser?.organizerId}
+              events={eventsList as any}
               initialGateName="मुख्य प्रवेशद्वार (Gate 1)"
               onTicketVerified={(ticket) => {
                 triggerToast(`तिकीट ${ticket?.code || ''} वैध ठरले!`);
-                setStreamItems(prev => [
+                setStreamItems((prev) => [
                   {
-                    id: ticket?.code || '#TK-9999',
+                    id: ticket?.code || `TK-${Date.now()}`,
                     status: 'valid',
                     text: 'प्रवेश वैध',
-                    venue: 'बालगंधर्व रंगमंदिर',
+                    venue: ticket?.venue || ticket?.event || '—',
                     time: 'आत्ताच',
-                    seat: ticket?.seat || 'A1'
+                    seat: ticket?.seat || ticket?.seats || '—',
                   },
-                  ...prev
+                  ...prev,
                 ]);
               }}
             />

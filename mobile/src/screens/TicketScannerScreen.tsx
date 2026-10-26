@@ -175,15 +175,14 @@ export default function TicketScannerScreen({ navigation }: any) {
         .then((d) => setRecentOrders(d.orders || []))
         .catch(() => null);
       api
-        .getEvents({ limit: 40 })
+        .getEvents({ limit: 80, includeEnded: true })
         .then((d) => {
           const list = d.events || [];
           setScannerEvents(list);
-          if (list.length && !selectedEventId) {
-            setSelectedEventId(list[0].id);
-            const sess =
-              filterScannableSessions(list[0].sessions || [])[0] || list[0].sessions?.[0];
-            if (sess?.id) setSelectedSessionId(sess.id);
+          // Do NOT auto-pick first event — gate must explicitly choose show (avoids wrong-scope scans)
+          if (!list.length) {
+            setSelectedEventId(null);
+            setSelectedSessionId(null);
           }
         })
         .catch(() => null);

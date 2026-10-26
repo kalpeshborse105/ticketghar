@@ -11,8 +11,10 @@
 | `npm run typecheck` | **PASSED** | `tsc --noEmit` |
 | `npm run build` | **PASSED** | Next.js 15.5.27 production build |
 | `npm --prefix mobile test` | **FAILED** | Pre-existing Jest ESM parse error on `@react-navigation/native` — suite did not execute tests |
-| Android `bundleRelease` | **NOT RUN** | Signing/SDK not exercised this pass |
-| Live Razorpay / device scanner | **BLOCKED** | Needs staging + device |
+| `assembleRelease` + `adb install` | **PASSED** | Device `d67ea9dc` (25057RN09I); APK `releases/MahaTicket-1.0.21-release.apk` |
+| App launch log | **PASSED** | `ReactNativeJS: Running "MahaTicket"` — no FATAL |
+| Live prod `/api/health` + `/api/events` | **PASSED** | HTTP 200, DB connected |
+| Live reviews fake count | **FIXED locally** | Mobile default 108 removed; API invented ratings removed in code — **needs Vercel deploy** for prod API |
 
 ## Code-level verification (inspection)
 
