@@ -1,0 +1,2735 @@
+{
+  "generatedAt": "2026-10-26T14:34:58.727Z",
+  "liveInspection": true,
+  "connection": {
+    "hasDatabaseUrl": true,
+    "host": "aws-0-ap-south-1.pooler.supabase.com",
+    "port": "6543",
+    "database": "postgres",
+    "userPreview": "pos***",
+    "classification": "hosted-supabase — TREAT AS PRODUCTION unless owner confirms staging project",
+    "secretsPrinted": false
+  },
+  "counts": {
+    "venues": 58,
+    "venue_sections": 174,
+    "seats": 6916,
+    "events": 35,
+    "event_sessions": 109,
+    "ticket_types": 491,
+    "seat_inventory": 30220,
+    "orders": 73,
+    "tickets": 160,
+    "ticket_scans": 0,
+    "users": 16,
+    "event_reviews": 115,
+    "settlements": 73,
+    "audit_logs": 86,
+    "organizers": 4,
+    "coupons": 4
+  },
+  "eventsByStatus": [
+    {
+      "status": "published",
+      "n": 18
+    },
+    {
+      "status": "unpublished",
+      "n": 17
+    }
+  ],
+  "sessionStatuses": [
+    {
+      "status": "completed",
+      "n": 107
+    },
+    {
+      "status": "active",
+      "n": 2
+    }
+  ],
+  "orderPaymentStatuses": [
+    {
+      "payment_status": "captured",
+      "n": 63
+    },
+    {
+      "payment_status": "pending",
+      "n": 10
+    }
+  ],
+  "suspiciousNaming": [],
+  "noFutureSessionsByStatus": [
+    {
+      "status": "unpublished",
+      "n": 17
+    },
+    {
+      "status": "published",
+      "n": 16
+    }
+  ],
+  "withFutureAndInventory": [
+    {
+      "id": 93,
+      "title": "Jailer 2",
+      "status": "published",
+      "future_sessions": 1,
+      "inventory_rows": 550,
+      "available_seats": 548
+    },
+    {
+      "id": 94,
+      "title": "Ramayan",
+      "status": "published",
+      "future_sessions": 1,
+      "inventory_rows": 48,
+      "available_seats": 48
+    }
+  ],
+  "withDependencies": [
+    {
+      "id": 9,
+      "title": "Punha Sahi Re Sahi",
+      "status": "published",
+      "orders": 2,
+      "tickets": 4,
+      "scans": 0,
+      "reviews": 9,
+      "paidish_orders": 2,
+      "future_sessions": 0
+    },
+    {
+      "id": 10,
+      "title": "Ghashiram Kotwal",
+      "status": "published",
+      "orders": 8,
+      "tickets": 24,
+      "scans": 0,
+      "reviews": 12,
+      "paidish_orders": 8,
+      "future_sessions": 0
+    },
+    {
+      "id": 11,
+      "title": "Sur Nava Dhyas Nava",
+      "status": "published",
+      "orders": 1,
+      "tickets": 2,
+      "scans": 0,
+      "reviews": 4,
+      "paidish_orders": 1,
+      "future_sessions": 0
+    },
+    {
+      "id": 12,
+      "title": "Aai Shapath",
+      "status": "unpublished",
+      "orders": 0,
+      "tickets": 0,
+      "scans": 0,
+      "reviews": 4,
+      "paidish_orders": 0,
+      "future_sessions": 0
+    },
+    {
+      "id": 13,
+      "title": "Lavani Vaibhav",
+      "status": "unpublished",
+      "orders": 0,
+      "tickets": 0,
+      "scans": 0,
+      "reviews": 4,
+      "paidish_orders": 0,
+      "future_sessions": 0
+    },
+    {
+      "id": 14,
+      "title": "Warli Art Workshop",
+      "status": "unpublished",
+      "orders": 0,
+      "tickets": 0,
+      "scans": 0,
+      "reviews": 4,
+      "paidish_orders": 0,
+      "future_sessions": 0
+    },
+    {
+      "id": 15,
+      "title": "Sairat Echoes",
+      "status": "unpublished",
+      "orders": 0,
+      "tickets": 0,
+      "scans": 0,
+      "reviews": 4,
+      "paidish_orders": 0,
+      "future_sessions": 0
+    },
+    {
+      "id": 16,
+      "title": "Nashik Grape Harvest Night",
+      "status": "unpublished",
+      "orders": 0,
+      "tickets": 0,
+      "scans": 0,
+      "reviews": 4,
+      "paidish_orders": 0,
+      "future_sessions": 0
+    },
+    {
+      "id": 18,
+      "title": "Sangeet Sharada",
+      "status": "unpublished",
+      "orders": 0,
+      "tickets": 0,
+      "scans": 0,
+      "reviews": 4,
+      "paidish_orders": 0,
+      "future_sessions": 0
+    },
+    {
+      "id": 19,
+      "title": "Natasamrat",
+      "status": "unpublished",
+      "orders": 0,
+      "tickets": 0,
+      "scans": 0,
+      "reviews": 4,
+      "paidish_orders": 0,
+      "future_sessions": 0
+    },
+    {
+      "id": 20,
+      "title": "Pune Standup Night",
+      "status": "published",
+      "orders": 1,
+      "tickets": 3,
+      "scans": 0,
+      "reviews": 4,
+      "paidish_orders": 1,
+      "future_sessions": 0
+    },
+    {
+      "id": 21,
+      "title": "Balgandharva Music Evening",
+      "status": "published",
+      "orders": 1,
+      "tickets": 2,
+      "scans": 0,
+      "reviews": 4,
+      "paidish_orders": 1,
+      "future_sessions": 0
+    },
+    {
+      "id": 26,
+      "title": "Aai Retire Hote",
+      "status": "unpublished",
+      "orders": 0,
+      "tickets": 0,
+      "scans": 0,
+      "reviews": 4,
+      "paidish_orders": 0,
+      "future_sessions": 0
+    },
+    {
+      "id": 27,
+      "title": "Ti Phulrani",
+      "status": "unpublished",
+      "orders": 0,
+      "tickets": 0,
+      "scans": 0,
+      "reviews": 4,
+      "paidish_orders": 0,
+      "future_sessions": 0
+    },
+    {
+      "id": 28,
+      "title": "Varhad Nighalay Londonla",
+      "status": "unpublished",
+      "orders": 0,
+      "tickets": 0,
+      "scans": 0,
+      "reviews": 4,
+      "paidish_orders": 0,
+      "future_sessions": 0
+    },
+    {
+      "id": 29,
+      "title": "Eka Lagnachi Pudhchi Gosht",
+      "status": "published",
+      "orders": 1,
+      "tickets": 2,
+      "scans": 0,
+      "reviews": 5,
+      "paidish_orders": 1,
+      "future_sessions": 0
+    },
+    {
+      "id": 30,
+      "title": "Sur Nava Dhyas Nava",
+      "status": "published",
+      "orders": 7,
+      "tickets": 17,
+      "scans": 0,
+      "reviews": 4,
+      "paidish_orders": 7,
+      "future_sessions": 0
+    },
+    {
+      "id": 31,
+      "title": "Mamachya Govyala Jauya",
+      "status": "unpublished",
+      "orders": 0,
+      "tickets": 0,
+      "scans": 0,
+      "reviews": 4,
+      "paidish_orders": 0,
+      "future_sessions": 0
+    },
+    {
+      "id": 32,
+      "title": "Chhapa Kata",
+      "status": "unpublished",
+      "orders": 0,
+      "tickets": 0,
+      "scans": 0,
+      "reviews": 4,
+      "paidish_orders": 0,
+      "future_sessions": 0
+    },
+    {
+      "id": 33,
+      "title": "Folk Lok",
+      "status": "published",
+      "orders": 1,
+      "tickets": 4,
+      "scans": 0,
+      "reviews": 4,
+      "paidish_orders": 1,
+      "future_sessions": 0
+    },
+    {
+      "id": 34,
+      "title": "Dandiya Nights 2026",
+      "status": "published",
+      "orders": 7,
+      "tickets": 22,
+      "scans": 0,
+      "reviews": 5,
+      "paidish_orders": 7,
+      "future_sessions": 0
+    },
+    {
+      "id": 47,
+      "title": "Natsamrat",
+      "status": "unpublished",
+      "orders": 0,
+      "tickets": 0,
+      "scans": 0,
+      "reviews": 5,
+      "paidish_orders": 0,
+      "future_sessions": 0
+    },
+    {
+      "id": 48,
+      "title": "Aamhi Aani Aamche Baap",
+      "status": "unpublished",
+      "orders": 0,
+      "tickets": 0,
+      "scans": 0,
+      "reviews": 4,
+      "paidish_orders": 0,
+      "future_sessions": 0
+    },
+    {
+      "id": 49,
+      "title": "Vasantotsav 2026 Live",
+      "status": "published",
+      "orders": 4,
+      "tickets": 8,
+      "scans": 0,
+      "reviews": 5,
+      "paidish_orders": 4,
+      "future_sessions": 0
+    },
+    {
+      "id": 84,
+      "title": "Pushpa 2: The Rule",
+      "status": "published",
+      "orders": 2,
+      "tickets": 4,
+      "scans": 0,
+      "reviews": 0,
+      "paidish_orders": 2,
+      "future_sessions": 0
+    },
+    {
+      "id": 85,
+      "title": "Juna Furniture",
+      "status": "published",
+      "orders": 11,
+      "tickets": 29,
+      "scans": 0,
+      "reviews": 0,
+      "paidish_orders": 11,
+      "future_sessions": 0
+    },
+    {
+      "id": 87,
+      "title": "Baipan Bhaari Deva 2",
+      "status": "published",
+      "orders": 11,
+      "tickets": 15,
+      "scans": 0,
+      "reviews": 0,
+      "paidish_orders": 7,
+      "future_sessions": 0
+    },
+    {
+      "id": 90,
+      "title": "Jar Tar Chi Goshta",
+      "status": "published",
+      "orders": 7,
+      "tickets": 14,
+      "scans": 0,
+      "reviews": 0,
+      "paidish_orders": 5,
+      "future_sessions": 0
+    },
+    {
+      "id": 92,
+      "title": "Shree Tashi Sau",
+      "status": "published",
+      "orders": 7,
+      "tickets": 8,
+      "scans": 0,
+      "reviews": 0,
+      "paidish_orders": 4,
+      "future_sessions": 0
+    },
+    {
+      "id": 93,
+      "title": "Jailer 2",
+      "status": "published",
+      "orders": 2,
+      "tickets": 2,
+      "scans": 0,
+      "reviews": 1,
+      "paidish_orders": 1,
+      "future_sessions": 1
+    }
+  ],
+  "publishedNoUpcomingBookable": [
+    {
+      "id": 9,
+      "title": "Punha Sahi Re Sahi",
+      "status": "published",
+      "sessions_total": 8,
+      "orders": 2
+    },
+    {
+      "id": 10,
+      "title": "Ghashiram Kotwal",
+      "status": "published",
+      "sessions_total": 10,
+      "orders": 8
+    },
+    {
+      "id": 11,
+      "title": "Sur Nava Dhyas Nava",
+      "status": "published",
+      "sessions_total": 2,
+      "orders": 1
+    },
+    {
+      "id": 20,
+      "title": "Pune Standup Night",
+      "status": "published",
+      "sessions_total": 2,
+      "orders": 1
+    },
+    {
+      "id": 21,
+      "title": "Balgandharva Music Evening",
+      "status": "published",
+      "sessions_total": 2,
+      "orders": 1
+    },
+    {
+      "id": 29,
+      "title": "Eka Lagnachi Pudhchi Gosht",
+      "status": "published",
+      "sessions_total": 2,
+      "orders": 1
+    },
+    {
+      "id": 30,
+      "title": "Sur Nava Dhyas Nava",
+      "status": "published",
+      "sessions_total": 2,
+      "orders": 7
+    },
+    {
+      "id": 33,
+      "title": "Folk Lok",
+      "status": "published",
+      "sessions_total": 1,
+      "orders": 1
+    },
+    {
+      "id": 34,
+      "title": "Dandiya Nights 2026",
+      "status": "published",
+      "sessions_total": 3,
+      "orders": 7
+    },
+    {
+      "id": 49,
+      "title": "Vasantotsav 2026 Live",
+      "status": "published",
+      "sessions_total": 6,
+      "orders": 4
+    },
+    {
+      "id": 84,
+      "title": "Pushpa 2: The Rule",
+      "status": "published",
+      "sessions_total": 4,
+      "orders": 2
+    },
+    {
+      "id": 85,
+      "title": "Juna Furniture",
+      "status": "published",
+      "sessions_total": 4,
+      "orders": 11
+    },
+    {
+      "id": 87,
+      "title": "Baipan Bhaari Deva 2",
+      "status": "published",
+      "sessions_total": 4,
+      "orders": 11
+    },
+    {
+      "id": 90,
+      "title": "Jar Tar Chi Goshta",
+      "status": "published",
+      "sessions_total": 4,
+      "orders": 7
+    },
+    {
+      "id": 92,
+      "title": "Shree Tashi Sau",
+      "status": "published",
+      "sessions_total": 2,
+      "orders": 7
+    },
+    {
+      "id": 95,
+      "title": "Punha Sahi Re Sahi",
+      "status": "published",
+      "sessions_total": 0,
+      "orders": 0
+    }
+  ],
+  "venueDuplicates": [],
+  "venueCapacityMismatch": [
+    {
+      "id": 16,
+      "name": "Kasturchand Park Open Theatre",
+      "city": "Nagpur",
+      "total_capacity": 2000,
+      "physical_seats": 114,
+      "delta": -1886
+    },
+    {
+      "id": 5,
+      "name": "PVR INOX: The Pavillion Mall",
+      "city": "Pune",
+      "total_capacity": 1100,
+      "physical_seats": 48,
+      "delta": -1052
+    },
+    {
+      "id": 25,
+      "name": "Indira Gandhi Indoor Stadium Hall",
+      "city": "Solapur",
+      "total_capacity": 1000,
+      "physical_seats": 114,
+      "delta": -886
+    },
+    {
+      "id": 12,
+      "name": "Dinanath Mangeshkar Natya Griha",
+      "city": "Vile Parle",
+      "total_capacity": 950,
+      "physical_seats": 114,
+      "delta": -836
+    },
+    {
+      "id": 2,
+      "name": "Dinanath Mangeshkar Natyagruha",
+      "city": "Mumbai",
+      "total_capacity": 900,
+      "physical_seats": 114,
+      "delta": -786
+    },
+    {
+      "id": 21,
+      "name": "Shahu Smarak Bhavan",
+      "city": "Kolhapur",
+      "total_capacity": 900,
+      "physical_seats": 114,
+      "delta": -786
+    },
+    {
+      "id": 6,
+      "name": "Cinepolis: Westend Mall",
+      "city": "Pune",
+      "total_capacity": 900,
+      "physical_seats": 114,
+      "delta": -786
+    },
+    {
+      "id": 14,
+      "name": "Suresh Bhat Auditorium",
+      "city": "Nagpur",
+      "total_capacity": 900,
+      "physical_seats": 114,
+      "delta": -786
+    },
+    {
+      "id": 19,
+      "name": "Sant Eknath Rang Mandir",
+      "city": "Chhatrapati Sambhajinagar",
+      "total_capacity": 850,
+      "physical_seats": 114,
+      "delta": -736
+    },
+    {
+      "id": 9,
+      "name": "Prabodhankar Thackeray Natya Mandir",
+      "city": "Mumbai",
+      "total_capacity": 850,
+      "physical_seats": 114,
+      "delta": -736
+    },
+    {
+      "id": 42,
+      "name": "Nanded Guru Gobind Singh Hall",
+      "city": "Nanded",
+      "total_capacity": 800,
+      "physical_seats": 114,
+      "delta": -686
+    },
+    {
+      "id": 17,
+      "name": "Kalidas Kala Mandir",
+      "city": "Nashik",
+      "total_capacity": 800,
+      "physical_seats": 114,
+      "delta": -686
+    },
+    {
+      "id": 11,
+      "name": "Kalidas Natya Mandir",
+      "city": "Thane",
+      "total_capacity": 800,
+      "physical_seats": 114,
+      "delta": -686
+    },
+    {
+      "id": 4,
+      "name": "Dr. Kashinath Ghanekar Natyagruha",
+      "city": "Thane",
+      "total_capacity": 800,
+      "physical_seats": 114,
+      "delta": -686
+    },
+    {
+      "id": 31,
+      "name": "Hanuman Vyayam Prasarak Mandal Hall",
+      "city": "Amravati",
+      "total_capacity": 800,
+      "physical_seats": 114,
+      "delta": -686
+    },
+    {
+      "id": 23,
+      "name": "Bal Gandharva Natya Mandir Sangli",
+      "city": "Sangli",
+      "total_capacity": 750,
+      "physical_seats": 114,
+      "delta": -636
+    },
+    {
+      "id": 15,
+      "name": "Vasantrao Deshpande Hall",
+      "city": "Nagpur",
+      "total_capacity": 750,
+      "physical_seats": 114,
+      "delta": -636
+    },
+    {
+      "id": 26,
+      "name": "Lokmanya Tilak Natya Mandir",
+      "city": "Solapur",
+      "total_capacity": 700,
+      "physical_seats": 114,
+      "delta": -586
+    },
+    {
+      "id": 22,
+      "name": "Bhalji Pendharkar Kala Mandir",
+      "city": "Kolhapur",
+      "total_capacity": 700,
+      "physical_seats": 114,
+      "delta": -586
+    },
+    {
+      "id": 13,
+      "name": "Thane Municipal Corporation Hall",
+      "city": "Thane",
+      "total_capacity": 700,
+      "physical_seats": 114,
+      "delta": -586
+    },
+    {
+      "id": 18,
+      "name": "Mahakavi Kalidas Natya Mandir",
+      "city": "Nashik",
+      "total_capacity": 700,
+      "physical_seats": 114,
+      "delta": -586
+    },
+    {
+      "id": 41,
+      "name": "Latur Municipal Natya Mandir",
+      "city": "Latur",
+      "total_capacity": 700,
+      "physical_seats": 114,
+      "delta": -586
+    },
+    {
+      "id": 3,
+      "name": "Yashwantrao Chavan Natyagruha",
+      "city": "Pune",
+      "total_capacity": 700,
+      "physical_seats": 114,
+      "delta": -586
+    },
+    {
+      "id": 24,
+      "name": "Yashwantrao Chavan Auditorium Satara",
+      "city": "Satara",
+      "total_capacity": 650,
+      "physical_seats": 114,
+      "delta": -536
+    },
+    {
+      "id": 28,
+      "name": "Jalgaon Natya Mandir",
+      "city": "Jalgaon",
+      "total_capacity": 650,
+      "physical_seats": 114,
+      "delta": -536
+    },
+    {
+      "id": 29,
+      "name": "Dhule Cultural Hall",
+      "city": "Dhule",
+      "total_capacity": 550,
+      "physical_seats": 48,
+      "delta": -502
+    },
+    {
+      "id": 7,
+      "name": "PVR INOX: R City Mall",
+      "city": "Mumbai",
+      "total_capacity": 600,
+      "physical_seats": 114,
+      "delta": -486
+    },
+    {
+      "id": 27,
+      "name": "Ahmednagar Municipal Hall",
+      "city": "Ahmednagar",
+      "total_capacity": 600,
+      "physical_seats": 114,
+      "delta": -486
+    },
+    {
+      "id": 32,
+      "name": "Akola Municipal Auditorium",
+      "city": "Akola",
+      "total_capacity": 600,
+      "physical_seats": 114,
+      "delta": -486
+    },
+    {
+      "id": 20,
+      "name": "Town Hall Aurangabad",
+      "city": "Chhatrapati Sambhajinagar",
+      "total_capacity": 600,
+      "physical_seats": 114,
+      "delta": -486
+    },
+    {
+      "id": 49,
+      "name": "Panvel Cultural Centre",
+      "city": "Panvel",
+      "total_capacity": 600,
+      "physical_seats": 114,
+      "delta": -486
+    },
+    {
+      "id": 39,
+      "name": "Chandrapur Town Hall",
+      "city": "Chandrapur",
+      "total_capacity": 600,
+      "physical_seats": 114,
+      "delta": -486
+    },
+    {
+      "id": 1,
+      "name": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "total_capacity": 1000,
+      "physical_seats": 550,
+      "delta": -450
+    },
+    {
+      "id": 50,
+      "name": "Ratnagiri Lokmanya Tilak Hall",
+      "city": "Ratnagiri",
+      "total_capacity": 550,
+      "physical_seats": 114,
+      "delta": -436
+    },
+    {
+      "id": 35,
+      "name": "Yavatmal Natya Griha",
+      "city": "Yavatmal",
+      "total_capacity": 550,
+      "physical_seats": 114,
+      "delta": -436
+    },
+    {
+      "id": 46,
+      "name": "Jalna Natya Mandir",
+      "city": "Jalna",
+      "total_capacity": 550,
+      "physical_seats": 114,
+      "delta": -436
+    },
+    {
+      "id": 43,
+      "name": "Parbhani Town Hall",
+      "city": "Parbhani",
+      "total_capacity": 550,
+      "physical_seats": 114,
+      "delta": -436
+    },
+    {
+      "id": 30,
+      "name": "Nandurbar Town Hall",
+      "city": "Nandurbar",
+      "total_capacity": 500,
+      "physical_seats": 114,
+      "delta": -386
+    },
+    {
+      "id": 47,
+      "name": "Dharashiv Town Hall",
+      "city": "Dharashiv",
+      "total_capacity": 500,
+      "physical_seats": 114,
+      "delta": -386
+    },
+    {
+      "id": 38,
+      "name": "Gondia Cultural Hall",
+      "city": "Gondia",
+      "total_capacity": 500,
+      "physical_seats": 114,
+      "delta": -386
+    },
+    {
+      "id": 36,
+      "name": "Wardha Gandhi Seva Sangh Hall",
+      "city": "Wardha",
+      "total_capacity": 500,
+      "physical_seats": 114,
+      "delta": -386
+    },
+    {
+      "id": 33,
+      "name": "Buldhana Cultural Centre",
+      "city": "Buldhana",
+      "total_capacity": 500,
+      "physical_seats": 114,
+      "delta": -386
+    },
+    {
+      "id": 45,
+      "name": "Beed Municipal Hall",
+      "city": "Beed",
+      "total_capacity": 500,
+      "physical_seats": 114,
+      "delta": -386
+    },
+    {
+      "id": 10,
+      "name": "Mysore Association Hall",
+      "city": "Mumbai",
+      "total_capacity": 500,
+      "physical_seats": 114,
+      "delta": -386
+    },
+    {
+      "id": 52,
+      "name": "Vasai Town Hall",
+      "city": "Vasai",
+      "total_capacity": 500,
+      "physical_seats": 114,
+      "delta": -386
+    },
+    {
+      "id": 48,
+      "name": "Alibag Town Hall",
+      "city": "Alibag",
+      "total_capacity": 450,
+      "physical_seats": 114,
+      "delta": -336
+    },
+    {
+      "id": 37,
+      "name": "Bhandara Municipal Hall",
+      "city": "Bhandara",
+      "total_capacity": 450,
+      "physical_seats": 114,
+      "delta": -336
+    },
+    {
+      "id": 34,
+      "name": "Washim Town Hall",
+      "city": "Washim",
+      "total_capacity": 450,
+      "physical_seats": 114,
+      "delta": -336
+    },
+    {
+      "id": 40,
+      "name": "Gadchiroli District Auditorium",
+      "city": "Gadchiroli",
+      "total_capacity": 400,
+      "physical_seats": 114,
+      "delta": -286
+    },
+    {
+      "id": 51,
+      "name": "Sawantwadi Palace Hall",
+      "city": "Sawantwadi",
+      "total_capacity": 400,
+      "physical_seats": 114,
+      "delta": -286
+    },
+    {
+      "id": 44,
+      "name": "Hingoli Cultural Hall",
+      "city": "Hingoli",
+      "total_capacity": 400,
+      "physical_seats": 114,
+      "delta": -286
+    },
+    {
+      "id": 8,
+      "name": "NCPA Experimental Theatre",
+      "city": "Mumbai",
+      "total_capacity": 300,
+      "physical_seats": 114,
+      "delta": -186
+    }
+  ],
+  "sectionCapacityMismatch": [
+    {
+      "id": 84,
+      "venue_id": 29,
+      "name": "Stall A",
+      "rows_count": 4,
+      "cols_count": 12,
+      "configured_capacity": 48,
+      "seat_count": 0,
+      "delta": -48
+    },
+    {
+      "id": 3,
+      "venue_id": 5,
+      "name": "Stall",
+      "rows_count": 4,
+      "cols_count": 10,
+      "configured_capacity": 40,
+      "seat_count": 0,
+      "delta": -40
+    },
+    {
+      "id": 85,
+      "venue_id": 29,
+      "name": "Stall B",
+      "rows_count": 3,
+      "cols_count": 12,
+      "configured_capacity": 36,
+      "seat_count": 0,
+      "delta": -36
+    },
+    {
+      "id": 165,
+      "venue_id": 1,
+      "name": "Stall",
+      "rows_count": 5,
+      "cols_count": 10,
+      "configured_capacity": 50,
+      "seat_count": 30,
+      "delta": -20
+    },
+    {
+      "id": 164,
+      "venue_id": 1,
+      "name": "Balcony",
+      "rows_count": 4,
+      "cols_count": 30,
+      "configured_capacity": 120,
+      "seat_count": 140,
+      "delta": 20
+    },
+    {
+      "id": 83,
+      "venue_id": 29,
+      "name": "Balcony",
+      "rows_count": 3,
+      "cols_count": 10,
+      "configured_capacity": 30,
+      "seat_count": 48,
+      "delta": 18
+    },
+    {
+      "id": 4,
+      "venue_id": 5,
+      "name": "Balcony",
+      "rows_count": 5,
+      "cols_count": 12,
+      "configured_capacity": 60,
+      "seat_count": 48,
+      "delta": -12
+    }
+  ],
+  "proposedSoftUnpublishCandidates": [
+    {
+      "id": 95,
+      "title": "Punha Sahi Re Sahi",
+      "status": "published",
+      "orders": 0,
+      "tickets": 0,
+      "reviews": 0,
+      "future_sessions": 0
+    }
+  ],
+  "alreadyUnpublishedZeroOrderEvents": [
+    {
+      "id": 12,
+      "title": "Aai Shapath",
+      "status": "unpublished"
+    },
+    {
+      "id": 13,
+      "title": "Lavani Vaibhav",
+      "status": "unpublished"
+    },
+    {
+      "id": 14,
+      "title": "Warli Art Workshop",
+      "status": "unpublished"
+    },
+    {
+      "id": 15,
+      "title": "Sairat Echoes",
+      "status": "unpublished"
+    },
+    {
+      "id": 16,
+      "title": "Nashik Grape Harvest Night",
+      "status": "unpublished"
+    },
+    {
+      "id": 18,
+      "title": "Sangeet Sharada",
+      "status": "unpublished"
+    },
+    {
+      "id": 19,
+      "title": "Natasamrat",
+      "status": "unpublished"
+    },
+    {
+      "id": 26,
+      "title": "Aai Retire Hote",
+      "status": "unpublished"
+    },
+    {
+      "id": 27,
+      "title": "Ti Phulrani",
+      "status": "unpublished"
+    },
+    {
+      "id": 28,
+      "title": "Varhad Nighalay Londonla",
+      "status": "unpublished"
+    },
+    {
+      "id": 31,
+      "title": "Mamachya Govyala Jauya",
+      "status": "unpublished"
+    },
+    {
+      "id": 32,
+      "title": "Chhapa Kata",
+      "status": "unpublished"
+    },
+    {
+      "id": 47,
+      "title": "Natsamrat",
+      "status": "unpublished"
+    },
+    {
+      "id": 48,
+      "title": "Aamhi Aani Aamche Baap",
+      "status": "unpublished"
+    },
+    {
+      "id": 86,
+      "title": "Kantara: Chapter 1",
+      "status": "unpublished"
+    },
+    {
+      "id": 88,
+      "title": "Avatar: Fire and Ash (IMAX 3D)",
+      "status": "unpublished"
+    },
+    {
+      "id": 91,
+      "title": "Albattya Galbattya",
+      "status": "unpublished"
+    }
+  ],
+  "allEventsBrief": [
+    {
+      "id": 9,
+      "title": "Punha Sahi Re Sahi",
+      "title_mr": "पुन्हा सही रे सही",
+      "status": "published",
+      "category": "plays",
+      "slug": "punha-sahi-re-sahi-1792262544854-0",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 8,
+      "future_sessions": 0,
+      "orders": 2,
+      "tickets": 4,
+      "reviews": 9
+    },
+    {
+      "id": 10,
+      "title": "Ghashiram Kotwal",
+      "title_mr": "घाशीराम कोतवाल",
+      "status": "published",
+      "category": "plays",
+      "slug": "ghashiram-kotwal-1792262557456-1",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 10,
+      "future_sessions": 0,
+      "orders": 8,
+      "tickets": 24,
+      "reviews": 12
+    },
+    {
+      "id": 11,
+      "title": "Sur Nava Dhyas Nava",
+      "title_mr": "सूर नवा ध्यास नवा",
+      "status": "published",
+      "category": "music",
+      "slug": "sur-nava-dhyas-nava-1792262557784-2",
+      "venue": "PVR INOX: The Pavillion Mall",
+      "city": "Pune",
+      "sessions": 2,
+      "future_sessions": 0,
+      "orders": 1,
+      "tickets": 2,
+      "reviews": 4
+    },
+    {
+      "id": 12,
+      "title": "Aai Shapath",
+      "title_mr": "आई शपथ",
+      "status": "unpublished",
+      "category": "comedy",
+      "slug": "aai-shapath-1792262558360-3",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 2,
+      "future_sessions": 0,
+      "orders": 0,
+      "tickets": 0,
+      "reviews": 4
+    },
+    {
+      "id": 13,
+      "title": "Lavani Vaibhav",
+      "title_mr": "लावणी वैभव",
+      "status": "unpublished",
+      "category": "cultural",
+      "slug": "lavani-vaibhav-1792262558687-4",
+      "venue": "Shahu Smarak Bhavan",
+      "city": "Kolhapur",
+      "sessions": 2,
+      "future_sessions": 0,
+      "orders": 0,
+      "tickets": 0,
+      "reviews": 4
+    },
+    {
+      "id": 14,
+      "title": "Warli Art Workshop",
+      "title_mr": "वारली चित्रकला कार्यशाळा",
+      "status": "unpublished",
+      "category": "workshops",
+      "slug": "warli-art-workshop-1792262559880-5",
+      "venue": "Kalidas Natya Mandir",
+      "city": "Thane",
+      "sessions": 2,
+      "future_sessions": 0,
+      "orders": 0,
+      "tickets": 0,
+      "reviews": 4
+    },
+    {
+      "id": 15,
+      "title": "Sairat Echoes",
+      "title_mr": "सैराट इकोज",
+      "status": "unpublished",
+      "category": "music",
+      "slug": "sairat-echoes-1792262561012-6",
+      "venue": "Bal Gandharva Natya Mandir Sangli",
+      "city": "Sangli",
+      "sessions": 2,
+      "future_sessions": 0,
+      "orders": 0,
+      "tickets": 0,
+      "reviews": 4
+    },
+    {
+      "id": 16,
+      "title": "Nashik Grape Harvest Night",
+      "title_mr": "नाशिक द्राक्ष काढणी रात्र",
+      "status": "unpublished",
+      "category": "music",
+      "slug": "nashik-grape-harvest-night-1792262562632-7",
+      "venue": "Kalidas Kala Mandir",
+      "city": "Nashik",
+      "sessions": 2,
+      "future_sessions": 0,
+      "orders": 0,
+      "tickets": 0,
+      "reviews": 4
+    },
+    {
+      "id": 18,
+      "title": "Sangeet Sharada",
+      "title_mr": "संगीत शारदा",
+      "status": "unpublished",
+      "category": "plays",
+      "slug": "pune-sangeet-sharada",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 2,
+      "future_sessions": 0,
+      "orders": 0,
+      "tickets": 0,
+      "reviews": 4
+    },
+    {
+      "id": 19,
+      "title": "Natasamrat",
+      "title_mr": "नटसम्राट",
+      "status": "unpublished",
+      "category": "movies",
+      "slug": "pune-natasamrat",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 2,
+      "future_sessions": 0,
+      "orders": 0,
+      "tickets": 0,
+      "reviews": 4
+    },
+    {
+      "id": 20,
+      "title": "Pune Standup Night",
+      "title_mr": "पुणे स्टँडअप नाईट",
+      "status": "published",
+      "category": "comedy",
+      "slug": "pune-pune-standup-night",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 2,
+      "future_sessions": 0,
+      "orders": 1,
+      "tickets": 3,
+      "reviews": 4
+    },
+    {
+      "id": 21,
+      "title": "Balgandharva Music Evening",
+      "title_mr": "बालगंधर्व संगीत संध्या",
+      "status": "published",
+      "category": "music",
+      "slug": "pune-balgandharva-music-evening",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 2,
+      "future_sessions": 0,
+      "orders": 1,
+      "tickets": 2,
+      "reviews": 4
+    },
+    {
+      "id": 26,
+      "title": "Aai Retire Hote",
+      "title_mr": "आई रिटायर होतेय",
+      "status": "unpublished",
+      "category": "plays",
+      "slug": "aai-retire-hote",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 2,
+      "future_sessions": 0,
+      "orders": 0,
+      "tickets": 0,
+      "reviews": 4
+    },
+    {
+      "id": 27,
+      "title": "Ti Phulrani",
+      "title_mr": "ती फुलराणी",
+      "status": "unpublished",
+      "category": "plays",
+      "slug": "ti-phulrani",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 2,
+      "future_sessions": 0,
+      "orders": 0,
+      "tickets": 0,
+      "reviews": 4
+    },
+    {
+      "id": 28,
+      "title": "Varhad Nighalay Londonla",
+      "title_mr": "वऱ्हाड निघालं लंडनला",
+      "status": "unpublished",
+      "category": "comedy",
+      "slug": "varhad-nighalay-londonla",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 2,
+      "future_sessions": 0,
+      "orders": 0,
+      "tickets": 0,
+      "reviews": 4
+    },
+    {
+      "id": 29,
+      "title": "Eka Lagnachi Pudhchi Gosht",
+      "title_mr": "एका लग्नाची पुढची गोष्ट",
+      "status": "published",
+      "category": "plays",
+      "slug": "eka-lagnachi-pudhchi-gosht",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 2,
+      "future_sessions": 0,
+      "orders": 1,
+      "tickets": 2,
+      "reviews": 5
+    },
+    {
+      "id": 30,
+      "title": "Sur Nava Dhyas Nava",
+      "title_mr": "सूर नवा ध्यास नवा",
+      "status": "published",
+      "category": "music",
+      "slug": "sur-nava-dhyas-nava",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 2,
+      "future_sessions": 0,
+      "orders": 7,
+      "tickets": 17,
+      "reviews": 4
+    },
+    {
+      "id": 31,
+      "title": "Mamachya Govyala Jauya",
+      "title_mr": "मामाच्या गोव्याला जाऊया",
+      "status": "unpublished",
+      "category": "plays",
+      "slug": "mamachya-govyala-jauya",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 0,
+      "future_sessions": 0,
+      "orders": 0,
+      "tickets": 0,
+      "reviews": 4
+    },
+    {
+      "id": 32,
+      "title": "Chhapa Kata",
+      "title_mr": "छापा काटा",
+      "status": "unpublished",
+      "category": "plays",
+      "slug": "chhapa-kata",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 2,
+      "future_sessions": 0,
+      "orders": 0,
+      "tickets": 0,
+      "reviews": 4
+    },
+    {
+      "id": 33,
+      "title": "Folk Lok",
+      "title_mr": "फोक लोक",
+      "status": "published",
+      "category": "music",
+      "slug": "folk-lok-1792485534044",
+      "venue": "Dhule Cultural Hall",
+      "city": "Dhule",
+      "sessions": 1,
+      "future_sessions": 0,
+      "orders": 1,
+      "tickets": 4,
+      "reviews": 4
+    },
+    {
+      "id": 34,
+      "title": "Dandiya Nights 2026",
+      "title_mr": "दांडिया रास महोत्सव २०२६",
+      "status": "published",
+      "category": "cultural",
+      "slug": "dandiya-nights-2026",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 3,
+      "future_sessions": 0,
+      "orders": 7,
+      "tickets": 22,
+      "reviews": 5
+    },
+    {
+      "id": 47,
+      "title": "Natsamrat",
+      "title_mr": "नटसम्राट",
+      "status": "unpublished",
+      "category": "plays",
+      "slug": "natsamrat",
+      "venue": "Dinanath Mangeshkar Natyagruha",
+      "city": "Mumbai",
+      "sessions": 6,
+      "future_sessions": 0,
+      "orders": 0,
+      "tickets": 0,
+      "reviews": 5
+    },
+    {
+      "id": 48,
+      "title": "Aamhi Aani Aamche Baap",
+      "title_mr": "आम्ही आणि आमचे बाप",
+      "status": "unpublished",
+      "category": "plays",
+      "slug": "aamhi-aani-aamche-baap",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 0,
+      "future_sessions": 0,
+      "orders": 0,
+      "tickets": 0,
+      "reviews": 4
+    },
+    {
+      "id": 49,
+      "title": "Vasantotsav 2026 Live",
+      "title_mr": "वसंतोत्सव २०२६ (भव्य शास्त्रीय संगीतोत्सव)",
+      "status": "published",
+      "category": "music",
+      "slug": "vasantotsav-2026",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 6,
+      "future_sessions": 0,
+      "orders": 4,
+      "tickets": 8,
+      "reviews": 5
+    },
+    {
+      "id": 84,
+      "title": "Pushpa 2: The Rule",
+      "title_mr": "पुष्पा २: द रुल (महा-चित्रपट)",
+      "status": "published",
+      "category": "movies",
+      "slug": "pushpa-2-the-rule",
+      "venue": "PVR INOX: The Pavillion Mall",
+      "city": "Pune",
+      "sessions": 4,
+      "future_sessions": 0,
+      "orders": 2,
+      "tickets": 4,
+      "reviews": 0
+    },
+    {
+      "id": 85,
+      "title": "Juna Furniture",
+      "title_mr": "जुना फर्निचर (सुपरहिट कौटुंबिक कथा)",
+      "status": "published",
+      "category": "movies",
+      "slug": "juna-furniture",
+      "venue": "Cinepolis: Westend Mall",
+      "city": "Pune",
+      "sessions": 4,
+      "future_sessions": 0,
+      "orders": 11,
+      "tickets": 29,
+      "reviews": 0
+    },
+    {
+      "id": 86,
+      "title": "Kantara: Chapter 1",
+      "title_mr": "कांतारा: चॅप्टर १ (दैवी लोकगाथा)",
+      "status": "unpublished",
+      "category": "movies",
+      "slug": "kantara-chapter-1",
+      "venue": "PVR INOX: R City Mall",
+      "city": "Mumbai",
+      "sessions": 4,
+      "future_sessions": 0,
+      "orders": 0,
+      "tickets": 0,
+      "reviews": 0
+    },
+    {
+      "id": 87,
+      "title": "Baipan Bhaari Deva 2",
+      "title_mr": "बाईपण भारी देवा २",
+      "status": "published",
+      "category": "movies",
+      "slug": "baipan-bhaari-deva-2",
+      "venue": "PVR INOX: The Pavillion Mall",
+      "city": "Pune",
+      "sessions": 4,
+      "future_sessions": 0,
+      "orders": 11,
+      "tickets": 15,
+      "reviews": 0
+    },
+    {
+      "id": 88,
+      "title": "Avatar: Fire and Ash (IMAX 3D)",
+      "title_mr": "अवतार: फायर अँड ॲश (आयमॅक्स ३डी)",
+      "status": "unpublished",
+      "category": "movies",
+      "slug": "avatar-fire-and-ash",
+      "venue": "PVR INOX: R City Mall",
+      "city": "Mumbai",
+      "sessions": 4,
+      "future_sessions": 0,
+      "orders": 0,
+      "tickets": 0,
+      "reviews": 0
+    },
+    {
+      "id": 90,
+      "title": "Jar Tar Chi Goshta",
+      "title_mr": "जर तर ची गोष्ट",
+      "status": "published",
+      "category": "plays",
+      "slug": "jar-tar-chi-goshta",
+      "venue": "Yashwantrao Chavan Natyagruha",
+      "city": "Pune",
+      "sessions": 4,
+      "future_sessions": 0,
+      "orders": 7,
+      "tickets": 14,
+      "reviews": 0
+    },
+    {
+      "id": 91,
+      "title": "Albattya Galbattya",
+      "title_mr": "अलबत्या गलबत्या (बालनाट्य)",
+      "status": "unpublished",
+      "category": "plays",
+      "slug": "albattya-galbattya",
+      "venue": "Dr. Kashinath Ghanekar Natyagruha",
+      "city": "Thane",
+      "sessions": 4,
+      "future_sessions": 0,
+      "orders": 0,
+      "tickets": 0,
+      "reviews": 0
+    },
+    {
+      "id": 92,
+      "title": "Shree Tashi Sau",
+      "title_mr": "श्री तशी सौ (कौटुंबिक महानाटक)",
+      "status": "published",
+      "category": "plays",
+      "slug": "shree-tashi-sau-1792686743",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 2,
+      "future_sessions": 0,
+      "orders": 7,
+      "tickets": 8,
+      "reviews": 0
+    },
+    {
+      "id": 93,
+      "title": "Jailer 2",
+      "title_mr": "जेलर २",
+      "status": "published",
+      "category": "plays",
+      "slug": "jailer-2-1792871826246",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 1,
+      "future_sessions": 1,
+      "orders": 2,
+      "tickets": 2,
+      "reviews": 1
+    },
+    {
+      "id": 94,
+      "title": "Ramayan",
+      "title_mr": "रामायण",
+      "status": "published",
+      "category": "plays",
+      "slug": "ramayan-1792872154710",
+      "venue": "Dhule Cultural Hall",
+      "city": "Dhule",
+      "sessions": 1,
+      "future_sessions": 1,
+      "orders": 0,
+      "tickets": 0,
+      "reviews": 0
+    },
+    {
+      "id": 95,
+      "title": "Punha Sahi Re Sahi",
+      "title_mr": "पुन्हा सही रे सही",
+      "status": "published",
+      "category": "plays",
+      "slug": "punha-sahi-re-sahi",
+      "venue": "Bal Gandharva Rang Mandir",
+      "city": "Pune",
+      "sessions": 0,
+      "future_sessions": 0,
+      "orders": 0,
+      "tickets": 0,
+      "reviews": 0
+    }
+  ],
+  "columnCatalog": [
+    {
+      "table_name": "audit_logs",
+      "column_name": "id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "audit_logs",
+      "column_name": "actor_id",
+      "data_type": "text"
+    },
+    {
+      "table_name": "audit_logs",
+      "column_name": "actor_role",
+      "data_type": "text"
+    },
+    {
+      "table_name": "audit_logs",
+      "column_name": "action",
+      "data_type": "text"
+    },
+    {
+      "table_name": "audit_logs",
+      "column_name": "entity_type",
+      "data_type": "text"
+    },
+    {
+      "table_name": "audit_logs",
+      "column_name": "entity_id",
+      "data_type": "text"
+    },
+    {
+      "table_name": "audit_logs",
+      "column_name": "details",
+      "data_type": "text"
+    },
+    {
+      "table_name": "audit_logs",
+      "column_name": "ip_address",
+      "data_type": "text"
+    },
+    {
+      "table_name": "audit_logs",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "coupons",
+      "column_name": "id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "coupons",
+      "column_name": "code",
+      "data_type": "text"
+    },
+    {
+      "table_name": "coupons",
+      "column_name": "discount_type",
+      "data_type": "text"
+    },
+    {
+      "table_name": "coupons",
+      "column_name": "discount_value",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "coupons",
+      "column_name": "min_order_value",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "coupons",
+      "column_name": "max_discount",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "coupons",
+      "column_name": "usage_limit",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "coupons",
+      "column_name": "per_user_limit",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "coupons",
+      "column_name": "starts_at",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "coupons",
+      "column_name": "ends_at",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "coupons",
+      "column_name": "event_id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "coupons",
+      "column_name": "city",
+      "data_type": "text"
+    },
+    {
+      "table_name": "coupons",
+      "column_name": "active",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "coupons",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "coupons",
+      "column_name": "used_count",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "coupons",
+      "column_name": "is_active",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "event_reviews",
+      "column_name": "id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "event_reviews",
+      "column_name": "event_id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "event_reviews",
+      "column_name": "user_id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "event_reviews",
+      "column_name": "user_email",
+      "data_type": "text"
+    },
+    {
+      "table_name": "event_reviews",
+      "column_name": "user_name",
+      "data_type": "text"
+    },
+    {
+      "table_name": "event_reviews",
+      "column_name": "city",
+      "data_type": "text"
+    },
+    {
+      "table_name": "event_reviews",
+      "column_name": "rating",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "event_reviews",
+      "column_name": "comment",
+      "data_type": "text"
+    },
+    {
+      "table_name": "event_reviews",
+      "column_name": "verified_attendance",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "event_reviews",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "event_reviews",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "event_sessions",
+      "column_name": "id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "event_sessions",
+      "column_name": "event_id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "event_sessions",
+      "column_name": "session_start_time",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "event_sessions",
+      "column_name": "session_end_time",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "event_sessions",
+      "column_name": "status",
+      "data_type": "text"
+    },
+    {
+      "table_name": "event_sessions",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "events",
+      "column_name": "id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "events",
+      "column_name": "organizer_id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "events",
+      "column_name": "venue_id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "events",
+      "column_name": "title",
+      "data_type": "text"
+    },
+    {
+      "table_name": "events",
+      "column_name": "title_mr",
+      "data_type": "text"
+    },
+    {
+      "table_name": "events",
+      "column_name": "slug",
+      "data_type": "text"
+    },
+    {
+      "table_name": "events",
+      "column_name": "category",
+      "data_type": "text"
+    },
+    {
+      "table_name": "events",
+      "column_name": "category_mr",
+      "data_type": "text"
+    },
+    {
+      "table_name": "events",
+      "column_name": "language",
+      "data_type": "text"
+    },
+    {
+      "table_name": "events",
+      "column_name": "age_guidance",
+      "data_type": "text"
+    },
+    {
+      "table_name": "events",
+      "column_name": "duration_minutes",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "events",
+      "column_name": "description",
+      "data_type": "text"
+    },
+    {
+      "table_name": "events",
+      "column_name": "description_mr",
+      "data_type": "text"
+    },
+    {
+      "table_name": "events",
+      "column_name": "poster_url",
+      "data_type": "text"
+    },
+    {
+      "table_name": "events",
+      "column_name": "banner_url",
+      "data_type": "text"
+    },
+    {
+      "table_name": "events",
+      "column_name": "trailer_url",
+      "data_type": "text"
+    },
+    {
+      "table_name": "events",
+      "column_name": "gallery_urls",
+      "data_type": "text"
+    },
+    {
+      "table_name": "events",
+      "column_name": "status",
+      "data_type": "text"
+    },
+    {
+      "table_name": "events",
+      "column_name": "featured",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "events",
+      "column_name": "tag",
+      "data_type": "text"
+    },
+    {
+      "table_name": "events",
+      "column_name": "cast_crew",
+      "data_type": "text"
+    },
+    {
+      "table_name": "events",
+      "column_name": "rejection_reason",
+      "data_type": "text"
+    },
+    {
+      "table_name": "events",
+      "column_name": "convenience_fee_type",
+      "data_type": "text"
+    },
+    {
+      "table_name": "events",
+      "column_name": "convenience_fee_value",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "events",
+      "column_name": "gst_percent",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "events",
+      "column_name": "cancellation_policy",
+      "data_type": "text"
+    },
+    {
+      "table_name": "events",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "orders",
+      "column_name": "id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "orders",
+      "column_name": "order_number",
+      "data_type": "text"
+    },
+    {
+      "table_name": "orders",
+      "column_name": "user_id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "orders",
+      "column_name": "user_email",
+      "data_type": "text"
+    },
+    {
+      "table_name": "orders",
+      "column_name": "user_phone",
+      "data_type": "text"
+    },
+    {
+      "table_name": "orders",
+      "column_name": "user_name",
+      "data_type": "text"
+    },
+    {
+      "table_name": "orders",
+      "column_name": "event_id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "orders",
+      "column_name": "session_id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "orders",
+      "column_name": "ticket_count",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "orders",
+      "column_name": "ticket_face_value_total",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "orders",
+      "column_name": "platform_fee_total",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "orders",
+      "column_name": "tax_total",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "orders",
+      "column_name": "gateway_cost_estimate",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "orders",
+      "column_name": "discount_total",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "orders",
+      "column_name": "grand_total",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "orders",
+      "column_name": "currency",
+      "data_type": "text"
+    },
+    {
+      "table_name": "orders",
+      "column_name": "payment_status",
+      "data_type": "text"
+    },
+    {
+      "table_name": "orders",
+      "column_name": "order_status",
+      "data_type": "text"
+    },
+    {
+      "table_name": "orders",
+      "column_name": "razorpay_order_id",
+      "data_type": "text"
+    },
+    {
+      "table_name": "orders",
+      "column_name": "razorpay_payment_id",
+      "data_type": "text"
+    },
+    {
+      "table_name": "orders",
+      "column_name": "idempotency_key",
+      "data_type": "text"
+    },
+    {
+      "table_name": "orders",
+      "column_name": "hold_expires_at",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "orders",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "orders",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "organizers",
+      "column_name": "id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "organizers",
+      "column_name": "name",
+      "data_type": "text"
+    },
+    {
+      "table_name": "organizers",
+      "column_name": "company_name",
+      "data_type": "text"
+    },
+    {
+      "table_name": "organizers",
+      "column_name": "email",
+      "data_type": "text"
+    },
+    {
+      "table_name": "organizers",
+      "column_name": "phone",
+      "data_type": "text"
+    },
+    {
+      "table_name": "organizers",
+      "column_name": "city",
+      "data_type": "text"
+    },
+    {
+      "table_name": "organizers",
+      "column_name": "verification_status",
+      "data_type": "text"
+    },
+    {
+      "table_name": "organizers",
+      "column_name": "status",
+      "data_type": "text"
+    },
+    {
+      "table_name": "organizers",
+      "column_name": "commission_type",
+      "data_type": "text"
+    },
+    {
+      "table_name": "organizers",
+      "column_name": "commission_rate",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "organizers",
+      "column_name": "bank_name",
+      "data_type": "text"
+    },
+    {
+      "table_name": "organizers",
+      "column_name": "bank_account_number",
+      "data_type": "text"
+    },
+    {
+      "table_name": "organizers",
+      "column_name": "bank_ifsc",
+      "data_type": "text"
+    },
+    {
+      "table_name": "organizers",
+      "column_name": "pan_number",
+      "data_type": "text"
+    },
+    {
+      "table_name": "organizers",
+      "column_name": "gstin",
+      "data_type": "text"
+    },
+    {
+      "table_name": "organizers",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "seat_inventory",
+      "column_name": "id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "seat_inventory",
+      "column_name": "session_id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "seat_inventory",
+      "column_name": "seat_id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "seat_inventory",
+      "column_name": "ticket_type_id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "seat_inventory",
+      "column_name": "status",
+      "data_type": "text"
+    },
+    {
+      "table_name": "seat_inventory",
+      "column_name": "held_by_user_id",
+      "data_type": "text"
+    },
+    {
+      "table_name": "seat_inventory",
+      "column_name": "hold_expires_at",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "seat_inventory",
+      "column_name": "order_id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "seats",
+      "column_name": "id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "seats",
+      "column_name": "venue_id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "seats",
+      "column_name": "section_id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "seats",
+      "column_name": "row_label",
+      "data_type": "text"
+    },
+    {
+      "table_name": "seats",
+      "column_name": "seat_number",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "seats",
+      "column_name": "seat_code",
+      "data_type": "text"
+    },
+    {
+      "table_name": "seats",
+      "column_name": "tier",
+      "data_type": "text"
+    },
+    {
+      "table_name": "seats",
+      "column_name": "is_accessible",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "seats",
+      "column_name": "is_blocked",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "settlements",
+      "column_name": "id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "settlements",
+      "column_name": "settlement_reference",
+      "data_type": "text"
+    },
+    {
+      "table_name": "settlements",
+      "column_name": "organizer_id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "settlements",
+      "column_name": "event_id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "settlements",
+      "column_name": "total_gross_ticket_sales",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "settlements",
+      "column_name": "total_platform_fees_collected",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "settlements",
+      "column_name": "total_payment_gateway_cost",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "settlements",
+      "column_name": "total_tax_collected",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "settlements",
+      "column_name": "platform_commission_earned",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "settlements",
+      "column_name": "total_refund_deductions",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "settlements",
+      "column_name": "net_payable_to_organizer",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "settlements",
+      "column_name": "status",
+      "data_type": "text"
+    },
+    {
+      "table_name": "settlements",
+      "column_name": "payout_utr",
+      "data_type": "text"
+    },
+    {
+      "table_name": "settlements",
+      "column_name": "settled_at",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "settlements",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "ticket_scans",
+      "column_name": "id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "ticket_scans",
+      "column_name": "ticket_id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "ticket_scans",
+      "column_name": "ticket_code",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ticket_scans",
+      "column_name": "scanned_by_user_id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "ticket_scans",
+      "column_name": "scanner_device",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ticket_scans",
+      "column_name": "scan_result",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ticket_scans",
+      "column_name": "gate_name",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ticket_scans",
+      "column_name": "scanned_at",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "ticket_types",
+      "column_name": "id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "ticket_types",
+      "column_name": "event_id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "ticket_types",
+      "column_name": "session_id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "ticket_types",
+      "column_name": "section_id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "ticket_types",
+      "column_name": "name",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ticket_types",
+      "column_name": "name_mr",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ticket_types",
+      "column_name": "price",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "ticket_types",
+      "column_name": "total_quota",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "ticket_types",
+      "column_name": "available_quota",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "ticket_types",
+      "column_name": "is_seated",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "tickets",
+      "column_name": "id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "tickets",
+      "column_name": "ticket_code",
+      "data_type": "text"
+    },
+    {
+      "table_name": "tickets",
+      "column_name": "order_id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "tickets",
+      "column_name": "session_id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "tickets",
+      "column_name": "ticket_type_id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "tickets",
+      "column_name": "seat_id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "tickets",
+      "column_name": "seat_code",
+      "data_type": "text"
+    },
+    {
+      "table_name": "tickets",
+      "column_name": "attendee_name",
+      "data_type": "text"
+    },
+    {
+      "table_name": "tickets",
+      "column_name": "face_value",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "tickets",
+      "column_name": "security_hash",
+      "data_type": "text"
+    },
+    {
+      "table_name": "tickets",
+      "column_name": "qr_payload",
+      "data_type": "text"
+    },
+    {
+      "table_name": "tickets",
+      "column_name": "status",
+      "data_type": "text"
+    },
+    {
+      "table_name": "tickets",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "users",
+      "column_name": "id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "users",
+      "column_name": "uid",
+      "data_type": "text"
+    },
+    {
+      "table_name": "users",
+      "column_name": "email",
+      "data_type": "text"
+    },
+    {
+      "table_name": "users",
+      "column_name": "full_name",
+      "data_type": "text"
+    },
+    {
+      "table_name": "users",
+      "column_name": "phone_number",
+      "data_type": "text"
+    },
+    {
+      "table_name": "users",
+      "column_name": "role",
+      "data_type": "text"
+    },
+    {
+      "table_name": "users",
+      "column_name": "preferred_language",
+      "data_type": "text"
+    },
+    {
+      "table_name": "users",
+      "column_name": "city",
+      "data_type": "text"
+    },
+    {
+      "table_name": "users",
+      "column_name": "password_hash",
+      "data_type": "text"
+    },
+    {
+      "table_name": "users",
+      "column_name": "organizer_id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "users",
+      "column_name": "status",
+      "data_type": "text"
+    },
+    {
+      "table_name": "users",
+      "column_name": "assigned_events",
+      "data_type": "text"
+    },
+    {
+      "table_name": "users",
+      "column_name": "otp_code",
+      "data_type": "text"
+    },
+    {
+      "table_name": "users",
+      "column_name": "otp_expires_at",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "users",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "users",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "users",
+      "column_name": "avatar_url",
+      "data_type": "text"
+    },
+    {
+      "table_name": "venue_sections",
+      "column_name": "id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "venue_sections",
+      "column_name": "venue_id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "venue_sections",
+      "column_name": "name",
+      "data_type": "text"
+    },
+    {
+      "table_name": "venue_sections",
+      "column_name": "name_mr",
+      "data_type": "text"
+    },
+    {
+      "table_name": "venue_sections",
+      "column_name": "rows_count",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "venue_sections",
+      "column_name": "cols_count",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "venue_sections",
+      "column_name": "base_price",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "venue_sections",
+      "column_name": "accessible",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "venues",
+      "column_name": "id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "venues",
+      "column_name": "district_id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "venues",
+      "column_name": "city_id",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "venues",
+      "column_name": "name",
+      "data_type": "text"
+    },
+    {
+      "table_name": "venues",
+      "column_name": "name_mr",
+      "data_type": "text"
+    },
+    {
+      "table_name": "venues",
+      "column_name": "address",
+      "data_type": "text"
+    },
+    {
+      "table_name": "venues",
+      "column_name": "city",
+      "data_type": "text"
+    },
+    {
+      "table_name": "venues",
+      "column_name": "state",
+      "data_type": "text"
+    },
+    {
+      "table_name": "venues",
+      "column_name": "pincode",
+      "data_type": "text"
+    },
+    {
+      "table_name": "venues",
+      "column_name": "latitude",
+      "data_type": "text"
+    },
+    {
+      "table_name": "venues",
+      "column_name": "longitude",
+      "data_type": "text"
+    },
+    {
+      "table_name": "venues",
+      "column_name": "facilities",
+      "data_type": "text"
+    },
+    {
+      "table_name": "venues",
+      "column_name": "total_capacity",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "venues",
+      "column_name": "has_seat_layout",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "venues",
+      "column_name": "verification_status",
+      "data_type": "text"
+    },
+    {
+      "table_name": "venues",
+      "column_name": "is_template",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "venues",
+      "column_name": "ownership_type",
+      "data_type": "text"
+    },
+    {
+      "table_name": "venues",
+      "column_name": "layout_config",
+      "data_type": "text"
+    },
+    {
+      "table_name": "venues",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone"
+    }
+  ],
+  "priorSoftUnpublishNote": "On 2026-10-26 a prior session soft-unpublished 18 zero-order events. This audit is read-only and does not mutate further."
+}
