@@ -16,6 +16,11 @@ import {
 import { desc, eq, inArray, and, ne, sql, asc, or, gt } from 'drizzle-orm';
 import { requireAdmin, verifyAdminSession } from '@/src/lib/admin-auth.ts';
 import { generateSessionInventory } from '@/src/lib/inventory-engine.ts';
+import {
+  isAuthoritativeTheatreId,
+  isEligibleForNewEvent,
+  loadAuthoritativeTheatres,
+} from '@/src/lib/venue-eligibility.ts';
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -160,6 +165,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const singleId = searchParams.get('id');
     const wantFull = searchParams.get('full') === '1' || !!singleId;
+    const forEventCreate = searchParams.get('forEventCreate') === '1';
+    const catalog = loadAuthoritativeTheatres();
 
     const venueList = await db
       .select({
@@ -187,6 +194,11 @@ export async function GET(request: NextRequest) {
         }
       }
 
+      const eligible = isEligibleForNewEvent({
+        venueId: v.id,
+        verificationStatus: v.verificationStatus,
+        catalog,
+      });
       const base = {
         ...v,
         districtName: row.districtName,
@@ -195,6 +207,15 @@ export async function GET(request: NextRequest) {
         cityNameMr: row.cityNameMr,
         cityDistrictId: row.cityDistrictId,
         locationMapped: !!(v.districtId && v.cityId),
+        locationDisplay:
+          row.cityName && row.districtName
+            ? `${row.cityName}, ${row.districtName}`
+            : v.city
+              ? `${v.city}${row.districtName ? ` (${row.districtName})` : ''} — city_id/district_id incomplete`
+              : 'Location unmapped',
+        authoritativeNew: isAuthoritativeTheatreId(v.id, catalog),
+        eligibleForEvents: eligible.ok,
+        eligibleReason: eligible.ok ? null : eligible.reason,
         layoutConfig: parsedLayoutConfig,
       };
 
@@ -226,7 +247,10 @@ export async function GET(request: NextRequest) {
       return { ...base, sectionsCount: sectionsWithSeats.length, sections: sectionsWithSeats };
     };
 
-    const enriched = await Promise.all(venueList.map(enrichOne));
+    let enriched = await Promise.all(venueList.map(enrichOne));
+    if (forEventCreate) {
+      enriched = enriched.filter((v) => v.eligibleForEvents);
+    }
 
     if (singleId) {
       if (enriched.length === 0) {
@@ -240,7 +264,10 @@ export async function GET(request: NextRequest) {
       meta: {
         total: enriched.length,
         unmapped: enriched.filter((v) => !v.locationMapped).length,
+        eligibleForEvents: enriched.filter((v) => v.eligibleForEvents).length,
+        authoritativeNew: enriched.filter((v) => v.authoritativeNew).length,
         mode: wantFull ? 'full' : 'lite',
+        forEventCreate,
       },
     });
   } catch (error: any) {

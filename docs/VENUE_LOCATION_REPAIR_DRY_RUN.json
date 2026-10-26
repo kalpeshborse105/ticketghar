@@ -1,16 +1,27 @@
 {
-  "generatedAt": "2026-10-26T17:57:56.864Z",
+  "generatedAt": "2026-10-26T18:17:24.769Z",
+  "gitHint": "Verify with: git rev-parse HEAD && git status -sb",
   "summary": {
     "mode": "dry-run",
-    "hostFamily": "aws-0-ap-south-1.pooler.supabase.com",
-    "venuesAudited": 66,
-    "proposedChanges": 81,
-    "unchangedVenuesApprox": 1,
+    "generatedAt": "2026-10-26T18:17:24.769Z",
+    "hostFamily": "supabase-pooler (treat as PRODUCTION unless owner confirms staging)",
+    "isProductionLikely": true,
+    "counts": {
+      "venues": 66,
+      "null_city_id": 65,
+      "null_district_id": 8,
+      "districts": 36,
+      "cities": 65
+    },
+    "proposedChanges": 79,
     "unresolved": 0,
     "byField": {
       "city_id": 65,
-      "district_id": 14,
-      "verification_status": 2
+      "district_id": 14
+    },
+    "byEvidence": {
+      "verified": 79,
+      "heuristic": 0
     }
   },
   "proposed": [
@@ -20,7 +31,8 @@
       "field": "city_id",
       "from": null,
       "to": 2,
-      "reason": "Match city text \"Pune\" → cities.id=2 (Pune)"
+      "reason": "Link city_id to unique cities.id=2 (Pune) from text \"Pune\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 2,
@@ -28,7 +40,8 @@
       "field": "city_id",
       "from": null,
       "to": 1,
-      "reason": "Match city text \"Mumbai\" → cities.id=1 (Mumbai)"
+      "reason": "Link city_id to unique cities.id=1 (Mumbai) from text \"Mumbai\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 2,
@@ -36,7 +49,8 @@
       "field": "district_id",
       "from": 26,
       "to": 18,
-      "reason": "Vile Parle East landmark"
+      "reason": "Address contains Vile Parle East → Mumbai Suburban (not Pune)",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 3,
@@ -44,7 +58,8 @@
       "field": "city_id",
       "from": null,
       "to": 2,
-      "reason": "Match city text \"Pune\" → cities.id=2 (Pune)"
+      "reason": "Link city_id to unique cities.id=2 (Pune) from text \"Pune\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 4,
@@ -52,7 +67,8 @@
       "field": "city_id",
       "from": null,
       "to": 5,
-      "reason": "Match city text \"Thane\" → cities.id=5 (Thane)"
+      "reason": "Link city_id to unique cities.id=5 (Thane) from text \"Thane\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 4,
@@ -60,7 +76,8 @@
       "field": "district_id",
       "from": 26,
       "to": 33,
-      "reason": "Thane city text; was wrongly Pune"
+      "reason": "City+address Thane West / Ghodbunder — district was wrongly Pune",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 5,
@@ -68,7 +85,8 @@
       "field": "city_id",
       "from": null,
       "to": 2,
-      "reason": "Match city text \"Pune\" → cities.id=2 (Pune)"
+      "reason": "Link city_id to unique cities.id=2 (Pune) from text \"Pune\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 5,
@@ -76,7 +94,8 @@
       "field": "district_id",
       "from": 17,
       "to": 26,
-      "reason": "Pavilion Mall is in Pune; was Mumbai City"
+      "reason": "Pavilion Mall address is Pune — district was wrongly Mumbai City",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 6,
@@ -84,7 +103,8 @@
       "field": "city_id",
       "from": null,
       "to": 2,
-      "reason": "Match city text \"Pune\" → cities.id=2 (Pune)"
+      "reason": "Link city_id to unique cities.id=2 (Pune) from text \"Pune\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 6,
@@ -92,7 +112,8 @@
       "field": "district_id",
       "from": 17,
       "to": 26,
-      "reason": "Westend Mall is in Pune; was Mumbai City"
+      "reason": "Westend Mall address is Pune — district was wrongly Mumbai City",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 7,
@@ -100,7 +121,8 @@
       "field": "city_id",
       "from": null,
       "to": 1,
-      "reason": "Match city text \"Mumbai\" → cities.id=1 (Mumbai)"
+      "reason": "Link city_id to unique cities.id=1 (Mumbai) from text \"Mumbai\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 7,
@@ -108,7 +130,8 @@
       "field": "district_id",
       "from": 17,
       "to": 18,
-      "reason": "R City Mall Ghatkopar is Mumbai Suburban"
+      "reason": "R City Mall Ghatkopar West → Mumbai Suburban (not Mumbai City)",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 8,
@@ -116,7 +139,8 @@
       "field": "city_id",
       "from": null,
       "to": 1,
-      "reason": "Match city text \"Mumbai\" → cities.id=1 (Mumbai)"
+      "reason": "Link city_id to unique cities.id=1 (Mumbai) from text \"Mumbai\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 9,
@@ -124,7 +148,8 @@
       "field": "city_id",
       "from": null,
       "to": 1,
-      "reason": "Match city text \"Mumbai\" → cities.id=1 (Mumbai)"
+      "reason": "Link city_id to unique cities.id=1 (Mumbai) from text \"Mumbai\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 10,
@@ -132,7 +157,8 @@
       "field": "city_id",
       "from": null,
       "to": 1,
-      "reason": "Match city text \"Mumbai\" → cities.id=1 (Mumbai)"
+      "reason": "Link city_id to unique cities.id=1 (Mumbai) from text \"Mumbai\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 11,
@@ -140,7 +166,8 @@
       "field": "city_id",
       "from": null,
       "to": 5,
-      "reason": "Match city text \"Thane\" → cities.id=5 (Thane)"
+      "reason": "Link city_id to unique cities.id=5 (Thane) from text \"Thane\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 12,
@@ -148,7 +175,8 @@
       "field": "city_id",
       "from": null,
       "to": 1,
-      "reason": "Match city text \"Mumbai\" → cities.id=1 (Mumbai)"
+      "reason": "Link city_id to unique cities.id=1 (Mumbai) from text \"Mumbai\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 12,
@@ -156,7 +184,8 @@
       "field": "district_id",
       "from": 33,
       "to": 18,
-      "reason": "Same Dinanath landmark Vile Parle"
+      "reason": "Address contains Vile Parle East → Mumbai Suburban (not Thane)",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 13,
@@ -164,7 +193,8 @@
       "field": "city_id",
       "from": null,
       "to": 5,
-      "reason": "Match city text \"Thane\" → cities.id=5 (Thane)"
+      "reason": "Link city_id to unique cities.id=5 (Thane) from text \"Thane\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 14,
@@ -172,7 +202,8 @@
       "field": "city_id",
       "from": null,
       "to": 3,
-      "reason": "Match city text \"Nagpur\" → cities.id=3 (Nagpur)"
+      "reason": "Link city_id to unique cities.id=3 (Nagpur) from text \"Nagpur\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 15,
@@ -180,7 +211,8 @@
       "field": "city_id",
       "from": null,
       "to": 3,
-      "reason": "Match city text \"Nagpur\" → cities.id=3 (Nagpur)"
+      "reason": "Link city_id to unique cities.id=3 (Nagpur) from text \"Nagpur\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 16,
@@ -188,7 +220,8 @@
       "field": "city_id",
       "from": null,
       "to": 3,
-      "reason": "Match city text \"Nagpur\" → cities.id=3 (Nagpur)"
+      "reason": "Link city_id to unique cities.id=3 (Nagpur) from text \"Nagpur\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 17,
@@ -196,7 +229,8 @@
       "field": "city_id",
       "from": null,
       "to": 4,
-      "reason": "Match city text \"Nashik\" → cities.id=4 (Nashik)"
+      "reason": "Link city_id to unique cities.id=4 (Nashik) from text \"Nashik\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 18,
@@ -204,7 +238,8 @@
       "field": "city_id",
       "from": null,
       "to": 4,
-      "reason": "Match city text \"Nashik\" → cities.id=4 (Nashik)"
+      "reason": "Link city_id to unique cities.id=4 (Nashik) from text \"Nashik\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 19,
@@ -212,7 +247,8 @@
       "field": "city_id",
       "from": null,
       "to": 9,
-      "reason": "Match city text \"Chhatrapati Sambhajinagar\" → cities.id=9 (Chhatrapati Sambhajinagar)"
+      "reason": "Link city_id to unique cities.id=9 (Chhatrapati Sambhajinagar) from text \"Chhatrapati Sambhajinagar\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 20,
@@ -220,7 +256,8 @@
       "field": "city_id",
       "from": null,
       "to": 9,
-      "reason": "Match city text \"Chhatrapati Sambhajinagar\" → cities.id=9 (Chhatrapati Sambhajinagar)"
+      "reason": "Link city_id to unique cities.id=9 (Chhatrapati Sambhajinagar) from text \"Chhatrapati Sambhajinagar\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 21,
@@ -228,7 +265,8 @@
       "field": "city_id",
       "from": null,
       "to": 6,
-      "reason": "Match city text \"Kolhapur\" → cities.id=6 (Kolhapur)"
+      "reason": "Link city_id to unique cities.id=6 (Kolhapur) from text \"Kolhapur\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 22,
@@ -236,7 +274,8 @@
       "field": "city_id",
       "from": null,
       "to": 6,
-      "reason": "Match city text \"Kolhapur\" → cities.id=6 (Kolhapur)"
+      "reason": "Link city_id to unique cities.id=6 (Kolhapur) from text \"Kolhapur\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 23,
@@ -244,7 +283,8 @@
       "field": "city_id",
       "from": null,
       "to": 7,
-      "reason": "Match city text \"Sangli\" → cities.id=7 (Sangli)"
+      "reason": "Link city_id to unique cities.id=7 (Sangli) from text \"Sangli\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 24,
@@ -252,7 +292,8 @@
       "field": "city_id",
       "from": null,
       "to": 22,
-      "reason": "Match city text \"Satara\" → cities.id=22 (Satara)"
+      "reason": "Link city_id to unique cities.id=22 (Satara) from text \"Satara\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 25,
@@ -260,7 +301,8 @@
       "field": "city_id",
       "from": null,
       "to": 8,
-      "reason": "Match city text \"Solapur\" → cities.id=8 (Solapur)"
+      "reason": "Link city_id to unique cities.id=8 (Solapur) from text \"Solapur\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 26,
@@ -268,7 +310,8 @@
       "field": "city_id",
       "from": null,
       "to": 8,
-      "reason": "Match city text \"Solapur\" → cities.id=8 (Solapur)"
+      "reason": "Link city_id to unique cities.id=8 (Solapur) from text \"Solapur\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 27,
@@ -276,7 +319,8 @@
       "field": "city_id",
       "from": null,
       "to": 10,
-      "reason": "Match city text \"Ahmednagar\" → cities.id=10 (Ahilyanagar)"
+      "reason": "Link city_id to unique cities.id=10 (Ahilyanagar) from text \"Ahmednagar\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 28,
@@ -284,7 +328,8 @@
       "field": "city_id",
       "from": null,
       "to": 29,
-      "reason": "Match city text \"Jalgaon\" → cities.id=29 (Jalgaon)"
+      "reason": "Link city_id to unique cities.id=29 (Jalgaon) from text \"Jalgaon\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 30,
@@ -292,7 +337,8 @@
       "field": "city_id",
       "from": null,
       "to": 42,
-      "reason": "Match city text \"Nandurbar\" → cities.id=42 (Nandurbar)"
+      "reason": "Link city_id to unique cities.id=42 (Nandurbar) from text \"Nandurbar\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 31,
@@ -300,7 +346,8 @@
       "field": "city_id",
       "from": null,
       "to": 23,
-      "reason": "Match city text \"Amravati\" → cities.id=23 (Amravati)"
+      "reason": "Link city_id to unique cities.id=23 (Amravati) from text \"Amravati\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 32,
@@ -308,7 +355,8 @@
       "field": "city_id",
       "from": null,
       "to": 24,
-      "reason": "Match city text \"Akola\" → cities.id=24 (Akola)"
+      "reason": "Link city_id to unique cities.id=24 (Akola) from text \"Akola\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 33,
@@ -316,7 +364,8 @@
       "field": "city_id",
       "from": null,
       "to": 37,
-      "reason": "Match city text \"Buldhana\" → cities.id=37 (Buldhana)"
+      "reason": "Link city_id to unique cities.id=37 (Buldhana) from text \"Buldhana\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 34,
@@ -324,7 +373,8 @@
       "field": "city_id",
       "from": null,
       "to": 43,
-      "reason": "Match city text \"Washim\" → cities.id=43 (Washim)"
+      "reason": "Link city_id to unique cities.id=43 (Washim) from text \"Washim\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 35,
@@ -332,7 +382,8 @@
       "field": "city_id",
       "from": null,
       "to": 38,
-      "reason": "Match city text \"Yavatmal\" → cities.id=38 (Yavatmal)"
+      "reason": "Link city_id to unique cities.id=38 (Yavatmal) from text \"Yavatmal\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 36,
@@ -340,7 +391,8 @@
       "field": "city_id",
       "from": null,
       "to": 32,
-      "reason": "Match city text \"Wardha\" → cities.id=32 (Wardha)"
+      "reason": "Link city_id to unique cities.id=32 (Wardha) from text \"Wardha\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 37,
@@ -348,7 +400,8 @@
       "field": "city_id",
       "from": null,
       "to": 39,
-      "reason": "Match city text \"Bhandara\" → cities.id=39 (Bhandara)"
+      "reason": "Link city_id to unique cities.id=39 (Bhandara) from text \"Bhandara\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 38,
@@ -356,7 +409,8 @@
       "field": "city_id",
       "from": null,
       "to": 40,
-      "reason": "Match city text \"Gondia\" → cities.id=40 (Gondia)"
+      "reason": "Link city_id to unique cities.id=40 (Gondia) from text \"Gondia\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 39,
@@ -364,7 +418,8 @@
       "field": "city_id",
       "from": null,
       "to": 31,
-      "reason": "Match city text \"Chandrapur\" → cities.id=31 (Chandrapur)"
+      "reason": "Link city_id to unique cities.id=31 (Chandrapur) from text \"Chandrapur\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 40,
@@ -372,7 +427,8 @@
       "field": "city_id",
       "from": null,
       "to": 41,
-      "reason": "Match city text \"Gadchiroli\" → cities.id=41 (Gadchiroli)"
+      "reason": "Link city_id to unique cities.id=41 (Gadchiroli) from text \"Gadchiroli\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 41,
@@ -380,7 +436,8 @@
       "field": "city_id",
       "from": null,
       "to": 25,
-      "reason": "Match city text \"Latur\" → cities.id=25 (Latur)"
+      "reason": "Link city_id to unique cities.id=25 (Latur) from text \"Latur\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 42,
@@ -388,7 +445,8 @@
       "field": "city_id",
       "from": null,
       "to": 26,
-      "reason": "Match city text \"Nanded\" → cities.id=26 (Nanded)"
+      "reason": "Link city_id to unique cities.id=26 (Nanded) from text \"Nanded\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 43,
@@ -396,7 +454,8 @@
       "field": "city_id",
       "from": null,
       "to": 36,
-      "reason": "Match city text \"Parbhani\" → cities.id=36 (Parbhani)"
+      "reason": "Link city_id to unique cities.id=36 (Parbhani) from text \"Parbhani\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 44,
@@ -404,7 +463,8 @@
       "field": "city_id",
       "from": null,
       "to": 44,
-      "reason": "Match city text \"Hingoli\" → cities.id=44 (Hingoli)"
+      "reason": "Link city_id to unique cities.id=44 (Hingoli) from text \"Hingoli\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 45,
@@ -412,7 +472,8 @@
       "field": "city_id",
       "from": null,
       "to": 35,
-      "reason": "Match city text \"Beed\" → cities.id=35 (Beed)"
+      "reason": "Link city_id to unique cities.id=35 (Beed) from text \"Beed\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 46,
@@ -420,7 +481,8 @@
       "field": "city_id",
       "from": null,
       "to": 34,
-      "reason": "Match city text \"Jalna\" → cities.id=34 (Jalna)"
+      "reason": "Link city_id to unique cities.id=34 (Jalna) from text \"Jalna\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 47,
@@ -428,7 +490,8 @@
       "field": "city_id",
       "from": null,
       "to": 33,
-      "reason": "Match city text \"Dharashiv\" → cities.id=33 (Dharashiv)"
+      "reason": "Link city_id to unique cities.id=33 (Dharashiv) from text \"Dharashiv\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 48,
@@ -436,7 +499,8 @@
       "field": "city_id",
       "from": null,
       "to": 46,
-      "reason": "Match city text \"Alibag\" → cities.id=46 (Alibag)"
+      "reason": "Link city_id to unique cities.id=46 (Alibag) from text \"Alibag\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 49,
@@ -444,7 +508,8 @@
       "field": "city_id",
       "from": null,
       "to": 50,
-      "reason": "Match city text \"Panvel\" → cities.id=50 (Panvel)"
+      "reason": "Link city_id to unique cities.id=50 (Panvel) from text \"Panvel\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 50,
@@ -452,7 +517,8 @@
       "field": "city_id",
       "from": null,
       "to": 28,
-      "reason": "Match city text \"Ratnagiri\" → cities.id=28 (Ratnagiri)"
+      "reason": "Link city_id to unique cities.id=28 (Ratnagiri) from text \"Ratnagiri\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 51,
@@ -460,7 +526,8 @@
       "field": "city_id",
       "from": null,
       "to": 55,
-      "reason": "Match city text \"Sawantwadi\" → cities.id=55 (Sawantwadi)"
+      "reason": "Link city_id to unique cities.id=55 (Sawantwadi) from text \"Sawantwadi\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 52,
@@ -468,7 +535,8 @@
       "field": "city_id",
       "from": null,
       "to": 49,
-      "reason": "Match city text \"Vasai\" → cities.id=49 (Vasai-Virar)"
+      "reason": "Link city_id to unique cities.id=49 (Vasai-Virar) from text \"Vasai\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 53,
@@ -476,7 +544,8 @@
       "field": "city_id",
       "from": null,
       "to": 2,
-      "reason": "Match city text \"Pune\" → cities.id=2 (Pune)"
+      "reason": "Link city_id to unique cities.id=2 (Pune) from text \"Pune\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 54,
@@ -484,7 +553,8 @@
       "field": "city_id",
       "from": null,
       "to": 2,
-      "reason": "Match city text \"Pune\" → cities.id=2 (Pune)"
+      "reason": "Link city_id to unique cities.id=2 (Pune) from text \"Pune\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 55,
@@ -492,7 +562,8 @@
       "field": "city_id",
       "from": null,
       "to": 2,
-      "reason": "Match city text \"Pune\" → cities.id=2 (Pune)"
+      "reason": "Link city_id to unique cities.id=2 (Pune) from text \"Pune\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 56,
@@ -500,7 +571,8 @@
       "field": "city_id",
       "from": null,
       "to": 1,
-      "reason": "Match city text \"Mumbai\" → cities.id=1 (Mumbai)"
+      "reason": "Link city_id to unique cities.id=1 (Mumbai) from text \"Mumbai\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 57,
@@ -508,7 +580,8 @@
       "field": "city_id",
       "from": null,
       "to": 1,
-      "reason": "Match city text \"Mumbai\" → cities.id=1 (Mumbai)"
+      "reason": "Link city_id to unique cities.id=1 (Mumbai) from text \"Mumbai\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 58,
@@ -516,7 +589,8 @@
       "field": "city_id",
       "from": null,
       "to": 1,
-      "reason": "Match city text \"Mumbai\" → cities.id=1 (Mumbai)"
+      "reason": "Link city_id to unique cities.id=1 (Mumbai) from text \"Mumbai\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 59,
@@ -524,7 +598,8 @@
       "field": "city_id",
       "from": null,
       "to": 1,
-      "reason": "Match city text \"Mumbai\" → cities.id=1 (Mumbai)"
+      "reason": "Link city_id to unique cities.id=1 (Mumbai) from text \"Mumbai\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 59,
@@ -532,7 +607,8 @@
       "field": "district_id",
       "from": null,
       "to": 17,
-      "reason": "Fill null district from city Mumbai"
+      "reason": "Jamshed Bhabha (NCPA) — Nariman Point → Mumbai City",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 60,
@@ -540,7 +616,8 @@
       "field": "city_id",
       "from": null,
       "to": 1,
-      "reason": "Match city text \"Mumbai\" → cities.id=1 (Mumbai)"
+      "reason": "Link city_id to unique cities.id=1 (Mumbai) from text \"Mumbai\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 60,
@@ -548,7 +625,8 @@
       "field": "district_id",
       "from": null,
       "to": 17,
-      "reason": "Fill null district from city Mumbai"
+      "reason": "Tata Theatre (NCPA) — Nariman Point → Mumbai City",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 61,
@@ -556,7 +634,8 @@
       "field": "city_id",
       "from": null,
       "to": 1,
-      "reason": "Match city text \"Mumbai\" → cities.id=1 (Mumbai)"
+      "reason": "Link city_id to unique cities.id=1 (Mumbai) from text \"Mumbai\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 61,
@@ -564,7 +643,8 @@
       "field": "district_id",
       "from": null,
       "to": 17,
-      "reason": "Fill null district from city Mumbai"
+      "reason": "Godrej Dance Theatre (NCPA) — Nariman Point → Mumbai City",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 62,
@@ -572,7 +652,8 @@
       "field": "city_id",
       "from": null,
       "to": 2,
-      "reason": "Match city text \"Pune\" → cities.id=2 (Pune)"
+      "reason": "Link city_id to unique cities.id=2 (Pune) from text \"Pune\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 62,
@@ -580,7 +661,8 @@
       "field": "district_id",
       "from": null,
       "to": 26,
-      "reason": "Fill null district from city Pune"
+      "reason": "Fill null district_id from cities.district_id for Pune",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 63,
@@ -588,7 +670,8 @@
       "field": "city_id",
       "from": null,
       "to": 2,
-      "reason": "Match city text \"Pune\" → cities.id=2 (Pune)"
+      "reason": "Link city_id to unique cities.id=2 (Pune) from text \"Pune\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 63,
@@ -596,7 +679,8 @@
       "field": "district_id",
       "from": null,
       "to": 26,
-      "reason": "Fill null district from city Pune"
+      "reason": "Fill null district_id from cities.district_id for Pune",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 64,
@@ -604,7 +688,8 @@
       "field": "city_id",
       "from": null,
       "to": 2,
-      "reason": "Match city text \"Pune\" → cities.id=2 (Pune)"
+      "reason": "Link city_id to unique cities.id=2 (Pune) from text \"Pune\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 64,
@@ -612,7 +697,8 @@
       "field": "district_id",
       "from": null,
       "to": 26,
-      "reason": "Fill null district from city Pune"
+      "reason": "Fill null district_id from cities.district_id for Pune",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 65,
@@ -620,7 +706,8 @@
       "field": "city_id",
       "from": null,
       "to": 2,
-      "reason": "Match city text \"Pune\" → cities.id=2 (Pune)"
+      "reason": "Link city_id to unique cities.id=2 (Pune) from text \"Pune\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 65,
@@ -628,7 +715,8 @@
       "field": "district_id",
       "from": null,
       "to": 26,
-      "reason": "Fill null district from city Pune"
+      "reason": "Fill null district_id from cities.district_id for Pune",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 66,
@@ -636,7 +724,8 @@
       "field": "city_id",
       "from": null,
       "to": 2,
-      "reason": "Match city text \"Pune\" → cities.id=2 (Pune)"
+      "reason": "Link city_id to unique cities.id=2 (Pune) from text \"Pune\"",
+      "evidenceLevel": "verified"
     },
     {
       "venueId": 66,
@@ -644,81 +733,322 @@
       "field": "district_id",
       "from": null,
       "to": 26,
-      "reason": "Fill null district from city Pune"
-    },
-    {
-      "venueId": 12,
-      "name": "Dinanath Mangeshkar Natyagruha",
-      "field": "verification_status",
-      "from": "verified",
-      "to": "unverified",
-      "reason": "Suspected duplicate of venue #2; zero events/orders. Dinanath Mangeshkar Natyagruha Vile Parle — likely seed duplicate"
-    },
-    {
-      "venueId": 53,
-      "name": "Yashwantrao Chavan Natyagruha",
-      "field": "verification_status",
-      "from": "verified",
-      "to": "unverified",
-      "reason": "Suspected duplicate of venue #3; zero events/orders. Yashwantrao Chavan Natyagruha Pune — likely seed duplicate"
+      "reason": "Fill null district_id from cities.district_id for Pune",
+      "evidenceLevel": "verified"
     }
   ],
   "unresolved": [],
-  "suspectedDuplicates": [
+  "focusReview": {
+    "2": {
+      "venue": {
+        "id": 2,
+        "name": "Dinanath Mangeshkar Natyagruha",
+        "city": "Mumbai",
+        "address": "Vile Parle East, Mumbai",
+        "district_id": 26,
+        "city_id": null,
+        "verification_status": "verified"
+      },
+      "proposed": [
+        {
+          "venueId": 2,
+          "name": "Dinanath Mangeshkar Natyagruha",
+          "field": "city_id",
+          "from": null,
+          "to": 1,
+          "reason": "Link city_id to unique cities.id=1 (Mumbai) from text \"Mumbai\"",
+          "evidenceLevel": "verified"
+        },
+        {
+          "venueId": 2,
+          "name": "Dinanath Mangeshkar Natyagruha",
+          "field": "district_id",
+          "from": 26,
+          "to": 18,
+          "reason": "Address contains Vile Parle East → Mumbai Suburban (not Pune)",
+          "evidenceLevel": "verified"
+        }
+      ],
+      "unresolved": []
+    },
+    "3": {
+      "venue": {
+        "id": 3,
+        "name": "Yashwantrao Chavan Natyagruha",
+        "city": "Pune",
+        "address": "Kothrud, Pune",
+        "district_id": 26,
+        "city_id": null,
+        "verification_status": "verified"
+      },
+      "proposed": [
+        {
+          "venueId": 3,
+          "name": "Yashwantrao Chavan Natyagruha",
+          "field": "city_id",
+          "from": null,
+          "to": 2,
+          "reason": "Link city_id to unique cities.id=2 (Pune) from text \"Pune\"",
+          "evidenceLevel": "verified"
+        }
+      ],
+      "unresolved": []
+    },
+    "4": {
+      "venue": {
+        "id": 4,
+        "name": "Dr. Kashinath Ghanekar Natyagruha",
+        "city": "Thane",
+        "address": "Ghodbunder Road, Hiranandani Meadows, Thane West",
+        "district_id": 26,
+        "city_id": null,
+        "verification_status": "verified"
+      },
+      "proposed": [
+        {
+          "venueId": 4,
+          "name": "Dr. Kashinath Ghanekar Natyagruha",
+          "field": "city_id",
+          "from": null,
+          "to": 5,
+          "reason": "Link city_id to unique cities.id=5 (Thane) from text \"Thane\"",
+          "evidenceLevel": "verified"
+        },
+        {
+          "venueId": 4,
+          "name": "Dr. Kashinath Ghanekar Natyagruha",
+          "field": "district_id",
+          "from": 26,
+          "to": 33,
+          "reason": "City+address Thane West / Ghodbunder — district was wrongly Pune",
+          "evidenceLevel": "verified"
+        }
+      ],
+      "unresolved": []
+    },
+    "5": {
+      "venue": {
+        "id": 5,
+        "name": "PVR INOX: The Pavillion Mall",
+        "city": "Pune",
+        "address": "Senapati Bapat Road, Shivajinagar, Pune",
+        "district_id": 17,
+        "city_id": null,
+        "verification_status": "verified"
+      },
+      "proposed": [
+        {
+          "venueId": 5,
+          "name": "PVR INOX: The Pavillion Mall",
+          "field": "city_id",
+          "from": null,
+          "to": 2,
+          "reason": "Link city_id to unique cities.id=2 (Pune) from text \"Pune\"",
+          "evidenceLevel": "verified"
+        },
+        {
+          "venueId": 5,
+          "name": "PVR INOX: The Pavillion Mall",
+          "field": "district_id",
+          "from": 17,
+          "to": 26,
+          "reason": "Pavilion Mall address is Pune — district was wrongly Mumbai City",
+          "evidenceLevel": "verified"
+        }
+      ],
+      "unresolved": []
+    },
+    "6": {
+      "venue": {
+        "id": 6,
+        "name": "Cinepolis: Westend Mall",
+        "city": "Pune",
+        "address": "Parihar Chowk, Aundh, Pune",
+        "district_id": 17,
+        "city_id": null,
+        "verification_status": "verified"
+      },
+      "proposed": [
+        {
+          "venueId": 6,
+          "name": "Cinepolis: Westend Mall",
+          "field": "city_id",
+          "from": null,
+          "to": 2,
+          "reason": "Link city_id to unique cities.id=2 (Pune) from text \"Pune\"",
+          "evidenceLevel": "verified"
+        },
+        {
+          "venueId": 6,
+          "name": "Cinepolis: Westend Mall",
+          "field": "district_id",
+          "from": 17,
+          "to": 26,
+          "reason": "Westend Mall address is Pune — district was wrongly Mumbai City",
+          "evidenceLevel": "verified"
+        }
+      ],
+      "unresolved": []
+    },
+    "7": {
+      "venue": {
+        "id": 7,
+        "name": "PVR INOX: R City Mall",
+        "city": "Mumbai",
+        "address": "LBS Marg, Ghatkopar West, Mumbai",
+        "district_id": 17,
+        "city_id": null,
+        "verification_status": "verified"
+      },
+      "proposed": [
+        {
+          "venueId": 7,
+          "name": "PVR INOX: R City Mall",
+          "field": "city_id",
+          "from": null,
+          "to": 1,
+          "reason": "Link city_id to unique cities.id=1 (Mumbai) from text \"Mumbai\"",
+          "evidenceLevel": "verified"
+        },
+        {
+          "venueId": 7,
+          "name": "PVR INOX: R City Mall",
+          "field": "district_id",
+          "from": 17,
+          "to": 18,
+          "reason": "R City Mall Ghatkopar West → Mumbai Suburban (not Mumbai City)",
+          "evidenceLevel": "verified"
+        }
+      ],
+      "unresolved": []
+    },
+    "12": {
+      "venue": {
+        "id": 12,
+        "name": "Dinanath Mangeshkar Natyagruha",
+        "city": "Mumbai",
+        "address": "Vile Parle East, Mumbai",
+        "district_id": 33,
+        "city_id": null,
+        "verification_status": "verified"
+      },
+      "proposed": [
+        {
+          "venueId": 12,
+          "name": "Dinanath Mangeshkar Natyagruha",
+          "field": "city_id",
+          "from": null,
+          "to": 1,
+          "reason": "Link city_id to unique cities.id=1 (Mumbai) from text \"Mumbai\"",
+          "evidenceLevel": "verified"
+        },
+        {
+          "venueId": 12,
+          "name": "Dinanath Mangeshkar Natyagruha",
+          "field": "district_id",
+          "from": 33,
+          "to": 18,
+          "reason": "Address contains Vile Parle East → Mumbai Suburban (not Thane)",
+          "evidenceLevel": "verified"
+        }
+      ],
+      "unresolved": []
+    },
+    "53": {
+      "venue": {
+        "id": 53,
+        "name": "Yashwantrao Chavan Natyagruha",
+        "city": "Pune",
+        "address": "Kothrud, Pune",
+        "district_id": 26,
+        "city_id": null,
+        "verification_status": "verified"
+      },
+      "proposed": [
+        {
+          "venueId": 53,
+          "name": "Yashwantrao Chavan Natyagruha",
+          "field": "city_id",
+          "from": null,
+          "to": 2,
+          "reason": "Link city_id to unique cities.id=2 (Pune) from text \"Pune\"",
+          "evidenceLevel": "verified"
+        }
+      ],
+      "unresolved": []
+    }
+  },
+  "duplicateReviews": [
     {
       "keepId": 2,
-      "softId": 12,
-      "note": "Dinanath Mangeshkar Natyagruha Vile Parle — likely seed duplicate"
+      "otherId": 12,
+      "note": "Same display name + Vile Parle address — likely seed duplicate; do not merge/auto-unverify",
+      "recommendation": "manual_review_only",
+      "keepDeps": {
+        "events": 1,
+        "sessions": 6,
+        "orders": 0,
+        "tickets": 0,
+        "scans": 0,
+        "reviews": 5,
+        "seats": 114,
+        "sections": 3,
+        "seat_inventory": 912
+      },
+      "otherDeps": {
+        "events": 0,
+        "sessions": 0,
+        "orders": 0,
+        "tickets": 0,
+        "scans": 0,
+        "reviews": 0,
+        "seats": 114,
+        "sections": 3,
+        "seat_inventory": 0
+      },
+      "autoAction": "none — verification_status not changed by this script"
     },
     {
       "keepId": 3,
-      "softId": 53,
-      "note": "Yashwantrao Chavan Natyagruha Pune — likely seed duplicate"
+      "otherId": 53,
+      "note": "Same display name + Kothrud Pune address — likely seed duplicate; do not merge/auto-unverify",
+      "recommendation": "manual_review_only",
+      "keepDeps": {
+        "events": 3,
+        "sessions": 6,
+        "orders": 7,
+        "tickets": 14,
+        "scans": 0,
+        "reviews": 0,
+        "seats": 114,
+        "sections": 3,
+        "seat_inventory": 654
+      },
+      "otherDeps": {
+        "events": 0,
+        "sessions": 0,
+        "orders": 0,
+        "tickets": 0,
+        "scans": 0,
+        "reviews": 0,
+        "seats": 114,
+        "sections": 3,
+        "seat_inventory": 0
+      },
+      "autoAction": "none — verification_status not changed by this script"
     }
   ],
-  "cityAliases": {
-    "ahmednagar": "Ahilyanagar",
-    "ahmadnagar": "Ahilyanagar",
-    "vasai": "Vasai-Virar",
-    "vasai virar": "Vasai-Virar",
-    "aurangabad": "Chhatrapati Sambhajinagar",
-    "osmanabad": "Dharashiv"
-  },
-  "districtOverridesById": {
-    "2": {
-      "districtName": "Mumbai Suburban",
-      "reason": "Vile Parle East landmark",
-      "cityName": "Mumbai"
-    },
-    "4": {
-      "districtName": "Thane",
-      "reason": "Thane city text; was wrongly Pune",
-      "cityName": "Thane"
-    },
-    "5": {
-      "districtName": "Pune",
-      "reason": "Pavilion Mall is in Pune; was Mumbai City",
-      "cityName": "Pune"
-    },
-    "6": {
-      "districtName": "Pune",
-      "reason": "Westend Mall is in Pune; was Mumbai City",
-      "cityName": "Pune"
-    },
-    "7": {
-      "districtName": "Mumbai Suburban",
-      "reason": "R City Mall Ghatkopar is Mumbai Suburban",
-      "cityName": "Mumbai"
-    },
-    "9": {
-      "districtName": "Mumbai Suburban",
-      "reason": "Vile Parle East",
-      "cityName": "Mumbai"
-    },
-    "12": {
-      "districtName": "Mumbai Suburban",
-      "reason": "Same Dinanath landmark Vile Parle",
-      "cityName": "Mumbai"
-    }
+  "approvalInstructions": {
+    "copyChangesFrom": "proposed[]",
+    "writeTo": "docs/VENUE_LOCATION_REPAIR_APPROVAL.json",
+    "requiredFields": [
+      "approvedAt",
+      "approvedBy",
+      "baselineGeneratedAt (= this generatedAt)",
+      "backupConfirmed: true",
+      "productionConfirm: I_CONFIRM_PRODUCTION_WRITE (production hosts)",
+      "changes: Exact venueId/field/from/to subset of proposed"
+    ],
+    "applyCommand": "npx tsx scripts/repair-venue-locations.ts --apply --approval=docs/VENUE_LOCATION_REPAIR_APPROVAL.json --i-confirm-production"
   }
 }

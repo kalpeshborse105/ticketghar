@@ -1,0 +1,122 @@
+{
+  "sourceLabel": "LIVE_DATABASE_READONLY_OR_APPLY",
+  "generatedAt": "2026-10-26T18:27:57.827Z",
+  "host": {
+    "hostFamily": "supabase-pooler",
+    "isProductionLikely": true
+  },
+  "mode": "dry-run",
+  "retainAuthoritative": [
+    8,
+    9,
+    55,
+    56,
+    59,
+    60,
+    61,
+    62,
+    63,
+    64,
+    65,
+    66
+  ],
+  "retireVenueIds": [
+    4,
+    7,
+    10,
+    12,
+    13,
+    14,
+    15,
+    16,
+    18,
+    19,
+    22,
+    24,
+    25,
+    26,
+    28,
+    31,
+    35,
+    36,
+    41,
+    42,
+    46,
+    50,
+    51
+  ],
+  "skipProtected": [],
+  "skipPendingOwner": [],
+  "skipAlreadyRetired": [
+    20,
+    27,
+    30,
+    32,
+    33,
+    34,
+    37,
+    38,
+    39,
+    40,
+    43,
+    44,
+    45,
+    47,
+    48,
+    49,
+    52
+  ],
+  "skipUnknown": [],
+  "eventsToUnpublish": [
+    {
+      "id": 107,
+      "title": "Sur Nava Dhyas Nava Live",
+      "venue_id": 14
+    },
+    {
+      "id": 109,
+      "title": "Jailer 2",
+      "venue_id": 7
+    },
+    {
+      "id": 112,
+      "title": "Ramayan",
+      "venue_id": 7
+    },
+    {
+      "id": 115,
+      "title": "Pushpa 2: The Rule",
+      "venue_id": 7
+    },
+    {
+      "id": 118,
+      "title": "Baipan Bhaari Deva 2",
+      "venue_id": 7
+    },
+    {
+      "id": 121,
+      "title": "Juna Furniture",
+      "venue_id": 7
+    },
+    {
+      "id": 124,
+      "title": "Kantara: Chapter 1",
+      "venue_id": 7
+    },
+    {
+      "id": 127,
+      "title": "Chhaava",
+      "venue_id": 7
+    },
+    {
+      "id": 130,
+      "title": "Saiyaara",
+      "venue_id": 7
+    }
+  ],
+  "counts": {
+    "retireVenues": 23,
+    "unpublishEvents": 9,
+    "protectedSkipped": 0
+  }
+}

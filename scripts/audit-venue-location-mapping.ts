@@ -27,13 +27,26 @@ function norm(s: string | null | undefined) {
     .trim();
 }
 
-/** Heuristic expected district from free-text city/address — for audit flags only */
+/**
+ * Heuristic expected district from free-text — AUDIT FLAGS ONLY.
+ * Not used by the apply path. Never treat as independently verified.
+ * Mumbai City vs Suburban requires locality tokens; bare "Mumbai" → ambiguous/null.
+ */
 function guessDistrictFromText(city: string, address: string, districts: { id: number; name: string }[]) {
   const hay = norm(`${city} ${address}`);
+  // Suburban localities before generic Mumbai
+  if (/vile\s*parle|andheri|goregaon|powai|ghatkopar|borivali|malad|kandivali|bandra|jogeshwari/.test(hay)) {
+    return districts.find((x) => /mumbai suburban/i.test(x.name)) || null;
+  }
+  if (/nariman\s*point|fort\b|colaba|churchgate|girgaon|cuffe\s*parade|ncpa/.test(hay)) {
+    return districts.find((x) => /mumbai city/i.test(x.name)) || null;
+  }
+  if (/\bmumbai\b|मुंबई/.test(hay) && !/navi\s*mumbai/.test(hay)) {
+    return null; // ambiguous — do not default to Mumbai City
+  }
   const rules: [RegExp, string][] = [
     [/\bpune\b|पुणे|kothrud|shivajinagar|hinjewadi|hadapsar|bibwewadi|chinchwad|pimpri/, 'Pune'],
     [/\bthane\b|ठाणे|kalwa|mira road|bhiwandi/, 'Thane'],
-    [/\bmumbai\b|मुंबई|vile parle|andheri|dadar|bandra|goregaon|powai|prabhadevi|nariman|ghatkopar/, 'Mumbai City'],
     [/\bnavi mumbai\b|वाशी|vashi|nerul|belapur|kharghar/, 'Thane'],
     [/\bnashik\b|नाशिक/, 'Nashik'],
     [/\bnagpur\b|नागपूर/, 'Nagpur'],

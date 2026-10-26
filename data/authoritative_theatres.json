@@ -1,0 +1,61 @@
+{
+  "version": 2,
+  "generatedAt": "2026-10-26T18:40:00.000Z",
+  "sourceLabel": "INSERT_PROVENANCE_NOT_NAME_MATCH_ALONE",
+  "provenance": "Authoritative NEW = venues inserted by 2026-10-26 approved scripts (created_at that day + script lineage). Seed-era rows that scripts only UPDATED (e.g. #8 NCPA Experimental, #9 Prabodhankar) are listed separately and are NOT auto-eligible for new events. See Trace venue provenance follow-up: audit catalogue was 1–58; post-approval inserts include 55–56 and 59–66.",
+  "authoritativeTheatreIds": [55, 56, 59, 60, 61, 62, 63, 64, 65, 66],
+  "authoritativeTheatres": [
+    { "id": 55, "name": "Nehru Memorial Hall", "city": "Pune", "evidence": "inserted 2026-10-26 via upsert-real-pune-venues" },
+    { "id": 56, "name": "Shivaji Mandir", "city": "Mumbai", "evidence": "inserted 2026-10-26 via upsert-real-pune-venues" },
+    { "id": 59, "name": "Jamshed Bhabha Theatre (NCPA)", "city": "Mumbai", "evidence": "inserted 2026-10-26 via apply-approved NCPA batch" },
+    { "id": 60, "name": "Tata Theatre (NCPA)", "city": "Mumbai", "evidence": "inserted 2026-10-26 via apply-approved NCPA batch" },
+    { "id": 61, "name": "Godrej Dance Theatre (NCPA)", "city": "Mumbai", "evidence": "inserted 2026-10-26 via apply-approved NCPA batch" },
+    { "id": 62, "name": "Bharat Natya Rang Mandir", "city": "Pune", "evidence": "inserted 2026-10-26 via upsert-real-pune-venues" },
+    { "id": 63, "name": "Ram Krishna More Auditorium", "city": "Pune", "evidence": "inserted 2026-10-26 via upsert-real-pune-venues" },
+    { "id": 64, "name": "Vithal Tupe Sabhagruh", "city": "Pune", "evidence": "inserted 2026-10-26 via upsert-real-pune-venues" },
+    { "id": 65, "name": "Sudarshan Rangmanch", "city": "Pune", "evidence": "inserted 2026-10-26 via upsert-real-pune-venues" },
+    { "id": 66, "name": "Lokshahir Annabhau Sathe Natyagruha", "city": "Pune", "evidence": "inserted 2026-10-26 via upsert-real-pune-venues" }
+  ],
+  "seedUpdatedManifestIds": [8, 9],
+  "seedUpdatedManifest": [
+    {
+      "id": 8,
+      "name": "NCPA Experimental Theatre",
+      "note": "Present in DB_AUDIT (58-venue seed catalogue). Cleanup D updated metadata — not a 59+ insert. Owner may promote to allowlist later."
+    },
+    {
+      "id": 9,
+      "name": "Prabodhankar Thackeray Natya Mandir",
+      "note": "Seed-era row (created_at 2026-10-17); upsert script updated existing — not a new insert."
+    }
+  ],
+  "pendingOwnerConfirmIds": [53, 54, 57, 58],
+  "pendingOwnerConfirm": [
+    {
+      "id": 53,
+      "name": "Yashwantrao Chavan Natyagruha",
+      "note": "Same-day create; likely duplicate of protected #3 — do not treat as authoritative until owner confirms"
+    },
+    {
+      "id": 54,
+      "name": "Balgandharva Tilak Smarak Mandir",
+      "note": "Same-day create; distinct from #1 Bal Gandharva — owner confirm before event eligibility"
+    },
+    {
+      "id": 57,
+      "name": "Ravindra Natya Mandir",
+      "note": "Updated by apply-approved-cleanup name match; not in insert manifest — owner confirm"
+    },
+    {
+      "id": 58,
+      "name": "Chhabildas Hall",
+      "note": "Same-day create; not in insert manifest — owner confirm"
+    }
+  ],
+  "protectedPreserveIds": [1, 2, 3, 5, 6, 11, 17, 21, 23, 29],
+  "notes": [
+    "Protected IDs retain rows for orders/tickets/scans/reviews — never hard-delete.",
+    "Obsolete zero-dep venues are retired via verification_status=unverified (not deleted) by scripts/retire-obsolete-venues.ts.",
+    "Event creation allowlist = authoritativeTheatreIds only until owner expands pendingOwnerConfirmIds or seedUpdatedManifestIds."
+  ]
+}

@@ -1,27 +1,39 @@
 /**
  * Idempotent venue location repair (Maharashtra).
  *
- * Default: DRY-RUN (no writes). Apply only with: --apply
+ * Default: DRY-RUN (no writes).
+ * Apply ONLY with:
+ *   --apply
+ *   --approval=<reviewed approval JSON>
+ *   --baseline=<reviewed dry-run JSON>
+ *   and for production hosts also: --i-confirm-production
  *
- * What it does:
- * 1) Link venues.city_id via cities.name (aliases for renamed cities)
- * 2) Set venues.district_id from cities.district_id when city is linked
- * 3) Apply high-confidence district corrections for known mis-maps
- * 4) Soft-flag zero-dependency suspected duplicate venues as unverified
- * 5) Never deletes/merges venues; never touches events/orders/tickets
- *
- * Usage:
- *   npx tsx scripts/repair-venue-locations.ts
- *   npx tsx scripts/repair-venue-locations.ts --apply
+ * Never modifies events, orders, tickets, scans, seat layouts, or verification_status.
+ * Never merges/deletes venues.
  */
 import { config } from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 import pg from 'pg';
+import {
+  ApprovalArtifact,
+  ProposedChange,
+  buildRepairPlan,
+  detectStaleBaseline,
+  SUSPECTED_DUPLICATE_PAIRS,
+  validateApprovalAgainstPlan,
+  validateBaselineAgainstPlan,
+  VenueRow,
+} from './lib/venue-location-repair-core.ts';
 
 config({ override: true });
 
 const APPLY = process.argv.includes('--apply');
+const PRODUCTION_FLAG = process.argv.includes('--i-confirm-production');
+const approvalArg = process.argv.find((a) => a.startsWith('--approval='));
+const baselineArg = process.argv.find((a) => a.startsWith('--baseline='));
+const APPROVAL_PATH = approvalArg ? approvalArg.slice('--approval='.length) : '';
+const BASELINE_PATH = baselineArg ? baselineArg.slice('--baseline='.length) : '';
 
 function poolUrl() {
   const raw = process.env.DATABASE_URL || '';
@@ -31,323 +43,299 @@ function poolUrl() {
     .replace(/[?&]$/, '');
 }
 
-function norm(s: string | null | undefined) {
-  return String(s || '')
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9\u0900-\u097f]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+function classifyHost(hostname: string): {
+  hostFamily: string;
+  isProductionLikely: boolean;
+} {
+  const h = hostname.toLowerCase();
+  if (h.includes('supabase') || h.includes('pooler.supabase')) {
+    return {
+      hostFamily: 'supabase-pooler (treat as PRODUCTION unless owner confirms staging)',
+      isProductionLikely: true,
+    };
+  }
+  if (h === 'localhost' || h === '127.0.0.1') {
+    return { hostFamily: 'localhost', isProductionLikely: false };
+  }
+  return { hostFamily: hostname, isProductionLikely: true };
 }
 
-/** Free-text city → cities.name aliases (official renames / local spellings) */
-const CITY_ALIASES: Record<string, string> = {
-  ahmednagar: 'Ahilyanagar',
-  ahmadnagar: 'Ahilyanagar',
-  vasai: 'Vasai-Virar',
-  'vasai virar': 'Vasai-Virar',
-  aurangabad: 'Chhatrapati Sambhajinagar',
-  osmanabad: 'Dharashiv',
-};
-
-/**
- * High-confidence venue-id district overrides (verified from address + city text).
- * Only used when name match is unique / id listed.
- */
-const DISTRICT_OVERRIDES_BY_ID: Record<
-  number,
-  { districtName: string; reason: string; cityName?: string }
-> = {
-  2: { districtName: 'Mumbai Suburban', reason: 'Vile Parle East landmark', cityName: 'Mumbai' },
-  4: { districtName: 'Thane', reason: 'Thane city text; was wrongly Pune', cityName: 'Thane' },
-  5: { districtName: 'Pune', reason: 'Pavilion Mall is in Pune; was Mumbai City', cityName: 'Pune' },
-  6: { districtName: 'Pune', reason: 'Westend Mall is in Pune; was Mumbai City', cityName: 'Pune' },
-  7: {
-    districtName: 'Mumbai Suburban',
-    reason: 'R City Mall Ghatkopar is Mumbai Suburban',
-    cityName: 'Mumbai',
-  },
-  9: { districtName: 'Mumbai Suburban', reason: 'Vile Parle East', cityName: 'Mumbai' },
-  12: { districtName: 'Mumbai Suburban', reason: 'Same Dinanath landmark Vile Parle', cityName: 'Mumbai' },
-};
-
-/** Suspected same physical venue; keep both rows — soft-unverify zero-dep copy only */
-const SUSPECTED_DUPES: { keepId: number; softId: number; note: string }[] = [
-  { keepId: 2, softId: 12, note: 'Dinanath Mangeshkar Natyagruha Vile Parle — likely seed duplicate' },
-  { keepId: 3, softId: 53, note: 'Yashwantrao Chavan Natyagruha Pune — likely seed duplicate' },
-];
-
-type Proposed = {
-  venueId: number;
-  name: string;
-  field: 'city_id' | 'district_id' | 'verification_status';
-  from: number | string | null;
-  to: number | string | null;
-  reason: string;
-};
+async function loadDuplicateDeps(client: pg.PoolClient, venueId: number) {
+  const r = await client.query(
+    `
+    SELECT
+      (SELECT COUNT(*)::int FROM events WHERE venue_id=$1) AS events,
+      (SELECT COUNT(*)::int FROM event_sessions es
+         JOIN events e ON e.id=es.event_id WHERE e.venue_id=$1) AS sessions,
+      (SELECT COUNT(*)::int FROM orders o
+         JOIN events e ON e.id=o.event_id WHERE e.venue_id=$1) AS orders,
+      (SELECT COUNT(*)::int FROM tickets t
+         JOIN orders o ON o.id=t.order_id
+         JOIN events e ON e.id=o.event_id WHERE e.venue_id=$1) AS tickets,
+      (SELECT COUNT(*)::int FROM ticket_scans ts
+         JOIN tickets t ON t.id=ts.ticket_id
+         JOIN orders o ON o.id=t.order_id
+         JOIN events e ON e.id=o.event_id WHERE e.venue_id=$1) AS scans,
+      (SELECT COUNT(*)::int FROM event_reviews r
+         JOIN events e ON e.id=r.event_id WHERE e.venue_id=$1) AS reviews,
+      (SELECT COUNT(*)::int FROM seats WHERE venue_id=$1) AS seats,
+      (SELECT COUNT(*)::int FROM venue_sections WHERE venue_id=$1) AS sections,
+      (SELECT COUNT(*)::int FROM seat_inventory si
+         JOIN seats s ON s.id=si.seat_id WHERE s.venue_id=$1) AS seat_inventory
+    `,
+    [venueId]
+  );
+  return r.rows[0] as Record<string, number>;
+}
 
 async function main() {
-  const host = (() => {
+  const hostRaw = (() => {
     try {
       return new URL(poolUrl().replace(/^postgresql?/i, 'http')).hostname;
     } catch {
       return '(unparsed)';
     }
   })();
+  const { hostFamily, isProductionLikely } = classifyHost(hostRaw);
+
   console.log(`Mode: ${APPLY ? 'APPLY' : 'DRY-RUN'}`);
-  console.log(
-    `DB: ${host.includes('supabase') ? 'supabase-pooler (PRODUCTION unless confirmed staging)' : host}`
-  );
+  console.log(`DB host classification: ${hostFamily}`);
+  console.log(`HEAD tip for docs: run git rev-parse HEAD locally (do not trust stale JSON alone)`);
+
+  if (APPLY) {
+    if (!APPROVAL_PATH) {
+      throw new Error('--apply requires --approval=path/to/VENUE_LOCATION_REPAIR_APPROVAL.json');
+    }
+    if (!BASELINE_PATH) {
+      throw new Error(
+        '--apply requires --baseline=path/to/VENUE_LOCATION_REPAIR_DRY_RUN.json (the reviewed dry-run)'
+      );
+    }
+    if (!fs.existsSync(APPROVAL_PATH)) {
+      throw new Error(`Approval file not found: ${APPROVAL_PATH}`);
+    }
+    if (!fs.existsSync(BASELINE_PATH)) {
+      throw new Error(`Baseline dry-run file not found: ${BASELINE_PATH}`);
+    }
+  }
 
   const p = new pg.Pool({ connectionString: poolUrl(), ssl: { rejectUnauthorized: false } });
   const client = await p.connect();
 
   try {
     const districts = (
-      await client.query(`SELECT id, name, code FROM districts`)
-    ).rows as { id: number; name: string; code: string }[];
-    const distByName = new Map(districts.map((d) => [norm(d.name), d]));
-
+      await client.query(`SELECT id, name, code FROM districts ORDER BY id`)
+    ).rows;
     const cities = (
-      await client.query(`SELECT id, name, district_id FROM cities`)
-    ).rows as { id: number; name: string; district_id: number | null }[];
-    const cityByName = new Map(cities.map((c) => [norm(c.name), c]));
-
+      await client.query(`SELECT id, name, district_id FROM cities ORDER BY id`)
+    ).rows;
     const venues = (
       await client.query(`
         SELECT id, name, city, address, district_id, city_id, verification_status
         FROM venues ORDER BY id
       `)
-    ).rows as {
-      id: number;
-      name: string;
-      city: string;
-      address: string;
-      district_id: number | null;
-      city_id: number | null;
-      verification_status: string;
-    }[];
+    ).rows as VenueRow[];
 
-    const proposed: Proposed[] = [];
-    const unresolved: { venueId: number; name: string; city: string; reason: string }[] = [];
-    let unchanged = 0;
+    const counts = {
+      venues: venues.length,
+      null_city_id: venues.filter((v) => v.city_id == null).length,
+      null_district_id: venues.filter((v) => v.district_id == null).length,
+      districts: districts.length,
+      cities: cities.length,
+    };
 
-    function resolveCityRow(cityText: string) {
-      const n = norm(cityText);
-      const alias = CITY_ALIASES[n];
-      if (alias) return cityByName.get(norm(alias)) || null;
-      return cityByName.get(n) || null;
+    const plan = buildRepairPlan({ venues, cities, districts });
+
+    const duplicateReviews = [];
+    for (const pair of SUSPECTED_DUPLICATE_PAIRS) {
+      const keepDeps = await loadDuplicateDeps(client, pair.keepId);
+      const otherDeps = await loadDuplicateDeps(client, pair.otherId);
+      duplicateReviews.push({
+        ...pair,
+        recommendation: 'manual_review_only' as const,
+        keepDeps,
+        otherDeps,
+        autoAction: 'none — verification_status not changed by this script',
+      });
     }
 
-    for (const v of venues) {
-      let nextCityId = v.city_id;
-      let nextDistrictId = v.district_id;
-      let touched = false;
-
-      const cityRow = resolveCityRow(v.city);
-      if (!cityRow) {
-        unresolved.push({
-          venueId: v.id,
-          name: v.name,
-          city: v.city,
-          reason: 'No matching cities row (and no alias)',
-        });
-      } else if (v.city_id !== cityRow.id) {
-        proposed.push({
-          venueId: v.id,
-          name: v.name,
-          field: 'city_id',
-          from: v.city_id,
-          to: cityRow.id,
-          reason: `Match city text "${v.city}" → cities.id=${cityRow.id} (${cityRow.name})`,
-        });
-        nextCityId = cityRow.id;
-        touched = true;
-      }
-
-      // High-confidence district override by venue id (wrong Mumbai↔Pune etc.)
-      const override = DISTRICT_OVERRIDES_BY_ID[v.id];
-      if (override) {
-        const d = distByName.get(norm(override.districtName));
-        if (d && v.district_id !== d.id) {
-          proposed.push({
-            venueId: v.id,
-            name: v.name,
-            field: 'district_id',
-            from: v.district_id,
-            to: d.id,
-            reason: override.reason,
-          });
-          nextDistrictId = d.id;
-          touched = true;
-        }
-      } else if (cityRow?.district_id != null && v.district_id == null) {
-        // Only fill missing district from city — never auto-flip City↔Suburban for "Mumbai"
-        proposed.push({
-          venueId: v.id,
-          name: v.name,
-          field: 'district_id',
-          from: v.district_id,
-          to: cityRow.district_id,
-          reason: `Fill null district from city ${cityRow.name}`,
-        });
-        nextDistrictId = cityRow.district_id;
-        touched = true;
-      } else if (
-        cityRow?.district_id != null &&
-        v.district_id != null &&
-        v.district_id !== cityRow.district_id &&
-        norm(v.city) !== 'mumbai'
-      ) {
-        // Non-Mumbai: if city FK district disagrees with venue district, align to city
-        proposed.push({
-          venueId: v.id,
-          name: v.name,
-          field: 'district_id',
-          from: v.district_id,
-          to: cityRow.district_id,
-          reason: `Align district to city.district_id for ${cityRow.name}`,
-        });
-        nextDistrictId = cityRow.district_id;
-        touched = true;
-      }
-
-      if (!touched) unchanged += 1;
-      void nextDistrictId;
-      void nextCityId;
-    }
-
-    // Soft-flag suspected duplicates with zero event deps
-    for (const duo of SUSPECTED_DUPES) {
-      const deps = await client.query(
-        `SELECT
-           (SELECT COUNT(*)::int FROM events WHERE venue_id=$1) AS events,
-           (SELECT COUNT(*)::int FROM orders o JOIN events e ON e.id=o.event_id WHERE e.venue_id=$1) AS orders
-        `,
-        [duo.softId]
-      );
-      const soft = venues.find((v) => v.id === duo.softId);
-      if (!soft) continue;
-      if (Number(deps.rows[0].events) === 0 && Number(deps.rows[0].orders) === 0) {
-        if (soft.verification_status !== 'unverified') {
-          proposed.push({
-            venueId: duo.softId,
-            name: soft.name,
-            field: 'verification_status',
-            from: soft.verification_status,
-            to: 'unverified',
-            reason: `Suspected duplicate of venue #${duo.keepId}; zero events/orders. ${duo.note}`,
-          });
-        }
-      } else {
-        unresolved.push({
-          venueId: duo.softId,
-          name: soft.name,
-          city: soft.city,
-          reason: `Suspected duplicate of #${duo.keepId} but has deps — manual merge review only`,
-        });
-      }
-    }
-
+    const generatedAt = new Date().toISOString();
     const summary = {
       mode: APPLY ? 'apply' : 'dry-run',
-      hostFamily: host,
-      venuesAudited: venues.length,
-      proposedChanges: proposed.length,
-      unchangedVenuesApprox: unchanged,
-      unresolved: unresolved.length,
+      generatedAt,
+      hostFamily,
+      isProductionLikely,
+      sourceLabel: 'LIVE_DATABASE_READONLY_SNAPSHOT',
+      counts,
+      proposedChanges: plan.proposed.length,
+      unresolved: plan.unresolved.length,
       byField: {
-        city_id: proposed.filter((p) => p.field === 'city_id').length,
-        district_id: proposed.filter((p) => p.field === 'district_id').length,
-        verification_status: proposed.filter((p) => p.field === 'verification_status').length,
+        city_id: plan.proposed.filter((p) => p.field === 'city_id').length,
+        district_id: plan.proposed.filter((p) => p.field === 'district_id').length,
+        verification_status: 0,
+      },
+      byEvidence: {
+        verified: plan.proposed.filter((p) => p.evidenceLevel === 'verified').length,
+        heuristic: plan.proposed.filter((p) => p.evidenceLevel === 'heuristic').length,
       },
     };
 
-    console.log('\nSummary:', summary);
-    console.log('\nSample proposed (first 25):');
-    console.log(JSON.stringify(proposed.slice(0, 25), null, 2));
-    if (unresolved.length) {
-      console.log('\nUnresolved:', JSON.stringify(unresolved, null, 2));
-    }
-
     const out = {
-      generatedAt: new Date().toISOString(),
+      generatedAt,
+      sourceLabel: 'LIVE_DATABASE_READONLY_SNAPSHOT',
+      note: 'Not authoritative after DB drift — re-run dry-run before apply. Never treat an older committed snapshot as current.',
+      gitHint: 'Verify with: git rev-parse HEAD && git status -sb',
       summary,
-      proposed,
-      unresolved,
-      suspectedDuplicates: SUSPECTED_DUPES,
-      cityAliases: CITY_ALIASES,
-      districtOverridesById: DISTRICT_OVERRIDES_BY_ID,
+      proposed: plan.proposed,
+      unresolved: plan.unresolved,
+      focusReview: plan.focusReview,
+      duplicateReviews,
+      approvalInstructions: {
+        copyChangesFrom: 'proposed[]',
+        writeTo: 'docs/VENUE_LOCATION_REPAIR_APPROVAL.json',
+        requiredFields: [
+          'approvedAt',
+          'approvedBy',
+          'baselineGeneratedAt (= this generatedAt)',
+          'backupConfirmed: true',
+          'productionConfirm: I_CONFIRM_PRODUCTION_WRITE (production hosts)',
+          'changes: Exact venueId/field/from/to subset of proposed',
+        ],
+        applyCommand:
+          'npx tsx scripts/repair-venue-locations.ts --apply --approval=docs/VENUE_LOCATION_REPAIR_APPROVAL.json --baseline=docs/VENUE_LOCATION_REPAIR_DRY_RUN.json --i-confirm-production',
+      },
     };
-    const outPath = path.join(process.cwd(), 'docs', 'VENUE_LOCATION_REPAIR_DRY_RUN.json');
-    fs.writeFileSync(outPath, JSON.stringify(out, null, 2));
-    console.log(`\nWrote ${outPath}`);
 
+    // Dry-run writes the reviewed artifact. Apply must NOT overwrite the reviewed baseline.
     if (!APPLY) {
-      console.log('\nNo DB writes. Re-run with --apply after review.');
+      const outPath = path.join(process.cwd(), 'docs', 'VENUE_LOCATION_REPAIR_DRY_RUN.json');
+      fs.writeFileSync(outPath, JSON.stringify(out, null, 2));
+      console.log('\nSummary:', summary);
+      console.log(`Wrote ${outPath}`);
+      console.log(`Proposed: ${plan.proposed.length} | Unresolved: ${plan.unresolved.length}`);
+      console.log('\nFocus venues #2,#12,#3,#53,#4,#5,#6,#7:');
+      console.log(JSON.stringify(plan.focusReview, null, 2));
+      console.log('\nDuplicate reviews (manual only):');
+      console.log(JSON.stringify(duplicateReviews, null, 2));
+      console.log('\nNo DB writes (dry-run).');
       return;
     }
 
-    if (host.includes('supabase')) {
-      console.log(
-        '\nWARNING: Target looks like hosted Supabase (production). Proceeding because --apply was explicit.'
-      );
+    // -------- APPLY path --------
+    const approval = JSON.parse(fs.readFileSync(APPROVAL_PATH, 'utf8')) as ApprovalArtifact;
+    const baseline = JSON.parse(fs.readFileSync(BASELINE_PATH, 'utf8')) as {
+      generatedAt: string;
+      proposed: ProposedChange[];
+    };
+
+    const baselineErrors = validateBaselineAgainstPlan(approval, baseline, plan.proposed);
+    if (baselineErrors.length) {
+      throw new Error(`Baseline rejected:\n- ${baselineErrors.join('\n- ')}`);
+    }
+
+    const validation = validateApprovalAgainstPlan(approval, plan.proposed, {
+      hostIsProduction: isProductionLikely,
+      productionFlag: PRODUCTION_FLAG,
+    });
+    if (!validation.ok) {
+      throw new Error(`Approval rejected:\n- ${validation.errors.join('\n- ')}`);
+    }
+
+    const stale = detectStaleBaseline(approval.changes, venues);
+    if (stale.length) {
+      throw new Error(`Stale approval / DB drifted:\n- ${stale.join('\n- ')}`);
     }
 
     await client.query('BEGIN');
     let applied = 0;
-    for (const ch of proposed) {
-      if (ch.field === 'city_id') {
-        await client.query(`UPDATE venues SET city_id = $1 WHERE id = $2`, [ch.to, ch.venueId]);
-      } else if (ch.field === 'district_id') {
-        await client.query(`UPDATE venues SET district_id = $1 WHERE id = $2`, [ch.to, ch.venueId]);
-      } else if (ch.field === 'verification_status') {
-        await client.query(`UPDATE venues SET verification_status = $1 WHERE id = $2`, [
-          ch.to,
-          ch.venueId,
-        ]);
-      }
-      applied += 1;
-    }
+    const appliedLog: unknown[] = [];
 
-    // Audit log rows (best-effort)
     try {
-      await client.query(
-        `INSERT INTO audit_logs (actor_id, action, entity_type, entity_id, metadata)
-         VALUES ($1, $2, $3, $4, $5::jsonb)`,
-        [
-          'repair-venue-locations',
-          'venue_location_repair',
-          'venues',
-          0,
-          JSON.stringify({ applied, proposedCount: proposed.length, at: new Date().toISOString() }),
-        ]
-      );
-    } catch {
-      /* schema may differ; non-fatal */
-    }
+      for (const ch of approval.changes) {
+        const live = await client.query(
+          `SELECT id, city_id, district_id FROM venues WHERE id=$1 FOR UPDATE`,
+          [ch.venueId]
+        );
+        if (!live.rows[0]) throw new Error(`Venue #${ch.venueId} vanished`);
+        const row = live.rows[0];
+        const current = ch.field === 'city_id' ? row.city_id : row.district_id;
+        const curN = current == null ? null : Number(current);
+        const fromN = ch.from == null ? null : Number(ch.from);
+        if (curN !== fromN) {
+          throw new Error(
+            `Race/stale inside txn venue #${ch.venueId} ${ch.field}: live=${curN} expected from=${fromN}`
+          );
+        }
+        if (curN === Number(ch.to)) {
+          appliedLog.push({ ...ch, status: 'already_applied' });
+          continue;
+        }
 
-    await client.query('COMMIT');
-    console.log(`\nAPPLIED ${applied} field updates. COMMIT OK.`);
-
-    const after = await client.query(`
-      SELECT
-        COUNT(*)::int AS venues,
-        COUNT(*) FILTER (WHERE city_id IS NULL)::int AS null_city_id,
-        COUNT(*) FILTER (WHERE district_id IS NULL)::int AS null_district_id
-      FROM venues
-    `);
-    console.log('After:', after.rows[0]);
-  } catch (e) {
-    if (APPLY) {
-      try {
-        await client.query('ROLLBACK');
-        console.error('ROLLBACK');
-      } catch {
-        /* */
+        if (ch.field === 'city_id') {
+          await client.query(`UPDATE venues SET city_id=$1 WHERE id=$2`, [ch.to, ch.venueId]);
+        } else if (ch.field === 'district_id') {
+          await client.query(`UPDATE venues SET district_id=$1 WHERE id=$2`, [ch.to, ch.venueId]);
+        } else {
+          throw new Error(`Refusing unknown field: ${(ch as any).field}`);
+        }
+        applied += 1;
+        appliedLog.push({ ...ch, status: 'updated', old: fromN, new: ch.to });
       }
+
+      try {
+        await client.query(
+          `INSERT INTO audit_logs (actor_id, actor_role, action, entity_type, entity_id, details)
+           VALUES ($1,$2,$3,$4,$5,$6)`,
+          [
+            approval.approvedBy || 'repair-venue-locations',
+            'super_admin',
+            'venue_location_repair_apply',
+            'venues',
+            'batch',
+            JSON.stringify({
+              applied,
+              changes: appliedLog,
+              baselineGeneratedAt: approval.baselineGeneratedAt,
+              baselinePath: BASELINE_PATH,
+              at: new Date().toISOString(),
+            }),
+          ]
+        );
+      } catch (e: any) {
+        throw new Error(`audit_logs insert failed — rolling back: ${e?.message || e}`);
+      }
+
+      await client.query('COMMIT');
+      console.log(`\nAPPLIED ${applied} updates. COMMIT OK.`);
+      console.log(JSON.stringify(appliedLog, null, 2));
+
+      const applyReportPath = path.join(
+        process.cwd(),
+        'docs',
+        'VENUE_LOCATION_REPAIR_APPLY_REPORT.json'
+      );
+      fs.writeFileSync(
+        applyReportPath,
+        JSON.stringify(
+          {
+            sourceLabel: 'LIVE_DATABASE_APPLY_REPORT',
+            appliedAt: new Date().toISOString(),
+            baselineGeneratedAt: approval.baselineGeneratedAt,
+            applied,
+            appliedLog,
+            livePlanSummary: summary,
+          },
+          null,
+          2
+        )
+      );
+      console.log(`Wrote ${applyReportPath}`);
+    } catch (inner) {
+      await client.query('ROLLBACK');
+      console.error('ROLLBACK OK');
+      throw inner;
     }
+  } catch (e) {
     throw e;
   } finally {
     client.release();

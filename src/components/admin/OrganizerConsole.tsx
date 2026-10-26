@@ -197,9 +197,15 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
     e.preventDefault();
     if (!eventTitleMr.trim()) return;
 
+    const eligibleVenues = venuesList.filter((v: any) => v.eligibleForEvents === true);
+    const selectedVenue = eligibleVenues.find((v) => v.id === Number(eventVenueId));
+    if (!selectedVenue) {
+      triggerToast('कृपया प्रमाणित नवीन नाट्यगृह निवडा (Select an eligible theatre)');
+      return;
+    }
+
     setIsProcessing(true);
     try {
-      const selectedVenue = venuesList.find((v) => v.id === Number(eventVenueId)) || venuesList[0];
       const res = await fetch('/api/admin/events', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -207,7 +213,7 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
           title: eventTitleEn.trim() || eventTitleMr.trim(),
           titleMr: eventTitleMr.trim(),
           category: eventCategory,
-          venueId: selectedVenue ? selectedVenue.id : 1,
+          venueId: selectedVenue.id,
           ticketPrice: eventBasePrice * 100,
           // Always create a showtime so public Book → seats works (BMS flow)
           sessionStartTime: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
@@ -223,7 +229,8 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
         setEventTitleEn('');
         fetchOrganizerData();
       } else {
-        triggerToast('कार्यक्रम तयार करताना त्रुटी आली');
+        const errBody = await res.json().catch(() => ({}));
+        triggerToast(errBody?.error || 'कार्यक्रम तयार करताना त्रुटी आली');
       }
     } catch {
       triggerToast('नेटवर्क त्रुटी');
@@ -1044,15 +1051,21 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
               </div>
 
               <div>
-                <label className="font-bold text-[#141B2B] block mb-1">नाट्यगृह</label>
+                <label className="font-bold text-[#141B2B] block mb-1">नाट्यगृह (नवीन प्रमाणित)</label>
                 <select
-                  value={eventVenueId}
-                  onChange={e => setEventVenueId(Number(e.target.value))}
+                  value={eventVenueId || ''}
+                  onChange={e => setEventVenueId(Number(e.target.value) || 0)}
+                  required
                   className="w-full px-3 py-2 rounded-xl border border-[#E2E8F0] bg-white"
                 >
-                  {venuesList.map(v => (
-                    <option key={v.id} value={v.id}>{v.nameMr} ({v.city})</option>
-                  ))}
+                  <option value="">— नाट्यगृह निवडा —</option>
+                  {venuesList
+                    .filter((v: any) => v.eligibleForEvents === true)
+                    .map((v: any) => (
+                      <option key={v.id} value={v.id}>
+                        {v.nameMr || v.name} ({v.cityName || v.city})
+                      </option>
+                    ))}
                 </select>
               </div>
 

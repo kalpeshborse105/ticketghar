@@ -619,9 +619,11 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
 
     setIsProcessing(true);
     try {
-      const selectedVenue = venuesList.find(v => v.id === Number(eventVenueId));
+      const selectedVenue = venuesList.find(
+        (v: any) => v.id === Number(eventVenueId) && v.eligibleForEvents === true
+      );
       if (!selectedVenue) {
-        triggerToast('वैध नाट्यगृह निवडा — ड्रॉपडाउन रिफ्रेश करा');
+        triggerToast('वैध नवीन नाट्यगृह निवडा — ड्रॉपडाउन रिफ्रेश करा');
         setIsProcessing(false);
         return;
       }
@@ -2194,6 +2196,7 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                 >
                   <option value="">— नाट्यगृह निवडा —</option>
                   {venuesList
+                    .filter((v: any) => v.eligibleForEvents === true)
                     .filter((v) => {
                       const q = venueSearchInForm.trim().toLowerCase();
                       if (!q) return true;
@@ -2204,13 +2207,19 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                         (v.address || '').toLowerCase().includes(q)
                       );
                     })
-                    .map((v) => (
+                    .map((v: any) => (
                       <option key={v.id} value={v.id}>
-                        {v.nameMr || v.name} — {v.city}
+                        {v.nameMr || v.name} — {v.cityName || v.city}
                         {v.address ? ` · ${v.address}` : ''}
+                        {!v.locationMapped ? ' · ⚠ location IDs incomplete' : ''}
                       </option>
                     ))}
                 </select>
+                {venuesList.filter((v: any) => v.eligibleForEvents).length === 0 && (
+                  <p className="mt-1 text-[11px] text-amber-800 font-semibold">
+                    No authoritative verified theatres loaded. Refresh venue list or check data/authoritative_theatres.json.
+                  </p>
+                )}
                 <button
                   type="button"
                   onClick={() => void fetchAllData()}

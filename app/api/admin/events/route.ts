@@ -4,6 +4,7 @@ import { events, venues, organizers, eventSessions, ticketTypes, auditLogs } fro
 import { eq, desc, and, inArray } from 'drizzle-orm';
 import { requireAdmin, verifyAdminSession } from '@/src/lib/admin-auth.ts';
 import { generateSessionInventory } from '@/src/lib/inventory-engine.ts';
+import { isEligibleForNewEvent } from '@/src/lib/venue-eligibility.ts';
 
 export async function GET(request: NextRequest) {
   const authError = requireAdmin(request);
@@ -115,7 +116,41 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const finalVenueId = venueId ? parseInt(String(venueId), 10) : 1;
+    if (!venueId) {
+      return NextResponse.json(
+        { error: 'venueId is required. Select an authoritative verified theatre.' },
+        { status: 400 }
+      );
+    }
+    const finalVenueId = parseInt(String(venueId), 10);
+    if (!Number.isFinite(finalVenueId) || finalVenueId <= 0) {
+      return NextResponse.json({ error: 'Invalid venueId.' }, { status: 400 });
+    }
+
+    const [venueRow] = await db
+      .select({
+        id: venues.id,
+        verificationStatus: venues.verificationStatus,
+        city: venues.city,
+        cityId: venues.cityId,
+        districtId: venues.districtId,
+        name: venues.name,
+      })
+      .from(venues)
+      .where(eq(venues.id, finalVenueId))
+      .limit(1);
+
+    if (!venueRow) {
+      return NextResponse.json({ error: `Venue #${finalVenueId} not found.` }, { status: 400 });
+    }
+
+    const eligibility = isEligibleForNewEvent({
+      venueId: venueRow.id,
+      verificationStatus: venueRow.verificationStatus,
+    });
+    if (!eligibility.ok) {
+      return NextResponse.json({ error: eligibility.reason }, { status: 400 });
+    }
 
     if (!title || !titleMr || !category) {
       return NextResponse.json(
@@ -287,7 +322,26 @@ export async function PATCH(request: NextRequest) {
             : null;
     }
     if (body.venueId !== undefined) {
-      updatePayload.venueId = Number(body.venueId);
+      const nextVenueId = Number(body.venueId);
+      const [nextVenue] = await db
+        .select({
+          id: venues.id,
+          verificationStatus: venues.verificationStatus,
+        })
+        .from(venues)
+        .where(eq(venues.id, nextVenueId))
+        .limit(1);
+      if (!nextVenue) {
+        return NextResponse.json({ error: `Venue #${nextVenueId} not found.` }, { status: 400 });
+      }
+      const moveCheck = isEligibleForNewEvent({
+        venueId: nextVenue.id,
+        verificationStatus: nextVenue.verificationStatus,
+      });
+      if (!moveCheck.ok) {
+        return NextResponse.json({ error: moveCheck.reason }, { status: 400 });
+      }
+      updatePayload.venueId = nextVenueId;
     }
     if (body.category !== undefined) updatePayload.category = body.category;
     if (body.categoryMr !== undefined) updatePayload.categoryMr = body.categoryMr;

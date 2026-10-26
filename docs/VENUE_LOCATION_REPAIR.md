@@ -1,74 +1,114 @@
 # Venue ↔ Location repair (Maharashtra)
 
-## Diagnosis (live DB, 2026-10-26)
+**Repo tip inspected:** `main` @ `98d42cd` (`db fixed`).  
+**Rule:** Report JSON files are snapshots — always re-run a live dry-run before any apply.  
+**This workflow never runs `--apply` unless a human supplies a reviewed approval artifact.**
 
-| Metric | Value |
-|--------|------:|
-| Venues | **66** |
-| `city_id` NULL | **65** |
-| `district_id` NULL | **8** (includes newly upserted NCPA / Pune halls #59–66) |
-| Districts / cities / talukas | 36 / 65 / 359 |
+## Schema (authoritative)
 
-### Why “new theatres” looked missing in admin
-
-They **are in the database** (e.g. #62–66 Bharat Natya, Sudarshan, Annabhau Sathe; #59–61 NCPA). Upsert scripts wrote **free-text `city` only** and left `district_id` / `city_id` null. Admin district filters and slow full layout fetches made the catalog feel stuck on the older ~58–66 mix without clear mapping.
-
-### Authoritative fields
-
-| Field | Role |
+| Table | Role |
 |-------|------|
-| `venues.district_id` → `districts` | Canonical district |
-| `venues.city_id` → `cities` | Canonical city/town/village |
-| `cities.taluka_id` → `talukas` | Taluka (on city row, not venue) |
-| `venues.city` (text) | Display / legacy; must agree with `city_id` |
+| `districts` | 36 Maharashtra districts |
+| `talukas` | FK → `districts` |
+| `cities` | Unique `name`; optional `district_id`, `taluka_id` |
+| `venues.district_id` | Canonical district FK |
+| `venues.city_id` | Canonical city FK |
+| `venues.city` | Free-text display / legacy |
 
-Hierarchy: **Maharashtra → districts → talukas → cities → venues**.
+Hierarchy: **State (Maharashtra) → District → Taluka (on city) → City → Venue**.
 
-### Confirmed wrong districts (examples)
+`audit_logs` columns used on apply: `actor_id`, `actor_role`, `action`, `entity_type`, `entity_id`, `details`.
 
-| ID | Venue | Was | Expected |
-|---:|-------|-----|----------|
-| 5 | PVR INOX: The Pavillion Mall | Mumbai City | **Pune** |
-| 6 | Cinepolis: Westend Mall | Mumbai City | **Pune** |
-| 4 | Dr. Kashinath Ghanekar Natyagruha | Pune | **Thane** |
-| 2 / 12 | Dinanath Mangeshkar Natyagruha | Pune / Thane | **Mumbai Suburban** |
-| 7 | PVR INOX: R City Mall | Mumbai City | **Mumbai Suburban** (Ghatkopar) |
+## Safety rules
 
-### Duplicates (do not hard-delete)
+1. Dry-run is the **default** (no writes).
+2. Never infer **Mumbai City vs Mumbai Suburban** from city text `"Mumbai"` alone.
+3. Never resolve an ambiguous city name by picking the first row.
+4. District corrections require **venue id + address evidence** regex match.
+5. **No venue merge/delete.** Suspected duplicates are **manual review only** — script does **not** change `verification_status`.
+6. Apply requires:
+   - `--apply`
+   - `--approval=docs/VENUE_LOCATION_REPAIR_APPROVAL.json` (exact `venueId`/`field`/`from`/`to`)
+   - `backupConfirmed: true`
+   - For production-like hosts: `productionConfirm: "I_CONFIRM_PRODUCTION_WRITE"` **and** CLI `--i-confirm-production`
+7. Apply refuses if live `from` values drifted (stale baseline) or approved rows are not in the current plan.
+8. Transaction + rollback on failure; idempotent if already at target.
+9. Never touches events, orders, tickets, scans, seat layouts, inventory, or reviews.
 
-| Keep | Soft-flag | Deps |
-|-----:|----------:|------|
-| #2 Dinanath | #12 | #12 has 0 events |
-| #3 Yashwantrao Chavan | #53 | #53 has 0 events; #3 has orders |
+## Prerequisites
 
-### Root cause of bad auto-links
+```bash
+git rev-parse HEAD
+git status -sb
+# Confirm DATABASE_URL host family without printing secrets
+```
 
-`scripts/import_maharashtra_admin_data.ts` previously used **hardcoded** `district_id = 8` for Pune and `1` for Mumbai — those IDs are **not** Pune/Mumbai in the live catalog (Pune=`26`, Mumbai City=`17`, Ahmednagar=`1`). That script is corrected to join via `cities`.
+Classify host:
 
-## Scripts
+| Hostname pattern | Classification |
+|------------------|----------------|
+| `*.pooler.supabase.com` / `*.supabase.co` | **PRODUCTION** unless owner confirms dedicated staging |
+| `localhost` / `127.0.0.1` | Local |
 
-| Script | Purpose |
-|--------|---------|
-| `scripts/audit-venue-location-mapping.ts` | Read-only audit + reconciliation JSON |
-| `scripts/repair-venue-locations.ts` | Dry-run by default; `--apply` writes |
+## Commands
 
-### Safe apply
+### 1) Read-only audit
 
 ```bash
 npx tsx scripts/audit-venue-location-mapping.ts
-npx tsx scripts/repair-venue-locations.ts
-# review docs/VENUE_LOCATION_REPAIR_DRY_RUN.json
-npx tsx scripts/repair-venue-locations.ts --apply   # only after owner approval
 ```
 
-Hosted `*.pooler.supabase.com` is treated as **production**. Do not `--apply` without explicit approval.
+Outputs: `docs/VENUE_LOCATION_AUDIT.json`, `docs/VENUE_LOCATION_RECONCILIATION.json`
 
-## App changes
+### 2) Fresh dry-run (required before approval)
 
-- Admin `GET /api/admin/venues` defaults to **lite** list (no nested seats); `?id=` loads full layout for seat designer.
-- Venue POST rejects district/city mismatches (except Mumbai City vs Suburban).
-- Admin venues UI: Unmapped filter/badge; designer loads full venue by id.
+```bash
+npx tsx scripts/repair-venue-locations.ts
+```
+
+Outputs: `docs/VENUE_LOCATION_REPAIR_DRY_RUN.json` with full `proposed[]`, `unresolved[]`, `focusReview`, `duplicateReviews`.
+
+### 3) Offline tests (no DB writes)
+
+```bash
+npx tsx scripts/test-venue-location-repair-logic.ts
+```
+
+### 4) Apply (owner-only — not run in this task)
+
+1. Take a Supabase/DB backup.
+2. Copy `docs/VENUE_LOCATION_REPAIR_APPROVAL.example.json` → `docs/VENUE_LOCATION_REPAIR_APPROVAL.json`.
+3. Set `baselineGeneratedAt` to the dry-run `generatedAt`.
+4. Copy **only reviewed** rows from `proposed[]` into `changes[]` (exact `from`/`to`).
+5. Set `backupConfirmed: true` and production confirm string if needed.
+6. Run:
+
+```bash
+npx tsx scripts/repair-venue-locations.ts --apply --approval=docs/VENUE_LOCATION_REPAIR_APPROVAL.json --i-confirm-production
+```
 
 ## Rollback
 
-Re-apply previous `district_id` / `city_id` from `docs/VENUE_LOCATION_REPAIR_DRY_RUN.json` (`from` values), or restore from Supabase backup. No DROP/DELETE of venues.
+1. Prefer restore from the backup taken before apply.
+2. Or reverse each applied row using dry-run/apply log (`old` → write back to `from` values) inside a transaction.
+3. Never DROP tables or re-run destructive seeds to “undo”.
+
+## Focus venues (review checklist)
+
+| ID | Expected district (verified via address) | Notes |
+|---:|------------------------------------------|-------|
+| 5 | Pune | Pavilion / Senapati Bapat / Shivajinagar |
+| 6 | Pune | Westend / Aundh |
+| 4 | Thane | Ghodbunder / Thane West |
+| 7 | Mumbai Suburban | Ghatkopar (R City) |
+| 2, 12 | Mumbai Suburban | Vile Parle East — **duplicate pair, manual review** |
+| 3, 53 | Pune (already) | Kothrud — **duplicate pair, manual review** |
+
+## Code map
+
+| Path | Role |
+|------|------|
+| `scripts/lib/venue-location-repair-core.ts` | Pure resolution + plan + approval validation |
+| `scripts/repair-venue-locations.ts` | Live dry-run / gated apply |
+| `scripts/audit-venue-location-mapping.ts` | Broader read-only audit |
+| `scripts/test-venue-location-repair-logic.ts` | Offline tests |

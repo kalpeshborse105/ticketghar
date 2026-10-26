@@ -1,0 +1,21 @@
+{
+  "approvedAt": "2026-10-26T18:00:00.000Z",
+  "approvedBy": "owner@example.com",
+  "baselineGeneratedAt": "REPLACE_WITH_generatedAt_FROM_VENUE_LOCATION_REPAIR_DRY_RUN.json",
+  "backupConfirmed": true,
+  "productionConfirm": "I_CONFIRM_PRODUCTION_WRITE",
+  "changes": [
+    {
+      "venueId": 5,
+      "field": "district_id",
+      "from": 17,
+      "to": 26
+    },
+    {
+      "venueId": 5,
+      "field": "city_id",
+      "from": null,
+      "to": 2
+    }
+  ]
+}
