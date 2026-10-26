@@ -1,0 +1,258 @@
+{
+  "sourceLabel": "LIVE_DATABASE_READONLY_PLAN",
+  "generatedAt": "2026-10-26T19:06:26.616Z",
+  "applied": false,
+  "authoritativeIds": [
+    55,
+    56,
+    59,
+    60,
+    61,
+    62,
+    63,
+    64,
+    65,
+    66
+  ],
+  "updates": [
+    {
+      "venueId": 55,
+      "field": "city_id",
+      "from": null,
+      "to": 2,
+      "reason": "Unique cities.id=2 (Pune) from text \"Pune\""
+    },
+    {
+      "venueId": 56,
+      "field": "city_id",
+      "from": null,
+      "to": 1,
+      "reason": "Unique cities.id=1 (Mumbai) from text \"Mumbai\""
+    },
+    {
+      "venueId": 59,
+      "field": "city_id",
+      "from": null,
+      "to": 1,
+      "reason": "Unique cities.id=1 (Mumbai) from text \"Mumbai\""
+    },
+    {
+      "venueId": 59,
+      "field": "district_id",
+      "from": null,
+      "to": 17,
+      "reason": "Address/provenance → Mumbai City (districts.id=17)"
+    },
+    {
+      "venueId": 60,
+      "field": "city_id",
+      "from": null,
+      "to": 1,
+      "reason": "Unique cities.id=1 (Mumbai) from text \"Mumbai\""
+    },
+    {
+      "venueId": 60,
+      "field": "district_id",
+      "from": null,
+      "to": 17,
+      "reason": "Address/provenance → Mumbai City (districts.id=17)"
+    },
+    {
+      "venueId": 61,
+      "field": "city_id",
+      "from": null,
+      "to": 1,
+      "reason": "Unique cities.id=1 (Mumbai) from text \"Mumbai\""
+    },
+    {
+      "venueId": 61,
+      "field": "district_id",
+      "from": null,
+      "to": 17,
+      "reason": "Address/provenance → Mumbai City (districts.id=17)"
+    },
+    {
+      "venueId": 62,
+      "field": "city_id",
+      "from": null,
+      "to": 2,
+      "reason": "Unique cities.id=2 (Pune) from text \"Pune\""
+    },
+    {
+      "venueId": 62,
+      "field": "district_id",
+      "from": null,
+      "to": 26,
+      "reason": "Address/provenance → Pune (districts.id=26)"
+    },
+    {
+      "venueId": 63,
+      "field": "city_id",
+      "from": null,
+      "to": 2,
+      "reason": "Unique cities.id=2 (Pune) from text \"Pune\""
+    },
+    {
+      "venueId": 63,
+      "field": "district_id",
+      "from": null,
+      "to": 26,
+      "reason": "Address/provenance → Pune (districts.id=26)"
+    },
+    {
+      "venueId": 64,
+      "field": "city_id",
+      "from": null,
+      "to": 2,
+      "reason": "Unique cities.id=2 (Pune) from text \"Pune\""
+    },
+    {
+      "venueId": 64,
+      "field": "district_id",
+      "from": null,
+      "to": 26,
+      "reason": "Address/provenance → Pune (districts.id=26)"
+    },
+    {
+      "venueId": 65,
+      "field": "city_id",
+      "from": null,
+      "to": 2,
+      "reason": "Unique cities.id=2 (Pune) from text \"Pune\""
+    },
+    {
+      "venueId": 65,
+      "field": "district_id",
+      "from": null,
+      "to": 26,
+      "reason": "Address/provenance → Pune (districts.id=26)"
+    },
+    {
+      "venueId": 66,
+      "field": "city_id",
+      "from": null,
+      "to": 2,
+      "reason": "Unique cities.id=2 (Pune) from text \"Pune\""
+    },
+    {
+      "venueId": 66,
+      "field": "district_id",
+      "from": null,
+      "to": 26,
+      "reason": "Address/provenance → Pune (districts.id=26)"
+    }
+  ],
+  "unresolved": [],
+  "venues": [
+    {
+      "id": 55,
+      "name": "Nehru Memorial Hall",
+      "city_text": "Pune",
+      "address": "Camp, Pune",
+      "verification_status": "verified",
+      "city_id": null,
+      "district_id": 26,
+      "proposedCityId": 2,
+      "proposedDistrictId": 26
+    },
+    {
+      "id": 56,
+      "name": "Shivaji Mandir",
+      "city_text": "Mumbai",
+      "address": "Dadar West, Mumbai",
+      "verification_status": "verified",
+      "city_id": null,
+      "district_id": 17,
+      "proposedCityId": 1,
+      "proposedDistrictId": 17
+    },
+    {
+      "id": 59,
+      "name": "Jamshed Bhabha Theatre (NCPA)",
+      "city_text": "Mumbai",
+      "address": "NCPA, Nariman Point, Mumbai",
+      "verification_status": "verified",
+      "city_id": null,
+      "district_id": null,
+      "proposedCityId": 1,
+      "proposedDistrictId": 17
+    },
+    {
+      "id": 60,
+      "name": "Tata Theatre (NCPA)",
+      "city_text": "Mumbai",
+      "address": "NCPA, Nariman Point, Mumbai",
+      "verification_status": "verified",
+      "city_id": null,
+      "district_id": null,
+      "proposedCityId": 1,
+      "proposedDistrictId": 17
+    },
+    {
+      "id": 61,
+      "name": "Godrej Dance Theatre (NCPA)",
+      "city_text": "Mumbai",
+      "address": "NCPA, Nariman Point, Mumbai",
+      "verification_status": "verified",
+      "city_id": null,
+      "district_id": null,
+      "proposedCityId": 1,
+      "proposedDistrictId": 17
+    },
+    {
+      "id": 62,
+      "name": "Bharat Natya Rang Mandir",
+      "city_text": "Pune",
+      "address": "Sadashiv Peth, Pune",
+      "verification_status": "verified",
+      "city_id": null,
+      "district_id": null,
+      "proposedCityId": 2,
+      "proposedDistrictId": 26
+    },
+    {
+      "id": 63,
+      "name": "Ram Krishna More Auditorium",
+      "city_text": "Pune",
+      "address": "Chinchwad / Pimpri-Chinchwad, Pune",
+      "verification_status": "verified",
+      "city_id": null,
+      "district_id": null,
+      "proposedCityId": 2,
+      "proposedDistrictId": 26
+    },
+    {
+      "id": 64,
+      "name": "Vithal Tupe Sabhagruh",
+      "city_text": "Pune",
+      "address": "Pune",
+      "verification_status": "verified",
+      "city_id": null,
+      "district_id": null,
+      "proposedCityId": 2,
+      "proposedDistrictId": 26
+    },
+    {
+      "id": 65,
+      "name": "Sudarshan Rangmanch",
+      "city_text": "Pune",
+      "address": "Pune",
+      "verification_status": "verified",
+      "city_id": null,
+      "district_id": null,
+      "proposedCityId": 2,
+      "proposedDistrictId": 26
+    },
+    {
+      "id": 66,
+      "name": "Lokshahir Annabhau Sathe Natyagruha",
+      "city_text": "Pune",
+      "address": "Bibwewadi, off Satara Road, Pune",
+      "verification_status": "verified",
+      "city_id": null,
+      "district_id": null,
+      "proposedCityId": 2,
+      "proposedDistrictId": 26
+    }
+  ]
+}

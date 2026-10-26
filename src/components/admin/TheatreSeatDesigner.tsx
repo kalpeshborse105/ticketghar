@@ -18,6 +18,7 @@ import {
   AlertCircle,
   RefreshCw,
 } from 'lucide-react';
+import { buildAutoTheatreLayout } from '@/src/lib/theatre-auto-layout.ts';
 
 export interface SeatItemConfig {
   seatNumber: number;
@@ -308,6 +309,11 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  /** Quick auto-layout: total theatre seats → Gold/Silver/Balcony rows */
+  const [quickTotal, setQuickTotal] = useState<number>(
+    () => Number(venueToEdit?.totalCapacity) || 300
+  );
+  const [quickSeatsPerRow, setQuickSeatsPerRow] = useState<number>(20);
 
   // Stats calculation
   const totalSeats = sections.reduce(
@@ -355,6 +361,24 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
     };
     setSections([...sections, newSec]);
     setActiveSectionIdx(sections.length);
+  };
+
+  /** Rebuild entire hall from total seats + seats/row (section-wise Gold/Silver/Balcony). */
+  const handleAutoBuildFromTotal = () => {
+    const total = Math.max(1, Math.floor(Number(quickTotal) || 0));
+    const perRow = Math.max(1, Math.floor(Number(quickSeatsPerRow) || 1));
+    if (total > 5000) {
+      setSaveError('एकूण आसने 5000 पेक्षा जास्त ठेवू नका (cap 5000 for safety).');
+      return;
+    }
+    const built = buildAutoTheatreLayout({ totalSeats: total, seatsPerRow: perRow });
+    setSections(built.sections as SectionConfig[]);
+    setActiveSectionIdx(0);
+    setQuickTotal(built.totalSeats);
+    setDesignerNotice(
+      `✓ Auto layout: ${built.totalSeats} seats · ${built.sections.length} sections · ${perRow}/row. Customize rows then Save.`
+    );
+    setSaveError(null);
   };
 
   const [designerNotice, setDesignerNotice] = useState<string | null>(null);
@@ -874,6 +898,56 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
           {/* TAB 1: DESIGNER MODE */}
           {activeTab === 'editor' ? (
             <div className="space-y-6">
+              {/* Quick total → auto Gold/Silver/Balcony rows */}
+              <div className="bg-slate-900 border border-amber-800/50 rounded-2xl p-4 sm:p-5 space-y-3">
+                <h3 className="text-xs font-black uppercase tracking-wider text-amber-400 flex items-center gap-2">
+                  <Sparkles className="w-4 h-4" />
+                  <span>एकूण आसने → ऑटो रचना (Total → Auto layout)</span>
+                </h3>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  एकूण आसने आणि प्रति रांग आसने भरा. Gold (20%) / Silver (50%) / Balcony (30%)
+                  विभागांत रांगा आपोआप तयार होतात. नंतर customize करा.
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs items-end">
+                  <div>
+                    <label className="text-slate-400 block mb-1">एकूण आसने (Total)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={5000}
+                      value={quickTotal}
+                      onChange={(e) => setQuickTotal(Math.max(1, Number(e.target.value) || 1))}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono font-bold focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 block mb-1">प्रति रांग (Seats / row)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={80}
+                      value={quickSeatsPerRow}
+                      onChange={(e) =>
+                        setQuickSeatsPerRow(Math.max(1, Number(e.target.value) || 1))
+                      }
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono font-bold focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <button
+                      type="button"
+                      onClick={handleAutoBuildFromTotal}
+                      className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md transition"
+                    >
+                      ऑटो रचना तयार करा (Build Gold / Silver / Balcony)
+                    </button>
+                  </div>
+                </div>
+                <p className="text-[10px] text-slate-500 font-mono">
+                  Live designed total = {totalSeats} → saves as venues.total_capacity
+                </p>
+              </div>
+
               {/* Sections Selector & Add Section */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">

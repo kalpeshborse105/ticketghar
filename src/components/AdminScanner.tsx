@@ -439,7 +439,7 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
           setCurrentOverlay((cur) => (cur?.valid ? null : cur));
           overlayOpenRef.current = false;
           isCooldownRef.current = false;
-        }, 1600);
+        }, 750);
       }
     } catch (err: any) {
       console.error('Verify error:', err);
@@ -456,7 +456,7 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
       setIsVerifying(false);
       setTimeout(() => {
         isCooldownRef.current = false;
-      }, 450);
+      }, 220);
     }
   }, []);
 

@@ -166,6 +166,8 @@ export async function GET(request: NextRequest) {
     const singleId = searchParams.get('id');
     const wantFull = searchParams.get('full') === '1' || !!singleId;
     const forEventCreate = searchParams.get('forEventCreate') === '1';
+    /** authoritative | eligible | unverified | unmapped | all (default authoritative for admin inventory) */
+    const scope = (searchParams.get('scope') || 'authoritative').toLowerCase();
     const catalog = loadAuthoritativeTheatres();
 
     const venueList = await db
@@ -248,8 +250,38 @@ export async function GET(request: NextRequest) {
     };
 
     let enriched = await Promise.all(venueList.map(enrichOne));
+    enriched.sort((a, b) => {
+      const aAuth = a.authoritativeNew ? 1 : 0;
+      const bAuth = b.authoritativeNew ? 1 : 0;
+      if (aAuth !== bAuth) return bAuth - aAuth;
+      return Number(b.id) - Number(a.id);
+    });
+
+    const metaAll = {
+      totalAll: enriched.length,
+      authoritativeNew: enriched.filter((v) => v.authoritativeNew).length,
+      eligibleForEvents: enriched.filter((v) => v.eligibleForEvents).length,
+      unverified: enriched.filter(
+        (v) => (v.verificationStatus || '').toLowerCase() !== 'verified'
+      ).length,
+      unmapped: enriched.filter((v) => !v.locationMapped).length,
+    };
+
     if (forEventCreate) {
       enriched = enriched.filter((v) => v.eligibleForEvents);
+    } else if (!singleId) {
+      if (scope === 'authoritative') {
+        enriched = enriched.filter((v) => v.authoritativeNew);
+      } else if (scope === 'eligible') {
+        enriched = enriched.filter((v) => v.eligibleForEvents);
+      } else if (scope === 'unverified' || scope === 'retired') {
+        enriched = enriched.filter(
+          (v) => (v.verificationStatus || '').toLowerCase() !== 'verified'
+        );
+      } else if (scope === 'unmapped') {
+        enriched = enriched.filter((v) => !v.locationMapped);
+      }
+      // scope === 'all' → keep full list
     }
 
     if (singleId) {
@@ -262,12 +294,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       venues: enriched,
       meta: {
+        ...metaAll,
         total: enriched.length,
-        unmapped: enriched.filter((v) => !v.locationMapped).length,
-        eligibleForEvents: enriched.filter((v) => v.eligibleForEvents).length,
-        authoritativeNew: enriched.filter((v) => v.authoritativeNew).length,
+        returned: enriched.length,
+        scope: forEventCreate ? 'eligible' : scope,
         mode: wantFull ? 'full' : 'lite',
         forEventCreate,
+        authoritativeIds: catalog.authoritativeTheatreIds,
       },
     });
   } catch (error: any) {

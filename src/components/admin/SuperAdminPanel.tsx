@@ -103,8 +103,20 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
   const [venueStatusFilter, setVenueStatusFilter] = useState('all');
   const [venueLayoutFilter, setVenueLayoutFilter] = useState('all');
   const [venueMappedFilter, setVenueMappedFilter] = useState<'all' | 'mapped' | 'unmapped'>('all');
+  /** Inventory scope — default authoritative so new theatres are not buried in 66 cards */
+  const [venueScopeFilter, setVenueScopeFilter] = useState<
+    'authoritative' | 'eligible' | 'all' | 'unverified' | 'retired' | 'unmapped'
+  >('authoritative');
   const [districtsCatalog, setDistrictsCatalog] = useState<any[]>([]);
   const [citiesCatalog, setCitiesCatalog] = useState<any[]>([]);
+  const [venuesFetchError, setVenuesFetchError] = useState<string | null>(null);
+  const [venuesMeta, setVenuesMeta] = useState<{
+    totalAll?: number;
+    authoritativeNew?: number;
+    eligibleForEvents?: number;
+    unverified?: number;
+    unmapped?: number;
+  }>({});
 
   // Bulk Venue Import State
   const [showImportVenueModal, setShowImportVenueModal] = useState(false);
@@ -293,20 +305,43 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
     }
   };
 
-  const fetchVenuesBundle = async (force = false) => {
-    if (!force && loadedTabsRef.current.has('venues') && venuesList.length > 0) return;
+  const fetchVenuesBundle = async (
+    force = false,
+    scope: typeof venueScopeFilter | 'all' = venueScopeFilter
+  ) => {
+    // Always refetch when scope changes; skip only same-scope warm cache
+    const cacheKey = `venues:${scope}`;
+    if (!force && loadedTabsRef.current.has(cacheKey) && venuesList.length > 0) return;
     setTabLoading('venues');
+    setVenuesFetchError(null);
     try {
       const [venuesRes, distRes, cityRes] = await Promise.all([
-        fetch('/api/admin/venues', { credentials: 'include' }),
+        fetch(`/api/admin/venues?scope=${encodeURIComponent(scope)}`, {
+          credentials: 'include',
+        }),
         fetch('/api/locations/districts', { credentials: 'include' }),
         fetch('/api/locations/cities', { credentials: 'include' }),
       ]);
-      if (venuesRes.ok) {
+      if (!venuesRes.ok) {
+        setVenuesFetchError(`Venues API ${venuesRes.status} — empty list (no demo fallback)`);
+        setVenuesList([]);
+        setVenuesMeta({});
+      } else {
         const vnData = await venuesRes.json();
+        if (vnData.meta) setVenuesMeta(vnData.meta);
         if (Array.isArray(vnData.venues)) {
           setVenuesList(vnData.venues);
-          setVenueForDesigner((prev) => prev || vnData.venues[0] || null);
+          if (vnData.venues.length === 0 && scope === 'authoritative') {
+            setVenuesFetchError(
+              'Authoritative theatres (55,56,59–66) not returned — check data/authoritative_theatres.json and DB'
+            );
+          }
+          const firstAuth =
+            vnData.venues.find((v: any) => v.authoritativeNew) || vnData.venues[0];
+          setVenueForDesigner((prev) => prev || firstAuth || null);
+        } else {
+          setVenuesFetchError('Venues API returned no array');
+          setVenuesList([]);
         }
       }
       if (distRes.ok) {
@@ -317,9 +352,12 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
         const cityData = await cityRes.json();
         if (Array.isArray(cityData.cities)) setCitiesCatalog(cityData.cities);
       }
+      loadedTabsRef.current.add(cacheKey);
       loadedTabsRef.current.add('venues');
     } catch (err) {
       console.warn('Venues fetch error:', err);
+      setVenuesFetchError('Network error loading venues — empty list (no demo data)');
+      setVenuesList([]);
     } finally {
       setTabLoading(null);
     }
@@ -918,7 +956,10 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                 : 'bg-white text-[#64748B] hover:bg-slate-100 border border-[#E2E8F0]'
             }`}
           >
-            {mr ? 'नाट्यगृहे' : 'Theatres'} ({venuesList.length})
+            {mr ? 'नाट्यगृहे' : 'Theatres'} (
+              {venuesList.filter((v: any) => v.authoritativeNew).length}/
+              {venuesList.length || '…'}
+            )
           </button>
           <button
             onClick={() => openAdminTab('ads')}
@@ -1527,30 +1568,93 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
               </div>
             </div>
 
-            {/* Metrics Breakdown Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-              <div className="bg-white p-3.5 rounded-2xl border border-[#E2E8F0] shadow-2xs">
-                <span className="text-[11px] text-[#64748B] font-medium block">एकूण नाट्यगृहे</span>
-                <span className="text-lg font-black text-[#141B2B] font-mono mt-0.5 block">{venuesList.length}</span>
+            {venuesFetchError && (
+              <div className="bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold rounded-xl px-3 py-2">
+                {venuesFetchError}
               </div>
-              <div className="bg-white p-3.5 rounded-2xl border border-[#E2E8F0] shadow-2xs">
-                <span className="text-[11px] text-[#16A34A] font-medium block">✓ अधिकृत प्रमाणित</span>
-                <span className="text-lg font-black text-[#16A34A] font-mono mt-0.5 block">
-                  {venuesList.filter((v: any) => (v.verificationStatus || 'verified') === 'verified').length}
-                </span>
-              </div>
-              <div className="bg-white p-3.5 rounded-2xl border border-[#E2E8F0] shadow-2xs">
-                <span className="text-[11px] text-amber-600 font-medium block">⏳ पुनरावलोकन प्रलंबित</span>
-                <span className="text-lg font-black text-amber-600 font-mono mt-0.5 block">
-                  {venuesList.filter((v: any) => v.verificationStatus === 'unverified').length}
-                </span>
-              </div>
-              <div className="bg-white p-3.5 rounded-2xl border border-[#E2E8F0] shadow-2xs">
-                <span className="text-[11px] text-blue-600 font-medium block">🎭 आसन नकाशे उपलब्ध</span>
-                <span className="text-lg font-black text-blue-600 font-mono mt-0.5 block">
-                  {venuesList.filter((v: any) => v.hasSeatLayout === 1).length}
-                </span>
-              </div>
+            )}
+
+            {/* Metrics — counts from API meta (full DB), list = current scope */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
+              {(
+                [
+                  ['all', 'एकूण (DB)', venuesMeta.totalAll ?? '—', 'text-[#141B2B]'],
+                  [
+                    'authoritative',
+                    '★ नवीन अधिकृत',
+                    venuesMeta.authoritativeNew ?? venuesList.filter((v: any) => v.authoritativeNew).length,
+                    'text-[#16A34A]',
+                  ],
+                  [
+                    'eligible',
+                    'इव्हेंट निवडयोग्य',
+                    venuesMeta.eligibleForEvents ?? '—',
+                    'text-[#A33900]',
+                  ],
+                  ['unverified', 'अपुष्ट / retired', venuesMeta.unverified ?? '—', 'text-amber-600'],
+                  ['unmapped', '⚠ Unmapped FKs', venuesMeta.unmapped ?? '—', 'text-rose-600'],
+                ] as const
+              ).map(([key, label, count, color]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => {
+                    setVenueScopeFilter(key as typeof venueScopeFilter);
+                    void fetchVenuesBundle(true, key as typeof venueScopeFilter);
+                  }}
+                  className={`bg-white p-3.5 rounded-2xl border shadow-2xs text-left hover:border-[#A33900]/40 ${
+                    venueScopeFilter === key ? 'border-emerald-400 ring-1 ring-emerald-100' : 'border-[#E2E8F0]'
+                  }`}
+                >
+                  <span className={`text-[11px] font-medium block ${color}`}>{label}</span>
+                  <span className={`text-lg font-black font-mono mt-0.5 block ${color}`}>{count}</span>
+                </button>
+              ))}
+            </div>
+
+            <p className="text-[11px] text-slate-600 font-medium">
+              Showing <strong className="font-mono">{venuesList.length}</strong> venues for scope{' '}
+              <strong>{venueScopeFilter}</strong>
+              {venueScopeFilter === 'authoritative'
+                ? ' — IDs 55, 56, 59–66 only (not the old 66-row seed list).'
+                : ''}
+            </p>
+
+            {/* Scope tabs */}
+            <div className="flex flex-wrap gap-1.5 text-[11px] font-bold">
+              {(
+                [
+                  ['authoritative', '★ नवीन अधिकृत'],
+                  ['eligible', 'इव्हेंट निवडयोग्य'],
+                  ['all', 'सर्व DB'],
+                  ['unverified', 'अपुष्ट / retired'],
+                  ['retired', 'Retired (unverified)'],
+                  ['unmapped', 'Unmapped location'],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => {
+                    setVenueScopeFilter(key);
+                    void fetchVenuesBundle(true, key);
+                  }}
+                  className={`px-3 py-1.5 rounded-full border transition ${
+                    venueScopeFilter === key
+                      ? 'bg-[#A33900] text-white border-[#A33900]'
+                      : 'bg-white text-slate-700 border-slate-200 hover:border-[#A33900]/50'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => void fetchVenuesBundle(true, venueScopeFilter)}
+                className="px-3 py-1.5 rounded-full border border-slate-200 bg-white text-[#A33900] hover:bg-orange-50"
+              >
+                ↻ रिफ्रेश
+              </button>
             </div>
 
             {/* Advanced Filters Toolbar */}
@@ -1559,7 +1663,7 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="नाट्यगृह, शहर किंवा पत्ता शोधा..."
+                  placeholder="नाव, शहर, पत्ता किंवा ID (#66)…"
                   value={venueSearch}
                   onChange={(e) => setVenueSearch(e.target.value)}
                   className="w-full pl-9 pr-3 py-1.5 rounded-xl border border-slate-200 focus:outline-none focus:border-[#A33900]"
@@ -1671,12 +1775,16 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
             {/* Venues Grid */}
             {(() => {
               const displayList = venuesList.filter((v: any) => {
+                const q = venueSearch.trim().toLowerCase();
+                const idNeedle = q.replace(/^#?(vn-)?/i, '');
                 const matchSearch =
-                  !venueSearch ||
-                  v.name?.toLowerCase().includes(venueSearch.toLowerCase()) ||
-                  v.nameMr?.toLowerCase().includes(venueSearch.toLowerCase()) ||
-                  v.city?.toLowerCase().includes(venueSearch.toLowerCase()) ||
-                  v.address?.toLowerCase().includes(venueSearch.toLowerCase());
+                  !q ||
+                  String(v.id) === idNeedle ||
+                  v.name?.toLowerCase().includes(q) ||
+                  v.nameMr?.toLowerCase().includes(q) ||
+                  v.city?.toLowerCase().includes(q) ||
+                  v.cityName?.toLowerCase().includes(q) ||
+                  v.address?.toLowerCase().includes(q);
 
                 const matchDistrict =
                   !venueDistrictFilter ||
@@ -1684,7 +1792,8 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
 
                 const matchCity =
                   !venueCityFilter ||
-                  v.city?.toLowerCase() === venueCityFilter.toLowerCase();
+                  v.city?.toLowerCase() === venueCityFilter.toLowerCase() ||
+                  v.cityName?.toLowerCase() === venueCityFilter.toLowerCase();
 
                 const matchStatus =
                   venueStatusFilter === 'all' ||
@@ -1695,14 +1804,24 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                   (venueLayoutFilter === 'seated' && v.hasSeatLayout === 1) ||
                   (venueLayoutFilter === 'general' && v.hasSeatLayout === 0);
 
-                const isMapped = !!(v.districtId && v.cityId);
+                const isMapped = !!(v.locationMapped ?? (v.districtId && v.cityId));
                 const matchMapped =
                   venueMappedFilter === 'all' ||
                   (venueMappedFilter === 'mapped' && isMapped) ||
                   (venueMappedFilter === 'unmapped' && !isMapped);
 
+                const vs = (v.verificationStatus || 'verified').toLowerCase();
+                const matchScope =
+                  venueScopeFilter === 'all' ||
+                  (venueScopeFilter === 'authoritative' && !!v.authoritativeNew) ||
+                  (venueScopeFilter === 'eligible' && !!v.eligibleForEvents) ||
+                  (venueScopeFilter === 'unverified' && vs !== 'verified') ||
+                  (venueScopeFilter === 'retired' && vs === 'unverified') ||
+                  (venueScopeFilter === 'unmapped' && !isMapped);
+
                 return (
                   matchSearch &&
+                  matchScope &&
                   (venueDistrictFilter === 'unmapped' ? !v.districtId : matchDistrict) &&
                   matchCity &&
                   matchStatus &&
@@ -1731,18 +1850,39 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                     const sectionsCount =
                       Number(v.sectionsCount || 0) ||
                       (Array.isArray(v.sections) ? v.sections.length : 0);
-                    const isMapped = !!(v.districtId && v.cityId);
+                    const isMapped = !!(v.locationMapped ?? (v.districtId && v.cityId));
+                    const cityLabel = v.cityName || v.city || '—';
+                    const districtLabel = v.districtName || v.districtNameMr || null;
 
                     return (
                       <div
                         key={v.id}
-                        className="bg-white rounded-2xl p-4 border border-[#E2E8F0] shadow-sm hover:border-[#A33900]/40 transition flex flex-col justify-between"
+                        className={`bg-white rounded-2xl p-4 border shadow-sm hover:border-[#A33900]/40 transition flex flex-col justify-between ${
+                          v.authoritativeNew ? 'border-emerald-300 ring-1 ring-emerald-100' : 'border-[#E2E8F0]'
+                        }`}
                       >
                         <div>
                           {/* Header: Badges and ID */}
                           <div className="flex items-center justify-between gap-1 mb-2">
-                            <span className="text-[10px] font-mono text-slate-400">#VN-{v.id}</span>
+                            <span className="text-[10px] font-mono font-bold text-slate-600">DB #{v.id}</span>
                             <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                              {v.authoritativeNew ? (
+                                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-600 text-white">
+                                  ★ NEW
+                                </span>
+                              ) : null}
+                              {v.eligibleForEvents ? (
+                                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-orange-50 text-[#A33900] border border-orange-200">
+                                  Event OK
+                                </span>
+                              ) : (
+                                <span
+                                  className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-slate-100 text-slate-600 border border-slate-200"
+                                  title={v.eligibleReason || 'Not eligible for new events'}
+                                >
+                                  Not eligible
+                                </span>
+                              )}
                               {!isMapped ? (
                                 <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-rose-50 text-rose-700 border border-rose-200">
                                   ⚠ Unmapped
@@ -1755,15 +1895,15 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                                     : 'bg-amber-50 text-amber-700 border border-amber-200'
                                 }`}
                               >
-                                {isVerified ? '✓ प्रमाणित' : '⏳ अपुष्ट (Pending)'}
+                                {isVerified ? '✓ verified' : 'unverified'}
                               </span>
                               {hasLayout ? (
                                 <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                                  {sectionsCount > 0 ? `${sectionsCount} विभाग` : 'आसन नकाशा'}
+                                  {sectionsCount > 0 ? `${sectionsCount} sec` : 'layout'}
                                 </span>
                               ) : (
                                 <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-slate-100 text-slate-600">
-                                  जनरल
+                                  GA
                                 </span>
                               )}
                             </div>
@@ -1780,8 +1920,15 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                                 <p className="text-[11px] text-slate-500 truncate">{v.name}</p>
                               )}
                               <p className="text-[11px] font-medium text-[#A33900] mt-0.5">
-                                📍 {v.city} {v.districtNameMr ? `(${v.districtNameMr} जिल्हा)` : ''}
+                                📍 {cityLabel}
+                                {districtLabel ? ` · ${districtLabel}` : ''}
                               </p>
+                              <p className="text-[10px] text-slate-500 mt-0.5 font-mono">
+                                city_id={v.cityId ?? 'null'} · district_id={v.districtId ?? 'null'}
+                              </p>
+                              {!v.eligibleForEvents && v.eligibleReason ? (
+                                <p className="text-[10px] text-amber-800 mt-1 leading-snug">{v.eligibleReason}</p>
+                              ) : null}
                             </div>
                           </div>
 
@@ -1789,8 +1936,8 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                           <p className="text-xs text-[#64748B] mt-2.5 line-clamp-2">{v.address}</p>
 
                           <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-slate-700">
-                            <span>एकूण आसन क्षमता:</span>
-                            <span className="font-mono text-[#141B2B]">{v.totalCapacity || 500} आसने</span>
+                            <span>listed capacity (template):</span>
+                            <span className="font-mono text-[#141B2B]">{v.totalCapacity ?? '—'} seats</span>
                           </div>
                         </div>
 

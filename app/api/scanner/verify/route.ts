@@ -272,38 +272,40 @@ export async function POST(request: Request) {
         });
       }
 
-      // Atomic transition: mark all tickets of this order as 'used'
-      const updated = await db
-        .update(tickets)
-        .set({ status: 'used' })
-        .where(
-          and(
-            eq(tickets.orderId, order.id),
-            eq(tickets.status, 'valid')
-          )
-        )
-        .returning({ id: tickets.id });
+      // Atomic group redeem: CAS all valid tickets + scan log
+      const groupRedeem = await db.transaction(async (tx) => {
+        const updated = await tx
+          .update(tickets)
+          .set({ status: 'used' })
+          .where(and(eq(tickets.orderId, order.id), eq(tickets.status, 'valid')))
+          .returning({ id: tickets.id });
 
-      if (updated.length === 0) {
+        if (updated.length === 0) {
+          return { ok: false as const };
+        }
+
+        const [scanLog] = await tx
+          .insert(ticketScans)
+          .values({
+            ticketId: allOrderTickets[0].id,
+            ticketCode: order.orderNumber,
+            scannedByUserId: scannerUserId || null,
+            scannerDevice: scannerDevice || 'Gate Terminal Pro',
+            scanResult: 'SUCCESS',
+            gateName: gateName || 'Main Entry Gate 1',
+          })
+          .returning();
+
+        return { ok: true as const, scanLog, updatedCount: updated.length };
+      });
+
+      if (!groupRedeem.ok) {
         return NextResponse.json({
           valid: false,
           scanResult: 'ALREADY_USED',
           message: 'सावधान! हे तिकीट आधीच वापरले गेले आहे.',
         });
       }
-
-      // Log successful group entry
-      const [scanLog] = await db
-        .insert(ticketScans)
-        .values({
-          ticketId: allOrderTickets[0].id,
-          ticketCode: order.orderNumber,
-          scannedByUserId: scannerUserId || null,
-          scannerDevice: scannerDevice || 'Gate Terminal Pro',
-          scanResult: 'SUCCESS',
-          gateName: gateName || 'Main Entry Gate 1',
-        })
-        .returning();
 
       return NextResponse.json({
         valid: true,
@@ -322,7 +324,7 @@ export async function POST(request: Request) {
           showtime: session.sessionStartTime,
           sessionId: session.id,
         }),
-        scannedAt: scanLog.scannedAt,
+        scannedAt: groupRedeem.scanLog.scannedAt,
       });
     }
 
@@ -471,30 +473,46 @@ export async function POST(request: Request) {
           });
         }
 
-        const markedParty = await db
-          .update(tickets)
-          .set({ status: 'used' })
-          .where(and(eq(tickets.orderId, ord.id), eq(tickets.status, 'valid')))
-          .returning({ id: tickets.id });
+        const partyRedeem = await db.transaction(async (tx) => {
+          const markedParty = await tx
+            .update(tickets)
+            .set({ status: 'used' })
+            .where(and(eq(tickets.orderId, ord.id), eq(tickets.status, 'valid')))
+            .returning({ id: tickets.id });
 
-        const [partyScan] = await db
-          .insert(ticketScans)
-          .values({
-            ticketId: validParty[0].id,
-            ticketCode: ord.orderNumber,
-            scannedByUserId: scannerUserId || null,
-            scannerDevice: scannerDevice || 'Gate Terminal Pro',
-            scanResult: 'SUCCESS',
-            gateName: gateName || 'Main Entry Gate 1',
-          })
-          .returning();
+          if (markedParty.length === 0) {
+            return { ok: false as const };
+          }
+
+          const [partyScan] = await tx
+            .insert(ticketScans)
+            .values({
+              ticketId: validParty[0].id,
+              ticketCode: ord.orderNumber,
+              scannedByUserId: scannerUserId || null,
+              scannerDevice: scannerDevice || 'Gate Terminal Pro',
+              scanResult: 'SUCCESS',
+              gateName: gateName || 'Main Entry Gate 1',
+            })
+            .returning();
+
+          return { ok: true as const, markedParty, partyScan };
+        });
+
+        if (!partyRedeem.ok) {
+          return NextResponse.json({
+            valid: false,
+            scanResult: 'ALREADY_USED',
+            message: 'या ऑर्डरची सर्व तिकिटे आधीच वापरली गेली आहेत (Already Scanned).',
+          });
+        }
 
         return NextResponse.json({
           valid: true,
           scanResult: 'SUCCESS',
-          message: `ग्रुप प्रवेश मान्य! ${markedParty.length} आसने चेक-इन (Group entry: ${markedParty.length} seats)`,
+          message: `ग्रुप प्रवेश मान्य! ${partyRedeem.markedParty.length} आसने चेक-इन (Group entry: ${partyRedeem.markedParty.length} seats)`,
           isGroup: true,
-          totalSeats: markedParty.length,
+          totalSeats: partyRedeem.markedParty.length,
           seatCodes: allSeatsOrd,
           ticket: ticketPassSummary({
             code: ord.orderNumber,
@@ -506,7 +524,7 @@ export async function POST(request: Request) {
             showtime: sess.sessionStartTime,
             sessionId: sess.id,
           }),
-          scannedAt: partyScan.scannedAt,
+          scannedAt: partyRedeem.partyScan.scannedAt,
         });
       }
     }
@@ -666,14 +684,34 @@ export async function POST(request: Request) {
       });
     }
 
-    // Atomic update — only valid tickets transition to used
-    const marked = await db
-      .update(tickets)
-      .set({ status: 'used' })
-      .where(and(eq(tickets.id, ticket.id), eq(tickets.status, 'valid')))
-      .returning({ id: tickets.id });
+    // Atomic redeem: status CAS + scan log in one transaction (blocks double entry on retries)
+    const redeem = await db.transaction(async (tx) => {
+      const marked = await tx
+        .update(tickets)
+        .set({ status: 'used' })
+        .where(and(eq(tickets.id, ticket.id), eq(tickets.status, 'valid')))
+        .returning({ id: tickets.id });
 
-    if (marked.length === 0) {
+      if (marked.length === 0) {
+        return { ok: false as const };
+      }
+
+      const [scanLog] = await tx
+        .insert(ticketScans)
+        .values({
+          ticketId: ticket.id,
+          ticketCode: ticket.ticketCode,
+          scannedByUserId: scannerUserId || null,
+          scannerDevice: scannerDevice || 'Gate Terminal Pro',
+          scanResult: 'SUCCESS',
+          gateName: gateName || 'Main Entry Gate 1',
+        })
+        .returning();
+
+      return { ok: true as const, scanLog };
+    });
+
+    if (!redeem.ok) {
       return NextResponse.json({
         valid: false,
         scanResult: 'ALREADY_USED',
@@ -691,19 +729,6 @@ export async function POST(request: Request) {
       });
     }
 
-    // Log successful scan
-    const [scanLog] = await db
-      .insert(ticketScans)
-      .values({
-        ticketId: ticket.id,
-        ticketCode: ticket.ticketCode,
-        scannedByUserId: scannerUserId || null,
-        scannerDevice: scannerDevice || 'Gate Terminal Pro',
-        scanResult: 'SUCCESS',
-        gateName: gateName || 'Main Entry Gate 1',
-      })
-      .returning();
-
     return NextResponse.json({
       valid: true,
       scanResult: 'SUCCESS',
@@ -718,7 +743,7 @@ export async function POST(request: Request) {
         showtime: session.sessionStartTime,
         sessionId: session.id,
       }),
-      scannedAt: scanLog.scannedAt,
+      scannedAt: redeem.scanLog.scannedAt,
     });
   } catch (error: any) {
     console.error('Scanner verification error:', error);
