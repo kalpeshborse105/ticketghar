@@ -963,7 +963,7 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
               scannerOrganizerId={numericOrganizerId}
               events={eventsList as any}
               initialGateName="मुख्य प्रवेशद्वार (Gate 1)"
-              onClose={() => setActiveTab('dashboard')}
+              onClose={() => setActiveTab('overview')}
               onTicketVerified={(ticket) => {
                 triggerToast(`✓ तिकीट ${ticket?.code || ''} यशस्वीरित्या प्रमाणित!`);
               }}

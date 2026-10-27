@@ -268,7 +268,9 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
       setEventGalleryUrls([]);
     }
     setVenueSearchInForm('');
-    setFormDistrictId(ev.venue?.districtId ? String((ev.venue as any).districtId) : '');
+    setFormDistrictId(
+      (ev.venue as any)?.districtId ? String((ev.venue as any).districtId) : ''
+    );
     setFormCityName((ev.venue as any)?.cityName || ev.venue?.city || '');
     setImageUploadError(null);
     void fetchVenuesBundle(true, 'all');

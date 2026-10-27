@@ -480,6 +480,7 @@ export async function POST(request: NextRequest) {
 
     // If sold tickets exist for this venue, do NOT purge seats — soft-save metadata + prices only.
     let layoutLockedByTickets = false;
+    let sessionIdsAtVenue: number[] = [];
     if (venueId) {
       const sessionsAtVenue = await db
         .select({ id: eventSessions.id })
@@ -487,7 +488,7 @@ export async function POST(request: NextRequest) {
         .innerJoin(events, eq(eventSessions.eventId, events.id))
         .where(eq(events.venueId, Number(venueId)));
 
-      const sessionIdsAtVenue = sessionsAtVenue.map((s) => s.id);
+      sessionIdsAtVenue = sessionsAtVenue.map((s) => s.id);
       if (sessionIdsAtVenue.length > 0) {
         const existingTickets = await db
           .select({ id: tickets.id })
