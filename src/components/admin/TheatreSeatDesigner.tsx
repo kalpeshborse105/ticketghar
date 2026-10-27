@@ -18,7 +18,10 @@ import {
   AlertCircle,
   RefreshCw,
 } from 'lucide-react';
-import { buildAutoTheatreLayout } from '@/src/lib/theatre-auto-layout.ts';
+import {
+  buildAutoTheatreLayout,
+  buildAutoSectionRows,
+} from '@/src/lib/theatre-auto-layout.ts';
 
 export interface SeatItemConfig {
   seatNumber: number;
@@ -91,7 +94,7 @@ export interface SectionConfig {
 interface TheatreSeatDesignerProps {
   venueToEdit?: any | null;
   onClose: () => void;
-  onSaved: (venue: any) => void;
+  onSaved: (venue: any, meta?: { layoutLocked?: boolean; warning?: string }) => void;
 }
 
 interface DistrictItem {
@@ -314,6 +317,9 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
     () => Number(venueToEdit?.totalCapacity) || 300
   );
   const [quickSeatsPerRow, setQuickSeatsPerRow] = useState<number>(20);
+  /** Per-section quick total → auto rows (mirrors theatre-wide builder). */
+  const [sectionQuickTotal, setSectionQuickTotal] = useState<number>(60);
+  const [sectionSeatsPerRow, setSectionSeatsPerRow] = useState<number>(20);
 
   // Stats calculation
   const totalSeats = sections.reduce(
@@ -339,6 +345,11 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
 
   // Active section helper
   const currentSection = sections[activeSectionIdx] || sections[0];
+
+  // Keep section total input in sync when switching tabs / after rebuilds
+  useEffect(() => {
+    setSectionQuickTotal(Math.max(1, activeSectionSeatCount || 1));
+  }, [activeSectionIdx, activeSectionSeatCount]);
 
   // SECTION ACTIONS
   const handleAddSection = () => {
@@ -674,7 +685,10 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
         throw new Error(data.error || 'नाट्यगृह आसन रचना जतन करण्यात अडचण आली.');
       }
 
-      onSaved(data.venue || { ...payload, id: data.venueId || Date.now() });
+      onSaved(data.venue || { ...payload, id: data.venueId || Date.now() }, {
+        layoutLocked: !!data.layoutLocked,
+        warning: data.warning || undefined,
+      });
       onClose();
     } catch (err: any) {
       console.error('Save venue error:', err);
@@ -683,8 +697,30 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
     }
   };
 
+  /** Rebuild only the active section from a section seat total (same idea as theatre-wide auto). */
+  const handleAutoBuildSection = () => {
+    if (!currentSection) return;
+    const target = Math.max(1, Math.floor(Number(sectionQuickTotal) || 0));
+    const perRow = Math.max(1, Math.floor(Number(sectionSeatsPerRow) || 1));
+    if (target > 2000) {
+      setSaveError('एका विभागात 2000 पेक्षा जास्त आसने ठेवू नका.');
+      return;
+    }
+    const rows = buildAutoSectionRows({
+      seatCount: target,
+      seatsPerRow: perRow,
+      tier: currentSection.tier as 'gold' | 'silver' | 'standard',
+    }) as RowConfig[];
+    updateCurrentSection({ rows });
+    setSectionQuickTotal(target);
+    setDesignerNotice(
+      `✓ ${currentSection.name}: ${target} seats · ${rows.length} rows · ${perRow}/row`
+    );
+    setSaveError(null);
+  };
+
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-black/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 md:p-6">
+    <div className="fixed inset-0 z-[90] overflow-hidden bg-black/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 md:p-6">
       <div className="relative w-full max-w-6xl bg-slate-950 border border-slate-800 rounded-3xl shadow-2xl flex flex-col max-h-[96vh] overflow-hidden">
         
         {/* Modal Top Header */}
@@ -770,7 +806,7 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
             </span>
             {capacityMismatch && (
               <span className="text-amber-300 font-semibold">
-                DB जुनी क्षमता {dbCapacity} ≠ रचना {totalSeats} — जतन केल्यास {totalSeats} लागू
+                जुनी क्षमता {dbCapacity} ≠ रचना {totalSeats} — जतन केल्यास {totalSeats} लागू
               </span>
             )}
           </div>
@@ -993,11 +1029,52 @@ export const TheatreSeatDesigner: React.FC<TheatreSeatDesignerProps> = ({
               {/* Active Section Config Panel */}
               {currentSection && (
                 <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-5">
-                  <div className="rounded-xl border border-sky-800/60 bg-sky-950/40 px-3 py-2 text-[11px] text-sky-200 leading-relaxed">
-                    या विभागात <strong className="text-white font-mono">{activeSectionSeatCount}</strong> आसने
-                    (खालील रांग रचना). एकूण क्षमता{' '}
-                    <strong className="text-white font-mono">{totalSeats}</strong> = सर्व विभागांची बेरीज.
-                    रांग/आसन वाढ-घट केल्यास एकूण आपोआप जुळते; जतन करताना DB क्षमताही {totalSeats} होते.
+                  {/* Section total → auto rows (same pattern as theatre-wide builder) */}
+                  <div className="rounded-xl border border-amber-800/40 bg-slate-950/60 p-3 space-y-2">
+                    <p className="text-[11px] font-bold text-amber-400 uppercase tracking-wide">
+                      विभाग एकूण → ऑटो रांगा (Section total → Auto rows)
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs items-end">
+                      <div>
+                        <label className="text-slate-400 block mb-1">विभाग आसने (Total)</label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={2000}
+                          value={sectionQuickTotal}
+                          onChange={(e) =>
+                            setSectionQuickTotal(Math.max(1, Number(e.target.value) || 1))
+                          }
+                          className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-white font-mono font-bold focus:outline-none focus:border-amber-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-slate-400 block mb-1">प्रति रांग (Seats / row)</label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={80}
+                          value={sectionSeatsPerRow}
+                          onChange={(e) =>
+                            setSectionSeatsPerRow(Math.max(1, Number(e.target.value) || 1))
+                          }
+                          className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-white font-mono font-bold focus:outline-none focus:border-amber-500"
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <button
+                          type="button"
+                          onClick={handleAutoBuildSection}
+                          className="w-full py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md transition"
+                        >
+                          या विभागासाठी ऑटो रांगा (Build rows)
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-slate-500 font-mono">
+                      {currentSection.name}: {activeSectionSeatCount} seats · Theatre total:{' '}
+                      {totalSeats}
+                    </p>
                   </div>
                   <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
                     <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 flex-1 text-xs">

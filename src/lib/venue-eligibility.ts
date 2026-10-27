@@ -40,25 +40,17 @@ export function isAuthoritativeTheatreId(
 
 /**
  * Eligible for NEW event creation:
- * - Must be in authoritative allowlist (provenance-backed)
- * - Must be verification_status === 'verified' in DB
- * Pending / protected / retired venues are not selectable for new events.
+ * - verification_status === 'verified' (full 409 catalogue: unverified = research-only)
+ * Authoritative allowlist is a featured subset for public defaults, not the only event venue.
  */
 export function isEligibleForNewEvent(opts: {
   venueId: number;
   verificationStatus: string | null | undefined;
   catalog?: AuthoritativeTheatresFile;
 }): { ok: true } | { ok: false; reason: string } {
-  const catalog = opts.catalog || loadAuthoritativeTheatres();
   const id = Number(opts.venueId);
   if (!Number.isFinite(id) || id <= 0) {
     return { ok: false, reason: 'venueId is required and must be a positive integer' };
-  }
-  if (!isAuthoritativeTheatreId(id, catalog)) {
-    return {
-      ok: false,
-      reason: `Venue #${id} is not in the authoritative new-theatre allowlist for event creation`,
-    };
   }
   if ((opts.verificationStatus || '').toLowerCase() !== 'verified') {
     return {

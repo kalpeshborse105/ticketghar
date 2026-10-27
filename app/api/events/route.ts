@@ -35,7 +35,41 @@ export async function GET(request: Request) {
     }
 
     if (city && city.toLowerCase() !== 'all' && city.toLowerCase() !== 'महाराष्ट्र (all)') {
-      conditions.push(sql`lower(${venues.city}) = ${city.toLowerCase()}`);
+      const MARATHI_TO_ENG: Record<string, string> = {
+        पुणे: 'Pune',
+        मुंबई: 'Mumbai',
+        ठाणे: 'Thane',
+        नागपूर: 'Nagpur',
+        नाशिक: 'Nashik',
+        संभाजीनगर: 'Chhatrapati Sambhaji Nagar',
+        'छत्रपती संभाजीनगर': 'Chhatrapati Sambhaji Nagar',
+        औरंगाबाद: 'Chhatrapati Sambhaji Nagar',
+        कोल्हापूर: 'Kolhapur',
+        सोलापूर: 'Solapur',
+        सांगली: 'Sangli',
+        सातारा: 'Satara',
+        अमरावती: 'Amravati',
+        नांदेड: 'Nanded',
+        रत्नागिरी: 'Ratnagiri',
+        जळगाव: 'Jalgaon',
+      };
+      const normalized = (MARATHI_TO_ENG[city] || city).toLowerCase().trim();
+      const like = `%${normalized}%`;
+      // Flexible match: Pune↔पुणे; Mumbai also matches Bandra West / suburbs in venue.city text
+      conditions.push(
+        sql`(
+          lower(${venues.city}) = ${normalized}
+          OR lower(${venues.city}) LIKE ${like}
+          OR (
+            ${normalized} = 'mumbai'
+            AND (
+              lower(${venues.city}) LIKE '%bandra%'
+              OR lower(${venues.city}) LIKE '%mumbai%'
+              OR lower(${venues.city}) LIKE '%thane%'
+            )
+          )
+        )`
+      );
     }
 
     const dbEvents = await db
@@ -153,8 +187,10 @@ export async function GET(request: Request) {
               new Date(a.sessionStartTime).getTime() - new Date(b.sessionStartTime).getTime()
           );
         const nextBookable =
-          upcoming.find((s) => !s.isSoldOut && Number(s.availableInventoryCount || 0) > 0) || null;
-        const homeSession = nextBookable || upcoming[0] || null;
+          upcoming.find((s) => !s.isSoldOut && Number(s.availableInventoryCount || 0) > 0) ||
+          upcoming[0] ||
+          null;
+        const homeSession = nextBookable || sessionsRaw[0] || null;
         const bookablePrices = (nextBookable?.ticketTypes || [])
           .filter((t: any) => Number(t.availableQuota || 0) > 0)
           .map((t: any) => Number(t.price || 0))
@@ -210,7 +246,11 @@ export async function GET(request: Request) {
             : null,
           showDateStr,
           showTimeStr,
-          hasBookableSessions: !!nextBookable,
+          // True when a future active session exists (inventory may still be 0 / GA pending)
+          hasBookableSessions: upcoming.length > 0,
+          hasUpcomingInventory: !!(
+            upcoming.find((s) => !s.isSoldOut && Number(s.availableInventoryCount || 0) > 0)
+          ),
           // Only real DB reviews — never invent star counts for empty catalogs
           rating: realRating,
           ratingCount: realCount,
@@ -237,9 +277,12 @@ export async function GET(request: Request) {
       allEventsList = allEventsList.filter((item) => (item.minPrice || 0) <= maxPricePaise);
     }
 
-    // Hide events with no upcoming bookable showtimes (unless organizer list / includeEnded)
-    if (!includeEnded && !organizerIdParam) {
-      allEventsList = allEventsList.filter((item) => item.hasBookableSessions);
+    // Public catalog: show all published events (even before showtimes/inventory are attached).
+    // Booking CTAs still gate on hasUpcomingInventory / sessions client-side.
+    // Pass ?bookableOnly=1 to restore the old “must have future inventory” filter.
+    const bookableOnly = searchParams.get('bookableOnly') === '1';
+    if (bookableOnly && !includeEnded && !organizerIdParam) {
+      allEventsList = allEventsList.filter((item) => item.hasUpcomingInventory);
     }
 
     if (dateFilter && dateFilter !== 'all') {

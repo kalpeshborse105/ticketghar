@@ -12,6 +12,7 @@ import {
   calculatePricing,
   extendHoldForCheckout,
   CHECKOUT_HOLD_EXTENSION_MINUTES,
+  assertTicketSecretConfigured,
 } from '@/src/lib/inventory-engine.ts';
 import { cacheDel, sessionSeatsCacheKey } from '@/src/lib/redis.ts';
 import { getCustomerSession } from '@/src/lib/auth-service.ts';
@@ -72,6 +73,7 @@ async function findIdempotentPendingOrder(params: {
 
 export async function POST(request: Request) {
   try {
+    assertTicketSecretConfigured();
     const body = await request.json();
     const { sessionId, seatIds, couponCode, holdToken: bodyHoldToken } = body;
     const holdToken = String(bodyHoldToken || body.userIdStr || '').trim();
@@ -250,13 +252,13 @@ export async function POST(request: Request) {
     let targetUserPhone = body.userPhone ? String(body.userPhone).trim() : '';
 
     if (customer) {
+      // Logged-in session wins — never reassign order.userId via a different booking email
       targetUserId = customer.id;
       if (!targetUserEmail) targetUserEmail = customer.email?.toLowerCase() || '';
       if (!targetUserName) targetUserName = customer.fullName || '';
       if (!targetUserPhone && customer.phoneNumber) targetUserPhone = String(customer.phoneNumber);
-    }
-
-    if (targetUserEmail && targetUserEmail.includes('@')) {
+    } else if (targetUserEmail && targetUserEmail.includes('@')) {
+      // Guest checkout only: attach/create by booking email
       const existingUser = await db
         .select({ id: users.id, fullName: users.fullName, phoneNumber: users.phoneNumber })
         .from(users)
@@ -269,7 +271,7 @@ export async function POST(request: Request) {
         if (!targetUserPhone && existingUser[0].phoneNumber) {
           targetUserPhone = existingUser[0].phoneNumber;
         }
-      } else if (!targetUserId) {
+      } else {
         const [newUser] = await db
           .insert(users)
           .values({

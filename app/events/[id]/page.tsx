@@ -929,7 +929,7 @@ export default function EventDetailPage() {
               {/* Artist Chips / Star Cast Section (Real Database Cast & Crew) */}
               <div className="pt-2">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-[#64748B] block mb-2">
-                  मुख्य कलाकार आणि चमू (Cast & Crew)
+                  {language === 'mr' ? 'मुख्य कलाकार आणि चमू' : 'Cast & Crew'}
                 </span>
                 {Array.isArray((event as any).castCrewList) && (event as any).castCrewList.length > 0 ? (
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
@@ -938,60 +938,43 @@ export default function EventDetailPage() {
                         {member.avatarUrl ? (
                           <img
                             src={member.avatarUrl}
-                            alt={member.nameMr || member.name}
+                            alt={
+                              language === 'mr'
+                                ? member.nameMr || member.name
+                                : member.name || member.nameMr
+                            }
                             className="w-10 h-10 rounded-full object-cover shadow-xs shrink-0"
                           />
                         ) : (
                           <div className="w-10 h-10 rounded-full bg-orange-200 text-[#EA580C] flex items-center justify-center font-bold text-xs shrink-0">
-                            {(member.nameMr || member.name || 'म')[0]}
+                            {(
+                              (language === 'mr'
+                                ? member.nameMr || member.name
+                                : member.name || member.nameMr) || '?'
+                            )[0]}
                           </div>
                         )}
                         <div className="min-w-0">
-                          <p className="text-xs font-bold text-[#141B2B] truncate">{member.nameMr || member.name}</p>
-                          <p className="text-[10px] text-[#64748B] truncate">{member.roleMr || member.role}</p>
+                          <p className="text-xs font-bold text-[#141B2B] truncate">
+                            {language === 'mr'
+                              ? member.nameMr || member.name
+                              : member.name || member.nameMr}
+                          </p>
+                          <p className="text-[10px] text-[#64748B] truncate">
+                            {language === 'mr'
+                              ? member.roleMr || member.role
+                              : member.role || member.roleMr}
+                          </p>
                         </div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                    <div className="flex items-center gap-2.5 p-2 rounded-xl bg-[#FFF7ED] hover:bg-orange-100 transition-colors">
-                      <div className="w-10 h-10 rounded-full bg-orange-200 text-[#EA580C] flex items-center justify-center font-bold text-xs shrink-0">
-                        भ
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-[#141B2B] truncate">भरत जाधव</p>
-                        <p className="text-[10px] text-[#64748B] truncate">मुख्य भूमिका</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2.5 p-2 rounded-xl bg-[#FFF7ED] hover:bg-orange-100 transition-colors">
-                      <div className="w-10 h-10 rounded-full bg-orange-200 text-[#EA580C] flex items-center justify-center font-bold text-xs shrink-0">
-                        प्र
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-[#141B2B] truncate">प्रशांत दामले</p>
-                        <p className="text-[10px] text-[#64748B] truncate">मुख्य भूमिका</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2.5 p-2 rounded-xl bg-[#FFF7ED] hover:bg-orange-100 transition-colors">
-                      <div className="w-10 h-10 rounded-full bg-orange-200 text-[#EA580C] flex items-center justify-center font-bold text-xs shrink-0">
-                        मु
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-[#141B2B] truncate">मुक्ता बर्वे</p>
-                        <p className="text-[10px] text-[#64748B] truncate">मुख्य भूमिका</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2.5 p-2 rounded-xl bg-[#FFF7ED] hover:bg-orange-100 transition-colors">
-                      <div className="w-10 h-10 rounded-full bg-orange-200 text-[#EA580C] flex items-center justify-center font-bold text-xs shrink-0">
-                        दि
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-[#141B2B] truncate">केदार शिंदे</p>
-                        <p className="text-[10px] text-[#64748B] truncate">दिग्दर्शक</p>
-                      </div>
-                    </div>
-                  </div>
+                  <p className="text-xs text-[#64748B]">
+                    {language === 'mr'
+                      ? 'कलाकार माहिती अद्याप जोडलेली नाही.'
+                      : 'Cast & crew not listed yet.'}
+                  </p>
                 )}
               </div>
             </div>

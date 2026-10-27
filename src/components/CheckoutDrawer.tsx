@@ -621,11 +621,12 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
       const razorpay = new window.Razorpay(options);
       razorpay.on('payment.failed', (response: any) => {
         setIsProcessing(false);
+        // Keep seat hold so user can retry pay — do not release on gateway failure
         setErrorMessage(
           response?.error?.description ||
           (language === 'mr'
-            ? 'पेमेंट अयशस्वी. कृपया पुन्हा प्रयत्न करा.'
-            : 'Payment failed. Please try again.')
+            ? 'पेमेंट अयशस्वी. आसने अजूनही आरक्षित आहेत — पुन्हा Pay वर क्लिक करा. (Seats still held — retry payment.)'
+            : 'Payment failed. Your seats are still held — tap Pay again before the hold expires.')
         );
       });
       razorpay.open();
@@ -988,7 +989,10 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
             </div>
 
             {/* Coupon Code Box with Real-time Remove Action (Section 14 & 15) */}
-            <div className="space-y-2">
+            <div
+              className={`space-y-2 ${isProcessing ? 'pointer-events-none opacity-50' : ''}`}
+              aria-disabled={isProcessing}
+            >
               {couponApplied ? (
                 <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs">
                   <div className="flex items-center gap-2">
@@ -1000,10 +1004,11 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
                   </div>
                   <button
                     type="button"
+                    disabled={isProcessing}
                     onClick={handleRemoveCoupon}
-                    className="px-2.5 py-1 rounded-lg bg-white border border-emerald-300 text-red-600 hover:bg-red-50 font-bold text-xs transition cursor-pointer"
+                    className="px-2.5 py-1 rounded-lg bg-white border border-emerald-300 text-red-600 hover:bg-red-50 font-bold text-xs transition cursor-pointer disabled:opacity-50"
                   >
-                    काढा (Remove)
+                    {language === 'mr' ? 'काढा' : 'Remove'}
                   </button>
                 </div>
               ) : (
@@ -1012,16 +1017,18 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
                     <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input
                       type="text"
-                      placeholder="कूपन कोड"
+                      placeholder={language === 'mr' ? 'कूपन कोड' : 'Coupon code'}
                       value={couponInput}
+                      disabled={isProcessing}
                       onChange={(e) => setCouponInput(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 uppercase font-mono placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#ea580c]/50"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 uppercase font-mono placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#ea580c]/50 disabled:cursor-not-allowed"
                     />
                   </div>
                   <button
                     type="button"
+                    disabled={isProcessing}
                     onClick={() => handleApplyCoupon()}
-                    className="px-4 py-2 rounded-xl bg-orange-100 hover:bg-orange-200 text-[#ea580c] font-black text-xs transition active:scale-95 cursor-pointer"
+                    className="px-4 py-2 rounded-xl bg-orange-100 hover:bg-orange-200 text-[#ea580c] font-black text-xs transition active:scale-95 cursor-pointer disabled:opacity-50"
                   >
                     {t.applyCoupon}
                   </button>
@@ -1057,12 +1064,13 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
                       <div
                         key={offer.code}
                         onClick={() => {
-                          if (!isCurrent) {
-                            setCouponInput(offer.code);
-                            handleApplyCoupon(offer.code);
-                          }
+                          if (isProcessing || isCurrent) return;
+                          setCouponInput(offer.code);
+                          handleApplyCoupon(offer.code);
                         }}
-                        className={`p-2 rounded-xl border transition cursor-pointer text-left flex items-center justify-between ${isCurrent
+                        className={`p-2 rounded-xl border transition text-left flex items-center justify-between ${
+                          isProcessing ? 'cursor-not-allowed' : 'cursor-pointer'
+                        } ${isCurrent
                             ? 'bg-emerald-50 border-emerald-300 shadow-xs'
                             : 'bg-orange-50/50 border-orange-200/70 hover:bg-orange-100/60'
                           }`}
@@ -1151,6 +1159,30 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Android-style centre payment lock — blocks offers / form while Razorpay opens */}
+      {isProcessing && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 space-y-4 text-center">
+            <div className="w-14 h-14 rounded-full bg-orange-100 text-[#ea580c] flex items-center justify-center mx-auto">
+              <div className="w-7 h-7 border-[3px] border-[#ea580c] border-t-transparent rounded-full animate-spin" />
+            </div>
+            <div>
+              <h3 className="text-base font-black text-[#141B2B]">
+                {language === 'mr' ? 'पेमेंट सुरू आहे' : 'Payment in progress'}
+              </h3>
+              <p className="text-xs text-slate-600 mt-2 leading-relaxed">
+                {language === 'mr'
+                  ? 'Razorpay विंडो उघडत आहे. कृपया थांबा — ऑफर्स व फॉर्म आता लॉक आहेत. यशस्वी पेमेंटनंतर तिकीट QR पास दिसेल.'
+                  : 'Opening Razorpay. Please wait — offers and form are locked. Your ticket QR pass appears after successful payment.'}
+              </p>
+            </div>
+            <p className="text-sm font-black text-[#ea580c] font-mono">
+              ₹{(grandTotal / 100).toFixed(0)}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Discard Booking Confirmation Modal */}
       {showDiscardConfirm && (

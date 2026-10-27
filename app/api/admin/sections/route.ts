@@ -1,10 +1,13 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/src/db/index';
 import { homeSections } from '@/src/db/schema';
 import { asc, eq } from 'drizzle-orm';
+import { requireRoles } from '@/src/lib/admin-auth.ts';
 
 // Admin endpoint: List all sections (including hidden)
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const authError = requireRoles(request, ['super_admin', 'operations', 'manager']);
+  if (authError) return authError;
   try {
     const list = await db
       .select()
@@ -22,7 +25,9 @@ export async function GET() {
 }
 
 // Admin endpoint: Update section titles, subtitles, badges, visibility, or sort order
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  const authError = requireRoles(req, ['super_admin', 'operations', 'manager']);
+  if (authError) return authError;
   try {
     const body = await req.json();
     const { sections } = body;

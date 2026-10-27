@@ -190,17 +190,35 @@ export default function MyTicketsScreen({ navigation }: any) {
     setRefreshing(false);
   };
 
+  const isVisibleTicket = (o: OrderItem) => {
+    const ps = String(o.paymentStatus || '').toLowerCase();
+    const os = String((o as any).orderStatus || '').toLowerCase();
+    // Match web: show captured/paid/success and confirmed bookings
+    return (
+      ps === 'paid' ||
+      ps === 'captured' ||
+      ps === 'success' ||
+      os === 'confirmed' ||
+      (Array.isArray(o.tickets) && o.tickets.length > 0 && ps !== 'failed' && ps !== 'refunded')
+    );
+  };
+
   const now = new Date();
   const upcoming = orders.filter((o) => {
+    if (!isVisibleTicket(o)) return false;
     const sessionDate = o.session?.sessionStartTime ? new Date(o.session.sessionStartTime) : null;
-    return (!sessionDate || sessionDate >= now) && (o.paymentStatus === 'paid' || o.paymentStatus === 'captured');
+    return !sessionDate || sessionDate >= now;
   });
   const past = orders.filter((o) => {
+    if (!isVisibleTicket(o)) return false;
     const sessionDate = o.session?.sessionStartTime ? new Date(o.session.sessionStartTime) : null;
-    return sessionDate && sessionDate < now && o.paymentStatus === 'paid';
+    return !!sessionDate && sessionDate < now;
   });
 
-  const displayed = activeTab === 'upcoming' ? upcoming : past;
+  // If upcoming is empty but past has tickets, prefer Past (web lists all together)
+  const effectiveTab: Tab =
+    activeTab === 'upcoming' && upcoming.length === 0 && past.length > 0 ? 'past' : activeTab;
+  const displayed = effectiveTab === 'upcoming' ? upcoming : past;
 
   // ── Unauthenticated State (never show cached private tickets) ────────────
   if (!isAuthenticated) {
@@ -296,28 +314,28 @@ export default function MyTicketsScreen({ navigation }: any) {
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.bg} />
 
-      {/* Header */}
+      {/* Header — match web माझी तिकिटे */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Tickets</Text>
-        <Text style={styles.headerSub}>Digital Passes & Entry QR</Text>
+        <Text style={styles.headerTitle}>माझी तिकिटे</Text>
+        <Text style={styles.headerSub}>आपण बुक केलेली सर्व तिकिटे आणि डिजिटल QR पासेस</Text>
       </View>
 
       {/* Tabs */}
       <View style={styles.tabBar}>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'upcoming' && styles.tabActive]}
+          style={[styles.tab, effectiveTab === 'upcoming' && styles.tabActive]}
           onPress={() => setActiveTab('upcoming')}
         >
-          <Text style={[styles.tabText, activeTab === 'upcoming' && styles.tabTextActive]}>
-            Upcoming
+          <Text style={[styles.tabText, effectiveTab === 'upcoming' && styles.tabTextActive]}>
+            आगामी ({upcoming.length})
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'past' && styles.tabActive]}
+          style={[styles.tab, effectiveTab === 'past' && styles.tabActive]}
           onPress={() => setActiveTab('past')}
         >
-          <Text style={[styles.tabText, activeTab === 'past' && styles.tabTextActive]}>
-            Past
+          <Text style={[styles.tabText, effectiveTab === 'past' && styles.tabTextActive]}>
+            मागील ({past.length})
           </Text>
         </TouchableOpacity>
       </View>
@@ -330,9 +348,9 @@ export default function MyTicketsScreen({ navigation }: any) {
       ) : ordersToDisplay.length === 0 ? (
         <EmptyState
           iconName="emoticon-sad-outline"
-          title="No tickets yet"
-          subtitle="All your booked tickets will appear here."
-          action={{ label: 'Browse Events', onPress: () => navigation.navigate('Main', { screen: 'Home' }) }}
+          title="अद्याप तिकिटे नाहीत"
+          subtitle="आपण बुक केलेली सर्व तिकिटे येथे दिसतील."
+          action={{ label: 'कार्यक्रम पहा', onPress: () => navigation.navigate('Main', { screen: 'Home' }) }}
         />
       ) : (
         <FlatList
@@ -391,7 +409,7 @@ export default function MyTicketsScreen({ navigation }: any) {
                       </View>
                     ) : null}
                     <Text style={styles.webTotal}>
-                      GRAND TOTAL {paise(item.grandTotal)}
+                      एकूण देय रक्कम {paise(item.grandTotal)}
                     </Text>
                   </View>
                 </View>
@@ -405,7 +423,7 @@ export default function MyTicketsScreen({ navigation }: any) {
                     activeOpacity={0.88}
                   >
                     <Icon name="ticket-confirmation" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                    <Text style={styles.webViewPassText}>पास उघडा / View Pass</Text>
+                    <Text style={styles.webViewPassText}>पास उघडा</Text>
                   </TouchableOpacity>
 
                   <View style={styles.webSecondaryActionsRow}>

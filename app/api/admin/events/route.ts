@@ -4,8 +4,6 @@ import { events, venues, organizers, eventSessions, ticketTypes, auditLogs } fro
 import { eq, desc, and, inArray } from 'drizzle-orm';
 import { requireAdmin, verifyAdminSession } from '@/src/lib/admin-auth.ts';
 import { generateSessionInventory } from '@/src/lib/inventory-engine.ts';
-import { isEligibleForNewEvent } from '@/src/lib/venue-eligibility.ts';
-
 export async function GET(request: NextRequest) {
   const authError = requireAdmin(request);
   if (authError) return authError;
@@ -24,38 +22,58 @@ export async function GET(request: NextRequest) {
       filterOrganizerId = parseInt(organizerIdParam, 10);
     }
 
-    const query = db
-      .select({
-        event: events,
-        venue: venues,
-        organizer: organizers,
-      })
-      .from(events)
-      .innerJoin(venues, eq(events.venueId, venues.id))
-      .innerJoin(organizers, eq(events.organizerId, organizers.id))
-      .orderBy(desc(events.createdAt));
+    // Lite venue/organizer columns — full venue JSON was bloating admin loads
+    const venueCols = {
+      id: venues.id,
+      name: venues.name,
+      nameMr: venues.nameMr,
+      city: venues.city,
+      address: venues.address,
+      totalCapacity: venues.totalCapacity,
+      verificationStatus: venues.verificationStatus,
+    };
+    const organizerCols = {
+      id: organizers.id,
+      name: organizers.name,
+      companyName: organizers.companyName,
+      email: organizers.email,
+      phone: organizers.phone,
+      city: organizers.city,
+      verificationStatus: organizers.verificationStatus,
+    };
 
     const list = filterOrganizerId
       ? await db
-          .select({ event: events, venue: venues, organizer: organizers })
+          .select({ event: events, venue: venueCols, organizer: organizerCols })
           .from(events)
           .innerJoin(venues, eq(events.venueId, venues.id))
           .innerJoin(organizers, eq(events.organizerId, organizers.id))
           .where(eq(events.organizerId, filterOrganizerId))
           .orderBy(desc(events.createdAt))
-      : await query;
+      : await db
+          .select({ event: events, venue: venueCols, organizer: organizerCols })
+          .from(events)
+          .innerJoin(venues, eq(events.venueId, venues.id))
+          .innerJoin(organizers, eq(events.organizerId, organizers.id))
+          .orderBy(desc(events.createdAt));
 
     const eventIds = list.map((item) => item.event.id);
     const sessionsByEvent: Record<number, typeof eventSessions.$inferSelect[]> = {};
     if (eventIds.length > 0) {
       const allSessions = await db
-        .select()
+        .select({
+          id: eventSessions.id,
+          eventId: eventSessions.eventId,
+          sessionStartTime: eventSessions.sessionStartTime,
+          sessionEndTime: eventSessions.sessionEndTime,
+          status: eventSessions.status,
+        })
         .from(eventSessions)
         .where(inArray(eventSessions.eventId, eventIds))
         .orderBy(eventSessions.sessionStartTime);
       for (const s of allSessions) {
         if (!sessionsByEvent[s.eventId]) sessionsByEvent[s.eventId] = [];
-        sessionsByEvent[s.eventId].push(s);
+        sessionsByEvent[s.eventId].push(s as any);
       }
     }
 
@@ -81,6 +99,129 @@ export async function POST(request: NextRequest) {
   try {
     const session = verifyAdminSession(request);
     const body = await request.json();
+
+    // Add showtime to an existing event (same theatre)
+    if (body?.action === 'addSession') {
+      const eventId = Number(body.eventId);
+      if (!Number.isFinite(eventId) || eventId <= 0) {
+        return NextResponse.json({ error: 'eventId required' }, { status: 400 });
+      }
+      const [existing] = await db.select().from(events).where(eq(events.id, eventId)).limit(1);
+      if (!existing) {
+        return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+      }
+      if (session.valid && session.role === 'organizer') {
+        if (existing.organizerId !== session.user?.organizerId) {
+          return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+      }
+      if (!body.sessionStartTime) {
+        return NextResponse.json({ error: 'sessionStartTime required' }, { status: 400 });
+      }
+      const startTime = new Date(body.sessionStartTime);
+      if (Number.isNaN(startTime.getTime())) {
+        return NextResponse.json({ error: 'Invalid sessionStartTime' }, { status: 400 });
+      }
+      const endTime = body.sessionEndTime
+        ? new Date(body.sessionEndTime)
+        : new Date(startTime.getTime() + (existing.durationMinutes || 150) * 60000);
+      const [sess] = await db
+        .insert(eventSessions)
+        .values({
+          eventId,
+          sessionStartTime: startTime,
+          sessionEndTime: endTime,
+          status: 'active',
+        })
+        .returning();
+      try {
+        await generateSessionInventory(sess.id, existing.venueId);
+      } catch (invErr) {
+        console.warn('Inventory gen after addSession:', invErr);
+      }
+      return NextResponse.json({ success: true, session: sess });
+    }
+
+    // Clone show details onto another verified theatre + first showtime
+    if (body?.action === 'addVenueShow') {
+      const sourceEventId = Number(body.eventId);
+      const newVenueId = Number(body.venueId);
+      if (!Number.isFinite(sourceEventId) || !Number.isFinite(newVenueId)) {
+        return NextResponse.json({ error: 'eventId and venueId required' }, { status: 400 });
+      }
+      const [source] = await db.select().from(events).where(eq(events.id, sourceEventId)).limit(1);
+      if (!source) {
+        return NextResponse.json({ error: 'Source event not found' }, { status: 404 });
+      }
+      if (session.valid && session.role === 'organizer') {
+        if (source.organizerId !== session.user?.organizerId) {
+          return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+      }
+      const [venueRow] = await db
+        .select({ id: venues.id, verificationStatus: venues.verificationStatus })
+        .from(venues)
+        .where(eq(venues.id, newVenueId))
+        .limit(1);
+      if (!venueRow) {
+        return NextResponse.json({ error: `Venue #${newVenueId} not found` }, { status: 400 });
+      }
+      if (!body.sessionStartTime) {
+        return NextResponse.json({ error: 'sessionStartTime required' }, { status: 400 });
+      }
+      const startTime = new Date(body.sessionStartTime);
+      if (Number.isNaN(startTime.getTime())) {
+        return NextResponse.json({ error: 'Invalid sessionStartTime' }, { status: 400 });
+      }
+      const endTime = new Date(startTime.getTime() + (source.durationMinutes || 150) * 60000);
+      const slug =
+        source.slug.replace(/-\d+$/, '') + `-${newVenueId}-${Date.now()}`;
+      let initialStatus = source.status === 'published' ? 'published' : source.status || 'draft';
+      if (session.valid && session.role === 'organizer' && initialStatus === 'published') {
+        initialStatus = 'submitted';
+      }
+      const [newEvent] = await db
+        .insert(events)
+        .values({
+          title: source.title,
+          titleMr: source.titleMr,
+          slug,
+          category: source.category,
+          categoryMr: source.categoryMr,
+          organizerId: source.organizerId,
+          venueId: newVenueId,
+          language: source.language,
+          ageGuidance: source.ageGuidance,
+          durationMinutes: source.durationMinutes,
+          description: source.description,
+          descriptionMr: source.descriptionMr,
+          posterUrl: source.posterUrl,
+          bannerUrl: source.bannerUrl,
+          trailerUrl: source.trailerUrl,
+          galleryUrls: source.galleryUrls,
+          castCrew: source.castCrew,
+          tag: source.tag,
+          convenienceFeeValue: source.convenienceFeeValue,
+          status: initialStatus,
+        })
+        .returning();
+      const [sess] = await db
+        .insert(eventSessions)
+        .values({
+          eventId: newEvent.id,
+          sessionStartTime: startTime,
+          sessionEndTime: endTime,
+          status: 'active',
+        })
+        .returning();
+      try {
+        await generateSessionInventory(sess.id, newVenueId);
+      } catch (invErr) {
+        console.warn('Inventory gen after addVenueShow:', invErr);
+      }
+      return NextResponse.json({ success: true, event: newEvent, session: sess });
+    }
+
     const {
       title,
       titleMr,
@@ -118,7 +259,7 @@ export async function POST(request: NextRequest) {
 
     if (!venueId) {
       return NextResponse.json(
-        { error: 'venueId is required. Select an authoritative verified theatre.' },
+        { error: 'venueId is required. Select a theatre from the catalogue.' },
         { status: 400 }
       );
     }
@@ -144,13 +285,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Venue #${finalVenueId} not found.` }, { status: 400 });
     }
 
-    const eligibility = isEligibleForNewEvent({
-      venueId: venueRow.id,
-      verificationStatus: venueRow.verificationStatus,
-    });
-    if (!eligibility.ok) {
-      return NextResponse.json({ error: eligibility.reason }, { status: 400 });
-    }
+    // Full venue catalogue allowed for event attachment (admin + organizer).
+    // Public venue browse still prefers verified theatres separately.
 
     if (!title || !titleMr || !category) {
       return NextResponse.json(
@@ -212,18 +348,17 @@ export async function POST(request: NextRequest) {
         })
         .returning();
 
-      // Prefer venue section tiers (Balcony / Stall) via generateSessionInventory.
-      // Do NOT force a flat GA price over section base prices.
+      // Always use theatre section basePrice (seat map). ticketPrice = GA fallback only.
       try {
         const inv = await generateSessionInventory(sess.id, finalVenueId);
         if (!inv || inv.createdCount === 0) {
-          // Venue has no seat template — create a single GA tier so booking still works
+          const gaPaise = ticketPrice ? parseInt(String(ticketPrice), 10) : 35000;
           await db.insert(ticketTypes).values({
             eventId: newEvent.id,
             sessionId: sess.id,
             name: 'General Admission',
             nameMr: 'सामान्य प्रवेश',
-            price: ticketPrice ? parseInt(String(ticketPrice), 10) : 35000,
+            price: Number.isFinite(gaPaise) && gaPaise > 0 ? gaPaise : 35000,
             totalQuota: 200,
             availableQuota: 200,
             isSeated: 0,
@@ -231,12 +366,13 @@ export async function POST(request: NextRequest) {
         }
       } catch (invErr) {
         console.warn('Notice generating venue session inventory:', invErr);
+        const gaPaise = ticketPrice ? parseInt(String(ticketPrice), 10) : 35000;
         await db.insert(ticketTypes).values({
           eventId: newEvent.id,
           sessionId: sess.id,
           name: 'General Admission',
           nameMr: 'सामान्य प्रवेश',
-          price: ticketPrice ? parseInt(String(ticketPrice), 10) : 35000,
+          price: Number.isFinite(gaPaise) && gaPaise > 0 ? gaPaise : 35000,
           totalQuota: 200,
           availableQuota: 200,
           isSeated: 0,
@@ -333,13 +469,6 @@ export async function PATCH(request: NextRequest) {
         .limit(1);
       if (!nextVenue) {
         return NextResponse.json({ error: `Venue #${nextVenueId} not found.` }, { status: 400 });
-      }
-      const moveCheck = isEligibleForNewEvent({
-        venueId: nextVenue.id,
-        verificationStatus: nextVenue.verificationStatus,
-      });
-      if (!moveCheck.ok) {
-        return NextResponse.json({ error: moveCheck.reason }, { status: 400 });
       }
       updatePayload.venueId = nextVenueId;
     }

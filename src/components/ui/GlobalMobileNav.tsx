@@ -11,6 +11,8 @@ function GlobalMobileNavContent() {
   const searchParams = useSearchParams();
 
   const [language, setLanguage] = useState<Language>('mr');
+  const [hideForPass, setHideForPass] = useState(false);
+  const [activeTabOverride, setActiveTabOverride] = useState<NavTab | null>(null);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -30,13 +32,14 @@ function GlobalMobileNavContent() {
     }
   }, []);
 
-  // Hide on admin portal screens
-  if (pathname?.startsWith('/admin')) {
-    return null;
-  }
-
-  // Determine active tab based on route and custom events
-  const [activeTabOverride, setActiveTabOverride] = useState<NavTab | null>(null);
+  useEffect(() => {
+    const onOverlay = (e: Event) => {
+      const detail = (e as CustomEvent)?.detail;
+      setHideForPass(!!detail?.hideChrome);
+    };
+    window.addEventListener('mahaticket_ui_overlay', onOverlay as EventListener);
+    return () => window.removeEventListener('mahaticket_ui_overlay', onOverlay as EventListener);
+  }, []);
 
   useEffect(() => {
     const handleTabEvt = (e: any) => {
@@ -45,6 +48,11 @@ function GlobalMobileNavContent() {
     window.addEventListener('mahaticket_switch_nav_tab', handleTabEvt);
     return () => window.removeEventListener('mahaticket_switch_nav_tab', handleTabEvt);
   }, []);
+
+  // Hide on admin, ticket pass pages, and while pass modal is open (avoids nav under QR)
+  if (pathname?.startsWith('/admin') || pathname?.startsWith('/tickets') || hideForPass) {
+    return null;
+  }
 
   let activeTab: NavTab | null = activeTabOverride;
   if (!activeTab) {

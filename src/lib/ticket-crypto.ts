@@ -1,7 +1,14 @@
 import crypto from 'crypto';
 
 function getTicketSecret(): string {
-  return process.env.TICKET_SECRET || 'mahaticket_secure_signing_key_2026';
+  return process.env.TICKET_SECRET?.trim() || 'mahaticket_secure_signing_key_2026';
+}
+
+export function assertTicketCryptoSecretConfigured() {
+  if (process.env.NODE_ENV !== 'production') return;
+  if (!process.env.TICKET_SECRET?.trim()) {
+    throw new Error('TICKET_SECRET must be set in production');
+  }
 }
 
 /**

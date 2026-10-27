@@ -4,20 +4,25 @@ import crypto from 'crypto';
 import { db } from '@/src/db/index.ts';
 import { users, organizers } from '@/src/db/schema.ts';
 import { eq, or, sql } from 'drizzle-orm';
-import { verifyPassword } from '@/src/lib/auth-service.ts';
+import { verifyPassword, verifySessionToken } from '@/src/lib/auth-service.ts';
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 
-function getSessionSecret(): string {
-  return process.env.ADMIN_SESSION_SECRET || 'mahaticket-admin-session-secure-key-2026';
+function sessionSecret(): string {
+  return process.env.ADMIN_SESSION_SECRET?.trim() || 'mahaticket-admin-session-secure-key-2026';
 }
 
-const SESSION_SECRET = getSessionSecret();
+export function assertAdminSessionSecretConfigured() {
+  if (process.env.NODE_ENV !== 'production') return;
+  if (!process.env.ADMIN_SESSION_SECRET?.trim()) {
+    throw new Error('ADMIN_SESSION_SECRET must be set in production');
+  }
+}
 const SESSION_COOKIE_NAME = 'mahaticket_admin_session';
 const SESSION_DURATION_MS = 12 * 60 * 60 * 1000;
 
 function sign(payload: string): string {
-  return crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('base64url');
+  return crypto.createHmac('sha256', sessionSecret()).update(payload).digest('base64url');
 }
 
 function timingSafeEqualStr(a: string, b: string): boolean {
@@ -264,11 +269,84 @@ export function destroyAdminSession(_request: NextRequest): boolean {
 }
 
 export function requireAdmin(request: NextRequest): NextResponse | null {
+  try {
+    assertAdminSessionSecretConfigured();
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message || 'Server misconfigured' }, { status: 503 });
+  }
   const verification = verifyAdminSession(request);
   if (!verification.valid) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   return null;
+}
+
+/**
+ * Staff session for scanner/admin APIs:
+ * 1) admin cookie (web Organizer Console)
+ * 2) customer Bearer JWT with staff role (Android organizer app)
+ */
+export function resolveStaffSession(request: NextRequest): {
+  valid: boolean;
+  role?: string;
+  user?: Partial<AdminSessionData> & { id?: number };
+  error?: string;
+  via?: 'admin_cookie' | 'bearer';
+} {
+  const admin = verifyAdminSession(request);
+  if (admin.valid) {
+    return {
+      valid: true,
+      role: admin.role,
+      user: admin.user,
+      via: 'admin_cookie',
+    };
+  }
+
+  const authHeader = request.headers.get('authorization');
+  const m = authHeader?.match(/^Bearer\s+(.+)$/i);
+  if (!m?.[1]) {
+    return { valid: false, error: admin.error || 'No session' };
+  }
+
+  const customer = verifySessionToken(m[1].trim());
+  if (!customer?.id) {
+    return { valid: false, error: 'Invalid Bearer token' };
+  }
+  const role = String(customer.role || 'customer').toLowerCase();
+  return {
+    valid: true,
+    role,
+    user: {
+      userId: customer.id,
+      email: customer.email,
+      fullName: customer.fullName,
+      role: role as AdminSessionData['role'],
+    },
+    via: 'bearer',
+  };
+}
+
+/** Require admin cookie OR Android Bearer staff session with an allowed role. */
+export function requireRoles(
+  request: NextRequest,
+  allowed: Array<AdminSessionData['role'] | string>
+): NextResponse | null {
+  const verification = resolveStaffSession(request);
+  if (!verification.valid) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const role = String(verification.role || verification.user?.role || '');
+  if (!allowed.includes(role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+  return null;
+}
+
+export function getAdminSessionOrNull(request: NextRequest) {
+  const verification = resolveStaffSession(request);
+  if (!verification.valid) return null;
+  return verification;
 }
 
 export function setSessionCookie(response: NextResponse, sessionToken: string): void {

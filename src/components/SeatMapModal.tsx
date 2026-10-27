@@ -179,7 +179,9 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
       setLoading(true);
       setError(null);
       }
-      const res = await fetch(`/api/sessions/${activeSession.id}/seats?fresh=1`);
+      // First paint: use Redis/memory cache when warm; silent polls force fresh for strict multi-user holds
+      const qs = silent ? '?fresh=1' : '';
+      const res = await fetch(`/api/sessions/${activeSession.id}/seats${qs}`);
       if (!res.ok) {
         if (!silent) throw new Error('Failed to load seat layout');
         return;
@@ -216,11 +218,11 @@ export const SeatMapModal: React.FC<SeatMapModalProps> = ({
     fetchSessionSeats(false);
   }, [fetchSessionSeats]);
 
-  // Live sync: refresh seats so another user's hold greys out immediately (same as Android)
+  // Live sync: greys seats held by others (strict inventory)
   useEffect(() => {
     const poll = setInterval(() => {
       fetchSessionSeats(true);
-    }, 8000);
+    }, 5000);
     return () => clearInterval(poll);
   }, [fetchSessionSeats]);
 

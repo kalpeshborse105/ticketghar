@@ -28,11 +28,17 @@ import {
   cacheDel,
 } from './redis.ts';
 
-function getTicketSecret(): string {
-  return process.env.TICKET_SECRET || 'mahaticket_secure_signing_key_2026';
+function ticketSecret(): string {
+  return process.env.TICKET_SECRET?.trim() || 'mahaticket_secure_signing_key_2026';
 }
 
-const TICKET_SECRET = getTicketSecret();
+/** Call from payment/ticket request handlers — not at module import (breaks next build). */
+export function assertTicketSecretConfigured() {
+  if (process.env.NODE_ENV !== 'production') return;
+  if (!process.env.TICKET_SECRET?.trim()) {
+    throw new Error('TICKET_SECRET must be set in production');
+  }
+}
 const HOLD_DURATION_MINUTES = 5;
 export const CHECKOUT_HOLD_EXTENSION_MINUTES = 10;
 const MAX_SEATS_PER_BOOKING = 5;
@@ -70,6 +76,7 @@ export async function releaseSeatsHold(
         status: 'available',
         heldByUserId: null,
         holdExpiresAt: null,
+        orderId: null,
       })
       .where(and(...conditions))
       .returning({ id: seatInventory.id, seatId: seatInventory.seatId });
@@ -104,6 +111,7 @@ export async function releaseExpiredHolds(sessionId: number): Promise<number> {
         status: 'available',
         heldByUserId: null,
         holdExpiresAt: null,
+        orderId: null,
       })
       .where(
         and(
@@ -239,6 +247,7 @@ export async function createTemporarySeatHold(params: {
         status: 'available',
         heldByUserId: null,
         holdExpiresAt: null,
+        orderId: null,
       })
       .where(
         and(
@@ -292,6 +301,7 @@ export async function createTemporarySeatHold(params: {
       status: 'held',
         heldByUserId: holdToken,
       holdExpiresAt: expiresAt,
+      orderId: null,
     })
     .where(
       and(
@@ -578,7 +588,7 @@ export async function confirmBookingOrder(params: {
     }
   }
 
-  // 4. Update existing pending order OR create new authoritative Order
+  // 4. Resolve pending Razorpay order (preferred) or create a new row still pending seats
   let order: any = null;
   if (paymentDetails.razorpayOrderId) {
     const pendingOrders = await db
@@ -589,6 +599,7 @@ export async function confirmBookingOrder(params: {
 
     if (pendingOrders.length > 0) {
       const pending = pendingOrders[0];
+      // Record payment ids but do NOT mark confirmed until seats are booked
       const [updatedOrder] = await db
         .update(orders)
         .set({
@@ -597,7 +608,6 @@ export async function confirmBookingOrder(params: {
           userPhone,
           userName,
           paymentStatus: 'captured',
-          orderStatus: 'confirmed',
           razorpayPaymentId: paymentDetails.razorpayPaymentId || pending.razorpayPaymentId,
           updatedAt: new Date(),
         })
@@ -608,38 +618,43 @@ export async function confirmBookingOrder(params: {
   }
 
   if (!order) {
-  const randomSuffix = Math.floor(10000 + Math.random() * 90000);
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('Cannot confirm: missing pending Razorpay order binding.');
+    }
+    const randomSuffix = Math.floor(10000 + Math.random() * 90000);
     const orderNumber = `MT-${new Date().getFullYear()}-${randomSuffix}`;
 
     const [newOrder] = await db
-    .insert(orders)
-    .values({
-      orderNumber,
-      userId,
-      userEmail,
-      userPhone,
-      userName,
-      eventId,
-      sessionId,
+      .insert(orders)
+      .values({
+        orderNumber,
+        userId,
+        userEmail,
+        userPhone,
+        userName,
+        eventId,
+        sessionId,
         ticketCount: pricing.ticketCount || seatIds.length || 1,
-      ticketFaceValueTotal: pricing.ticketFaceValueTotal,
-      platformFeeTotal: pricing.platformFeeTotal,
-      taxTotal: pricing.taxTotal,
+        ticketFaceValueTotal: pricing.ticketFaceValueTotal,
+        platformFeeTotal: pricing.platformFeeTotal,
+        taxTotal: pricing.taxTotal,
         gatewayCostEstimate: pricing.gatewayCostEstimate || 0,
         discountTotal: pricing.discountTotal || 0,
-      grandTotal: pricing.grandTotal,
-      currency: 'INR',
-      paymentStatus: 'captured',
-      orderStatus: 'confirmed',
+        grandTotal: pricing.grandTotal,
+        currency: 'INR',
+        paymentStatus: 'captured',
+        orderStatus: 'pending',
         razorpayOrderId: paymentDetails.razorpayOrderId || null,
         razorpayPaymentId: paymentDetails.razorpayPaymentId || null,
-      idempotencyKey: paymentDetails.idempotencyKey || `idem_${orderNumber}`,
-    })
-    .returning();
+        idempotencyKey: paymentDetails.idempotencyKey || `idem_${orderNumber}`,
+      })
+      .returning();
     order = newOrder;
   }
 
-  // 5. Update seat inventory to 'booked' (never overwrite seats booked by another order)
+  // 5. Book seats ONLY if they are already bound to this order (set at checkout hold extend).
+  // Never steal another customer's held/available seat via ne(status,'booked').
+  const targetSeatIds = effectiveSeatIds.length > 0 ? effectiveSeatIds : seatIds;
   const bookedSeatUpdate = await db
     .update(seatInventory)
     .set({
@@ -651,18 +666,64 @@ export async function confirmBookingOrder(params: {
     .where(
       and(
         eq(seatInventory.sessionId, sessionId),
-        inArray(seatInventory.seatId, effectiveSeatIds.length > 0 ? effectiveSeatIds : seatIds),
-        or(
-          ne(seatInventory.status, 'booked'),
-          eq(seatInventory.orderId, order.id)
-        )
+        inArray(seatInventory.seatId, targetSeatIds),
+        eq(seatInventory.orderId, order.id),
+        or(eq(seatInventory.status, 'held'), eq(seatInventory.status, 'available'))
       )
     )
     .returning({ seatId: seatInventory.seatId });
 
-  if (bookedSeatUpdate.length < (effectiveSeatIds.length || seatIds.length)) {
-    throw new Error('Cannot confirm: one or more seats are no longer available.');
+  let bookedCount = bookedSeatUpdate.length;
+  if (bookedCount < targetSeatIds.length) {
+    // Late payment after hold expiry: reclaim only still-available unbound seats (never steal holds)
+    const reclaimed = await db
+      .update(seatInventory)
+      .set({
+        status: 'booked',
+        heldByUserId: null,
+        holdExpiresAt: null,
+        orderId: order.id,
+      })
+      .where(
+        and(
+          eq(seatInventory.sessionId, sessionId),
+          inArray(seatInventory.seatId, targetSeatIds),
+          eq(seatInventory.status, 'available'),
+          isNull(seatInventory.orderId)
+        )
+      )
+      .returning({ seatId: seatInventory.seatId });
+    bookedCount = (
+      await db
+        .select({ seatId: seatInventory.seatId })
+        .from(seatInventory)
+        .where(
+          and(
+            eq(seatInventory.sessionId, sessionId),
+            inArray(seatInventory.seatId, targetSeatIds),
+            eq(seatInventory.status, 'booked'),
+            eq(seatInventory.orderId, order.id)
+          )
+        )
+    ).length;
+    if (bookedCount < targetSeatIds.length) {
+      throw new Error('Cannot confirm: one or more seats are no longer available for this order.');
+    }
+    void reclaimed;
   }
+
+  // 5a. Only now mark the order confirmed (seats are booked)
+  const [confirmedOrder] = await db
+    .update(orders)
+    .set({
+      orderStatus: 'confirmed',
+      paymentStatus: 'captured',
+      razorpayPaymentId: paymentDetails.razorpayPaymentId || order.razorpayPaymentId,
+      updatedAt: new Date(),
+    })
+    .where(eq(orders.id, order.id))
+    .returning();
+  order = confirmedOrder || order;
 
   // 5b. Deduct available_quota in ticket_types for each booked seat
   for (const s of currentSeats) {
@@ -732,7 +793,7 @@ export async function confirmBookingOrder(params: {
     // Cryptographic signature: HMAC SHA256 of ticketCode + eventId + sessionId + seatCode
     const rawData = `${ticketCode}|${eventId}|${sessionId}|${s.seatCode}|${userName}`;
     const securityHash = crypto
-      .createHmac('sha256', TICKET_SECRET)
+            .createHmac('sha256', ticketSecret())
       .update(rawData)
       .digest('hex');
 
@@ -834,28 +895,34 @@ export async function confirmBookingOrder(params: {
     }
   }
 
-  // 9. Do NOT auto-email on booking confirm.
-  // PDF email is user-triggered only (TicketPassModal / MahaTicketPass / BookingConfirmed "Email PDF").
-  // Set BOOKING_AUTO_EMAIL=1 only if ops explicitly want post-payment mail again.
-  if (
-    process.env.BOOKING_AUTO_EMAIL === '1' &&
-    generatedTickets.length > 0 &&
-    userEmail
-  ) {
+  // 9. Send confirmation email ONCE after booking (PDF attached). My Tickets open must NOT re-send.
+  // Resend only via Mail icon. Opt-out: BOOKING_AUTO_EMAIL=0
+  const autoEmailOff = process.env.BOOKING_AUTO_EMAIL === '0';
+  if (!autoEmailOff && generatedTickets.length > 0 && userEmail) {
     try {
-      const emailResult = await Promise.race([
-        sendBookingTicketEmail({
-          ticketCode: generatedTickets[0].ticketCode,
-          recipientEmail: userEmail,
-        }),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 18000)),
-      ]);
-      if (!emailResult) {
-        console.warn('[Booking] Email dispatch timed out after 18s (PDF may be missing)');
-      } else if (!emailResult.attached) {
-        console.warn('[Booking] Email sent without PDF attachment:', emailResult.message || emailResult.error);
-      } else {
-        console.log('[Booking] Email+PDF attached OK:', emailResult.recipient);
+      const [stamp] = await db
+        .select({ emailSentAt: orders.emailSentAt })
+        .from(orders)
+        .where(eq(orders.id, order.id))
+        .limit(1);
+      if (!stamp?.emailSentAt) {
+        const emailResult = await Promise.race([
+          sendBookingTicketEmail({
+            ticketCode: generatedTickets[0].ticketCode,
+            recipientEmail: userEmail,
+          }),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 18000)),
+        ]);
+        if (!emailResult) {
+          console.warn('[Booking] Email dispatch timed out after 18s (PDF may be missing)');
+        } else if (!emailResult.attached) {
+          console.warn(
+            '[Booking] Email sent without PDF attachment:',
+            emailResult.message || emailResult.error
+          );
+        } else {
+          console.log('[Booking] Email+PDF attached OK (first send):', emailResult.recipient);
+        }
       }
     } catch (emailErr) {
       console.warn('[Booking] Email dispatch error:', emailErr);

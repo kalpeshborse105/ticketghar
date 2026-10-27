@@ -57,18 +57,30 @@ export async function resolveApiBase(): Promise<string> {
     return storedOk;
   }
 
-  // In development, check if the emulator loopback (10.0.2.2:3000) is running
+  // Dev / Metro builds: prefer LAN so phone matches localhost admin data.
+  // Release APK: use production so catalog matches the live site (deploy required for API changes).
   if (__DEV__) {
-    try {
-      const devRes = await fetch('http://10.0.2.2:3000/api/health', {
-        signal: typeof (AbortSignal as any).timeout === 'function' ? (AbortSignal as any).timeout(500) : undefined,
-      });
-      if (devRes.ok) {
-        resolvedBase = 'http://10.0.2.2:3000';
-        return resolvedBase;
+    const localCandidates = [
+      'http://10.0.2.2:3000',
+      'http://192.168.31.154:3000',
+      'http://127.0.0.1:3000',
+    ];
+    for (const url of localCandidates) {
+      try {
+        const localRes = await fetch(`${url}/api/health`, {
+          signal:
+            typeof (AbortSignal as any).timeout === 'function'
+              ? (AbortSignal as any).timeout(900)
+              : undefined,
+        });
+        if (localRes.ok) {
+          resolvedBase = url;
+          await AsyncStorage.setItem(STORAGE_KEY, url).catch(() => null);
+          return resolvedBase;
+        }
+      } catch {
+        // try next
       }
-    } catch {
-      // Dev server not on 10.0.2.2:3000, fallback to prod
     }
   }
 
@@ -190,7 +202,7 @@ async function request<T>(
         Accept: 'application/json',
         'Content-Type': 'application/json',
         'X-App-Platform': 'android',
-        'X-App-Version': '1.0.0',
+        'X-App-Version': '1.0.25',
         'X-Correlation-Id': correlationId,
         ...authHeaders,
         ...(init?.headers || {}),
@@ -912,7 +924,7 @@ export const api = {
       throw new ApiError('Session not found', 404);
     }
     const q = opts?.fresh ? '?fresh=1' : '';
-    const timeout = opts?.timeoutMs ?? 22000;
+    const timeout = opts?.timeoutMs ?? (opts?.fresh ? 14000 : 10000);
     const correlationId = opts?.correlationId || `seat_${sessionId}_${Date.now()}`;
     try {
       const data = await request<{
@@ -1284,7 +1296,7 @@ export const api = {
         scannerOrganizerId: scope?.scannerOrganizerId || null,
         requireScope: true,
       }),
-      timeout: 20000,
+      timeout: 12000,
     });
 
     if (serverRes && typeof serverRes.valid === 'boolean') {

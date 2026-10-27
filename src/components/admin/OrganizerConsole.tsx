@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Calendar,
   Building2,
@@ -20,7 +20,6 @@ import {
   Sparkles,
   MapPin,
   HelpCircle,
-  Repeat,
   Download
 } from 'lucide-react';
 import { Language } from '../../lib/i18n.ts';
@@ -63,15 +62,28 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
   const [activeTab, setActiveTab] = useState<'overview' | 'shows' | 'bookings' | 'scanner' | 'seats'>('overview');
   const [bookingSearch, setBookingSearch] = useState('');
   const [selectedEventFilter, setSelectedEventFilter] = useState<string>('all');
-  const [selectedOrg, setSelectedOrg] = useState('श्री चिंतामणी थिएटर्स, पुणे');
   const [showOrgModal, setShowOrgModal] = useState(false);
+  const [districtsCatalog, setDistrictsCatalog] = useState<any[]>([]);
+  const [citiesCatalog, setCitiesCatalog] = useState<any[]>([]);
+  const [formDistrictId, setFormDistrictId] = useState('');
+  const [formCityName, setFormCityName] = useState('');
+  const [venueSearchInForm, setVenueSearchInForm] = useState('');
+  const [gaFallbackPrice, setGaFallbackPrice] = useState(350);
+  const [venuePricePreview, setVenuePricePreview] = useState<{
+    loading: boolean;
+    sections: { id: number; name: string; nameMr?: string; basePrice: number; seatCount: number }[];
+  }>({ loading: false, sections: [] });
+  const [venuePriceRefreshKey, setVenuePriceRefreshKey] = useState(0);
 
-  const availableOrgs = [
-    { name: 'श्री चिंतामणी थिएटर्स, पुणे', id: 'org_1', verified: true, activeShows: 3 },
-    { name: 'अश्विनी थिएटर्स, मुंबई', id: 'org_2', verified: true, activeShows: 2 },
-    { name: 'नाट्यसंपदा कला मंच, कोथरूड', id: 'org_3', verified: true, activeShows: 4 },
-    { name: 'महाराष्ट्र राज्य रंगभूमी अकादमी', id: 'org_4', verified: true, activeShows: 1 },
-  ];
+  const orgDisplayName =
+    currentUser?.companyName ||
+    currentUser?.organizationName ||
+    currentUser?.organizerName ||
+    currentUser?.fullName ||
+    (mr ? 'माझी संस्था' : 'My organization');
+  const orgVerified =
+    (currentUser?.verificationStatus || currentUser?.organizerVerificationStatus || '')
+      .toLowerCase() === 'verified' || currentUser?.verified === true;
 
   const exportBookingsCsv = () => {
     if (!ordersList.length) {
@@ -104,8 +116,7 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
   const [eventTitleMr, setEventTitleMr] = useState('');
   const [eventTitleEn, setEventTitleEn] = useState('');
   const [eventCategory, setEventCategory] = useState('plays');
-  const [eventBasePrice, setEventBasePrice] = useState<number>(300);
-  const [eventVenueId, setEventVenueId] = useState<number>(1);
+  const [eventVenueId, setEventVenueId] = useState<number>(0);
   const [isProcessing, setIsProcessing] = useState(false);
 
   const triggerToast = (msg: string) => {
@@ -143,10 +154,12 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
         if (Array.isArray(evData.events)) setEventsList(evData.events);
       }
 
-      const [ordersRes, settlementsRes, venuesRes] = await Promise.all([
+      const [ordersRes, settlementsRes, venuesRes, distRes, cityRes] = await Promise.all([
         fetch('/api/admin/orders', { credentials: 'include' }),
         fetch('/api/admin/settlements', { credentials: 'include' }),
-        fetch('/api/admin/venues', { credentials: 'include' }),
+        fetch('/api/admin/venues?scope=all', { credentials: 'include' }),
+        fetch('/api/locations/districts', { credentials: 'include' }),
+        fetch('/api/locations/cities', { credentials: 'include' }),
       ]);
 
       if (venuesRes.ok) {
@@ -155,6 +168,14 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
           setVenuesList(vnData.venues);
           setVenueForDesigner(vnData.venues[0]);
         }
+      }
+      if (distRes.ok) {
+        const distData = await distRes.json();
+        if (Array.isArray(distData.districts)) setDistrictsCatalog(distData.districts);
+      }
+      if (cityRes.ok) {
+        const cityData = await cityRes.json();
+        if (Array.isArray(cityData.cities)) setCitiesCatalog(cityData.cities);
       }
 
       if (ordersRes.ok) {
@@ -177,6 +198,41 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
     void fetchOrganizerData();
   }, []);
 
+  useEffect(() => {
+    if (!showAddEventModal || !eventVenueId) {
+      setVenuePricePreview({ loading: false, sections: [] });
+      return;
+    }
+    let cancelled = false;
+    setVenuePricePreview((p) => ({ ...p, loading: true }));
+    void (async () => {
+      try {
+        const res = await fetch(`/api/admin/venues?id=${eventVenueId}`, {
+          credentials: 'include',
+        });
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        const venue = data.venue || data.venues?.[0];
+        const sectionsRaw = Array.isArray(venue?.sections) ? venue.sections : [];
+        const sections = sectionsRaw.map((sec: any) => ({
+          id: Number(sec.id),
+          name: String(sec.name || ''),
+          nameMr: sec.nameMr ? String(sec.nameMr) : undefined,
+          basePrice: Math.round(Number(sec.basePrice || 0) / 100),
+          seatCount: Array.isArray(sec.seats)
+            ? sec.seats.length
+            : Number(sec.rowsCount || 0) * Number(sec.colsCount || 0),
+        }));
+        if (!cancelled) setVenuePricePreview({ loading: false, sections });
+      } catch {
+        if (!cancelled) setVenuePricePreview({ loading: false, sections: [] });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showAddEventModal, eventVenueId, venuePriceRefreshKey]);
+
   // Compute live business metrics from database records
   const totalRevenue = ordersList.reduce((sum, o) => sum + (o.grandTotal || 0), 0);
   const ticketsSold = ordersList.reduce((sum, o) => sum + (o.ticketCount || 0), 0);
@@ -197,10 +253,9 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
     e.preventDefault();
     if (!eventTitleMr.trim()) return;
 
-    const eligibleVenues = venuesList.filter((v: any) => v.eligibleForEvents === true);
-    const selectedVenue = eligibleVenues.find((v) => v.id === Number(eventVenueId));
+    const selectedVenue = venuesList.find((v: any) => v.id === Number(eventVenueId));
     if (!selectedVenue) {
-      triggerToast('कृपया प्रमाणित नवीन नाट्यगृह निवडा (Select an eligible theatre)');
+      triggerToast(mr ? 'कृपया नाट्यगृह निवडा' : 'Please select a theatre');
       return;
     }
 
@@ -214,7 +269,9 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
           titleMr: eventTitleMr.trim(),
           category: eventCategory,
           venueId: selectedVenue.id,
-          ticketPrice: eventBasePrice * 100,
+          ...(venuePricePreview.sections.length === 0
+            ? { ticketPrice: Math.round(gaFallbackPrice * 100) }
+            : {}),
           // Always create a showtime so public Book → seats works (BMS flow)
           sessionStartTime: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
           status: 'submitted',
@@ -252,8 +309,29 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
       {viewingEvent && (
         <AdminEventDetailModal
           event={viewingEvent as any}
+          relatedEvents={eventsList as any}
+          venues={venuesList as any}
           language={language}
           onClose={() => setViewingEvent(null)}
+          onRefresh={() => {
+            void (async () => {
+              try {
+                const eventsRes = await fetch('/api/admin/events', { credentials: 'include' });
+                if (eventsRes.ok) {
+                  const data = await eventsRes.json();
+                  if (Array.isArray(data.events)) {
+                    setEventsList(data.events);
+                    const updated = data.events.find(
+                      (e: EventItem) => Number(e.id) === Number(viewingEvent.id)
+                    );
+                    if (updated) setViewingEvent(updated);
+                  }
+                }
+              } catch {
+                /* ignore */
+              }
+            })();
+          }}
         />
       )}
 
@@ -262,7 +340,7 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
         {dataLoading && (
           <div className="rounded-xl border border-orange-100 bg-orange-50/80 px-3 py-2 text-[11px] font-semibold text-[#A33900] flex items-center gap-2">
             <span className="w-3.5 h-3.5 border-2 border-[#A33900] border-t-transparent rounded-full animate-spin" />
-            {mr ? 'आयोजक डेटा DB मधून लोड होत आहे…' : 'Loading organizer data from DB…'}
+            {mr ? 'आयोजक डेटा लोड होत आहे…' : 'Loading organizer data…'}
           </div>
         )}
         {/* Producer Welcome & Status Banner */}
@@ -277,9 +355,24 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
                   नमस्कार, {currentUser?.fullName || 'नाट्य निर्माते'}
                 </h2>
                 <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className="w-2 h-2 rounded-full bg-[#16A34A] animate-pulse inline-block"></span>
-                  <span className="text-xs text-[#16A34A] font-bold truncate max-w-[220px]">
-                    {selectedOrg}
+                  <span
+                    className={`w-2 h-2 rounded-full inline-block ${
+                      orgVerified ? 'bg-[#16A34A]' : 'bg-amber-500'
+                    }`}
+                  />
+                  <span
+                    className={`text-xs font-bold truncate max-w-[220px] ${
+                      orgVerified ? 'text-[#16A34A]' : 'text-amber-700'
+                    }`}
+                  >
+                    {orgDisplayName}
+                    {orgVerified
+                      ? mr
+                        ? ' · प्रमाणित'
+                        : ' · Verified'
+                      : mr
+                        ? ' · तपासणीत'
+                        : ' · Pending'}
                   </span>
                 </div>
               </div>
@@ -288,22 +381,23 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
             <button
               onClick={() => setShowOrgModal(true)}
               className="px-3 h-9 rounded-xl bg-[#E1E8FD] text-[#141B2B] flex items-center gap-1.5 hover:bg-[#DCE2F7] active:scale-95 transition shrink-0 text-xs font-bold"
-              title="संस्था बदला"
+              title={mr ? 'संस्था माहिती' : 'Organization'}
             >
-              <Repeat className="w-3.5 h-3.5 text-[#EA580C]" />
-              <span className="hidden sm:inline">संस्था बदला</span>
+              <Building2 className="w-3.5 h-3.5 text-[#EA580C]" />
+              <span className="hidden sm:inline">{mr ? 'संस्था' : 'Org'}</span>
             </button>
           </div>
 
-          {/* Festival Window Banner */}
-          <div className="bg-[#FFF7ED] rounded-xl p-3 mt-3 flex items-center justify-between border border-[#FFEDD5]">
-            <div className="flex items-center gap-2">
-              <span className="text-base text-[#AC3400]">📢</span>
-              <span className="text-xs font-bold text-[#AC3400]">
-                पुणे नाट्य महोत्सव विशेष विंडो सुरू आहे
+          <div className="bg-slate-50 rounded-xl p-3 mt-3 flex items-center justify-between border border-slate-100">
+            <div className="flex items-center gap-2 min-w-0">
+              <Calendar className="w-4 h-4 text-[#A33900] shrink-0" />
+              <span className="text-xs font-bold text-slate-700 truncate">
+                {mr ? 'सक्रिय शोज' : 'Active shows'}: {eventsList.length}
               </span>
             </div>
-            <span className="text-xs font-extrabold text-[#A33900]">थेट आकडेवारी</span>
+            <span className="text-xs font-extrabold text-[#A33900] shrink-0">
+              {mr ? 'थेट DB' : 'Live DB'}
+            </span>
           </div>
         </div>
 
@@ -863,29 +957,17 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
 
         {/* 3. LIVE GATE SCANNER TAB */}
         {activeTab === 'scanner' && (
-          <div className="space-y-4">
-            <div className="bg-white p-4 rounded-2xl border border-[#E2E8F0] shadow-xs">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <h3 className="text-base font-black text-[#141B2B]">थेट गेट तिकीट स्कॅनर (Live Gate QR Scanner)</h3>
-                  <p className="text-xs text-[#64748B]">कॅमेरा समोर ग्राहकाचे डिजिटल QR M-Ticket धरा, सिस्टीम त्वरित व्हेरिफाय करेल</p>
-                </div>
-                <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span>
-                  कॅमेरा सज्ज
-                </span>
-              </div>
-
-              <AdminScanner
-                scannerUserId={currentUser?.id || 1}
-                scannerOrganizerId={numericOrganizerId}
-                events={eventsList as any}
-                initialGateName="मुख्य प्रवेशद्वार (Gate 1)"
-                onTicketVerified={(ticket) => {
-                  triggerToast(`✓ तिकीट ${ticket?.code || ''} यशस्वीरित्या प्रमाणित!`);
-                }}
-              />
-            </div>
+          <div className="fixed inset-0 z-[80] bg-[#0B1220]">
+            <AdminScanner
+              scannerUserId={currentUser?.id || 1}
+              scannerOrganizerId={numericOrganizerId}
+              events={eventsList as any}
+              initialGateName="मुख्य प्रवेशद्वार (Gate 1)"
+              onClose={() => setActiveTab('dashboard')}
+              onTicketVerified={(ticket) => {
+                triggerToast(`✓ तिकीट ${ticket?.code || ''} यशस्वीरित्या प्रमाणित!`);
+              }}
+            />
           </div>
         )}
 
@@ -1026,48 +1108,167 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="font-bold text-[#141B2B] block mb-1">श्रेणी</label>
-                  <select
-                    value={eventCategory}
-                    onChange={e => setEventCategory(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-[#E2E8F0] bg-white"
-                  >
-                    <option value="plays">नाटक (Plays)</option>
-                    <option value="music">संगीत (Music)</option>
-                    <option value="comedy">हास्य (Comedy)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="font-bold text-[#141B2B] block mb-1">तिकीट दर पासून (₹)</label>
-                  <input
-                    type="number"
-                    value={eventBasePrice}
-                    onChange={e => setEventBasePrice(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-xl border border-[#E2E8F0]"
-                  />
-                </div>
-              </div>
-
               <div>
-                <label className="font-bold text-[#141B2B] block mb-1">नाट्यगृह (नवीन प्रमाणित)</label>
+                <label className="font-bold text-[#141B2B] block mb-1">श्रेणी</label>
                 <select
-                  value={eventVenueId || ''}
-                  onChange={e => setEventVenueId(Number(e.target.value) || 0)}
-                  required
+                  value={eventCategory}
+                  onChange={(e) => setEventCategory(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl border border-[#E2E8F0] bg-white"
                 >
-                  <option value="">— नाट्यगृह निवडा —</option>
+                  <option value="plays">नाटक (Plays)</option>
+                  <option value="music">संगीत (Music)</option>
+                  <option value="comedy">हास्य (Comedy)</option>
+                  <option value="movies">चित्रपट (Movies)</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="font-bold text-[#141B2B] block">
+                  {mr ? 'नाट्यगृह निवडा' : 'Select theatre'}
+                  <span className="ml-1 font-medium text-slate-500">
+                    ({venuesList.length || 0})
+                  </span>
+                </label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <select
+                    value={formDistrictId}
+                    onChange={(e) => {
+                      setFormDistrictId(e.target.value);
+                      setFormCityName('');
+                      setEventVenueId(0);
+                    }}
+                    className="w-full px-3 py-2 rounded-xl border border-[#E2E8F0] bg-white"
+                  >
+                    <option value="">{mr ? 'जिल्हा' : 'District'}</option>
+                    {districtsCatalog.map((d: any) => (
+                      <option key={d.id} value={String(d.id)}>
+                        {mr ? d.nameMr || d.name : d.name || d.nameMr}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={formCityName}
+                    onChange={(e) => {
+                      setFormCityName(e.target.value);
+                      setEventVenueId(0);
+                    }}
+                    className="w-full px-3 py-2 rounded-xl border border-[#E2E8F0] bg-white"
+                  >
+                    <option value="">{mr ? 'शहर' : 'City'}</option>
+                    {citiesCatalog
+                      .filter(
+                        (c: any) =>
+                          !formDistrictId || String(c.districtId) === String(formDistrictId)
+                      )
+                      .map((c: any) => (
+                        <option key={c.id} value={c.name}>
+                          {mr ? c.nameMr || c.name : c.name || c.nameMr}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                <input
+                  type="search"
+                  value={venueSearchInForm}
+                  onChange={(e) => setVenueSearchInForm(e.target.value)}
+                  placeholder={mr ? 'नाव / पत्ता शोधा…' : 'Search name / address…'}
+                  className="w-full px-3 py-2 rounded-xl border border-[#E2E8F0]"
+                />
+                <select
+                  value={eventVenueId || ''}
+                  onChange={(e) => setEventVenueId(Number(e.target.value) || 0)}
+                  required
+                  size={6}
+                  className="w-full px-3 py-2 rounded-xl border border-[#E2E8F0] bg-white"
+                >
+                  <option value="">{mr ? '— नाट्यगृह निवडा —' : '— Select theatre —'}</option>
                   {venuesList
-                    .filter((v: any) => v.eligibleForEvents === true)
+                    .filter((v: any) => {
+                      if (formDistrictId && String(v.districtId ?? '') !== String(formDistrictId))
+                        return false;
+                      if (formCityName) {
+                        const city = String(v.cityName || v.city || '').toLowerCase();
+                        const want = formCityName.toLowerCase();
+                        if (city !== want && !city.includes(want)) return false;
+                      }
+                      const q = venueSearchInForm.trim().toLowerCase();
+                      if (!q) return true;
+                      return (
+                        String(v.nameMr || '').toLowerCase().includes(q) ||
+                        String(v.name || '').toLowerCase().includes(q) ||
+                        String(v.city || '').toLowerCase().includes(q) ||
+                        String(v.address || '').toLowerCase().includes(q)
+                      );
+                    })
                     .map((v: any) => (
                       <option key={v.id} value={v.id}>
-                        {v.nameMr || v.name} ({v.cityName || v.city})
+                        {mr ? v.nameMr || v.name : v.name || v.nameMr} — {v.cityName || v.city}
                       </option>
                     ))}
                 </select>
               </div>
+
+              {eventVenueId ? (
+                <div className="rounded-xl border border-[#E2E8F0] bg-slate-50 p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-bold text-[#141B2B]">
+                        {mr ? 'विभागनिहाय तिकीट दर' : 'Section ticket prices'}
+                      </p>
+                      <p className="text-[10px] text-slate-500">
+                        {mr
+                          ? 'दर सीट नकाशामधून येतात'
+                          : 'Prices come from the theatre seat map'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const v = venuesList.find((x: any) => x.id === Number(eventVenueId));
+                        if (v) void openVenueDesigner(v);
+                      }}
+                      className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#A33900] text-white text-[11px] font-bold"
+                    >
+                      <Armchair className="w-3.5 h-3.5" />
+                      {mr ? 'दर बदला' : 'Edit prices'}
+                    </button>
+                  </div>
+                  {venuePricePreview.loading ? (
+                    <p className="text-[11px] text-slate-500">
+                      {mr ? 'लोड…' : 'Loading…'}
+                    </p>
+                  ) : venuePricePreview.sections.length > 0 ? (
+                    <ul className="space-y-1">
+                      {venuePricePreview.sections.map((sec) => (
+                        <li
+                          key={sec.id}
+                          className="flex justify-between gap-2 text-[11px] bg-white border border-slate-100 rounded-lg px-2.5 py-1.5"
+                        >
+                          <span className="font-semibold truncate">
+                            {mr ? sec.nameMr || sec.name : sec.name || sec.nameMr}
+                          </span>
+                          <span className="font-mono font-bold text-[#A33900]">
+                            ₹{sec.basePrice.toLocaleString('en-IN')}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <label className="block text-[11px] font-bold text-slate-700">
+                      {mr ? 'सामान्य प्रवेश दर (₹)' : 'GA price (₹)'}
+                      <input
+                        type="number"
+                        min={1}
+                        value={gaFallbackPrice}
+                        onChange={(e) =>
+                          setGaFallbackPrice(Math.max(1, Number(e.target.value) || 1))
+                        }
+                        className="mt-1 w-full px-3 py-2 rounded-xl border border-[#E2E8F0] text-xs bg-white"
+                      />
+                    </label>
+                  )}
+                </div>
+              ) : null}
 
               <button
                 type="submit"
@@ -1079,18 +1280,6 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
             </form>
           </div>
         </div>
-      )}
-
-      {/* Seat Designer Modal */}
-      {showSeatDesigner && venueForDesigner && (
-        <TheatreSeatDesigner
-          venueToEdit={venueForDesigner}
-          onClose={() => setShowSeatDesigner(false)}
-          onSaved={() => {
-            setShowSeatDesigner(false);
-            triggerToast('✓ आसन रचना व दर जतन करण्यात आले!');
-          }}
-        />
       )}
 
       {/* Camera Scanner Modal */}
@@ -1117,14 +1306,16 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
         </div>
       )}
 
-      {/* Organization Switcher Modal */}
+      {/* Organization info (session — no fake multi-org switcher) */}
       {showOrgModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-5 relative shadow-2xl space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <div className="flex items-center gap-2">
-                <span className="text-xl">🎭</span>
-                <h3 className="text-base font-black text-[#141B2B]">नाट्य संस्था निवडा</h3>
+                <Building2 className="w-5 h-5 text-[#A33900]" />
+                <h3 className="text-base font-black text-[#141B2B]">
+                  {mr ? 'संस्था माहिती' : 'Organization'}
+                </h3>
               </div>
               <button
                 onClick={() => setShowOrgModal(false)}
@@ -1134,52 +1325,52 @@ export const OrganizerConsole: React.FC<OrganizerConsoleProps> = ({
               </button>
             </div>
 
-            <p className="text-xs text-[#64748B]">
-              आपल्या खात्याशी जोडलेली सक्रिय नाट्य संस्था निवडा. निवडलेल्या संस्थेनुसार सर्व शोज, महसूल व बुकिंग्ज अद्ययावत होतील:
-            </p>
-
-            <div className="space-y-2">
-              {availableOrgs.map((org) => {
-                const isSelected = selectedOrg === org.name;
-                return (
-                  <button
-                    key={org.id}
-                    onClick={() => {
-                      setSelectedOrg(org.name);
-                      setShowOrgModal(false);
-                      triggerToast(`✓ सक्रिय संस्था: "${org.name}" सेट केली!`);
-                    }}
-                    className={`w-full text-left p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
-                      isSelected
-                        ? 'border-[#EA580C] bg-[#FFF7ED]'
-                        : 'border-[#E2E8F0] hover:border-slate-300 bg-white'
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold text-[#141B2B]">{org.name}</span>
-                        {org.verified && (
-                          <span className="text-[10px] bg-emerald-100 text-[#16A34A] px-2 py-0.5 rounded-full font-bold">
-                            प्रमाणित ✓
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-xs text-[#64748B] mt-0.5 block">
-                        {org.activeShows} सक्रिय शोज चालू आहेत
-                      </span>
-                    </div>
-
-                    <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${
-                      isSelected ? 'border-[#EA580C] bg-[#EA580C]' : 'border-slate-300'
-                    }`}>
-                      {isSelected && <span className="w-2 h-2 rounded-full bg-white" />}
-                    </div>
-                  </button>
-                );
-              })}
+            <div className="rounded-2xl border border-[#E2E8F0] bg-slate-50 p-4 space-y-2">
+              <p className="text-sm font-bold text-[#141B2B]">{orgDisplayName}</p>
+              <p className="text-xs text-slate-600">
+                {mr ? 'आयोजक ID' : 'Organizer ID'}:{' '}
+                <span className="font-mono">{numericOrganizerId ?? '—'}</span>
+              </p>
+              <p className="text-xs text-slate-600">
+                {orgVerified
+                  ? mr
+                    ? 'स्थिती: प्रमाणित'
+                    : 'Status: Verified'
+                  : mr
+                    ? 'स्थिती: तपासणीत / अपुष्ट'
+                    : 'Status: Pending / unverified'}
+              </p>
+              <p className="text-xs text-slate-600">
+                {mr ? 'सक्रिय शोज' : 'Shows'}: {eventsList.length}
+              </p>
+              {currentUser?.email ? (
+                <p className="text-xs text-slate-500 truncate">{currentUser.email}</p>
+              ) : null}
             </div>
+            <p className="text-[11px] text-slate-500">
+              {mr
+                ? 'एक लॉगिन = एक संस्था. शोज, बुकिंग व स्कॅनर या खात्याशी जोडलेले आहेत.'
+                : 'One login maps to one organization. Shows, bookings and scanner use this account.'}
+            </p>
           </div>
         </div>
+      )}
+
+      {/* Seat Designer — above Add Event (z-[90]) */}
+      {showSeatDesigner && venueForDesigner && (
+        <TheatreSeatDesigner
+          venueToEdit={venueForDesigner}
+          onClose={() => setShowSeatDesigner(false)}
+          onSaved={(_v: any, meta?: { layoutLocked?: boolean; warning?: string }) => {
+            setShowSeatDesigner(false);
+            setVenuePriceRefreshKey((k) => k + 1);
+            triggerToast(
+              meta?.layoutLocked && meta.warning
+                ? `✓ जतन · ${meta.warning}`
+                : '✓ आसन रचना व दर जतन करण्यात आले!'
+            );
+          }}
+        />
       )}
     </div>
   );

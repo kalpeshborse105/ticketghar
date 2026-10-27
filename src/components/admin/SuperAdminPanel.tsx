@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ShieldCheck,
   Calendar,
@@ -73,7 +73,6 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
 
   // Approval queue
   const [pendingApproval, setPendingApproval] = useState<boolean>(true);
-  const [approvalDecision, setApprovalDecision] = useState<'pending' | 'approved' | 'changes' | 'rejected'>('pending');
 
   // Scanner & Designer modals
   const [showScannerModal, setShowScannerModal] = useState<boolean>(false);
@@ -87,7 +86,20 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
   const [eventTitleEn, setEventTitleEn] = useState('');
   const [eventCategory, setEventCategory] = useState('plays');
   const [eventVenueId, setEventVenueId] = useState<number>(0);
-  const [eventBasePrice, setEventBasePrice] = useState<number>(300);
+  /** Only used when selected theatre has no seat sections (GA fallback) */
+  const [gaFallbackPrice, setGaFallbackPrice] = useState<number>(350);
+  const [venuePricePreview, setVenuePricePreview] = useState<{
+    loading: boolean;
+    hasSeatLayout: boolean;
+    sections: {
+      id: number;
+      name: string;
+      nameMr?: string;
+      basePrice: number;
+      seatCount: number;
+    }[];
+  }>({ loading: false, hasSeatLayout: false, sections: [] });
+  const [venuePriceRefreshKey, setVenuePriceRefreshKey] = useState(0);
   const [eventBadge, setEventBadge] = useState<string>('हाऊसफुल्ल');
   const [eventDescriptionMr, setEventDescriptionMr] = useState('');
   const [eventPosterUrl, setEventPosterUrl] = useState('');
@@ -95,6 +107,8 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
   const [imageUploading, setImageUploading] = useState(false);
   const [imageUploadError, setImageUploadError] = useState<string | null>(null);
   const [venueSearchInForm, setVenueSearchInForm] = useState('');
+  const [formDistrictId, setFormDistrictId] = useState('');
+  const [formCityName, setFormCityName] = useState('');
 
   // Venue Master Directory Filters & Import State
   const [venueSearch, setVenueSearch] = useState('');
@@ -103,10 +117,10 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
   const [venueStatusFilter, setVenueStatusFilter] = useState('all');
   const [venueLayoutFilter, setVenueLayoutFilter] = useState('all');
   const [venueMappedFilter, setVenueMappedFilter] = useState<'all' | 'mapped' | 'unmapped'>('all');
-  /** Inventory scope — default authoritative so new theatres are not buried in 66 cards */
+  /** Inventory scope — default all 409 theatres in catalogue */
   const [venueScopeFilter, setVenueScopeFilter] = useState<
     'authoritative' | 'eligible' | 'all' | 'unverified' | 'retired' | 'unmapped'
-  >('authoritative');
+  >('all');
   const [districtsCatalog, setDistrictsCatalog] = useState<any[]>([]);
   const [citiesCatalog, setCitiesCatalog] = useState<any[]>([]);
   const [venuesFetchError, setVenuesFetchError] = useState<string | null>(null);
@@ -240,7 +254,7 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
     setEventTitleEn(ev.title);
     setEventCategory(ev.category);
     setEventVenueId(ev.venueId);
-    setEventBasePrice((ev.minPrice || 30000) / 100);
+    setGaFallbackPrice(Math.max(1, Math.round((ev.minPrice || 35000) / 100)));
     setEventBadge(ev.tag || 'हाऊसफुल्ल');
     setEventDescriptionMr(ev.descriptionMr || '');
     setEventPosterUrl(ev.posterUrl || '');
@@ -254,8 +268,10 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
       setEventGalleryUrls([]);
     }
     setVenueSearchInForm('');
+    setFormDistrictId(ev.venue?.districtId ? String((ev.venue as any).districtId) : '');
+    setFormCityName((ev.venue as any)?.cityName || ev.venue?.city || '');
     setImageUploadError(null);
-    void fetchAllData();
+    void fetchVenuesBundle(true, 'all');
     setShowAddEventModal(true);
   };
 
@@ -323,7 +339,11 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
         fetch('/api/locations/cities', { credentials: 'include' }),
       ]);
       if (!venuesRes.ok) {
-        setVenuesFetchError(`Venues API ${venuesRes.status} — empty list (no demo fallback)`);
+        setVenuesFetchError(
+          mr
+            ? `नाट्यगृह यादी लोड अयशस्वी (${venuesRes.status})`
+            : `Theatre list failed (${venuesRes.status})`
+        );
         setVenuesList([]);
         setVenuesMeta({});
       } else {
@@ -333,7 +353,9 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
           setVenuesList(vnData.venues);
           if (vnData.venues.length === 0 && scope === 'authoritative') {
             setVenuesFetchError(
-              'Authoritative theatres (55,56,59–66) not returned — check data/authoritative_theatres.json and DB'
+              mr
+                ? 'नवीन अधिकृत नाट्यगृह यादी रिकामी — रिफ्रेश करा'
+                : 'Featured theatre list empty — refresh'
             );
           }
           const firstAuth =
@@ -356,7 +378,9 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
       loadedTabsRef.current.add('venues');
     } catch (err) {
       console.warn('Venues fetch error:', err);
-      setVenuesFetchError('Network error loading venues — empty list (no demo data)');
+      setVenuesFetchError(
+        mr ? 'नाट्यगृह यादी नेटवर्क त्रुटी' : 'Network error loading theatres'
+      );
       setVenuesList([]);
     } finally {
       setTabLoading(null);
@@ -533,7 +557,10 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
     }
   };
 
-  const pendingEvent = eventsList.find(e => e.status === 'submitted' || e.status === 'draft') || eventsList[0];
+  const pendingApprovals = eventsList.filter(
+    (e) => e.status === 'submitted' || e.status === 'draft'
+  );
+  const pendingEvent = pendingApprovals[0] || null;
 
   const handleApprove = async () => {
     if (!pendingEvent) return;
@@ -549,7 +576,6 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
         }),
       });
       if (res.ok) {
-        setApprovalDecision('approved');
         triggerToast(`✓ "${pendingEvent.titleMr || pendingEvent.title}" अधिकृतपणे मंजूर झाला व विक्री सुरू झाली!`);
         fetchAllData();
       } else {
@@ -576,7 +602,6 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
         }),
       });
       if (res.ok) {
-        setApprovalDecision('changes');
         triggerToast(`सुधारणा नोटीस आयोजकांना पाठवली आहे.`);
         fetchAllData();
       }
@@ -610,7 +635,6 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
         }),
       });
       if (res.ok) {
-        setApprovalDecision('rejected');
         triggerToast('हा प्रयोग नाकारण्यात आला आहे.');
         fetchAllData();
       }
@@ -657,11 +681,13 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
 
     setIsProcessing(true);
     try {
-      const selectedVenue = venuesList.find(
-        (v: any) => v.id === Number(eventVenueId) && v.eligibleForEvents === true
-      );
+      const selectedVenue = venuesList.find((v: any) => v.id === Number(eventVenueId));
       if (!selectedVenue) {
-        triggerToast('वैध नवीन नाट्यगृह निवडा — ड्रॉपडाउन रिफ्रेश करा');
+        triggerToast(
+          mr
+            ? 'नाट्यगृह यादीत सापडले नाही — रिफ्रेश करा'
+            : 'Theatre not in list — refresh and try again'
+        );
         setIsProcessing(false);
         return;
       }
@@ -676,10 +702,13 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
         posterUrl: eventPosterUrl.trim() || '',
         galleryUrls: eventGalleryUrls,
         status: 'published',
-        ticketPrice: eventBasePrice * 100,
         tag: eventBadge || null,
         actorId: currentUser?.email || 'admin',
       };
+      // Seat-wise prices come from theatre sections. Flat ticketPrice only for GA venues.
+      if (venuePricePreview.sections.length === 0) {
+        payload.ticketPrice = Math.round(gaFallbackPrice * 100);
+      }
       if (!payload.posterUrl) {
         triggerToast('फीचर्ड पोस्टर अपलोड करा किंवा URL भरा');
         setIsProcessing(false);
@@ -761,11 +790,87 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
     }
   };
 
+  useEffect(() => {
+    if (!showAddEventModal || !eventVenueId) {
+      setVenuePricePreview({ loading: false, hasSeatLayout: false, sections: [] });
+      return;
+    }
+    let cancelled = false;
+    setVenuePricePreview((prev) => ({ ...prev, loading: true }));
+    void (async () => {
+      try {
+        const res = await fetch(`/api/admin/venues?id=${eventVenueId}`, {
+          credentials: 'include',
+        });
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        const venue = data.venue || data.venues?.[0];
+        const sectionsRaw = Array.isArray(venue?.sections) ? venue.sections : [];
+        const sections = sectionsRaw.map((sec: any) => ({
+          id: Number(sec.id),
+          name: String(sec.name || ''),
+          nameMr: sec.nameMr ? String(sec.nameMr) : undefined,
+          // DB stores paise
+          basePrice: Math.round(Number(sec.basePrice || 0) / 100),
+          seatCount: Array.isArray(sec.seats)
+            ? sec.seats.length
+            : Number(sec.rowsCount || 0) * Number(sec.colsCount || 0),
+        }));
+        if (!cancelled) {
+          setVenuePricePreview({
+            loading: false,
+            hasSeatLayout: Number(venue?.hasSeatLayout) === 1 || sections.length > 0,
+            sections,
+          });
+        }
+      } catch {
+        if (!cancelled) {
+          setVenuePricePreview({ loading: false, hasSeatLayout: false, sections: [] });
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showAddEventModal, eventVenueId, venuePriceRefreshKey]);
+
   const filteredEvents = eventsList.filter(ev => {
     const matchesQuery = ev.titleMr.toLowerCase().includes(searchEventQuery.toLowerCase()) ||
       ev.title.toLowerCase().includes(searchEventQuery.toLowerCase());
     const matchesCat = filterCategory === 'all' || ev.category === filterCategory;
     return matchesQuery && matchesCat;
+  });
+
+  /** Full catalogue for event form — district → city → search */
+  const formVenueOptions = venuesList.filter((v: any) => {
+    if (formDistrictId && String(v.districtId ?? '') !== String(formDistrictId)) return false;
+    if (formCityName) {
+      const city = String(v.cityName || v.city || '').toLowerCase();
+      const want = formCityName.toLowerCase();
+      if (city !== want && !city.includes(want)) return false;
+    }
+    const q = venueSearchInForm.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      String(v.nameMr || '')
+        .toLowerCase()
+        .includes(q) ||
+      String(v.name || '')
+        .toLowerCase()
+        .includes(q) ||
+      String(v.city || '')
+        .toLowerCase()
+        .includes(q) ||
+      String(v.cityName || '')
+        .toLowerCase()
+        .includes(q) ||
+      String(v.address || '')
+        .toLowerCase()
+        .includes(q) ||
+      String(v.districtName || '')
+        .toLowerCase()
+        .includes(q)
+    );
   });
 
   return (
@@ -781,8 +886,28 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
       {viewingEvent && (
         <AdminEventDetailModal
           event={viewingEvent as any}
+          relatedEvents={eventsList as any}
+          venues={venuesList as any}
           language={language}
           onClose={() => setViewingEvent(null)}
+          onRefresh={() => {
+            void (async () => {
+              const eventsRes = await fetch('/api/admin/events', { credentials: 'include' });
+              if (eventsRes.ok) {
+                const evData = await eventsRes.json();
+                if (Array.isArray(evData.events)) {
+                  setEventsList(evData.events);
+                  const updated = evData.events.find(
+                    (e: EventItem) => Number(e.id) === Number(viewingEvent.id)
+                  );
+                  if (updated) setViewingEvent(updated);
+                }
+              }
+              if (venuesList.length < 20) {
+                void fetchVenuesBundle(true, 'all');
+              }
+            })();
+          }}
           onEdit={() => {
             const ev = viewingEvent;
             setViewingEvent(null);
@@ -912,8 +1037,8 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
               <Megaphone className="w-4 h-4 text-emerald-700" />
               <span>
                 {mr
-                  ? 'जाहिरात DB मध्ये सेव्ह झाली (अॅप होम अॅनाउन्समेंट).'
-                  : 'Announcement saved to DB (app home announcements).'}
+                  ? 'जाहिरात सेव्ह झाली (अॅप होम अॅनाउन्समेंट).'
+                  : 'Announcement saved (app home announcements).'}
               </span>
             </div>
             <button
@@ -957,8 +1082,7 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
             }`}
           >
             {mr ? 'नाट्यगृहे' : 'Theatres'} (
-              {venuesList.filter((v: any) => v.authoritativeNew).length}/
-              {venuesList.length || '…'}
+              {venuesMeta.totalAll ?? (venuesList.length || '…')}
             )
           </button>
           <button
@@ -991,8 +1115,8 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
             <span className="w-3.5 h-3.5 border-2 border-[#A33900] border-t-transparent rounded-full animate-spin" />
             {dataLoading
               ? mr
-                ? 'डॅशबोर्ड DB मधून लोड होत आहे…'
-                : 'Loading dashboard from DB…'
+                ? 'डॅशबोर्ड लोड होत आहे…'
+                : 'Loading dashboard…'
               : mr
                 ? `${tabLoading} लोड होत आहे…`
                 : `Loading ${tabLoading}…`}
@@ -1099,101 +1223,118 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
               </div>
             </div>
 
-            {/* Event Approval Queue Section */}
+            {/* Event Approval Queue — pending draft/submitted only */}
             <div className="space-y-2 mt-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
                   <ShieldCheck className="w-5 h-5 text-[#A33900]" />
-                  <h3 className="text-base font-bold text-[#141B2B]">तातडीची तपासणी व मंजुरी</h3>
+                  <h3 className="text-base font-bold text-[#141B2B]">
+                    {mr ? 'तातडीची तपासणी व मंजुरी' : 'Pending approval'}
+                  </h3>
                 </div>
-                <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-red-100 text-[#DC2626] font-bold">
-                  {approvalDecision === 'pending' ? '१ प्रलंबित' : 'पूर्ण झाले'}
+                <span
+                  className={`text-[11px] px-2.5 py-0.5 rounded-full font-bold ${
+                    pendingApprovals.length > 0
+                      ? 'bg-red-100 text-[#DC2626]'
+                      : 'bg-emerald-100 text-emerald-700'
+                  }`}
+                >
+                  {pendingApprovals.length > 0
+                    ? `${pendingApprovals.length} ${mr ? 'प्रलंबित' : 'pending'}`
+                    : mr
+                      ? 'काही नाही'
+                      : 'None'}
                 </span>
               </div>
 
-              {approvalDecision === 'pending' ? (
-                <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-[#E2E8F0] space-y-3">
-                  <div className="flex gap-3.5">
-                    <img
-                      src="https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?w=400"
-                      alt="कट्यार काळजात घुसली"
-                      className="w-20 h-28 object-cover rounded-xl shadow-sm shrink-0 border border-[#E2E8F0]"
-                    />
-                    <div className="flex flex-col justify-between flex-1 min-w-0">
-                      <div>
-                        <div className="flex items-center gap-1 mb-1">
-                          <span className="text-[10px] px-2 py-0.5 rounded bg-[#FFF7ED] text-[#A33900] font-bold">
-                            मराठी संगीत नाटक
-                          </span>
-                          <span className="text-[10px] text-[#64748B]">पुणे केंद्र</span>
-                        </div>
-                        <h4 className="text-sm font-bold text-[#141B2B] truncate">कट्यार काळजात घुसली</h4>
-                        <p className="text-xs text-[#64748B]">सुवर्णमहोत्सवी विशेष प्रयोग</p>
-                        <p className="text-xs text-[#A33900] font-medium mt-1">आयोजक: स्वरश्री इव्हेंट्स, पुणे</p>
-                      </div>
-                      <div className="text-[11px] text-[#64748B] flex items-center gap-1">
-                        <span>🏛️ बालगंधर्व रंगमंदिर • २० मे, सायं. ५:००</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Verification Checklist */}
-                  <div className="bg-[#F1F3FF] rounded-xl p-3 space-y-1.5 text-xs">
-                    <div className="text-[11px] font-bold text-[#64748B] uppercase tracking-wider">
-                      कायदेशीर परवाने व दाखले:
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white text-[#16A34A] shadow-xs font-semibold">
-                        ✓ पोलीस परवाना संलग्न
-                      </span>
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white text-[#16A34A] shadow-xs font-semibold">
-                        ✓ करमणूक कर पावती संलग्न
-                      </span>
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white text-[#16A34A] shadow-xs font-semibold">
-                        ✓ नाट्यगृह बुकिंग पावती संलग्न
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs text-[#64748B] pt-1">
-                    <span>नोंदणी वेळ: आज, दुपारी १२:४२</span>
-                    <span className="font-bold text-[#F59E0B]">अंतिम पुनरावलोकन प्रलंबित</span>
-                  </div>
-
-                  {/* Action CTA Buttons */}
-                  <div className="grid grid-cols-3 gap-2 pt-1">
-                    <button
-                      onClick={handleApprove}
-                      className="h-10 rounded-xl bg-[#16A34A] hover:bg-[#15803D] text-white font-bold text-xs flex items-center justify-center gap-1 active:scale-95 transition-all shadow-sm"
-                    >
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>मंजूर करा</span>
-                    </button>
-                    <button
-                      onClick={handleRequestChanges}
-                      className="h-10 rounded-xl bg-[#FFF7ED] hover:bg-[#FFEDD5] text-[#A33900] font-bold text-xs flex items-center justify-center gap-1 active:scale-95 transition-all shadow-sm"
-                    >
-                      <span>सुधारणा</span>
-                    </button>
-                    <button
-                      onClick={handleReject}
-                      className="h-10 rounded-xl bg-red-100 hover:bg-red-200 text-[#DC2626] font-bold text-xs flex items-center justify-center gap-1 active:scale-95 transition-all shadow-sm"
-                    >
-                      <span>नाकारा</span>
-                    </button>
-                  </div>
-                </div>
-              ) : (
+              {!pendingEvent ? (
                 <div className="bg-white rounded-2xl p-4 text-center border border-[#E2E8F0]">
                   <p className="text-xs font-bold text-[#16A34A]">
-                    ✓ सर्व प्रलंबित कार्यक्रम तपासणी पूर्ण झाली आहे!
+                    {mr
+                      ? '✓ मंजुरीसाठी कोणताही मसुदा/सबमिट कार्यक्रम नाही.'
+                      : '✓ No draft/submitted events waiting for approval.'}
                   </p>
-                  <button
-                    onClick={() => setApprovalDecision('pending')}
-                    className="text-xs text-[#A33900] underline mt-1 font-semibold"
-                  >
-                    पुन्हा तपासा
-                  </button>
+                </div>
+              ) : (
+                <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-[#E2E8F0] space-y-3">
+                  <div className="flex gap-3.5">
+                    {pendingEvent.posterUrl ? (
+                      <img
+                        src={pendingEvent.posterUrl}
+                        alt={pendingEvent.titleMr || pendingEvent.title}
+                        className="w-20 h-28 object-cover rounded-xl shadow-sm shrink-0 border border-[#E2E8F0]"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <div className="w-20 h-28 rounded-xl bg-slate-100 border border-slate-200 shrink-0" />
+                    )}
+                    <div className="flex flex-col justify-between flex-1 min-w-0">
+                      <div>
+                        <div className="flex items-center gap-1 mb-1 flex-wrap">
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-[#FFF7ED] text-[#A33900] font-bold">
+                            {pendingEvent.category || 'event'}
+                          </span>
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-amber-50 text-amber-800 font-bold border border-amber-200">
+                            {pendingEvent.status}
+                          </span>
+                          <span className="text-[10px] text-[#64748B]">#{pendingEvent.id}</span>
+                        </div>
+                        <h4 className="text-sm font-bold text-[#141B2B] truncate">
+                          {mr
+                            ? pendingEvent.titleMr || pendingEvent.title
+                            : pendingEvent.title || pendingEvent.titleMr}
+                        </h4>
+                        <p className="text-xs text-[#A33900] font-medium mt-1 truncate">
+                          {(pendingEvent as any).organizer?.companyName ||
+                            (pendingEvent as any).organizer?.name ||
+                            ''}
+                        </p>
+                      </div>
+                      <div className="text-[11px] text-[#64748B] truncate">
+                        {mr
+                          ? pendingEvent.venue?.nameMr || pendingEvent.venue?.name
+                          : pendingEvent.venue?.name || pendingEvent.venue?.nameMr}
+                        {pendingEvent.venue?.city ? ` · ${pendingEvent.venue.city}` : ''}
+                      </div>
+                    </div>
+                  </div>
+
+                  {pendingApprovals.length > 1 ? (
+                    <p className="text-[11px] text-slate-500">
+                      +{pendingApprovals.length - 1}{' '}
+                      {mr ? 'आणखी प्रलंबित (इव्हेंट्स टॅब पहा)' : 'more pending (see Events tab)'}
+                    </p>
+                  ) : null}
+
+                  <div className="grid grid-cols-3 gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleApprove}
+                      disabled={isProcessing}
+                      className="h-10 rounded-xl bg-[#16A34A] hover:bg-[#15803D] text-white font-bold text-xs flex items-center justify-center gap-1 active:scale-95 transition-all shadow-sm disabled:opacity-50"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>{mr ? 'मंजूर करा' : 'Approve'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRequestChanges}
+                      disabled={isProcessing}
+                      className="h-10 rounded-xl bg-[#FFF7ED] hover:bg-[#FFEDD5] text-[#A33900] font-bold text-xs flex items-center justify-center gap-1 active:scale-95 transition-all shadow-sm disabled:opacity-50"
+                    >
+                      <span>{mr ? 'सुधारणा' : 'Changes'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleReject}
+                      disabled={isProcessing}
+                      className="h-10 rounded-xl bg-red-100 hover:bg-red-200 text-[#DC2626] font-bold text-xs flex items-center justify-center gap-1 active:scale-95 transition-all shadow-sm disabled:opacity-50"
+                    >
+                      <span>{mr ? 'नाकारा' : 'Reject'}</span>
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -1208,7 +1349,7 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-[#64748B] flex items-center gap-1">
                     <span className="h-2 w-2 rounded-full bg-[#16A34A] animate-pulse"></span>
-                    लाइव्ह DB स्कॅन
+                    {mr ? 'लाइव्ह स्कॅन' : 'Live scans'}
                   </span>
                   <button
                     onClick={() => setShowScannerModal(true)}
@@ -1371,8 +1512,10 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                   setEventGalleryUrls([]);
                   setEventVenueId(0);
                   setVenueSearchInForm('');
+                  setFormDistrictId('');
+                  setFormCityName('');
                   setImageUploadError(null);
-                  void fetchAllData();
+                  void fetchVenuesBundle(true, 'all');
                   setShowAddEventModal(true);
                 }}
                 className="bg-[#A33900] hover:bg-[#832600] text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-sm"
@@ -1409,11 +1552,15 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                   key={ev.id}
                   role="button"
                   tabIndex={0}
-                  onClick={() => setViewingEvent(ev)}
+                  onClick={() => {
+                    setViewingEvent(ev);
+                    if (venuesList.length < 20) void fetchVenuesBundle(true, 'all');
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
                       setViewingEvent(ev);
+                      if (venuesList.length < 20) void fetchVenuesBundle(true, 'all');
                     }
                   }}
                   className="bg-white rounded-2xl p-3.5 border border-[#E2E8F0] shadow-sm flex gap-3 hover:border-[#A33900]/40 transition cursor-pointer text-left"
@@ -1468,8 +1615,14 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                           : ev.venue?.name || ev.venue?.nameMr || 'Theatre'}
                       </p>
                       <p className="text-[11px] font-bold text-[#A33900] mt-0.5">
-                        {mr ? 'किमान' : 'From'}: ₹{(ev.minPrice || 30000) / 100} •{' '}
-                        {mr ? 'बॅज' : 'Tag'}: {ev.tag || (mr ? 'सामान्य' : 'General')}
+                        {ev.minPrice != null
+                          ? `${mr ? 'किमान' : 'From'} ₹${Math.round(Number(ev.minPrice) / 100).toLocaleString('en-IN')}`
+                          : mr
+                            ? 'किंमत सेट नाही'
+                            : 'Price not set'}
+                        {Array.isArray(ev.sessions) && ev.sessions.length > 0
+                          ? ` · ${ev.sessions.length} ${mr ? 'शो' : 'shows'}`
+                          : ''}
                       </p>
                     </div>
 
@@ -1574,25 +1727,19 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
               </div>
             )}
 
-            {/* Metrics — counts from API meta (full DB), list = current scope */}
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
+            {/* Metrics — full catalogue */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
               {(
                 [
-                  ['all', 'एकूण (DB)', venuesMeta.totalAll ?? '—', 'text-[#141B2B]'],
-                  [
-                    'authoritative',
-                    '★ नवीन अधिकृत',
-                    venuesMeta.authoritativeNew ?? venuesList.filter((v: any) => v.authoritativeNew).length,
-                    'text-[#16A34A]',
-                  ],
+                  ['all', mr ? 'एकूण नाट्यगृह' : 'All theatres', venuesMeta.totalAll ?? '—', 'text-[#141B2B]'],
                   [
                     'eligible',
-                    'इव्हेंट निवडयोग्य',
+                    mr ? 'प्रमाणित (इव्हेंट)' : 'Verified',
                     venuesMeta.eligibleForEvents ?? '—',
-                    'text-[#A33900]',
+                    'text-[#16A34A]',
                   ],
-                  ['unverified', 'अपुष्ट / retired', venuesMeta.unverified ?? '—', 'text-amber-600'],
-                  ['unmapped', '⚠ Unmapped FKs', venuesMeta.unmapped ?? '—', 'text-rose-600'],
+                  ['unverified', mr ? 'अपुष्ट' : 'Unverified', venuesMeta.unverified ?? '—', 'text-amber-700'],
+                  ['unmapped', mr ? 'स्थान नकाशित' : 'Unmapped location', venuesMeta.unmapped ?? '—', 'text-rose-600'],
                 ] as const
               ).map(([key, label, count, color]) => (
                 <button
@@ -1603,7 +1750,7 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                     void fetchVenuesBundle(true, key as typeof venueScopeFilter);
                   }}
                   className={`bg-white p-3.5 rounded-2xl border shadow-2xs text-left hover:border-[#A33900]/40 ${
-                    venueScopeFilter === key ? 'border-emerald-400 ring-1 ring-emerald-100' : 'border-[#E2E8F0]'
+                    venueScopeFilter === key ? 'border-[#A33900] ring-1 ring-[#A33900]/20' : 'border-[#E2E8F0]'
                   }`}
                 >
                   <span className={`text-[11px] font-medium block ${color}`}>{label}</span>
@@ -1613,23 +1760,20 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
             </div>
 
             <p className="text-[11px] text-slate-600 font-medium">
-              Showing <strong className="font-mono">{venuesList.length}</strong> venues for scope{' '}
-              <strong>{venueScopeFilter}</strong>
-              {venueScopeFilter === 'authoritative'
-                ? ' — IDs 55, 56, 59–66 only (not the old 66-row seed list).'
-                : ''}
+              {mr ? 'दाखवत आहे' : 'Showing'}{' '}
+              <strong className="font-mono">{venuesList.length}</strong>
+              {mr ? ' / एकूण ' : ' of '}
+              <strong className="font-mono">{venuesMeta.totalAll ?? '—'}</strong>
+              {mr ? ' नाट्यगृह' : ' theatres'}
             </p>
 
-            {/* Scope tabs */}
             <div className="flex flex-wrap gap-1.5 text-[11px] font-bold">
               {(
                 [
-                  ['authoritative', '★ नवीन अधिकृत'],
-                  ['eligible', 'इव्हेंट निवडयोग्य'],
-                  ['all', 'सर्व DB'],
-                  ['unverified', 'अपुष्ट / retired'],
-                  ['retired', 'Retired (unverified)'],
-                  ['unmapped', 'Unmapped location'],
+                  ['all', mr ? 'सर्व' : 'All'],
+                  ['eligible', mr ? 'प्रमाणित' : 'Verified'],
+                  ['unverified', mr ? 'अपुष्ट' : 'Unverified'],
+                  ['unmapped', mr ? 'नकाशित' : 'Unmapped'],
                 ] as const
               ).map(([key, label]) => (
                 <button
@@ -1653,7 +1797,7 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                 onClick={() => void fetchVenuesBundle(true, venueScopeFilter)}
                 className="px-3 py-1.5 rounded-full border border-slate-200 bg-white text-[#A33900] hover:bg-orange-50"
               >
-                ↻ रिफ्रेश
+                ↻ {mr ? 'रिफ्रेश' : 'Refresh'}
               </button>
             </div>
 
@@ -1857,99 +2001,65 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                     return (
                       <div
                         key={v.id}
-                        className={`bg-white rounded-2xl p-4 border shadow-sm hover:border-[#A33900]/40 transition flex flex-col justify-between ${
-                          v.authoritativeNew ? 'border-emerald-300 ring-1 ring-emerald-100' : 'border-[#E2E8F0]'
-                        }`}
+                        className="bg-white rounded-2xl p-4 border border-[#E2E8F0] shadow-sm hover:border-[#A33900]/40 transition flex flex-col justify-between"
                       >
                         <div>
-                          {/* Header: Badges and ID */}
-                          <div className="flex items-center justify-between gap-1 mb-2">
-                            <span className="text-[10px] font-mono font-bold text-slate-600">DB #{v.id}</span>
-                            <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                              {v.authoritativeNew ? (
-                                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-600 text-white">
-                                  ★ NEW
-                                </span>
-                              ) : null}
-                              {v.eligibleForEvents ? (
-                                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-orange-50 text-[#A33900] border border-orange-200">
-                                  Event OK
-                                </span>
-                              ) : (
-                                <span
-                                  className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-slate-100 text-slate-600 border border-slate-200"
-                                  title={v.eligibleReason || 'Not eligible for new events'}
-                                >
-                                  Not eligible
-                                </span>
-                              )}
+                          <div className="flex items-center justify-between gap-2 mb-2">
+                            <span className="text-[10px] font-mono text-slate-400">#{v.id}</span>
+                            <span
+                              className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${
+                                isVerified
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  : 'bg-amber-50 text-amber-700 border-amber-200'
+                              }`}
+                            >
+                              {isVerified
+                                ? mr
+                                  ? 'प्रमाणित'
+                                  : 'Verified'
+                                : mr
+                                  ? 'अपुष्ट'
+                                  : 'Unverified'}
+                            </span>
+                          </div>
+
+                          <div className="min-w-0">
+                            <h4 className="text-sm font-bold text-[#141B2B] leading-snug truncate">
+                              {mr ? v.nameMr || v.name : v.name || v.nameMr}
+                            </h4>
+                            {v.name && v.nameMr && v.name !== v.nameMr ? (
+                              <p className="text-[11px] text-slate-500 truncate">
+                                {mr ? v.name : v.nameMr}
+                              </p>
+                            ) : null}
+                            <p className="text-[11px] font-medium text-[#A33900] mt-1">
+                              {cityLabel}
+                              {districtLabel ? ` · ${districtLabel}` : ''}
                               {!isMapped ? (
-                                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                                  ⚠ Unmapped
-                                </span>
+                                <span className="text-rose-600 font-normal"> · {mr ? 'स्थान अपूर्ण' : 'location incomplete'}</span>
                               ) : null}
-                              <span
-                                className={`text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
-                                  isVerified
-                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                    : 'bg-amber-50 text-amber-700 border border-amber-200'
-                                }`}
-                              >
-                                {isVerified ? '✓ verified' : 'unverified'}
-                              </span>
-                              {hasLayout ? (
-                                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                                  {sectionsCount > 0 ? `${sectionsCount} sec` : 'layout'}
-                                </span>
-                              ) : (
-                                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-slate-100 text-slate-600">
-                                  GA
-                                </span>
-                              )}
-                            </div>
+                            </p>
                           </div>
 
-                          {/* Venue Name & Location */}
-                          <div className="flex items-start gap-2.5">
-                            <span className="text-2xl shrink-0 mt-0.5">🏛️</span>
-                            <div className="min-w-0">
-                              <h4 className="text-sm font-bold text-[#141B2B] leading-snug font-serif truncate">
-                                {v.nameMr || v.name}
-                              </h4>
-                              {v.name && v.name !== v.nameMr && (
-                                <p className="text-[11px] text-slate-500 truncate">{v.name}</p>
-                              )}
-                              <p className="text-[11px] font-medium text-[#A33900] mt-0.5">
-                                📍 {cityLabel}
-                                {districtLabel ? ` · ${districtLabel}` : ''}
-                              </p>
-                              <p className="text-[10px] text-slate-500 mt-0.5 font-mono">
-                                city_id={v.cityId ?? 'null'} · district_id={v.districtId ?? 'null'}
-                              </p>
-                              {!v.eligibleForEvents && v.eligibleReason ? (
-                                <p className="text-[10px] text-amber-800 mt-1 leading-snug">{v.eligibleReason}</p>
-                              ) : null}
-                            </div>
-                          </div>
+                          <p className="text-xs text-[#64748B] mt-2 line-clamp-2">{v.address}</p>
 
-                          {/* Address & Capacity */}
-                          <p className="text-xs text-[#64748B] mt-2.5 line-clamp-2">{v.address}</p>
-
-                          <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-slate-700">
-                            <span>listed capacity (template):</span>
-                            <span className="font-mono text-[#141B2B]">{v.totalCapacity ?? '—'} seats</span>
+                          <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
+                            <span>{mr ? 'क्षमता' : 'Capacity'}</span>
+                            <span className="font-mono font-bold text-[#141B2B]">
+                              {v.totalCapacity ?? '—'}
+                              {hasLayout && sectionsCount > 0 ? ` · ${sectionsCount} ${mr ? 'विभाग' : 'sec'}` : ''}
+                            </span>
                           </div>
                         </div>
 
-                        {/* Action Buttons */}
                         <div className="mt-4 pt-3 border-t border-slate-100 space-y-2">
                           <button
                             type="button"
                             onClick={() => void openVenueDesigner(v)}
-                            className="w-full py-2 rounded-xl bg-[#A33900] hover:bg-[#832600] text-white font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-xs cursor-pointer"
+                            className="w-full py-2 rounded-xl bg-[#A33900] hover:bg-[#832600] text-white font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
                           >
                             <Armchair className="w-3.5 h-3.5" />
-                            <span>सीट डिझायनर व नकाशा (Seat Builder)</span>
+                            <span>{mr ? 'सीट नकाशा' : 'Seat map'}</span>
                           </button>
 
                           <div className="grid grid-cols-2 gap-2">
@@ -1963,7 +2073,7 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                               }`}
                             >
                               <CheckCircle2 className="w-3.5 h-3.5" />
-                              <span>{isVerified ? 'अपुष्ट करा' : 'प्रमाणित करा'}</span>
+                              <span>{isVerified ? (mr ? 'अपुष्ट करा' : 'Unverify') : (mr ? 'प्रमाणित करा' : 'Verify')}</span>
                             </button>
 
                             <button
@@ -1972,7 +2082,7 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                               className="py-1.5 rounded-xl text-xs font-bold text-red-600 hover:bg-red-50 border border-red-200 transition flex items-center justify-center gap-1 cursor-pointer"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
-                              <span>हटवा</span>
+                              <span>{mr ? 'हटवा' : 'Remove'}</span>
                             </button>
                           </div>
                         </div>
@@ -1995,7 +2105,11 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
               </div>
               <button
                 onClick={() =>
-                  triggerToast('जाहिरात API लवकरच — सध्या showcase नाही; फक्त DB डेटा')
+                  triggerToast(
+                    mr
+                      ? 'जाहिरात व्यवस्थापन लवकरच — सध्या रेकॉर्ड उपलब्ध नाहीत'
+                      : 'Ads management coming soon — no records yet'
+                  )
                 }
                 className="bg-[#A33900] text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow-sm"
               >
@@ -2007,7 +2121,9 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
               {adsList.length === 0 && (
                 <div className="bg-white p-6 rounded-2xl border border-dashed border-[#E2E8F0] text-center">
                   <p className="text-xs text-[#64748B]">
-                    कोणत्याही जाहिराती DB मध्ये नाहीत (डेमो बॅनर्स काढले). Admin CRUD जोडल्यावर येथे दिसतील.
+                    {mr
+                      ? 'कोणत्याही जाहिराती उपलब्ध नाहीत. CRUD जोडल्यावर येथे दिसतील.'
+                      : 'No ads yet. They will appear here once CRUD is enabled.'}
                   </p>
                 </div>
               )}
@@ -2219,25 +2335,14 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
         )}
       </div>
 
-      {/* Seat Designer Modal */}
-      {showSeatDesigner && venueForDesigner && (
-        <TheatreSeatDesigner
-          venueToEdit={venueForDesigner}
-          onClose={() => setShowSeatDesigner(false)}
-          onSaved={(_savedVenue: any) => {
-            setShowSeatDesigner(false);
-            triggerToast(`✓ ${venueForDesigner.nameMr} चा नवीन आसन लेआउट जतन केला!`);
-          }}
-        />
-      )}
-
       {/* Gate Scanner Modal */}
       {showScannerModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full max-h-[96vh] overflow-hidden relative shadow-2xl flex flex-col">
+        <div className="fixed inset-0 z-[95] bg-black flex items-stretch justify-center">
+          <div className="bg-[#0B1220] max-w-lg w-full h-[100dvh] overflow-hidden relative shadow-2xl flex flex-col">
             <button
               onClick={() => setShowScannerModal(false)}
-              className="absolute right-3 top-3 z-50 p-1.5 rounded-full bg-white/90 hover:bg-slate-100 text-[#64748B] shadow-sm"
+              className="absolute right-3 top-2.5 z-[100] p-1.5 rounded-full bg-white/15 hover:bg-white/25 text-white"
+              aria-label="Close scanner"
             >
               <X className="w-5 h-5" />
             </button>
@@ -2302,79 +2407,193 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="font-bold text-[#141B2B] block mb-1">श्रेणी</label>
-                  <select
-                    value={eventCategory}
-                    onChange={e => setEventCategory(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-[#E2E8F0] bg-white"
-                  >
-                    <option value="plays">नाटक (Plays)</option>
-                    <option value="music">संगीत (Music)</option>
-                    <option value="comedy">स्टँडअप (Comedy)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="font-bold text-[#141B2B] block mb-1">किमान तिकीट दर (₹)</label>
-                  <input
-                    type="number"
-                    value={eventBasePrice}
-                    onChange={e => setEventBasePrice(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-xl border border-[#E2E8F0]"
-                  />
-                </div>
+              <div>
+                <label className="font-bold text-[#141B2B] block mb-1">श्रेणी</label>
+                <select
+                  value={eventCategory}
+                  onChange={e => setEventCategory(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-[#E2E8F0] bg-white"
+                >
+                  <option value="plays">नाटक (Plays)</option>
+                  <option value="music">संगीत (Music)</option>
+                  <option value="comedy">स्टँडअप (Comedy)</option>
+                  <option value="movies">चित्रपट (Movies)</option>
+                </select>
               </div>
 
-              <div>
-                <label className="font-bold text-[#141B2B] block mb-1">नाट्यगृह (DB)</label>
+              <div className="space-y-1.5">
+                <label className="font-bold text-[#141B2B] block">
+                  {mr ? 'नाट्यगृह निवडा' : 'Select theatre'}
+                  <span className="ml-1 font-medium text-slate-500">
+                    ({venuesList.length || '…'} {mr ? 'उपलब्ध' : 'available'})
+                  </span>
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                  <select
+                    value={formDistrictId}
+                    onChange={(e) => {
+                      setFormDistrictId(e.target.value);
+                      setFormCityName('');
+                      setEventVenueId(0);
+                    }}
+                    className="w-full px-3 py-2 rounded-xl border border-[#E2E8F0] bg-white"
+                  >
+                    <option value="">{mr ? '१. जिल्हा निवडा' : '1. Select district'}</option>
+                    {districtsCatalog.map((d: any) => (
+                      <option key={d.id} value={String(d.id)}>
+                        {mr ? d.nameMr || d.name : d.name || d.nameMr}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={formCityName}
+                    onChange={(e) => {
+                      setFormCityName(e.target.value);
+                      setEventVenueId(0);
+                    }}
+                    className="w-full px-3 py-2 rounded-xl border border-[#E2E8F0] bg-white"
+                  >
+                    <option value="">{mr ? '२. शहर (पर्यायी)' : '2. City (optional)'}</option>
+                    {citiesCatalog
+                      .filter(
+                        (c: any) =>
+                          !formDistrictId || String(c.districtId) === String(formDistrictId)
+                      )
+                      .map((c: any) => (
+                        <option key={c.id} value={c.name}>
+                          {mr ? c.nameMr || c.name : c.name || c.nameMr}
+                        </option>
+                      ))}
+                  </select>
+                </div>
                 <input
                   type="search"
                   value={venueSearchInForm}
                   onChange={(e) => setVenueSearchInForm(e.target.value)}
-                  placeholder="नाट्यगृह / शहर शोधा…"
-                  className="w-full px-3 py-2 mb-1.5 rounded-xl border border-[#E2E8F0]"
+                  placeholder={
+                    mr ? '३. नाव / पत्ता शोधा…' : '3. Search name / address…'
+                  }
+                  className="w-full px-3 py-2 rounded-xl border border-[#E2E8F0]"
                 />
                 <select
                   value={eventVenueId || ''}
                   onChange={(e) => setEventVenueId(Number(e.target.value) || 0)}
                   required
+                  size={Math.min(8, Math.max(4, formVenueOptions.length || 4))}
                   className="w-full px-3 py-2 rounded-xl border border-[#E2E8F0] bg-white"
                 >
-                  <option value="">— नाट्यगृह निवडा —</option>
-                  {venuesList
-                    .filter((v: any) => v.eligibleForEvents === true)
-                    .filter((v) => {
-                      const q = venueSearchInForm.trim().toLowerCase();
-                      if (!q) return true;
-                      return (
-                        (v.nameMr || '').toLowerCase().includes(q) ||
-                        (v.name || '').toLowerCase().includes(q) ||
-                        (v.city || '').toLowerCase().includes(q) ||
-                        (v.address || '').toLowerCase().includes(q)
-                      );
-                    })
-                    .map((v: any) => (
-                      <option key={v.id} value={v.id}>
-                        {v.nameMr || v.name} — {v.cityName || v.city}
-                        {v.address ? ` · ${v.address}` : ''}
-                        {!v.locationMapped ? ' · ⚠ location IDs incomplete' : ''}
-                      </option>
-                    ))}
+                  <option value="">
+                    {mr ? '— नाट्यगृह निवडा —' : '— Select theatre —'}
+                    {formVenueOptions.length
+                      ? ` (${formVenueOptions.length})`
+                      : ''}
+                  </option>
+                  {formVenueOptions.map((v: any) => (
+                    <option key={v.id} value={v.id}>
+                      {mr ? v.nameMr || v.name : v.name || v.nameMr}
+                      {' — '}
+                      {v.cityName || v.city || '—'}
+                      {v.address ? ` · ${String(v.address).slice(0, 48)}` : ''}
+                    </option>
+                  ))}
                 </select>
-                {venuesList.filter((v: any) => v.eligibleForEvents).length === 0 && (
-                  <p className="mt-1 text-[11px] text-amber-800 font-semibold">
-                    No authoritative verified theatres loaded. Refresh venue list or check data/authoritative_theatres.json.
+                {venuesList.length === 0 ? (
+                  <p className="text-[11px] text-amber-800 font-semibold">
+                    {mr
+                      ? 'नाट्यगृह यादी लोड होत आहे… रिफ्रेश दाबा.'
+                      : 'Theatre list loading… tap refresh.'}
                   </p>
-                )}
+                ) : formVenueOptions.length === 0 ? (
+                  <p className="text-[11px] text-amber-800 font-semibold">
+                    {mr
+                      ? 'या जिल्हा/शोधात नाट्यगृह नाही — फिल्टर सैल करा.'
+                      : 'No theatres for this district/search — widen filters.'}
+                  </p>
+                ) : null}
                 <button
                   type="button"
-                  onClick={() => void fetchAllData()}
-                  className="mt-1 text-[11px] font-bold text-[#A33900] hover:underline"
+                  onClick={() => void fetchVenuesBundle(true, 'all')}
+                  className="text-[11px] font-bold text-[#A33900] hover:underline"
                 >
-                  नाट्यगृह यादी रिफ्रेश करा
+                  {mr ? 'नाट्यगृह यादी रिफ्रेश करा' : 'Refresh theatre list'}
                 </button>
               </div>
+
+              {/* Seat-wise ticket prices — from theatre sections, not a flat event field */}
+              {eventVenueId ? (
+                <div className="rounded-xl border border-[#E2E8F0] bg-slate-50 p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-bold text-[#141B2B]">
+                        {mr ? 'विभागनिहाय तिकीट दर' : 'Section ticket prices'}
+                      </p>
+                      <p className="text-[10px] text-slate-500">
+                        {mr
+                          ? 'दर सीट नकाशामधील विभागांतून येतात — इथे फ्लॅट किंमत सेट होत नाही.'
+                          : 'Prices come from the theatre seat map sections — not a flat event price.'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const v = venuesList.find((x: any) => x.id === Number(eventVenueId));
+                        if (v) void openVenueDesigner(v);
+                      }}
+                      className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#A33900] text-white text-[11px] font-bold"
+                    >
+                      <Armchair className="w-3.5 h-3.5" />
+                      {mr ? 'सीट नकाशा / दर' : 'Seat map / prices'}
+                    </button>
+                  </div>
+                  {venuePricePreview.loading ? (
+                    <p className="text-[11px] text-slate-500">
+                      {mr ? 'दर लोड होत आहे…' : 'Loading prices…'}
+                    </p>
+                  ) : venuePricePreview.sections.length > 0 ? (
+                    <ul className="space-y-1">
+                      {venuePricePreview.sections.map((sec) => (
+                        <li
+                          key={sec.id}
+                          className="flex items-center justify-between gap-2 text-[11px] bg-white border border-slate-100 rounded-lg px-2.5 py-1.5"
+                        >
+                          <span className="font-semibold text-slate-800 truncate">
+                            {mr ? sec.nameMr || sec.name : sec.name || sec.nameMr}
+                            {sec.seatCount > 0 ? (
+                              <span className="text-slate-400 font-normal">
+                                {' '}
+                                · {sec.seatCount} {mr ? 'जागा' : 'seats'}
+                              </span>
+                            ) : null}
+                          </span>
+                          <span className="font-mono font-bold text-[#A33900] shrink-0">
+                            ₹{sec.basePrice.toLocaleString('en-IN')}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-[11px] text-amber-800 font-medium">
+                        {mr
+                          ? 'या नाट्यगृहात सीट विभाग नाहीत. सामान्य प्रवेश किंमत सेट करा, किंवा सीट नकाशा तयार करा.'
+                          : 'No seat sections on this theatre. Set a GA price, or build a seat map first.'}
+                      </p>
+                      <label className="block text-[11px] font-bold text-slate-700">
+                        {mr ? 'सामान्य प्रवेश दर (₹)' : 'General admission (₹)'}
+                        <input
+                          type="number"
+                          min={1}
+                          value={gaFallbackPrice}
+                          onChange={(e) =>
+                            setGaFallbackPrice(Math.max(1, Number(e.target.value) || 1))
+                          }
+                          className="mt-1 w-full px-3 py-2 rounded-xl border border-[#E2E8F0] text-xs bg-white"
+                        />
+                      </label>
+                    </div>
+                  )}
+                </div>
+              ) : null}
 
               <div>
                 <label className="font-bold text-[#141B2B] block mb-1">इव्हेंट बॅज (Event Status Badge / Tag)</label>
@@ -2663,6 +2882,23 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({
             )}
           </div>
         </div>
+      )}
+
+      {/* Seat Designer — above Add Event modal (z-[90]) so Edit Seat from event form works */}
+      {showSeatDesigner && venueForDesigner && (
+        <TheatreSeatDesigner
+          venueToEdit={venueForDesigner}
+          onClose={() => setShowSeatDesigner(false)}
+          onSaved={(_savedVenue: any, meta?: { layoutLocked?: boolean; warning?: string }) => {
+            setShowSeatDesigner(false);
+            setVenuePriceRefreshKey((k) => k + 1);
+            if (meta?.layoutLocked && meta.warning) {
+              triggerToast(`✓ जतन · ${meta.warning}`);
+            } else {
+              triggerToast(`✓ ${venueForDesigner.nameMr || venueForDesigner.name} चा आसन लेआउट जतन केला!`);
+            }
+          }}
+        />
       )}
     </div>
   );

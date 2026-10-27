@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { verifyPaymentSignatureAsync } from '@/src/lib/payments/razorpay.ts';
-import { confirmBookingOrder, calculatePricing } from '@/src/lib/inventory-engine.ts';
+import {
+  confirmBookingOrder,
+  calculatePricing,
+  assertTicketSecretConfigured,
+} from '@/src/lib/inventory-engine.ts';
 import { db } from '@/src/db/index.ts';
 import {
   users,
@@ -18,6 +22,7 @@ import { cacheDel, sessionSeatsCacheKey } from '@/src/lib/redis.ts';
 
 export async function POST(request: Request) {
   try {
+    assertTicketSecretConfigured();
     const body = await request.json();
     const {
       razorpay_order_id,
@@ -81,13 +86,15 @@ export async function POST(request: Request) {
 
     const pendingOrder = storedOrders[0];
 
-    // 3. Idempotency Check: if already confirmed and captured, return existing confirmed booking immediately
+    // 3. Idempotency Check: if already confirmed and captured WITH tickets, return immediately.
+    // If "confirmed" but zero tickets (legacy webhook race), fall through to confirmBookingOrder.
     if (pendingOrder.orderStatus === 'confirmed' && pendingOrder.paymentStatus === 'captured') {
       const existingTickets = await db
         .select()
         .from(tickets)
         .where(eq(tickets.orderId, pendingOrder.id));
 
+      if (existingTickets.length > 0) {
       const [existingEvent] = await db
         .select()
         .from(events)
@@ -133,6 +140,11 @@ export async function POST(request: Request) {
           paymentId: razorpay_payment_id,
         },
       });
+      }
+      console.warn(
+        '[Verify] Order marked confirmed/captured but has zero tickets — attempting confirmBookingOrder',
+        pendingOrder.orderNumber
+      );
     }
 
     // 4. Reject if order was explicitly cancelled or expired

@@ -166,8 +166,8 @@ export async function GET(request: NextRequest) {
     const singleId = searchParams.get('id');
     const wantFull = searchParams.get('full') === '1' || !!singleId;
     const forEventCreate = searchParams.get('forEventCreate') === '1';
-    /** authoritative | eligible | unverified | unmapped | all (default authoritative for admin inventory) */
-    const scope = (searchParams.get('scope') || 'authoritative').toLowerCase();
+    /** all | verified | eligible | authoritative | unverified | unmapped (default: all catalogue) */
+    const scope = (searchParams.get('scope') || 'all').toLowerCase();
     const catalog = loadAuthoritativeTheatres();
 
     const venueList = await db
@@ -185,15 +185,33 @@ export async function GET(request: NextRequest) {
       .where(singleId ? eq(venues.id, Number(singleId)) : sql`true`)
       .orderBy(desc(venues.id));
 
+    // One grouped count instead of N+1 per venue (was ~16s for 409 theatres)
+    const sectionCountMap: Record<number, number> = {};
+    if (!wantFull && !singleId) {
+      const counts = await db
+        .select({
+          venueId: venueSections.venueId,
+          n: sql<number>`count(*)::int`,
+        })
+        .from(venueSections)
+        .groupBy(venueSections.venueId);
+      for (const row of counts) {
+        sectionCountMap[Number(row.venueId)] = Number(row.n || 0);
+      }
+    }
+
     const enrichOne = async (row: (typeof venueList)[0]) => {
       const v = row.venue;
       let parsedLayoutConfig: any = v.layoutConfig;
-      if (typeof parsedLayoutConfig === 'string') {
+      if (wantFull && typeof parsedLayoutConfig === 'string') {
         try {
           parsedLayoutConfig = JSON.parse(parsedLayoutConfig);
         } catch {
           parsedLayoutConfig = {};
         }
+      } else if (!wantFull) {
+        // Lite catalog: omit heavy layout JSON from payload
+        parsedLayoutConfig = null;
       }
 
       const eligible = isEligibleForNewEvent({
@@ -201,8 +219,12 @@ export async function GET(request: NextRequest) {
         verificationStatus: v.verificationStatus,
         catalog,
       });
+      // Drop heavy layoutConfig from lite catalog payloads
+      const { layoutConfig: _omitLayout, ...venueFields } = v as typeof v & {
+        layoutConfig?: unknown;
+      };
       const base = {
-        ...v,
+        ...venueFields,
         districtName: row.districtName,
         districtNameMr: row.districtNameMr,
         cityName: row.cityName,
@@ -213,20 +235,20 @@ export async function GET(request: NextRequest) {
           row.cityName && row.districtName
             ? `${row.cityName}, ${row.districtName}`
             : v.city
-              ? `${v.city}${row.districtName ? ` (${row.districtName})` : ''} — city_id/district_id incomplete`
+              ? `${v.city}${row.districtName ? ` (${row.districtName})` : ''} — location incomplete`
               : 'Location unmapped',
         authoritativeNew: isAuthoritativeTheatreId(v.id, catalog),
         eligibleForEvents: eligible.ok,
         eligibleReason: eligible.ok ? null : eligible.reason,
-        layoutConfig: parsedLayoutConfig,
+        layoutConfig: wantFull ? parsedLayoutConfig : null,
       };
 
       if (!wantFull) {
-        const [secCount] = await db
-          .select({ n: sql<number>`count(*)::int` })
-          .from(venueSections)
-          .where(eq(venueSections.venueId, v.id));
-        return { ...base, sectionsCount: Number(secCount?.n || 0), sections: [] as any[] };
+        return {
+          ...base,
+          sectionsCount: sectionCountMap[v.id] ?? 0,
+          sections: [] as any[],
+        };
       }
 
       const sectionRows = await db
@@ -456,8 +478,8 @@ export async function POST(request: NextRequest) {
         : JSON.stringify(finalLayoutConfig)
       : undefined;
 
-    // Safety check: protect existing orders and tickets when replacing the layout of an existing venue
-    let sessionIdsAtVenue: number[] = [];
+    // If sold tickets exist for this venue, do NOT purge seats — soft-save metadata + prices only.
+    let layoutLockedByTickets = false;
     if (venueId) {
       const sessionsAtVenue = await db
         .select({ id: eventSessions.id })
@@ -465,25 +487,77 @@ export async function POST(request: NextRequest) {
         .innerJoin(events, eq(eventSessions.eventId, events.id))
         .where(eq(events.venueId, Number(venueId)));
 
-      sessionIdsAtVenue = sessionsAtVenue.map((s) => s.id);
-
+      const sessionIdsAtVenue = sessionsAtVenue.map((s) => s.id);
       if (sessionIdsAtVenue.length > 0) {
         const existingTickets = await db
           .select({ id: tickets.id })
           .from(tickets)
           .where(inArray(tickets.sessionId, sessionIdsAtVenue))
           .limit(1);
+        layoutLockedByTickets = existingTickets.length > 0;
+      }
+    }
 
-        if (existingTickets.length > 0) {
-          return NextResponse.json(
-            {
-              error:
-                'या नाट्यगृहातील खेळांसाठी विक्री झालेली तिकिटे अस्तित्वात असल्याने आसन रचना थेट डिलीट/बदल करता येणार नाही. (Historical tickets protected).',
-            },
-            { status: 409 }
+    // Soft path: sold tickets → update capacity/config/prices without deleting seat rows
+    if (venueId && layoutLockedByTickets) {
+      const [updatedVenue] = await db
+        .update(venues)
+        .set({
+          name: trimmedName,
+          nameMr: trimmedNameMr,
+          address: trimmedAddress,
+          city: trimmedCity,
+          districtId: resolvedDistrictId,
+          cityId: resolvedCityId,
+          verificationStatus,
+          isTemplate: Number(isTemplate),
+          ownershipType,
+          layoutConfig: layoutConfigJson,
+          totalCapacity: Number(totalCapacity),
+          hasSeatLayout: Number(hasSeatLayout),
+        })
+        .where(eq(venues.id, Number(venueId)))
+        .returning();
+
+      if (!updatedVenue) {
+        return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
+      }
+
+      // Update section prices by name when possible (no seat delete)
+      if (useCustomSections && Array.isArray(customSections)) {
+        const existingSecs = await db
+          .select()
+          .from(venueSections)
+          .where(eq(venueSections.venueId, Number(venueId)));
+        for (const sec of customSections as any[]) {
+          const match = existingSecs.find(
+            (s) =>
+              String(s.name).toLowerCase() === String(sec.name || '').toLowerCase() ||
+              String(s.nameMr || '').toLowerCase() === String(sec.nameMr || '').toLowerCase()
           );
+          if (match) {
+            // UI sends rupees (same as full rebuild path)
+            const pricePaise = Math.round(Number(sec.basePrice || 0) * 100);
+            await db
+              .update(venueSections)
+              .set({
+                name: sec.name || match.name,
+                nameMr: sec.nameMr || match.nameMr,
+                basePrice: pricePaise > 0 ? pricePaise : match.basePrice,
+              })
+              .where(eq(venueSections.id, match.id));
+          }
         }
       }
+
+      return NextResponse.json({
+        success: true,
+        venueId: updatedVenue.id,
+        venue: updatedVenue,
+        layoutLocked: true,
+        warning:
+          'विक्री झालेली तिकिटे असल्याने आसन नकाशा पुन्हा तयार केला नाही — क्षमता, दर व पूर्वावलोकन जतन झाले.',
+      });
     }
 
     // 2. ATOMIC WRITE: venue row + layout replacement + audit log in ONE transaction.

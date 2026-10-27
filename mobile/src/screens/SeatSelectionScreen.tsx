@@ -43,7 +43,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const MAP_MIN_SCALE = 0.65;
 const MAP_MAX_SCALE = 2.75;
 /** Live hold sync — same spirit as web fresh seat refresh */
-const POLL_INTERVAL = 8000;
+const POLL_INTERVAL = 5000;
 const DEVANAGARI_RE = /[\u0900-\u097F]/;
 const LATIN_RE = /[A-Za-z]/;
 const TEXT_COLLATOR = new Intl.Collator('en', { numeric: true, sensitivity: 'base' });

@@ -261,34 +261,40 @@ export default function ProfileScreen({ navigation }: any) {
           </View>
         </View>
 
-        {/* ORGANIZER Tools Section */}
-        {isOrganizer && !isAdmin && (
+        {/* ORGANIZER / GATE STAFF Tools */}
+        {(isOrganizer || isScannerStaff) && !isAdmin && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Organizer Tools</Text>
+            <Text style={styles.sectionTitle}>
+              {isOrganizer ? 'Organizer Tools' : 'Gate Scanner Tools'}
+            </Text>
             <View style={styles.menuCard}>
               <MenuItem
                 iconName="qrcode-scan"
                 label="Gate Ticket Scanner (तिकीट स्कॅनर)"
                 onPress={() => navigation.navigate('TicketScanner')}
               />
-              <Divider style={{ marginVertical: 0 }} />
-              <MenuItem
-                iconName="view-dashboard-outline"
-                label="My Events Dashboard"
-                onPress={() => openLink(WEB_ADMIN_URL)}
-              />
-              <Divider style={{ marginVertical: 0 }} />
-              <MenuItem
-                iconName="calendar-plus"
-                label="Post New Event"
-                onPress={() => openLink(WEB_ADMIN_URL)}
-              />
-              <Divider style={{ marginVertical: 0 }} />
-              <MenuItem
-                iconName="phone"
-                label="Organizer Support"
-                onPress={() => navigation.navigate('HelpSupport')}
-              />
+              {isOrganizer ? (
+                <>
+                  <Divider style={{ marginVertical: 0 }} />
+                  <MenuItem
+                    iconName="view-dashboard-outline"
+                    label="My Events Dashboard"
+                    onPress={() => openLink(WEB_ADMIN_URL)}
+                  />
+                  <Divider style={{ marginVertical: 0 }} />
+                  <MenuItem
+                    iconName="calendar-plus"
+                    label="Post New Event"
+                    onPress={() => openLink(WEB_ADMIN_URL)}
+                  />
+                  <Divider style={{ marginVertical: 0 }} />
+                  <MenuItem
+                    iconName="phone"
+                    label="Organizer Support"
+                    onPress={() => navigation.navigate('HelpSupport')}
+                  />
+                </>
+              ) : null}
             </View>
           </View>
         )}

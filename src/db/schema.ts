@@ -221,6 +221,10 @@ export const orders = pgTable('orders', {
   razorpayPaymentId: text('razorpay_payment_id'),
   idempotencyKey: text('idempotency_key').unique(),
   holdExpiresAt: timestamp('hold_expires_at'),
+  /** Public URL of generated ticket PDF (Supabase storage) */
+  ticketPdfUrl: text('ticket_pdf_url'),
+  /** First successful booking confirmation email timestamp (resend via mail icon only after) */
+  emailSentAt: timestamp('email_sent_at'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });

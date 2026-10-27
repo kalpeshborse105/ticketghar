@@ -19,14 +19,19 @@ export type AuthCustomerLite = {
 };
 
 /**
- * Canonical ownership: application user id only.
- * Email equality alone must not grant access (prevents wrong-account association).
+ * Ownership for an authenticated session:
+ * - primary: application user id
+ * - also: same verified session email (covers guest-checkout / duplicate-account drift)
+ * Client-supplied email query params are never used — only the signed-in session email.
  */
 export function customerOwnsOrder(
   customer: AuthCustomerLite,
   order: OrderOwnershipFields
 ): boolean {
-  return typeof customer.id === 'number' && customer.id === order.userId;
+  if (typeof customer.id === 'number' && customer.id === order.userId) return true;
+  const sessionEmail = String(customer.email || '').trim().toLowerCase();
+  const orderEmail = String(order.userEmail || '').trim().toLowerCase();
+  return !!sessionEmail && !!orderEmail && sessionEmail === orderEmail;
 }
 
 export function mintOrderPdfToken(orderId: number, userId: number): string {

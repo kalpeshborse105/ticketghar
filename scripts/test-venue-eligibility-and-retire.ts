@@ -15,35 +15,33 @@ import {
 
 resetAuthoritativeTheatresCache();
 const catalog = loadAuthoritativeTheatres();
-assert.ok(catalog.authoritativeTheatreIds.includes(62));
-assert.ok(catalog.authoritativeTheatreIds.includes(55));
-assert.ok(catalog.authoritativeTheatreIds.includes(59));
-assert.ok(!catalog.authoritativeTheatreIds.includes(8), 'seed-updated #8 must not be auto-allowlisted');
-assert.ok(!catalog.authoritativeTheatreIds.includes(9), 'seed-updated #9 must not be auto-allowlisted');
-assert.ok(isAuthoritativeTheatreId(62, catalog));
+assert.ok(catalog.authoritativeTheatreIds.includes(476));
+assert.ok(catalog.authoritativeTheatreIds.includes(479));
+assert.ok(!catalog.authoritativeTheatreIds.includes(8), 'old seed IDs must not be auto-allowlisted');
+assert.ok(isAuthoritativeTheatreId(476, catalog));
 assert.ok(!isAuthoritativeTheatreId(1, catalog));
-assert.ok(!isAuthoritativeTheatreId(8, catalog));
 
 assert.ok(
   isEligibleForNewEvent({
-    venueId: 62,
+    venueId: 476,
     verificationStatus: 'verified',
     catalog,
   }).ok
 );
 assert.ok(
   !isEligibleForNewEvent({
-    venueId: 62,
+    venueId: 476,
     verificationStatus: 'unverified',
     catalog,
   }).ok
 );
 assert.ok(
-  !isEligibleForNewEvent({
+  isEligibleForNewEvent({
     venueId: 1,
     verificationStatus: 'verified',
     catalog,
-  }).ok
+  }).ok,
+  'any verified venue is event-eligible (full catalogue)'
 );
 assert.ok(
   !isEligibleForNewEvent({
@@ -53,12 +51,19 @@ assert.ok(
   }).ok
 );
 assert.ok(
-  !isEligibleForNewEvent({
+  isEligibleForNewEvent({
     venueId: 53,
     verificationStatus: 'verified',
     catalog,
   }).ok,
-  'pending owner confirm must not be auto-eligible'
+  'verified pending-owner IDs are eligible once verification_status is verified'
+);
+assert.ok(
+  !isEligibleForNewEvent({
+    venueId: 53,
+    verificationStatus: 'unverified',
+    catalog,
+  }).ok
 );
 
 const venues = [

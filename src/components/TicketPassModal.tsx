@@ -47,6 +47,19 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState(false);
 
+  // Hide bottom nav / Mitra while pass is open (phone screenshots: nav under QR)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.dispatchEvent(
+      new CustomEvent('mahaticket_ui_overlay', { detail: { hideChrome: true } })
+    );
+    return () => {
+      window.dispatchEvent(
+        new CustomEvent('mahaticket_ui_overlay', { detail: { hideChrome: false } })
+      );
+    };
+  }, []);
+
   // Save to offline cache (localStorage)
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -123,6 +136,25 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
       setIsDownloading(true);
       setDownloadSuccess(false);
       setDownloadError(null);
+
+      // Prefer stored PDF URL (uploaded after first email / booking)
+      const storedPdf =
+        (order as any)?.ticketPdfUrl ||
+        (bookingResult as any)?.order?.ticketPdfUrl ||
+        (bookingResult as any)?.ticketPdfUrl ||
+        null;
+      if (storedPdf && typeof storedPdf === 'string') {
+        const a = document.createElement('a');
+        a.href = storedPdf;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.download = `MahaTicket-${order?.orderNumber || primaryTicket || 'pass'}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setDownloadSuccess(true);
+        return;
+      }
 
       const pdfToken =
         (order as any)?.pdfDownloadToken ||

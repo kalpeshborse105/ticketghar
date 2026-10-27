@@ -279,10 +279,8 @@ export default function HomePage() {
       });
       setError(null);
 
+      // Load statewide catalogue once — city only filters the local theatres row (and explore).
       const params = new URLSearchParams();
-      if (selectedCity && selectedCity !== 'महाराष्ट्र (All)') {
-        params.append('city', selectedCity);
-      }
       if (searchQuery.trim()) {
         params.append('search', searchQuery.trim());
       }
@@ -334,7 +332,7 @@ export default function HomePage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedCity, searchQuery, priceRange, selectedDate, customDate]);
+  }, [searchQuery, priceRange, selectedDate, customDate]);
 
   useEffect(() => {
     fetchEvents();
@@ -575,6 +573,30 @@ export default function HomePage() {
     }
     return list;
   }, [events, sortBy]);
+
+  /** City picker only drives this local rail + venues directory — not the whole home catalogue */
+  const cityLocalEvents = React.useMemo(() => {
+    if (!selectedCity || selectedCity === 'महाराष्ट्र (All)') return sortedEvents;
+    const MARATHI_TO_ENG: Record<string, string> = {
+      पुणे: 'pune',
+      मुंबई: 'mumbai',
+      नागपूर: 'nagpur',
+      ठाणे: 'thane',
+      नाशिक: 'nashik',
+    };
+    const normalized = MARATHI_TO_ENG[selectedCity] || selectedCity.toLowerCase();
+    return sortedEvents.filter((e) => {
+      const c = (e.venue?.city || '').toLowerCase();
+      if (!c) return false;
+      return (
+        c === normalized ||
+        c.includes(normalized) ||
+        normalized.includes(c) ||
+        (normalized === 'mumbai' &&
+          (c.includes('bandra') || c.includes('mumbai') || c.includes('thane')))
+      );
+    });
+  }, [sortedEvents, selectedCity]);
 
   // Dynamic category filtered results shown directly under the category rail
   const categoryFilteredEvents = React.useMemo(() => {
@@ -1312,7 +1334,7 @@ export default function HomePage() {
                 </section>
               )}
 
-              {/* Main discovery grid */}
+              {/* Statewide discovery — city change does NOT wipe this rail */}
               <section>
                 <div className="flex items-center gap-2 mb-3">
                   <div className="h-8 w-1.5 rounded-full bg-[#ea580c]" />
@@ -1321,71 +1343,67 @@ export default function HomePage() {
                       {language === 'mr' ? 'ठळक कार्यक्रम' : 'All events'}
                     </h2>
                     <p className="text-sm text-[#64748b]">
-                      {selectedCity}
+                      {language === 'mr' ? 'महाराष्ट्रभर' : 'Across Maharashtra'}
                       {sortedEvents.length > 0
                         ? ` · ${sortedEvents.length} ${language === 'mr' ? 'उपलब्ध' : 'available'}`
                         : ''}
                     </p>
                   </div>
-              </div>
+                </div>
 
-              {loading ? (
+                {loading ? (
                   <div className="flex overflow-x-auto gap-3.5 pb-2 scrollbar-none py-2">
                     {[1, 2, 3, 4, 5].map((n) => (
                       <div key={n} className="w-[185px] sm:w-[225px] shrink-0">
                         <MTEventCardSkeleton />
-                    </div>
-                  ))}
-                </div>
-              ) : error ? (
-                <MTEmptyState
-                  type="general"
+                      </div>
+                    ))}
+                  </div>
+                ) : error ? (
+                  <MTEmptyState
+                    type="general"
                     title={language === 'mr' ? 'काहीतरी चूक झाली.' : 'Something went wrong.'}
                     description={language === 'mr' ? 'कृपया पुन्हा प्रयत्न करा.' : 'Please try again.'}
-                  actionText={language === 'mr' ? 'पुन्हा प्रयत्न करा' : 'Retry'}
-                  onAction={fetchEvents}
-                />
+                    actionText={language === 'mr' ? 'पुन्हा प्रयत्न करा' : 'Retry'}
+                    onAction={fetchEvents}
+                  />
                 ) : sortedEvents.length === 0 ? (
-                <MTEmptyState
-                  type="events"
+                  <MTEmptyState
+                    type="events"
                     title={
                       language === 'mr'
-                        ? 'सध्या या शहरात कार्यक्रम उपलब्ध नाहीत.'
-                        : 'No events available in this city right now.'
+                        ? 'सध्या प्रकाशित कार्यक्रम उपलब्ध नाहीत.'
+                        : 'No published events yet.'
                     }
-                  description={
-                    language === 'mr'
-                        ? 'शहर किंवा श्रेणी बदलून पहा.'
-                        : 'Try another city or category.'
+                    description={
+                      language === 'mr'
+                        ? 'प्रकाशित कार्यक्रम DB मधून येथे दिसतील.'
+                        : 'Published events from the database will appear here.'
                     }
-                    actionText={
-                      language === 'mr' ? 'सर्व महाराष्ट्र पहा' : 'View all Maharashtra'
-                    }
-                    onAction={() => {
-                      setSelectedCity('महाराष्ट्र (All)');
-                      handleResetFilters();
-                    }}
-                />
-              ) : (
+                    actionText={language === 'mr' ? 'पुन्हा लोड करा' : 'Reload'}
+                    onAction={fetchEvents}
+                  />
+                ) : (
                   <div className="flex overflow-x-auto gap-3 sm:gap-3.5 pb-2 scrollbar-none snap-x snap-mandatory">
-                    {sortedEvents.slice(0, 5).map((evt) => (
+                    {sortedEvents.slice(0, 8).map((evt) => (
                       <div key={evt.id} className="w-[170px] sm:w-[215px] shrink-0 snap-start">
-                    <EventCard
-                      event={evt}
-                      language={language}
-                      onSelect={handleSelectEvent}
+                        <EventCard
+                          event={evt}
+                          language={language}
+                          onSelect={handleSelectEvent}
                           onBook={handleBookEvent}
                         />
                       </div>
                     ))}
-                    {sortedEvents.length > 5 && (
+                    {sortedEvents.length > 8 && (
                       <div className="w-[140px] sm:w-[160px] shrink-0 flex items-center justify-center snap-start">
                         <button
                           type="button"
                           onClick={() => {
                             setViewState('explore');
                             setActiveNavTab('explore');
-                            if (typeof window !== 'undefined') window.history.pushState(null, '', '/?tab=explore');
+                            if (typeof window !== 'undefined')
+                              window.history.pushState(null, '', '/?tab=explore');
                             window.scrollTo({ top: 0, behavior: 'smooth' });
                           }}
                           className="h-full min-h-[220px] w-full rounded-2xl border-2 border-dashed border-orange-300 bg-orange-50/70 hover:bg-orange-100/90 flex flex-col items-center justify-center p-4 text-center group transition cursor-pointer shadow-2xs"
@@ -1397,14 +1415,57 @@ export default function HomePage() {
                             {language === 'mr' ? 'अधिक पहा' : 'View All'}
                           </span>
                           <span className="text-[10px] text-[#64748b] mt-0.5 font-medium">
-                            +{sortedEvents.length - 5} {language === 'mr' ? 'आणखी' : 'more'}
+                            +{sortedEvents.length - 8} {language === 'mr' ? 'आणखी' : 'more'}
                           </span>
                         </button>
-                </div>
-              )}
-            </div>
+                      </div>
+                    )}
+                  </div>
                 )}
               </section>
+
+              {/* City-scoped events row — ONLY this rail changes with city picker */}
+              {!searchQuery.trim() && selectedCity && selectedCity !== 'महाराष्ट्र (All)' && (
+                <section className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-8 w-1.5 rounded-full bg-[#ea580c]" />
+                    <div>
+                      <h2 className="text-xl font-bold text-[#141b2b]">
+                        {language === 'mr'
+                          ? `${selectedCity} मधील कार्यक्रम`
+                          : `Events in ${selectedCity}`}
+                      </h2>
+                      <p className="text-sm text-[#64748b]">
+                        {cityLocalEvents.length > 0
+                          ? `${cityLocalEvents.length} ${language === 'mr' ? 'उपलब्ध' : 'available'}`
+                          : language === 'mr'
+                            ? 'या शहरात अजून प्रकाशित शो नाहीत'
+                            : 'No published shows in this city yet'}
+                      </p>
+                    </div>
+                  </div>
+                  {cityLocalEvents.length > 0 ? (
+                    <div className="flex overflow-x-auto gap-3 sm:gap-3.5 pb-2 scrollbar-none">
+                      {cityLocalEvents.slice(0, 8).map((evt) => (
+                        <div key={`city-${evt.id}`} className="w-[170px] sm:w-[215px] shrink-0">
+                          <EventCard
+                            event={evt}
+                            language={language}
+                            onSelect={handleSelectEvent}
+                            onBook={handleBookEvent}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-[#64748b] px-1">
+                      {language === 'mr'
+                        ? 'वर महाराष्ट्रभरचे कार्यक्रम पाहा, किंवा शहर बदला.'
+                        : 'See statewide events above, or pick another city.'}
+                    </p>
+                  )}
+                </section>
+              )}
 
               {/* STITCH SECTION 2: नाट्यगृह दर्शन (Theatres in Selected City) */}
               {!searchQuery.trim() && (
@@ -1447,9 +1508,17 @@ export default function HomePage() {
                               <div className="w-12 h-12 rounded-2xl bg-orange-50 border border-orange-100 text-[#ea580c] flex items-center justify-center shrink-0">
                                 <Theater className="h-6 w-6" />
                               </div>
-                              <span className="text-xs font-bold px-3 py-1 rounded-full bg-orange-100 text-[#c2410c]">
-                                {language === 'mr' ? `आज ${v.showCount || 2} प्रयोग` : `${v.showCount || 2} Shows Today`}
-                </span>
+                              {Number(v.showCount) > 0 ? (
+                                <span className="text-xs font-bold px-3 py-1 rounded-full bg-orange-100 text-[#c2410c]">
+                                  {language === 'mr'
+                                    ? `${v.showCount} शो`
+                                    : `${v.showCount} shows`}
+                                </span>
+                              ) : (
+                                <span className="text-xs font-medium px-3 py-1 rounded-full bg-slate-100 text-slate-600">
+                                  {language === 'mr' ? 'नाट्यगृह' : 'Theatre'}
+                                </span>
+                              )}
                             </div>
 
                             <h3 className="text-lg font-extrabold text-[#141b2b]">

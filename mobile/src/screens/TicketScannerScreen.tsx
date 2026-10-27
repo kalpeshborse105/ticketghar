@@ -301,6 +301,8 @@ export default function TicketScannerScreen({ navigation }: any) {
       };
       setScanLogs((prev) => [log, ...prev]);
       setTicketInput('');
+      // Instant gate UX: flash result then clear for next guest
+      setTimeout(() => setLastResult(null), res.status === 'valid' ? 500 : 1000);
     } catch (e: any) {
       Vibration.vibrate([0, 120, 80, 120]);
       setLastResult({
@@ -313,6 +315,7 @@ export default function TicketScannerScreen({ navigation }: any) {
         text1: 'पडताळणी अयशस्वी (Scan Failed)',
         text2: e?.message || 'तिकीट कोड तपासून पुन्हा प्रयत्न करा.',
       });
+      setTimeout(() => setLastResult(null), 1100);
     } finally {
       setVerifying(false);
     }

@@ -49,7 +49,11 @@ function rowLabel(index: number): string {
   return `${first}${second}`;
 }
 
-function buildRows(seatCount: number, seatsPerRow: number, tier: AutoLayoutTier): BuiltRow[] {
+export function buildRows(
+  seatCount: number,
+  seatsPerRow: number,
+  tier: AutoLayoutTier = 'standard'
+): BuiltRow[] {
   const per = Math.max(1, Math.floor(seatsPerRow));
   const rows: BuiltRow[] = [];
   let remaining = Math.max(0, Math.floor(seatCount));
@@ -72,6 +76,19 @@ function buildRows(seatCount: number, seatsPerRow: number, tier: AutoLayoutTier)
     r += 1;
   }
   return rows;
+}
+
+/** Rebuild one section from a seat total + seats/row (same auto-row logic as theatre-wide). */
+export function buildAutoSectionRows(opts: {
+  seatCount: number;
+  seatsPerRow: number;
+  tier?: AutoLayoutTier;
+}): BuiltRow[] {
+  return buildRows(
+    Math.max(1, Math.floor(opts.seatCount)),
+    Math.max(1, Math.floor(opts.seatsPerRow)),
+    opts.tier || 'standard'
+  );
 }
 
 /**

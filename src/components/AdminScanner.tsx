@@ -63,6 +63,7 @@ interface AdminScannerProps {
   initialGateName?: string;
   onTicketVerified?: (ticket: any) => void;
   onViewVerifiedList?: () => void;
+  onClose?: () => void;
 }
 
 // Sound Synthesizer via Web Audio API (no external asset dependencies)
@@ -136,6 +137,7 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
   initialGateName = 'Main Entry Gate 1',
   onTicketVerified,
   onViewVerifiedList,
+  onClose,
 }) => {
   const [gateName, setGateName] = useState(initialGateName);
   const [targetEventId, setTargetEventId] = useState<string | number | undefined>(initialTargetEventId);
@@ -428,19 +430,19 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
       }
 
       setCurrentOverlay(data);
+      overlayOpenRef.current = true;
 
       if (data.valid && onTicketVerifiedRef.current) {
         onTicketVerifiedRef.current(data.ticket);
       }
 
-      // Auto-clear success so next guest can scan quickly
-      if (data.valid) {
-        setTimeout(() => {
-          setCurrentOverlay((cur) => (cur?.valid ? null : cur));
-          overlayOpenRef.current = false;
-          isCooldownRef.current = false;
-        }, 750);
-      }
+      // Instant gate flow: short flash then resume (payment-gateway style)
+      const clearMs = data.valid ? 420 : data.scanResult === 'ALREADY_USED' ? 900 : 1100;
+      setTimeout(() => {
+        setCurrentOverlay(null);
+        overlayOpenRef.current = false;
+        isCooldownRef.current = false;
+      }, clearMs);
     } catch (err: any) {
       console.error('Verify error:', err);
       const fallbackResult: VerifyResult = {
@@ -451,12 +453,18 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
         rawPreview: trimmed.slice(0, 96),
       };
       setCurrentOverlay(fallbackResult);
+      overlayOpenRef.current = true;
       if (soundEnabledRef.current) playScanSound('error');
+      setTimeout(() => {
+        setCurrentOverlay(null);
+        overlayOpenRef.current = false;
+        isCooldownRef.current = false;
+      }, 1100);
     } finally {
       setIsVerifying(false);
       setTimeout(() => {
-        isCooldownRef.current = false;
-      }, 220);
+        if (!overlayOpenRef.current) isCooldownRef.current = false;
+      }, 180);
     }
   }, []);
 
@@ -474,10 +482,10 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
       html5QrCodeRef.current = html5Qr;
 
       const config: Html5QrcodeCameraScanConfig = {
-        fps: 20,
+        fps: 30,
         qrbox: (viewfinderWidth, viewfinderHeight) => {
-          const edge = Math.min(viewfinderWidth, viewfinderHeight) * 0.78;
-          return { width: Math.max(240, edge), height: Math.max(240, edge) };
+          const edge = Math.min(viewfinderWidth, viewfinderHeight) * 0.72;
+          return { width: Math.max(220, edge), height: Math.max(220, edge) };
         },
         aspectRatio: 1.0,
         disableFlip: false,
@@ -597,498 +605,322 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
   };
 
   const [activeTab, setActiveTab] = useState<'live' | 'manual' | 'recent'>('live');
+  const [scopeExpanded, setScopeExpanded] = useState(true);
+  const scopeReady = !!(targetEventId && targetSessionId);
+
+  useEffect(() => {
+    if (scopeReady) setScopeExpanded(false);
+  }, [scopeReady]);
 
   return (
-    <div className="w-full max-w-lg mx-auto bg-[#F9F9FF] min-h-[70vh] max-h-[92vh] overflow-y-auto text-[#141B2B] flex flex-col pb-8 font-sans">
-      {/* Hidden file upload reader helper */}
+    <div className="w-full max-w-lg mx-auto h-[100dvh] max-h-[100dvh] bg-[#0B1220] text-white flex flex-col overflow-hidden font-sans">
       <div id="admin-file-reader-dummy" className="hidden" />
 
-      {/* Stitch Header */}
-      <header className="sticky top-0 z-40 bg-[#FFF7ED]/95 backdrop-blur-md border-b border-[#E5E7EB] px-4 py-3 flex items-center justify-between shadow-xs">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="font-extrabold text-lg text-[#EA580C] tracking-tight">महाटिकिट</span>
-            <span className="text-slate-300">|</span>
-            <h1 className="font-bold text-sm sm:text-base text-[#141B2B] truncate">Gate QR Scanner</h1>
-          </div>
+      {/* Fixed top: brand + live metrics — never scrolls away */}
+      <header className="shrink-0 z-40 bg-[#141B2B] border-b border-white/10 px-3 py-2.5 flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[10px] uppercase tracking-wider text-orange-300/90 font-bold">FastGate</p>
+          <h1 className="font-bold text-sm truncate text-white">Gate Scanner</h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="flex text-[10px] font-mono bg-white/5 rounded-lg px-2 py-1 gap-2 border border-white/10">
+            <span className="text-emerald-400">{metrics.valid}✓</span>
+            <span className="text-amber-300">{metrics.duplicate}↻</span>
+            <span className="text-rose-400">{metrics.rejected}✗</span>
+          </div>
           <button
+            type="button"
             onClick={() => setSoundEnabled(!soundEnabled)}
-            className="w-9 h-9 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:text-[#EA580C]"
+            className="w-9 h-9 rounded-full bg-white/10 border border-white/15 flex items-center justify-center"
             title={soundEnabled ? 'आवाज सुरू' : 'म्यूट'}
           >
-            {soundEnabled ? <Volume2 className="w-4 h-4 text-[#EA580C]" /> : <VolumeX className="w-4 h-4" />}
+            {soundEnabled ? <Volume2 className="w-4 h-4 text-[#EA580C]" /> : <VolumeX className="w-4 h-4 text-slate-300" />}
           </button>
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-9 h-9 rounded-full bg-white/10 border border-white/15 flex items-center justify-center text-white"
+              aria-label="Close"
+            >
+              ✕
+            </button>
+          )}
         </div>
       </header>
 
-      {/* Sticky event + showtime lock — always visible (screenshot: picker was scrolled away) */}
-      <div className="sticky top-[52px] z-30 bg-[#141B2B] text-white p-3 flex flex-col gap-2 shadow-md border-b border-slate-700">
-        <div className="grid grid-cols-1 gap-2">
-          <label className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">कार्यक्रम / Event</label>
-          <select
-            value={targetEventId ? String(targetEventId) : ''}
-            onChange={(e) => {
-              const next = e.target.value || undefined;
-              setTargetEventId(next);
-              setTargetSessionId(undefined);
-            }}
-            className="w-full bg-[#1E293B] border border-slate-600 rounded-lg px-3 py-2.5 text-sm text-white"
-          >
-            <option value="">निवडा (Select event)</option>
-            {(loadedEvents || []).map((ev) => (
-              <option key={String(ev.id)} value={String(ev.id)}>
-                {ev.titleMr || ev.title || `Event #${ev.id}`}
-              </option>
-            ))}
-          </select>
-          <label className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">शो वेळ / Showtime</label>
-          <select
-            value={targetSessionId ? String(targetSessionId) : ''}
-            onChange={(e) => setTargetSessionId(e.target.value || undefined)}
-            disabled={!targetEventId}
-            className="w-full bg-[#1E293B] border border-slate-600 rounded-lg px-3 py-2.5 text-sm text-white disabled:opacity-50"
-          >
-            <option value="">निवडा (Select showtime)</option>
-            {sessionOptions.map((s) => (
-              <option key={String(s.id)} value={String(s.id)}>
-                {s.sessionStartTime
-                  ? new Date(s.sessionStartTime).toLocaleString('en-IN', {
-                      timeZone: 'Asia/Kolkata',
-                      weekday: 'short',
-                      day: 'numeric',
-                      month: 'short',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      hour12: true,
-                    })
-                  : `Session #${s.id}`}
-              </option>
-            ))}
-          </select>
-          {(loadedEvents || []).length === 0 && (
-            <p className="text-[11px] text-red-300 font-semibold">
-              कार्यक्रम यादी रिकामी — admin login / DB events तपासा.
-            </p>
-          )}
-          {targetEventId && sessionOptions.length === 0 && (
-            <p className="text-[11px] text-amber-300">
-              या कार्यक्रमासाठी शो वेळा उपलब्ध नाहीत — admin मध्ये session जोडा.
-            </p>
-          )}
-          {(!targetEventId || !targetSessionId) && (
-            <p className="text-[11px] text-amber-300">
-              स्कॅन सुरू करण्यापूर्वी कार्यक्रम व अचूक शो वेळ निवडा — इतर दिनांक/वेळेची तिकिटे नाकारली जातील.
-            </p>
-          )}
-        </div>
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <Ticket className="w-5 h-5 text-[#FD6B36] shrink-0" />
-            <span className="truncate font-bold text-sm text-white">
-              {selectedEvent?.titleMr || selectedEvent?.title || 'Gate Scanner'}
-            </span>
+      {/* Fixed scope picker */}
+      <div className="shrink-0 z-30 bg-[#0F172A] border-b border-white/10">
+        <button
+          type="button"
+          onClick={() => setScopeExpanded((v) => !v)}
+          className="w-full px-3 py-2 flex items-center justify-between gap-2 text-left"
+        >
+          <div className="min-w-0 flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full shrink-0 ${scopeReady ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'}`} />
+            <div className="min-w-0">
+              <p className="text-xs font-bold truncate">
+                {selectedEvent?.titleMr || selectedEvent?.title || 'कार्यक्रम निवडा'}
+              </p>
+              <p className="text-[10px] text-slate-400 truncate">
+                {selectedShowLabel || 'शो वेळ निवडा'} · {gateName || 'Gate 1'}
+              </p>
+            </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {cameraActive && (
-              <>
+          <span className="text-[10px] font-bold text-orange-300 shrink-0">
+            {scopeExpanded ? 'लपवा' : 'बदला'}
+          </span>
+        </button>
+        {scopeExpanded && (
+          <div className="px-3 pb-3 grid grid-cols-1 gap-2">
+            <select
+              value={targetEventId ? String(targetEventId) : ''}
+              onChange={(e) => {
+                setTargetEventId(e.target.value || undefined);
+                setTargetSessionId(undefined);
+              }}
+              className="w-full bg-[#1E293B] border border-slate-600 rounded-lg px-3 py-2 text-sm text-white"
+            >
+              <option value="">कार्यक्रम निवडा</option>
+              {(loadedEvents || []).map((ev) => (
+                <option key={String(ev.id)} value={String(ev.id)}>
+                  {ev.titleMr || ev.title || `Event #${ev.id}`}
+                </option>
+              ))}
+            </select>
+            <select
+              value={targetSessionId ? String(targetSessionId) : ''}
+              onChange={(e) => setTargetSessionId(e.target.value || undefined)}
+              disabled={!targetEventId}
+              className="w-full bg-[#1E293B] border border-slate-600 rounded-lg px-3 py-2 text-sm text-white disabled:opacity-50"
+            >
+              <option value="">शो वेळ निवडा</option>
+              {sessionOptions.map((s) => (
+                <option key={String(s.id)} value={String(s.id)}>
+                  {s.sessionStartTime
+                    ? new Date(s.sessionStartTime).toLocaleString('en-IN', {
+                        timeZone: 'Asia/Kolkata',
+                        weekday: 'short',
+                        day: 'numeric',
+                        month: 'short',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: true,
+                      })
+                    : `Session #${s.id}`}
+                </option>
+              ))}
+            </select>
+            {!scopeReady && (
+              <p className="text-[11px] text-amber-300">
+                स्कॅनपूर्वी कार्यक्रम + शो वेळ लॉक करा — चुकीची तिकिटे नाकारली जातील.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Tabs */}
+      <div className="shrink-0 px-3 pt-2">
+        <div className="flex bg-white/10 p-1 rounded-xl">
+          {(
+            [
+              { id: 'live' as const, label: 'Camera', icon: QrCode },
+              { id: 'manual' as const, label: 'Entry', icon: Keyboard },
+              { id: 'recent' as const, label: `Recent (${metrics.total})`, icon: Clock },
+            ] as const
+          ).map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex-1 py-2 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 ${
+                activeTab === tab.id ? 'bg-[#EA580C] text-white' : 'text-slate-300'
+              }`}
+            >
+              <tab.icon className="w-3.5 h-3.5" />
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Main pane — camera fills remaining height; no page scroll */}
+      <div className="flex-1 min-h-0 flex flex-col p-3 gap-2">
+        {activeTab === 'live' && (
+          <div className="relative flex-1 min-h-[240px] rounded-2xl overflow-hidden bg-black border border-white/10 shadow-xl">
+            <div id={scannerContainerId} className="absolute inset-0 w-full h-full [&_video]:object-cover [&_video]:w-full [&_video]:h-full" />
+
+            {!cameraActive && (
+              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 p-6 bg-[#0B1220]/95 text-center">
+                <Camera className="w-10 h-10 text-[#EA580C]" />
+                <div>
+                  <p className="font-bold text-white">कॅमेरा बंद आहे</p>
+                  <p className="text-xs text-slate-400 mt-1">तिकीट तपासण्यासाठी कॅमेरा सुरू करा</p>
+                </div>
+                {cameraError && (
+                  <p className="text-xs text-red-300 bg-red-950/50 border border-red-500/40 rounded-lg px-3 py-2 max-w-xs">
+                    {cameraError}
+                  </p>
+                )}
                 <button
-                  aria-label="Toggle Torch"
+                  type="button"
+                  disabled={!scopeReady}
+                  onClick={() => void startCamera()}
+                  className="px-5 py-2.5 rounded-xl bg-[#EA580C] disabled:opacity-40 text-white font-bold text-xs flex items-center gap-2"
+                >
+                  <Camera className="w-4 h-4" />
+                  कॅमेरा सुरू करा
+                </button>
+              </div>
+            )}
+
+            {cameraActive && !currentOverlay && (
+              <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+                <div className="relative w-[68%] max-w-[280px] aspect-square border-2 border-orange-400/50 rounded-2xl">
+                  <span className="absolute -top-0.5 -left-0.5 w-5 h-5 border-t-2 border-l-2 border-[#EA580C] rounded-tl-md" />
+                  <span className="absolute -top-0.5 -right-0.5 w-5 h-5 border-t-2 border-r-2 border-[#EA580C] rounded-tr-md" />
+                  <span className="absolute -bottom-0.5 -left-0.5 w-5 h-5 border-b-2 border-l-2 border-[#EA580C] rounded-bl-md" />
+                  <span className="absolute -bottom-0.5 -right-0.5 w-5 h-5 border-b-2 border-r-2 border-[#EA580C] rounded-br-md" />
+                  <div className="absolute inset-x-3 top-1/2 h-0.5 bg-gradient-to-r from-transparent via-[#EA580C] to-transparent animate-pulse" />
+                </div>
+              </div>
+            )}
+
+            {/* Instant verify flash overlay (does not push layout / no scroll) */}
+            {currentOverlay && (
+              <button
+                type="button"
+                onClick={handleDismissOverlay}
+                className={`absolute inset-0 z-30 flex flex-col items-center justify-center p-5 text-center ${
+                  currentOverlay.valid ? 'bg-emerald-600/95' : 'bg-rose-700/95'
+                }`}
+              >
+                {currentOverlay.valid ? (
+                  <CheckCircle2 className="w-16 h-16 text-white mb-2" />
+                ) : (
+                  <XCircle className="w-16 h-16 text-white mb-2" />
+                )}
+                <p className="text-xl font-black text-white tracking-wide">
+                  {currentOverlay.valid ? 'VALID · प्रवेश मंजूर' : denyBannerLabel(currentOverlay.scanResult)}
+                </p>
+                <p className="text-sm text-white/90 mt-1 font-semibold">
+                  {currentOverlay.ticket?.seats || currentOverlay.ticket?.seat || currentOverlay.ticket?.code || currentOverlay.message}
+                </p>
+                <p className="text-[11px] text-white/70 mt-3">पुढील स्कॅनसाठी टॅप / auto-resume</p>
+              </button>
+            )}
+
+            <div className="absolute bottom-3 inset-x-3 z-20 bg-black/65 backdrop-blur-md py-1.5 px-3 rounded-lg text-center">
+              <p className="text-[11px] text-white font-medium flex items-center justify-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#EA580C] animate-ping" />
+                {isVerifying ? 'तपासत आहे…' : 'QR फ्रेममध्ये धरा · Instant verify'}
+              </p>
+            </div>
+
+            {cameraActive && (
+              <div className="absolute top-3 right-3 z-20 flex gap-2">
+                <button
+                  type="button"
+                  aria-label="Torch"
                   onClick={handleToggleTorch}
-                  className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
-                    torchOn ? 'bg-[#EA580C] text-white' : 'bg-white/10 text-white hover:bg-white/20'
+                  className={`w-9 h-9 rounded-full flex items-center justify-center ${
+                    torchOn ? 'bg-[#EA580C] text-white' : 'bg-black/50 text-white'
                   }`}
-                  title="Flashlight"
                 >
                   <Flashlight className="w-4 h-4" />
                 </button>
                 {cameras.length > 1 && (
                   <button
-                    aria-label="Flip Camera"
+                    type="button"
+                    aria-label="Flip"
                     onClick={handleSwitchCamera}
-                    className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 active:scale-95 transition-all"
-                    title="Switch Camera"
+                    className="w-9 h-9 rounded-full bg-black/50 text-white flex items-center justify-center"
                   >
                     <SwitchCamera className="w-4 h-4" />
                   </button>
                 )}
-              </>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center justify-between text-xs text-slate-300 pt-0.5">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
-            <span className="font-semibold text-white truncate">
-              {selectedShowLabel || 'शो वेळ निवडा (Select showtime)'}
-            </span>
-            <span className="shrink-0">•</span>
-            <span className="bg-[#EA580C]/25 text-orange-200 px-2 py-0.5 rounded-full text-[11px] font-semibold border border-orange-500/30 shrink-0">
-              {gateName || 'मुख्य प्रवेशद्वार'}
-            </span>
-          </div>
-          <div className="flex items-center gap-1 text-[11px] text-slate-300 shrink-0">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-            <span>Online Sync</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="p-4 flex flex-col gap-4">
-        {/* Mode Toggle Bar */}
-        <div className="flex bg-slate-200/80 p-1 rounded-xl">
-          <button
-            onClick={() => setActiveTab('live')}
-            className={`flex-1 py-2 text-center rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-              activeTab === 'live'
-                ? 'bg-[#EA580C] text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <QrCode className="w-4 h-4" />
-            <span>Live Camera</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('manual')}
-            className={`flex-1 py-2 text-center rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-              activeTab === 'manual'
-                ? 'bg-[#EA580C] text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Keyboard className="w-4 h-4" />
-            <span>Manual Entry</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('recent')}
-            className={`flex-1 py-2 text-center rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-              activeTab === 'recent'
-                ? 'bg-[#EA580C] text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Clock className="w-4 h-4" />
-            <span>Recent ({metrics.total})</span>
-          </button>
-        </div>
-
-        {/* TAB 1: Live Scanner Viewport */}
-        {activeTab === 'live' && (
-          <div className="flex flex-col gap-4">
-            <div className="relative w-full aspect-square bg-[#141B2B] rounded-2xl overflow-hidden shadow-xl flex items-center justify-center">
-              {/* Radial dots pattern overlay */}
-              <div className="absolute inset-0 opacity-20 bg-[radial-gradient(#fd6b36_1px,transparent_1px)] [background-size:16px_16px]"></div>
-
-              {/* Html5Qrcode viewfinder mount */}
-              <div id={scannerContainerId} className="w-full h-full" />
-
-              {!cameraActive && (
-                <div className="absolute inset-0 bg-[#141B2B]/90 flex flex-col items-center justify-center text-center p-6 space-y-3 z-10">
-                  <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center mx-auto text-[#EA580C]">
-                    <Camera className="w-8 h-8" />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-bold text-white">कॅमेरा बंद आहे</h3>
-                    <p className="text-xs text-slate-400 mt-0.5">तिकीट तपासण्यासाठी कॅमेरा सुरू करा</p>
-                  </div>
-                  {cameraError && (
-                    <div className="p-2.5 rounded-lg bg-red-950/50 border border-red-500/40 text-red-300 text-xs max-w-xs">
-                      {cameraError}
-                    </div>
-                  )}
-                  <button
-                    onClick={() => void startCamera()}
-                    className="px-5 py-2.5 rounded-xl bg-[#EA580C] hover:bg-[#C2410C] active:scale-95 text-white font-bold text-xs shadow-md flex items-center gap-2 cursor-pointer"
-                  >
-                    <Camera className="w-4 h-4" />
-                    <span>कॅमेरा सुरू करा</span>
-                  </button>
-                </div>
-              )}
-
-              {/* Laser Target Box when camera is active */}
-              {cameraActive && !currentOverlay && (
-                <div className="pointer-events-none absolute inset-0 flex items-center justify-center z-10">
-                  <div className="relative w-56 h-56 flex items-center justify-center border-2 border-orange-400/60 rounded-2xl">
-                    <span className="absolute -top-1 -left-1 w-6 h-6 border-t-3 border-l-3 border-[#EA580C] rounded-tl-lg" />
-                    <span className="absolute -top-1 -right-1 w-6 h-6 border-t-3 border-r-3 border-[#EA580C] rounded-tr-lg" />
-                    <span className="absolute -bottom-1 -left-1 w-6 h-6 border-b-3 border-l-3 border-[#EA580C] rounded-bl-lg" />
-                    <span className="absolute -bottom-1 -right-1 w-6 h-6 border-b-3 border-r-3 border-[#EA580C] rounded-br-lg" />
-                    <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-[#EA580C] to-transparent shadow-[0_0_12px_#EA580C] animate-pulse" />
-                  </div>
-                </div>
-              )}
-
-              <div className="absolute bottom-3 inset-x-3 bg-black/70 backdrop-blur-md py-1.5 px-3 rounded-lg text-center z-20">
-                <p className="text-xs text-white flex items-center justify-center gap-1.5 font-medium">
-                  <span className="w-2 h-2 rounded-full bg-[#EA580C] animate-ping" />
-                  तिकीटाचा QR कोड फ्रेममध्ये धरा
-                </p>
-              </div>
-            </div>
-
-            {/* Validation Card (Stitch Exact) */}
-            {currentOverlay && (
-              <div className="bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
-                {currentOverlay.valid ? (
-                  <div className="bg-emerald-600 text-white px-4 py-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="w-5 h-5 stroke-[2.5]" />
-                      <span className="text-sm font-bold tracking-wide">✓ वैध तिकीट (VALID)</span>
-                    </div>
-                    <span className="bg-white/20 px-2 py-0.5 rounded text-[10px] font-bold tracking-wider">AUDIO OK</span>
-                  </div>
-                ) : (
-                  <div className="bg-rose-600 text-white px-4 py-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <XCircle className="w-5 h-5 stroke-[2.5]" />
-                      <span className="text-sm font-bold tracking-wide">
-                        {denyBannerLabel(currentOverlay.scanResult)}
-                      </span>
-                    </div>
-                    <span className="bg-white/20 px-2 py-0.5 rounded text-[10px] font-bold tracking-wider">DENIED</span>
-                  </div>
-                )}
-
-                  <div className="p-4 flex flex-col gap-3 bg-[#FFF7ED]/50">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">प्रेक्षक / ATTENDEE</span>
-                      <h2 className="text-base font-bold text-[#141B2B]">
-                        {currentOverlay.ticket?.attendee || '—'}
-                      </h2>
-                      <p className="text-xs text-slate-500 font-medium truncate max-w-[160px]">
-                        {currentOverlay.ticket?.eventMr || currentOverlay.ticket?.event || '—'}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">आसन / SEATS</span>
-                      <p className="text-base font-bold text-[#EA580C]">
-                        {currentOverlay.ticket?.seats || currentOverlay.ticket?.seat || '—'}
-                      </p>
-                      {(currentOverlay.isGroup || (currentOverlay.totalSeats || 0) > 1) && (
-                        <p className="text-[11px] font-bold text-emerald-700 mt-0.5">
-                          पार्टी: {currentOverlay.totalSeats || currentOverlay.seatCodes?.length || '—'} जण चेक-इन
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {!currentOverlay.valid && currentOverlay.rawPreview ? (
-                    <p className="text-[10px] font-mono text-slate-500 bg-slate-50 border border-slate-100 rounded-lg px-2 py-1.5 break-all">
-                      QR वाचले: {currentOverlay.rawPreview}
-                    </p>
-                  ) : null}
-
-                  <div className="grid grid-cols-2 gap-2 pt-1">
-                    <div className="bg-white p-2.5 rounded-lg border border-slate-200 flex flex-col">
-                      <span className="text-[10px] text-slate-500">तिकीट ID</span>
-                      <span className="text-xs font-semibold text-[#141B2B] truncate">
-                        {currentOverlay.ticket?.code || currentOverlay.ticketCode || '—'}
-                      </span>
-                    </div>
-                    <div className="bg-white p-2.5 rounded-lg border border-slate-200 flex flex-col">
-                      <span className="text-[10px] text-slate-500">शो वेळ / Showtime</span>
-                      <span className="text-xs font-semibold text-[#141B2B]">
-                        {currentOverlay.ticket?.showtimeLabel ||
-                          (currentOverlay.ticket?.showtime
-                            ? new Date(currentOverlay.ticket.showtime).toLocaleString('en-IN', {
-                                timeZone: 'Asia/Kolkata',
-                                day: 'numeric',
-                                month: 'short',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                                hour12: true,
-                              })
-                            : '—')}
-                      </span>
-                    </div>
-                    <div className="bg-white p-2.5 rounded-lg border border-slate-200 flex flex-col col-span-2">
-                      <span className="text-[10px] text-slate-500">स्थळ / Venue</span>
-                      <span className="text-xs font-semibold text-[#141B2B] truncate">
-                        {currentOverlay.ticket?.venue || '—'}
-                      </span>
-                    </div>
-                    <div className="bg-white p-2.5 rounded-lg border border-slate-200 flex flex-col col-span-2">
-                      <span className="text-[10px] text-slate-500">प्रवेश स्थिती</span>
-                      <span className={`text-xs font-semibold flex items-center gap-1 ${
-                        currentOverlay.valid ? 'text-emerald-700' : 'text-rose-700'
-                      }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${
-                          currentOverlay.valid ? 'bg-emerald-500' : 'bg-rose-500'
-                        }`} />
-                        {currentOverlay.valid ? 'प्रवेश मंजूर' : currentOverlay.message || 'प्रवेश नाकारला'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-1 gap-2">
-                    <button
-                      onClick={handleDismissOverlay}
-                      className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 active:scale-95 text-[#141B2B] text-xs font-bold rounded-lg text-center transition flex items-center justify-center gap-1 cursor-pointer"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                      <span>Next Scan</span>
-                    </button>
-                    <button
-                      onClick={() =>
-                        setScannerPopup({
-                          title: 'तिकीट तपशील (Ticket Details)',
-                          message: [
-                            `नाव: ${currentOverlay.ticket?.attendee || '—'}`,
-                            `आसन: ${currentOverlay.ticket?.seats || currentOverlay.ticket?.seat || '—'}`,
-                            `कार्यक्रम: ${currentOverlay.ticket?.eventMr || currentOverlay.ticket?.event || '—'}`,
-                            `वेळ: ${currentOverlay.ticket?.showtimeLabel || '—'}`,
-                            `स्थळ: ${currentOverlay.ticket?.venue || '—'}`,
-                            `कोड: ${currentOverlay.ticket?.code || currentOverlay.ticketCode || '—'}`,
-                          ].join('\n'),
-                        })
-                      }
-                      className="py-2.5 px-4 bg-[#EA580C] text-white hover:bg-[#C2410C] active:scale-95 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1 shadow-xs cursor-pointer"
-                    >
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      <span>तपशील</span>
-                    </button>
-                  </div>
-                </div>
               </div>
             )}
           </div>
         )}
 
-        {/* Live attendance from DB for selected showtime */}
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex flex-col gap-2">
-          <div className="flex justify-between items-end">
-            <div>
-              <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">गेट उपस्थिती / ATTENDANCE</span>
-              <div className="flex items-baseline gap-1 mt-0.5">
-                <span className="text-xl font-bold text-[#141B2B]">
-                  {attendance ? attendance.checkedIn : '—'}
-                </span>
-                <span className="text-xs text-slate-500">
-                  / {attendance ? attendance.totalTickets : '—'} तिकीटे
-                </span>
-              </div>
-            </div>
-            <div className="text-right">
-              <span className="text-lg font-extrabold text-[#EA580C]">
-                {attendance ? `${attendance.percent}%` : '—'}
-              </span>
-              <span className="text-[11px] text-slate-500 block font-semibold">
-                {targetSessionId ? 'लाइव्ह DB' : 'शो निवडा'}
-              </span>
-            </div>
-          </div>
-          <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden flex">
-            <div
-              className="h-full bg-[#EA580C] rounded-full transition-all duration-500"
-              style={{ width: `${attendance ? Math.min(100, attendance.percent) : 0}%` }}
-            />
-          </div>
-          <div className="flex justify-between items-center text-[11px] text-slate-500 pt-0.5">
-            <span>बाकी: {attendance ? attendance.remaining : '—'}</span>
-            <span>सत्र स्कॅन: {metrics.valid} ✓ / {metrics.rejected} ✗</span>
-            <span className="text-[#EA580C] font-semibold">
-              {attendance?.capacity ? `क्षमता: ${attendance.capacity}` : 'Live'}
-            </span>
-          </div>
-        </div>
-
-        {/* TAB 2 / Manual Code Input Fallback Card (Stitch Exact) */}
-        {(activeTab === 'manual' || activeTab === 'live') && (
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex flex-col gap-2">
-            <div className="flex items-center gap-1.5 text-[#141B2B]">
-              <span className="w-2 h-2 rounded-full bg-[#EA580C]" />
-              <h3 className="font-bold text-xs sm:text-sm">मॅन्युअल कोड पडताळणी (Fallback Entry)</h3>
-            </div>
-            <p className="text-[11px] text-slate-500">
-              QR अयशस्वी झाल्यास तिकीट कोड किंवा ऑर्डर ID (उदा. MT-2026-22814) टाका — निवडलेल्या शोशी जुळले तरच प्रवेश.
-            </p>
-            <form onSubmit={handleManualSubmit} className="flex gap-2 pt-1">
+        {activeTab === 'manual' && (
+          <div className="flex-1 overflow-y-auto rounded-2xl bg-white text-[#141B2B] p-4 space-y-3">
+            <h3 className="font-bold text-sm">मॅन्युअल कोड पडताळणी</h3>
+            <p className="text-[11px] text-slate-500">QR अयशस्वी झाल्यास तिकीट / ऑर्डर कोड टाका.</p>
+            <form onSubmit={handleManualSubmit} className="flex gap-2">
               <input
                 type="text"
                 value={manualCode}
                 onChange={(e) => setManualCode(e.target.value)}
-                placeholder="तिकीट कोड / ऑर्डर ID"
-                className="flex-1 bg-slate-50 text-[#141B2B] font-mono text-xs px-3 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-[#EA580C]"
+                placeholder="MT-TK-… / MT-2026-…"
+                className="flex-1 bg-slate-50 font-mono text-xs px-3 py-2.5 rounded-lg border border-slate-200"
               />
               <button
                 type="submit"
-                disabled={isVerifying || !manualCode.trim()}
-                className="bg-[#EA580C] hover:bg-[#C2410C] disabled:opacity-50 text-white px-4 py-2.5 rounded-lg text-xs font-bold shadow-xs active:scale-95 transition flex items-center gap-1 shrink-0 cursor-pointer"
+                disabled={isVerifying || !manualCode.trim() || !scopeReady}
+                className="bg-[#EA580C] disabled:opacity-50 text-white px-4 py-2.5 rounded-lg text-xs font-bold"
               >
-                {isVerifying ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                <span>तपासा</span>
+                {isVerifying ? '…' : 'तपासा'}
               </button>
             </form>
           </div>
         )}
 
-        {/* TAB 3 / Recent Scans Log (Stitch Exact) */}
-        <div className="bg-[#FFF7ED]/40 rounded-2xl p-4 flex flex-col gap-2.5 border border-orange-100">
-          <div className="flex justify-between items-center">
-            <span className="font-bold text-xs sm:text-sm text-[#141B2B]">मागील नोंदी (Recent Logs)</span>
-            <span className="text-[11px] text-[#EA580C] font-semibold">थेट सिंक</span>
-          </div>
-          <div className="flex flex-col gap-2">
-            {recentScans.length > 0 ? (
-              recentScans.slice(0, 5).map((scan, idx) => (
-                <div key={idx} className="bg-white p-3 rounded-xl flex items-center justify-between shadow-2xs border border-slate-100">
-                  <div className="flex items-center gap-2.5">
-                    {scan.valid ? (
-                      <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                    ) : (
-                      <XCircle className="w-5 h-5 text-rose-600 shrink-0" />
-                    )}
-                    <div>
-                      <h4 className="text-xs font-bold text-[#141B2B]">
-                        {scan.ticket?.attendee || scan.ticket?.code || scan.ticketCode || '—'}
-                      </h4>
-                      <p className="text-[10px] text-slate-500">
-                        {scan.ticket?.seat || scan.ticket?.seats
-                          ? `आसन: ${scan.ticket?.seats || scan.ticket?.seat}`
-                          : scan.scanResult || '—'}{' '}
-                        • {new Date(scan.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                    </div>
+        {activeTab === 'recent' && (
+          <div className="flex-1 overflow-y-auto rounded-2xl bg-[#FFF7ED] text-[#141B2B] p-3 space-y-2">
+            {recentScans.length === 0 ? (
+              <p className="text-xs text-slate-500 text-center py-8">अद्याप स्कॅन नाही</p>
+            ) : (
+              recentScans.slice(0, 30).map((scan, idx) => (
+                <div key={`${scan.timestamp}-${idx}`} className="bg-white rounded-xl p-3 flex items-center justify-between border border-slate-100">
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold truncate">
+                      {scan.ticket?.attendee || scan.ticket?.code || scan.ticketCode || '—'}
+                    </p>
+                    <p className="text-[10px] text-slate-500 truncate">
+                      {scan.ticket?.seats || scan.ticket?.seat || scan.scanResult} ·{' '}
+                      {new Date(scan.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </p>
                   </div>
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                    scan.valid ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
-                  }`}>
-                    {scan.valid ? 'Gate 2' : 'Denied'}
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${scan.valid ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+                    {scan.valid ? 'OK' : 'DENY'}
                   </span>
                 </div>
               ))
-            ) : (
-              <p className="text-[11px] text-slate-500 py-3 text-center bg-white rounded-xl border border-dashed border-slate-200">
-                अद्याप स्कॅन नाही — पहिले तिकीट स्कॅन केल्यावर येथे दिसेल.
-              </p>
             )}
           </div>
-        </div>
+        )}
+      </div>
 
-        {/* Protocol Footer */}
-        <div className="pt-2 text-center">
-          <p className="text-[11px] text-slate-400">
-            MahaTicket FastGate • निवडलेल्या कार्यक्रम + शो वेळेशीच तिकीट जुळते
-          </p>
+      {/* Fixed footer attendance */}
+      <div className="shrink-0 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-1 border-t border-white/10 bg-[#0B1220]">
+        <div className="flex items-center justify-between text-[11px] mb-1">
+          <span className="text-slate-400">उपस्थिती</span>
+          <span className="font-bold text-orange-300">
+            {attendance ? `${attendance.checkedIn}/${attendance.totalTickets} · ${attendance.percent}%` : 'शो निवडा'}
+          </span>
+        </div>
+        <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-[#EA580C] transition-all duration-300"
+            style={{ width: `${attendance ? Math.min(100, attendance.percent) : 0}%` }}
+          />
         </div>
       </div>
 
       {scannerPopup && (
-        <div className="fixed inset-0 z-[1300] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-3xl p-6 max-w-sm w-full text-center shadow-2xl border border-slate-100 transform transition-all scale-100">
-            <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3 text-amber-600">
-              <ShieldCheck className="w-6 h-6" />
-            </div>
-            <h3 className="text-base font-bold text-slate-900 mb-2">{scannerPopup.title}</h3>
-            <p className="text-slate-600 text-sm mb-6 leading-relaxed whitespace-pre-line">{scannerPopup.message}</p>
+        <div className="fixed inset-0 z-[1300] flex items-center justify-center p-4 bg-black/70">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full text-center text-[#141B2B]">
+            <h3 className="text-base font-bold mb-2">{scannerPopup.title}</h3>
+            <p className="text-sm text-slate-600 mb-6 whitespace-pre-line">{scannerPopup.message}</p>
             <button
+              type="button"
               onClick={() => setScannerPopup(null)}
-              className="w-full py-2.5 px-4 bg-[#EA580C] hover:bg-[#A33900] active:scale-95 text-white font-bold rounded-xl text-sm transition-all shadow-md cursor-pointer"
+              className="w-full py-2.5 bg-[#EA580C] text-white font-bold rounded-xl text-sm"
             >
-              ठीक आहे (OK)
+              ठीक आहे
             </button>
           </div>
         </div>

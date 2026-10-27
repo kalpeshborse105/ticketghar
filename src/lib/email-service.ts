@@ -6,6 +6,7 @@ import { tickets, orders, events, venues, eventSessions } from '@/src/db/schema'
 import { eq } from 'drizzle-orm';
 import { getTicketShareUrl } from './public-url';
 import { generateTicketPdfBuffer } from './ticket-pdf';
+import { uploadAndSaveOrderTicketPdf } from './ticket-pdf-storage';
 import QRCode from 'qrcode';
 
 interface SendTicketEmailParams {
@@ -182,6 +183,15 @@ export async function sendBookingTicketEmail(
       }
     }
 
+    if (pdfBuffer && pdfBuffer.length > 0) {
+      await uploadAndSaveOrderTicketPdf({
+        orderId: ticketRecord.order.id,
+        orderNumber: ticketRecord.order.orderNumber,
+        ticketCode: ticketRecord.ticket.ticketCode,
+        buffer: pdfBuffer,
+      }).catch(() => null);
+    }
+
     const emailSubject = `MahaTicket 🎟️ — Booking Confirmed (${ticketRecord.order.orderNumber}): ${eventRecord?.event.titleMr || eventRecord?.event.title || 'Event'}`;
 
     // 4. Try SMTP first if configured
@@ -262,6 +272,11 @@ export async function sendBookingTicketEmail(
           `[Email] Sent booking confirmation via SMTP to ${recipient}` +
             (pdfBuffer ? ' with PDF ticket attached' : ' (HTML only — PDF attach failed)')
         );
+        await db
+          .update(orders)
+          .set({ emailSentAt: new Date(), updatedAt: new Date() })
+          .where(eq(orders.id, ticketRecord.order.id))
+          .catch(() => null);
         return {
           success: true,
           status: 'sent',
@@ -288,6 +303,11 @@ export async function sendBookingTicketEmail(
               attachments,
             });
             console.log(`[Email] Sent confirmation via Gmail service fallback to ${recipient}`);
+            await db
+              .update(orders)
+              .set({ emailSentAt: new Date(), updatedAt: new Date() })
+              .where(eq(orders.id, ticketRecord.order.id))
+              .catch(() => null);
             return {
               success: true,
               status: 'sent',

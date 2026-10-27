@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
 import { tickets, eventSessions, events, venues } from '@/src/db/schema.ts';
 import { eq, sql, count } from 'drizzle-orm';
+import { requireRoles } from '@/src/lib/admin-auth.ts';
 
 /**
  * Live gate attendance for a selected showtime (from DB — not demo numbers).
@@ -9,6 +10,15 @@ import { eq, sql, count } from 'drizzle-orm';
  */
 export async function GET(request: NextRequest) {
   try {
+    const authError = requireRoles(request, [
+      'super_admin',
+      'organizer',
+      'scanner',
+      'operations',
+      'manager',
+    ]);
+    if (authError) return authError;
+
     const sessionId = Number(request.nextUrl.searchParams.get('sessionId') || 0);
     if (!sessionId) {
       return NextResponse.json({ error: 'sessionId is required' }, { status: 400 });

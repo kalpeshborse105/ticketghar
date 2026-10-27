@@ -13,3 +13,4 @@ export function createServiceRoleClient(): SupabaseClient {
 }
 
 export const EVENT_MEDIA_BUCKET = 'event-media';
+export const TICKET_PDF_BUCKET = 'ticket-pdfs';

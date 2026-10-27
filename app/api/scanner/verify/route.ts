@@ -1,9 +1,10 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/src/db/index.ts';
 import { tickets, ticketScans, events, orders, eventSessions, venues } from '@/src/db/schema.ts';
 import { eq, desc, and } from 'drizzle-orm';
 import { decryptSecureTicketQr, decryptSecureGroupOrderQr } from '@/src/lib/ticket-crypto.ts';
 import { normalizeScannerPayload } from '@/src/lib/scanner-payload.ts';
+import { requireRoles, getAdminSessionOrNull } from '@/src/lib/admin-auth.ts';
 
 function formatShowtimeIst(value: Date | string | null | undefined): string {
   if (!value) return '—';
@@ -46,8 +47,28 @@ function ticketPassSummary(params: {
   };
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const authError = requireRoles(request, [
+      'super_admin',
+      'organizer',
+      'scanner',
+      'operations',
+      'manager',
+    ]);
+    if (authError) {
+      return NextResponse.json(
+        {
+          valid: false,
+          scanResult: 'UNAUTHORIZED',
+          message: 'Login required to verify tickets.',
+          error: 'Unauthorized',
+        },
+        { status: 401 }
+      );
+    }
+
+    const adminSession = getAdminSessionOrNull(request);
     const body = await request.json();
     const {
       ticketCodeOrPayload,
@@ -57,7 +78,6 @@ export async function POST(request: Request) {
       targetEventId,
       targetSessionId,
       scannerOrganizerId,
-      requireScope,
     } = body;
 
     if (!ticketCodeOrPayload) {
@@ -67,8 +87,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // Gate staff must lock scanner to one event + showtime before accepting entry
-    if (requireScope && (!targetEventId || !targetSessionId)) {
+    // Always require event + showtime scope (client cannot opt out)
+    if (!targetEventId || !targetSessionId) {
       return NextResponse.json({
         valid: false,
         scanResult: 'SCOPE_REQUIRED',
@@ -76,6 +96,10 @@ export async function POST(request: Request) {
           'कृपया स्कॅन करण्यापूर्वी कार्यक्रम व शो वेळ निवडा (Select event and showtime first).',
       });
     }
+
+    // Prefer server session identity over client-supplied scanner ids
+    const effectiveScannerUserId = adminSession?.user?.userId || scannerUserId || null;
+    void scannerOrganizerId;
 
     const { normalized, kind } = normalizeScannerPayload(String(ticketCodeOrPayload));
     let targetCode = normalized;
@@ -244,7 +268,7 @@ export async function POST(request: Request) {
         await db.insert(ticketScans).values({
           ticketId: allOrderTickets[0].id,
           ticketCode: order.orderNumber,
-          scannedByUserId: scannerUserId || null,
+          scannedByUserId: effectiveScannerUserId,
           scannerDevice: scannerDevice || 'Gate Terminal',
           scanResult: 'ALREADY_USED',
           gateName: gateName || 'Main Entry Gate',
@@ -289,7 +313,7 @@ export async function POST(request: Request) {
           .values({
             ticketId: allOrderTickets[0].id,
             ticketCode: order.orderNumber,
-            scannedByUserId: scannerUserId || null,
+            scannedByUserId: effectiveScannerUserId,
             scannerDevice: scannerDevice || 'Gate Terminal Pro',
             scanResult: 'SUCCESS',
             gateName: gateName || 'Main Entry Gate 1',
@@ -489,7 +513,7 @@ export async function POST(request: Request) {
             .values({
               ticketId: validParty[0].id,
               ticketCode: ord.orderNumber,
-              scannedByUserId: scannerUserId || null,
+              scannedByUserId: effectiveScannerUserId,
               scannerDevice: scannerDevice || 'Gate Terminal Pro',
               scanResult: 'SUCCESS',
               gateName: gateName || 'Main Entry Gate 1',
@@ -641,7 +665,7 @@ export async function POST(request: Request) {
       await db.insert(ticketScans).values({
         ticketId: ticket.id,
         ticketCode: ticket.ticketCode,
-        scannedByUserId: scannerUserId || null,
+        scannedByUserId: effectiveScannerUserId,
         scannerDevice: scannerDevice || 'Gate Terminal 1',
         scanResult: 'ALREADY_USED',
         gateName: gateName || 'Main Gate',
@@ -701,7 +725,7 @@ export async function POST(request: Request) {
         .values({
           ticketId: ticket.id,
           ticketCode: ticket.ticketCode,
-          scannedByUserId: scannerUserId || null,
+          scannedByUserId: effectiveScannerUserId,
           scannerDevice: scannerDevice || 'Gate Terminal Pro',
           scanResult: 'SUCCESS',
           gateName: gateName || 'Main Entry Gate 1',

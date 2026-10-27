@@ -41,8 +41,21 @@ const TheatreFaceMasksIcon = ({ className = 'w-7 h-7' }: { className?: string })
 export function TikitMitraFloatingBot() {
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
+  const [hideChrome, setHideChrome] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const onOverlay = (e: Event) => {
+      const detail = (e as CustomEvent)?.detail;
+      setHideChrome(!!detail?.hideChrome);
+      if (detail?.hideChrome) {
+        setIsOpen(false);
+      }
+    };
+    window.addEventListener('mahaticket_ui_overlay', onOverlay as EventListener);
+    return () => window.removeEventListener('mahaticket_ui_overlay', onOverlay as EventListener);
+  }, []);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome',
@@ -223,6 +236,8 @@ export function TikitMitraFloatingBot() {
     const formatted = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
     return <span dangerouslySetInnerHTML={{ __html: formatted }} />;
   };
+
+  if (hideChrome) return null;
 
   return (
     <>
