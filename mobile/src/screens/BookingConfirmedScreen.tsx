@@ -190,17 +190,8 @@ export default function BookingConfirmedScreen({ navigation, route }: any) {
     ? `₹${Math.round(order.grandTotal / 100).toLocaleString('en-IN')}`
     : '—';
 
-  const qrPayload =
-    order?.tickets?.[0]?.qrPayload ||
-    JSON.stringify({
-      app: 'MahaTicket',
-      orderNumber: resolvedOrderNum,
-      ticketCode: order?.tickets?.[0]?.ticketCode || resolvedOrderNum,
-      eventTitle: resolvedEventTitle,
-      seats: formattedSeats,
-      verified: true,
-      timestamp: new Date().toISOString(),
-    });
+  // Order number QR → gate admits every seat on this booking with one scan
+  const qrPayload = resolvedOrderNum || order?.tickets?.[0]?.ticketCode || 'MT-PASS';
 
   const primaryTicketCode = order?.tickets?.[0]?.ticketCode || resolvedOrderNum;
   const pdfUrl = `${WEB_ORIGIN}/api/orders/${encodeURIComponent(resolvedOrderNum)}/pdf`;

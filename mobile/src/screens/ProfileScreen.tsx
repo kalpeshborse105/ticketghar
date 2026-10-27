@@ -105,6 +105,11 @@ export default function ProfileScreen({ navigation }: any) {
   const handleGoogleLogin = async () => {
     try {
       const url = await getGoogleAuthUrl();
+      const canOpen = await Linking.canOpenURL(url);
+      if (canOpen) {
+        await Linking.openURL(url);
+        return;
+      }
       setGoogleAuthUrl(url);
       setGoogleAuthVisible(true);
     } catch {

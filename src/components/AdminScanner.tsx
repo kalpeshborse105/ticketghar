@@ -805,8 +805,17 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
                   {currentOverlay.valid ? 'VALID · प्रवेश मंजूर' : denyBannerLabel(currentOverlay.scanResult)}
                 </p>
                 <p className="text-sm text-white/90 mt-1 font-semibold">
-                  {currentOverlay.ticket?.seats || currentOverlay.ticket?.seat || currentOverlay.ticket?.code || currentOverlay.message}
+                  {currentOverlay.ticket?.seats ||
+                    currentOverlay.seatCodes?.join(', ') ||
+                    currentOverlay.ticket?.seat ||
+                    currentOverlay.ticket?.code ||
+                    currentOverlay.message}
                 </p>
+                {currentOverlay.valid && (currentOverlay.totalSeats || 0) > 1 ? (
+                  <p className="text-xs text-white font-bold mt-1">
+                    ग्रुप: {currentOverlay.totalSeats} आसने चेक-इन
+                  </p>
+                ) : null}
                 <p className="text-[11px] text-white/70 mt-3">पुढील स्कॅनसाठी टॅप / auto-resume</p>
               </button>
             )}

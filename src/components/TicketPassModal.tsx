@@ -386,11 +386,11 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
               orderNumber={order.orderNumber}
               grandTotal={order.grandTotal}
               qrPayload={
-                // Prefer short HTTP share URL for reliable phone-camera scans.
-                // Dense MTGRP/MTSEC tokens often fail when scanned from another phone screen.
+                // Order ID QR → one scan checks in ALL seats in the booking.
+                // Short HTTP URL also resolves to the same order via ticket code.
+                order.orderNumber ||
                 ticketUrl ||
                 primaryTicket ||
-                order.orderNumber ||
                 bookingResult.groupQrPayload ||
                 order.groupQrPayload ||
                 ''

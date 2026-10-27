@@ -2,15 +2,14 @@ import { Platform } from 'react-native';
 import { resolveApiBase } from '../api';
 
 /**
- * Build Google OAuth URL for in-app WebView (preferred) or external browser fallback.
- * In-app WebView intercepts /auth/mobile-done?token=… and closes — no stuck Chrome tab.
+ * Google OAuth URL for mobile — open in system Chrome/browser so existing Google
+ * accounts appear. Callback lands on /auth/mobile-done → mahaticket:// deep link.
  */
 export async function getGoogleAuthUrl(): Promise<string> {
   const base = await resolveApiBase();
   return `${base.replace(/\/$/, '')}/api/auth/google?direct=true&source=mobile`;
 }
 
-/** @deprecated Prefer getGoogleAuthUrl + in-app WebView */
 export async function openGoogleAuthInApp(): Promise<string> {
   return getGoogleAuthUrl();
 }

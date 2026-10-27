@@ -1,9 +1,6 @@
 package com.kalpkrutinfotech.mahaticket
 
-import android.app.DownloadManager
 import android.content.ContentValues
-import android.content.Context
-import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
@@ -69,32 +66,9 @@ class DownloadModule(reactContext: ReactApplicationContext) : ReactContextBaseJa
 
                 promise.resolve(savedPath)
             } catch (e: Exception) {
-                // Last-resort: system DownloadManager (may still fail on auth)
-                try {
-                    val safeFilename = filename.replace(Regex("[^a-zA-Z0-9._-]"), "_")
-                    val request = DownloadManager.Request(Uri.parse(url))
-                    request.setTitle(title)
-                    request.setDescription(description)
-                    request.setMimeType("application/pdf")
-                    request.setNotificationVisibility(
-                        DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED
-                    )
-                    request.setDestinationInExternalPublicDir(
-                        Environment.DIRECTORY_DOWNLOADS,
-                        safeFilename
-                    )
-                    request.setAllowedOverMetered(true)
-                    request.setAllowedOverRoaming(true)
-                    if (!authHeader.isNullOrBlank()) {
-                        request.addRequestHeader("Authorization", authHeader)
-                    }
-                    val manager =
-                        reactApplicationContext.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-                    val id = manager.enqueue(request)
-                    promise.resolve(id.toString())
-                } catch (fallback: Exception) {
-                    promise.reject("DOWNLOAD_ERROR", e.message ?: fallback.message, e)
-                }
+                // Never enqueue DownloadManager fallback — it creates 0-byte "Waiting to retry" stubs
+                // when auth/token fails. Surface the real error to JS instead.
+                promise.reject("DOWNLOAD_ERROR", e.message ?: "PDF download failed", e)
             }
         }
     }

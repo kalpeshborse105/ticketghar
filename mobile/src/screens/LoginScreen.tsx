@@ -13,6 +13,7 @@ import {
   Animated,
   Dimensions,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   ScrollView,
   StatusBar,
@@ -243,17 +244,29 @@ export default function LoginScreen({ navigation, route }: any) {
     }
   };
 
-  // Google Sign In — in-app WebView (auto-closes after success)
+  // Google Sign-In — open system browser / Chrome so existing Google accounts appear
   const handleGoogleLogin = async () => {
     try {
       setLoading(true);
       setError('');
       const url = await getGoogleAuthUrl();
-      setGoogleAuthUrl(url);
-      setGoogleAuthVisible(true);
-      setLoading(false);
+      const canOpen = await Linking.canOpenURL(url);
+      if (!canOpen) {
+        // Fallback: in-app WebView if browser cannot open
+        setGoogleAuthUrl(url);
+        setGoogleAuthVisible(true);
+        return;
+      }
+      await Linking.openURL(url);
+      setInfo('Chrome / ब्राउझरमध्ये Google खाते निवडा — पूर्ण झाल्यावर अॅप आपोआप उघडेल.');
     } catch (err: any) {
-      setError(err?.message || 'Google लॉगिन सुरू करता आले नाही.');
+      try {
+        const url = await getGoogleAuthUrl();
+        setGoogleAuthUrl(url);
+        setGoogleAuthVisible(true);
+      } catch {
+        setError(err?.message || 'Google लॉगिन सुरू करता आले नाही.');
+      }
     } finally {
       setLoading(false);
     }

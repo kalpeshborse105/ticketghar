@@ -202,7 +202,7 @@ async function request<T>(
         Accept: 'application/json',
         'Content-Type': 'application/json',
         'X-App-Platform': 'android',
-        'X-App-Version': '1.0.25',
+        'X-App-Version': '1.0.26',
         'X-Correlation-Id': correlationId,
         ...authHeaders,
         ...(init?.headers || {}),

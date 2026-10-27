@@ -3,9 +3,13 @@
  * Event ticketing for Maharashtra theatres & live shows
  */
 import React, { useEffect } from 'react';
-import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
+import {
+  NavigationContainer,
+  DefaultTheme,
+  createNavigationContainerRef,
+} from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { StatusBar, Linking } from 'react-native';
+import { StatusBar, Linking, BackHandler, Alert } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Toast from 'react-native-toast-message';
 import RootNavigator from './src/navigation';
@@ -13,7 +17,33 @@ import { COLORS } from './src/theme/colors';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { useAuthStore, useEventsStore } from './src/store';
 
+export const navigationRef = createNavigationContainerRef();
+
 export default function App() {
+  useEffect(() => {
+    // Safety net: never let Android finish the Activity without confirm
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (navigationRef.isReady() && navigationRef.canGoBack()) {
+        navigationRef.goBack();
+        return true;
+      }
+      Alert.alert(
+        'अॅप बंद करायचे? (Exit MahaTicket)',
+        'तुम्हाला महाटिकिट अॅपमधून बाहेर पडायचे आहे का?',
+        [
+          { text: 'नाही (Stay)', style: 'cancel' },
+          {
+            text: 'होय, बंद करा (Exit)',
+            style: 'destructive',
+            onPress: () => BackHandler.exitApp(),
+          },
+        ]
+      );
+      return true;
+    });
+    return () => sub.remove();
+  }, []);
+
   useEffect(() => {
     // 0ms instant startup cache hydration
     useAuthStore.getState().loadStoredAuth().catch(() => null);
@@ -118,6 +148,7 @@ export default function App() {
         />
         <ErrorBoundary>
           <NavigationContainer
+            ref={navigationRef}
             theme={{
               ...DefaultTheme,
               colors: {
@@ -132,7 +163,7 @@ export default function App() {
             }}
           >
             <RootNavigator />
-    </NavigationContainer>
+          </NavigationContainer>
         </ErrorBoundary>
         <Toast />
       </SafeAreaProvider>

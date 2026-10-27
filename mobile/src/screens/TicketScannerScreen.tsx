@@ -1,7 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  BackHandler,
   Easing,
   Linking,
   ScrollView,
@@ -13,6 +14,7 @@ import {
   Vibration,
   View,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-toast-message';
@@ -146,6 +148,21 @@ export default function TicketScannerScreen({ navigation }: any) {
 
   const extractedPreviewCode = extractTicketCode(ticketInput);
   const resolvedTicketUrl = resolveTicketUrl(ticketInput);
+
+  useFocusEffect(
+    useCallback(() => {
+      const onBack = () => {
+        if (navigation.canGoBack()) {
+          navigation.goBack();
+          return true;
+        }
+        navigation.navigate('Main', { screen: 'Profile' });
+        return true;
+      };
+      const sub = BackHandler.addEventListener('hardwareBackPress', onBack);
+      return () => sub.remove();
+    }, [navigation])
+  );
 
   useEffect(() => {
     const loop = Animated.loop(

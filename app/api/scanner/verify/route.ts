@@ -651,45 +651,6 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Check if ticket was already scanned / used
-    if (ticket.status === 'used') {
-      const previousScans = await db
-        .select()
-        .from(ticketScans)
-        .where(eq(ticketScans.ticketId, ticket.id))
-        .orderBy(desc(ticketScans.scannedAt))
-        .limit(1);
-
-      const lastScan = previousScans[0];
-
-      await db.insert(ticketScans).values({
-        ticketId: ticket.id,
-        ticketCode: ticket.ticketCode,
-        scannedByUserId: effectiveScannerUserId,
-        scannerDevice: scannerDevice || 'Gate Terminal 1',
-        scanResult: 'ALREADY_USED',
-        gateName: gateName || 'Main Gate',
-      });
-
-      return NextResponse.json({
-        valid: false,
-        scanResult: 'ALREADY_USED',
-        message: 'सावधान! हे तिकीट आधीच वापरले गेले आहे (Already Scanned).',
-        alreadyScannedAt: lastScan?.scannedAt || ticket.createdAt,
-        previousGate: lastScan?.gateName || 'Gate 1',
-        ticket: ticketPassSummary({
-          code: ticket.ticketCode,
-          seat: ticket.seatCode,
-          attendee: ticket.attendeeName,
-          eventTitle: event.title,
-          eventTitleMr: event.titleMr,
-          venueName,
-          showtime: session.sessionStartTime,
-          sessionId: session.id,
-        }),
-      });
-    }
-
     if (ticket.status === 'cancelled' || ticket.status === 'refunded') {
       return NextResponse.json({
         valid: false,
@@ -708,12 +669,51 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Atomic redeem: status CAS + scan log in one transaction (blocks double entry on retries)
+    // Party / order check-in: ONE QR (any seat in the booking) admits ALL seats once.
+    const orderTicketsAll = await db.select().from(tickets).where(eq(tickets.orderId, order.id));
+    const allSeatCodes = orderTicketsAll.map((t) => t.seatCode).filter(Boolean);
+    const validPartySeats = orderTicketsAll.filter((t) => t.status === 'valid');
+
+    if (validPartySeats.length === 0) {
+      const previousScans = await db
+        .select()
+        .from(ticketScans)
+        .where(eq(ticketScans.ticketId, ticket.id))
+        .orderBy(desc(ticketScans.scannedAt))
+        .limit(1);
+      const lastScan = previousScans[0];
+      // Do not spam ticket_scans on every camera re-fire
+      return NextResponse.json({
+        valid: false,
+        scanResult: 'ALREADY_USED',
+        message:
+          orderTicketsAll.length > 1
+            ? `या बुकिंगची सर्व ${orderTicketsAll.length} आसने आधीच चेक-इन झाली आहेत (Already Scanned).`
+            : 'सावधान! हे तिकीट आधीच वापरले गेले आहे (Already Scanned).',
+        alreadyScannedAt: lastScan?.scannedAt || ticket.createdAt,
+        previousGate: lastScan?.gateName || 'Gate 1',
+        isGroup: orderTicketsAll.length > 1,
+        totalSeats: orderTicketsAll.length,
+        seatCodes: allSeatCodes,
+        ticket: ticketPassSummary({
+          code: order.orderNumber || ticket.ticketCode,
+          seats: allSeatCodes.join(', ') || ticket.seatCode,
+          attendee: ticket.attendeeName || order.userName,
+          eventTitle: event.title,
+          eventTitleMr: event.titleMr,
+          venueName,
+          showtime: session.sessionStartTime,
+          sessionId: session.id,
+        }),
+      });
+    }
+
+    const partySize = validPartySeats.length;
     const redeem = await db.transaction(async (tx) => {
       const marked = await tx
         .update(tickets)
         .set({ status: 'used' })
-        .where(and(eq(tickets.id, ticket.id), eq(tickets.status, 'valid')))
+        .where(and(eq(tickets.orderId, order.id), eq(tickets.status, 'valid')))
         .returning({ id: tickets.id });
 
       if (marked.length === 0) {
@@ -723,8 +723,8 @@ export async function POST(request: NextRequest) {
       const [scanLog] = await tx
         .insert(ticketScans)
         .values({
-          ticketId: ticket.id,
-          ticketCode: ticket.ticketCode,
+          ticketId: validPartySeats[0].id,
+          ticketCode: order.orderNumber || ticket.ticketCode,
           scannedByUserId: effectiveScannerUserId,
           scannerDevice: scannerDevice || 'Gate Terminal Pro',
           scanResult: 'SUCCESS',
@@ -732,7 +732,7 @@ export async function POST(request: NextRequest) {
         })
         .returning();
 
-      return { ok: true as const, scanLog };
+      return { ok: true as const, scanLog, markedCount: marked.length };
     });
 
     if (!redeem.ok) {
@@ -740,10 +740,13 @@ export async function POST(request: NextRequest) {
         valid: false,
         scanResult: 'ALREADY_USED',
         message: 'सावधान! हे तिकीट आधीच वापरले गेले आहे.',
+        isGroup: partySize > 1,
+        totalSeats: orderTicketsAll.length,
+        seatCodes: allSeatCodes,
         ticket: ticketPassSummary({
-          code: ticket.ticketCode,
-          seat: ticket.seatCode,
-          attendee: ticket.attendeeName,
+          code: order.orderNumber || ticket.ticketCode,
+          seats: allSeatCodes.join(', ') || ticket.seatCode,
+          attendee: ticket.attendeeName || order.userName,
           eventTitle: event.title,
           eventTitleMr: event.titleMr,
           venueName,
@@ -756,11 +759,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       valid: true,
       scanResult: 'SUCCESS',
-      message: 'प्रवेश मान्य! (Entry Approved)',
+      message:
+        redeem.markedCount > 1
+          ? `ग्रुप प्रवेश मान्य! ${redeem.markedCount} आसने चेक-इन (Group entry: ${redeem.markedCount} seats)`
+          : 'प्रवेश मान्य! (Entry Approved)',
+      isGroup: redeem.markedCount > 1,
+      totalSeats: redeem.markedCount,
+      seatCodes: allSeatCodes,
       ticket: ticketPassSummary({
-        code: ticket.ticketCode,
-        seat: ticket.seatCode,
-        attendee: ticket.attendeeName,
+        code: order.orderNumber || ticket.ticketCode,
+        seats: allSeatCodes.join(', ') || ticket.seatCode,
+        attendee: ticket.attendeeName || order.userName,
         eventTitle: event.title,
         eventTitleMr: event.titleMr,
         venueName,

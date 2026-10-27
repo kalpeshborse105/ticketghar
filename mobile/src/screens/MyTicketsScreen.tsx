@@ -570,20 +570,10 @@ export default function MyTicketsScreen({ navigation }: any) {
                 orderNumber={selectedOrder?.orderNumber}
                 grandTotal={selectedOrder?.grandTotal}
                 qrPayload={
-                  selectedOrder?.tickets?.[0]?.qrPayload ||
-                  JSON.stringify({
-                    app: 'MahaTicket',
-                    orderNumber: selectedOrder?.orderNumber || '—',
-                    ticketCode: selectedOrder?.tickets?.[0]?.ticketCode || selectedOrder?.orderNumber || '—',
-                    eventTitle: selectedOrder?.event?.titleMr || selectedOrder?.event?.title || (selectedOrder as any)?.eventTitle || 'कार्यक्रम',
-                    seats:
-                      selectedOrder?.tickets?.map((t) => t.seatCode).filter(Boolean).join(', ') ||
-                      (Array.isArray((selectedOrder as any)?.seatCodes)
-                        ? (selectedOrder as any).seatCodes.join(', ')
-                        : (selectedOrder as any)?.seatsSummary || '—'),
-                    verified: true,
-                    timestamp: new Date().toISOString(),
-                  })
+                  // Order number only — one scan admits every seat on this booking
+                  selectedOrder?.orderNumber ||
+                  selectedOrder?.tickets?.[0]?.ticketCode ||
+                  'MT-PASS'
                 }
                 ticketIndex={1}
                 totalTickets={selectedOrder?.tickets?.length || selectedOrder?.ticketCount}

@@ -96,16 +96,29 @@ export async function downloadTicketPdf(params: {
         if (Platform.OS === 'android') {
           ToastAndroid.show(
             msg.includes('PDF') || msg.includes('HTTP')
-              ? 'PDF अयशस्वी — लॉगिन तपासा किंवा पुन्हा प्रयत्न करा'
+              ? 'PDF अयशस्वी — लॉगिन तपासा व पुन्हा प्रयत्न करा'
               : 'PDF डाऊनलोड अयशस्वी. पुन्हा प्रयत्न करा.',
             ToastAndroid.LONG
           );
         }
-        // Fall through to browser only if we have a token (avoids empty auth downloads)
-        if (!pdfToken && !authHeader) {
-          return false;
+        // Browser open only with pdf token (never bare URL → 0-byte DownloadManager stubs)
+        if (pdfToken) {
+          try {
+            await Linking.openURL(url);
+            return true;
+          } catch {
+            return false;
+          }
         }
+        return false;
       }
+    }
+
+    if (!pdfToken && !authHeader) {
+      if (Platform.OS === 'android') {
+        ToastAndroid.show('PDF साठी लॉगिन आवश्यक आहे.', ToastAndroid.SHORT);
+      }
+      return false;
     }
 
     try {
@@ -113,7 +126,7 @@ export async function downloadTicketPdf(params: {
       return true;
     } catch {
       if (Platform.OS === 'android') {
-        ToastAndroid.show('PDF डाऊनलोड करण्यात अडचण आली.', ToastAndroid.SHORT);
+        ToastAndroid.show('PDF डाऊउनलोड करण्यात अडचण आली.', ToastAndroid.SHORT);
       }
       return false;
     }
