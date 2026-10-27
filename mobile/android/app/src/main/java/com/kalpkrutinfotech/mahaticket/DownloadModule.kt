@@ -8,6 +8,7 @@ import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import android.util.Base64
 import java.io.BufferedInputStream
 import java.io.File
 import java.io.FileOutputStream
@@ -69,6 +70,34 @@ class DownloadModule(reactContext: ReactApplicationContext) : ReactContextBaseJa
                 // Never enqueue DownloadManager fallback — it creates 0-byte "Waiting to retry" stubs
                 // when auth/token fails. Surface the real error to JS instead.
                 promise.reject("DOWNLOAD_ERROR", e.message ?: "PDF download failed", e)
+            }
+        }
+    }
+
+    /** JS fetch fallback: save already-downloaded PDF bytes (base64) to Downloads. */
+    @ReactMethod
+    fun savePdfBase64(
+        filename: String,
+        base64Payload: String,
+        promise: Promise
+    ) {
+        io.execute {
+            try {
+                val safeFilename = filename
+                    .replace(Regex("[^a-zA-Z0-9._-]"), "_")
+                    .let { if (it.lowercase().endsWith(".pdf")) it else "$it.pdf" }
+                val raw = base64Payload
+                    .substringAfter("base64,", base64Payload)
+                    .replace("\\s".toRegex(), "")
+                val bytes = Base64.decode(raw, Base64.DEFAULT)
+                if (bytes.size < 5 || String(bytes, 0, 4) != "%PDF") {
+                    promise.reject("DOWNLOAD_NOT_PDF", "Invalid PDF bytes (${bytes.size})")
+                    return@execute
+                }
+                val savedPath = savePdfToDownloads(safeFilename, bytes)
+                promise.resolve(savedPath)
+            } catch (e: Exception) {
+                promise.reject("DOWNLOAD_ERROR", e.message ?: "PDF save failed", e)
             }
         }
     }

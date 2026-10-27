@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="mr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>MahaTicket FastGate Camera</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #0B1220; overflow: hidden; font-family: system-ui, sans-serif; }
+    #reader { width: 100%; height: 100%; }
+    #reader video { object-fit: cover !important; width: 100% !important; height: 100% !important; }
+    #status {
+      position: fixed; left: 12px; right: 12px; bottom: 14px; z-index: 5;
+      background: rgba(0,0,0,0.7); color: #fff; font: 600 12px system-ui, sans-serif;
+      text-align: center; padding: 8px 10px; border-radius: 10px;
+    }
+    #frame {
+      pointer-events: none; position: fixed; inset: 18% 14%; z-index: 4;
+      border: 2px solid rgba(234,88,12,0.55); border-radius: 18px;
+    }
+  </style>
+</head>
+<body>
+  <div id="reader"></div>
+  <div id="frame"></div>
+  <div id="status">कॅमेरा तयार होत आहे…</div>
+  <script>
+    (function () {
+      function post(payload) {
+        try {
+          if (window.ReactNativeWebView) {
+            window.ReactNativeWebView.postMessage(JSON.stringify(payload));
+          }
+        } catch (e) {}
+      }
+
+      var statusEl = document.getElementById('status');
+      var lastCode = '';
+      var lastAt = 0;
+      var scanner = null;
+      var started = false;
+
+      function setStatus(t) { statusEl.textContent = t; }
+
+      function onDecoded(decoded) {
+        var now = Date.now();
+        if (!decoded || (decoded === lastCode && now - lastAt < 1800)) return;
+        lastCode = decoded;
+        lastAt = now;
+        setStatus('पडताळत आहे…');
+        post({ type: 'scan', code: String(decoded) });
+      }
+
+      function startCam() {
+        if (started) return;
+        if (typeof Html5Qrcode === 'undefined') {
+          setStatus('स्कॅनर लोड अयशस्वी');
+          post({ type: 'error', message: 'html5-qrcode failed to load' });
+          return;
+        }
+        started = true;
+        try {
+          scanner = new Html5Qrcode('reader');
+        } catch (e) {
+          started = false;
+          post({ type: 'error', message: String(e && e.message || e) });
+          return;
+        }
+
+        Html5Qrcode.getCameras().then(function (cams) {
+          if (!cams || !cams.length) {
+            setStatus('कॅमेरा सापडला नाही');
+            post({ type: 'error', message: 'No camera found' });
+            return;
+          }
+          var back = cams.find(function (c) {
+            return /back|rear|environment/i.test(c.label || '');
+          }) || cams[cams.length - 1] || cams[0];
+
+          var config = {
+            fps: 10,
+            qrbox: function (w, h) {
+              var s = Math.floor(Math.min(w, h) * 0.68);
+              return { width: Math.max(160, s), height: Math.max(160, s) };
+            },
+            aspectRatio: 1.0,
+            disableFlip: false
+          };
+
+          return scanner.start(back.id, config, onDecoded, function () {});
+        }).then(function () {
+          setStatus('Live · QR फ्रेममध्ये धरा');
+          post({ type: 'ready' });
+        }).catch(function (err) {
+          started = false;
+          setStatus('कॅमेरा सुरू झाला नाही');
+          post({ type: 'error', message: String(err && err.message || err) });
+        });
+      }
+
+      window.__mtStopCamera = function () {
+        try {
+          if (scanner && scanner.isScanning) {
+            scanner.stop().catch(function () {});
+          }
+        } catch (e) {}
+        started = false;
+      };
+
+      // Delay so WebView permission bridge is ready
+      setTimeout(startCam, 350);
+      post({ type: 'boot' });
+    })();
+  </script>
+</body>
+</html>

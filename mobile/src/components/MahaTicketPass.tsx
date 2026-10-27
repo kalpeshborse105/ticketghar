@@ -101,16 +101,25 @@ export function MahaTicketPass({
   const ticketWebUrl = `${WEB_ORIGIN}/tickets/${encodeURIComponent(ticketCode || resolvedOrderNum)}`;
 
   const handleDownloadPdf = async () => {
-    const ok = await downloadTicketPdf({
+    let token = pdfDownloadToken || null;
+    if (!token) {
+      try {
+        const fresh = await api.getOrder(resolvedOrderNum);
+        token =
+          (fresh as any)?.order?.pdfDownloadToken ||
+          (fresh as any)?.pdfDownloadToken ||
+          null;
+      } catch {
+        /* Bearer fallback in downloader */
+      }
+    }
+    await downloadTicketPdf({
       url: pdfUrl,
       filename: `MahaTicket-${resolvedOrderNum}.pdf`,
       title: 'MahaTicket Pass',
       description: `Order ${resolvedOrderNum}`,
-      pdfToken: pdfDownloadToken,
+      pdfToken: token,
     });
-    if (!ok && Platform.OS === 'android') {
-      // Toast already shown by downloader; avoid opening unauthenticated public URL
-    }
   };
 
   const handleShare = async () => {

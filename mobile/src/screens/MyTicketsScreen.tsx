@@ -124,12 +124,24 @@ export default function MyTicketsScreen({ navigation }: any) {
   const handleDownloadOrderPdf = async (order: OrderItem) => {
     const resolvedOrderNum = order.orderNumber || String(order.id);
     const pdfUrl = `${WEB_ORIGIN}/api/orders/${encodeURIComponent(resolvedOrderNum)}/pdf`;
+    let pdfToken = (order as any)?.pdfDownloadToken as string | undefined;
+    if (!pdfToken) {
+      try {
+        const fresh = await api.getOrder(resolvedOrderNum);
+        pdfToken =
+          (fresh as any)?.order?.pdfDownloadToken ||
+          (fresh as any)?.pdfDownloadToken ||
+          undefined;
+      } catch {
+        /* continue with Bearer auth */
+      }
+    }
     await downloadTicketPdf({
-      url: `${pdfUrl}?download=1`,
+      url: pdfUrl,
       filename: `MahaTicket-${resolvedOrderNum}.pdf`,
       title: `MahaTicket - ${resolvedOrderNum}`,
       description: `Order #${resolvedOrderNum}`,
-      pdfToken: (order as any)?.pdfDownloadToken,
+      pdfToken,
     });
   };
 
