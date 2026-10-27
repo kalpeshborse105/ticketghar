@@ -56,6 +56,18 @@ export function getTicketShareUrl(ticketCode: string): string {
   return getPublicUrl(`/tickets/${encodeURIComponent(ticketCode)}`);
 }
 
+/**
+ * QR / PDF / WhatsApp must never embed localhost — gate scanners need a reachable URL.
+ * Prefer production host when APP_URL is missing or points at loopback.
+ */
+export function getTicketQrShareUrl(ticketCode: string): string {
+  const url = getTicketShareUrl(ticketCode);
+  if (isLocalAppUrl(url)) {
+    return `${PRODUCTION_APP_URL}/tickets/${encodeURIComponent(ticketCode)}`;
+  }
+  return url;
+}
+
 export function isLocalAppUrl(url: string): boolean {
   return /localhost|127\.0\.0\.1/i.test(url);
 }

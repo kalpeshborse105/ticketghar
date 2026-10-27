@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import PDFDocument from 'pdfkit';
 import QRCode from 'qrcode';
-import { getTicketShareUrl } from './public-url';
+import { getTicketQrShareUrl, isLocalAppUrl } from './public-url';
 
 export type TicketPdfInput = {
   ticketCode: string;
@@ -244,10 +244,18 @@ async function generateTicketPdfBufferInternal(
   currentY += 18;
 
   // 6. Central Unified QR Code (BookMyShow Style)
-  // Prefer HTTP share URL for reliable encode + camera open; MTSEC is often too long for dense QR.
-  const publicShareUrl = getTicketShareUrl(input.ticketCode);
+  // Prefer signed MTGRP group token (one QR = whole party). Else production HTTPS share URL.
+  // Never encode localhost — scanners / phones cannot resolve it at the gate.
+  const publicShareUrl = getTicketQrShareUrl(input.ticketCode);
   const rawPayload = typeof input.qrPayload === 'string' ? input.qrPayload.trim() : '';
-  const qrTarget = rawPayload.startsWith('http') ? rawPayload : publicShareUrl;
+  let qrTarget = publicShareUrl;
+  if (rawPayload.startsWith('MTGRP:v1:') || rawPayload.startsWith('MTSEC:v1:')) {
+    qrTarget = rawPayload;
+  } else if (rawPayload.startsWith('http') && !isLocalAppUrl(rawPayload)) {
+    qrTarget = rawPayload;
+  } else if (rawPayload.startsWith('http') && isLocalAppUrl(rawPayload)) {
+    qrTarget = publicShareUrl;
+  }
 
   const qrSize = 150;
   const qrX = margin + (contentWidth - qrSize) / 2;

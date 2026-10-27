@@ -1265,7 +1265,11 @@ export const api = {
     message: string;
     ticket?: any;
     order?: any;
+    guest?: any;
     scanResult?: string;
+    isGroup?: boolean;
+    totalSeats?: number;
+    seatCodes?: string[];
   }> => {
     let cleanCode = ticketCodeOrPayload.trim();
     if (cleanCode.startsWith('{')) {
@@ -1323,14 +1327,28 @@ export const api = {
           'हे तिकीट तुमच्या आयोजक कार्यक्षेत्राबाहेर आहे (Unauthorized organizer).';
       }
 
+      const seatCodes = Array.isArray(serverRes.seatCodes)
+        ? serverRes.seatCodes.filter(Boolean)
+        : undefined;
+      const seatsLabel =
+        (seatCodes && seatCodes.length > 0 ? seatCodes.join(', ') : null) ||
+        serverRes.ticket?.seats ||
+        serverRes.ticket?.seat ||
+        undefined;
+
       return {
         valid: serverRes.valid,
         status,
         message,
+        scanResult,
+        isGroup: !!serverRes.isGroup || (Number(serverRes.totalSeats) || 0) > 1,
+        totalSeats: Number(serverRes.totalSeats) || seatCodes?.length || undefined,
+        seatCodes,
         ticket: serverRes.ticket
           ? {
             ticketCode: serverRes.ticket.code || cleanCode,
-            seatCode: serverRes.ticket.seat || serverRes.ticket.seats,
+            seatCode: seatsLabel,
+            seats: seatsLabel,
             attendeeName: serverRes.ticket.attendee || serverRes.guest?.name,
             email: serverRes.ticket.email || serverRes.guest?.email,
             phone: serverRes.ticket.phone || serverRes.guest?.phone,

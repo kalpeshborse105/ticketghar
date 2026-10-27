@@ -30,7 +30,8 @@ mobile/.gradle-user/
 mobile/.gradle-home/
 .vscode/
 mobile/android/.vscode/
-
+*.apk
+*.aab
 # Extracted APK native libs (not part of source; break 16 KB audits if mistaken for app input)
 /base/
 /base/lib/

@@ -77,6 +77,74 @@ function guestFromOrder(order: {
   };
 }
 
+function coercePositiveId(value: unknown): number | null {
+  if (value == null || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : null;
+}
+
+type GateScope = {
+  sessionId: number;
+  eventId: number;
+  eventTitle: string;
+  eventTitleMr: string;
+  showtime: Date | string | null;
+  venueName: string;
+};
+
+/**
+ * Gate lock = selected SHOW (session). Event is derived from that session row.
+ * Industry pattern: theater staff pick venue/show, then auto-verify against that show only.
+ */
+function checkTicketMatchesGate(opts: {
+  gate: GateScope;
+  ticketEventId: number;
+  ticketSessionId: number;
+  ticketShowtime: Date | string | null;
+  ticketEventTitle: string;
+  ticketEventTitleMr?: string | null;
+  venueName?: string;
+  pass: Parameters<typeof ticketPassSummary>[0];
+  guest?: ReturnType<typeof guestFromOrder>;
+}): NextResponse | null {
+  // Exact showtime match → admit (event is implied by session FK)
+  if (Number(opts.ticketSessionId) === opts.gate.sessionId) {
+    return null;
+  }
+
+  const ticketLabel = opts.ticketEventTitleMr || opts.ticketEventTitle || '—';
+  const gateLabel = opts.gate.eventTitleMr || opts.gate.eventTitle || '—';
+  const ticketWhen = formatShowtimeIst(opts.ticketShowtime);
+  const gateWhen = formatShowtimeIst(opts.gate.showtime);
+  const venueBit = opts.venueName ? ` · ${opts.venueName}` : '';
+
+  // Same event, different show → staff must switch showtime chip
+  if (Number(opts.ticketEventId) === opts.gate.eventId) {
+    return NextResponse.json({
+      valid: false,
+      scanResult: 'WRONG_SESSION',
+      message: `तिकीट या शो वेळेशी जुळत नाही. तिकीट: ${ticketWhen}${venueBit} · निवडलेला शो: ${gateWhen}. योग्य शो निवडा (Wrong showtime).`,
+      ticket: ticketPassSummary(opts.pass),
+      ...(opts.guest ? { guest: opts.guest } : {}),
+      expectedSessionId: opts.ticketSessionId,
+      selectedSessionId: opts.gate.sessionId,
+    });
+  }
+
+  // Different event listing (titles may look identical) — show both showtimes so gate can switch
+  return NextResponse.json({
+    valid: false,
+    scanResult: 'WRONG_EVENT',
+    message: `हे तिकीट या शो/कार्यक्रमाचे नाही. तिकीट: '${ticketLabel}' · ${ticketWhen}${venueBit}. निवडलेले: '${gateLabel}' · ${gateWhen}. योग्य थिएटर/शो निवडा.`,
+    ticket: ticketPassSummary(opts.pass),
+    ...(opts.guest ? { guest: opts.guest } : {}),
+    expectedEventId: opts.ticketEventId,
+    selectedEventId: opts.gate.eventId,
+    expectedSessionId: opts.ticketSessionId,
+    selectedSessionId: opts.gate.sessionId,
+  });
+}
+
 export async function POST(request: NextRequest) {
   try {
     const authError = requireRoles(request, [
@@ -118,7 +186,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Always require event + showtime scope (client cannot opt out)
-    if (!targetEventId || !targetSessionId) {
+    const gateSessionId = coercePositiveId(targetSessionId);
+    const clientEventId = coercePositiveId(targetEventId);
+    if (!gateSessionId || !clientEventId) {
       return NextResponse.json({
         valid: false,
         scanResult: 'SCOPE_REQUIRED',
@@ -127,9 +197,40 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Resolve gate from DB session (source of truth) — never trust client event alone
+    const gateRows = await db
+      .select({
+        session: eventSessions,
+        event: events,
+        venue: venues,
+      })
+      .from(eventSessions)
+      .innerJoin(events, eq(eventSessions.eventId, events.id))
+      .leftJoin(venues, eq(events.venueId, venues.id))
+      .where(eq(eventSessions.id, gateSessionId))
+      .limit(1);
+
+    if (gateRows.length === 0) {
+      return NextResponse.json({
+        valid: false,
+        scanResult: 'INVALID_SCOPE',
+        message: 'निवडलेला शो सापडला नाही. कार्यक्रम व वेळ पुन्हा निवडा.',
+      });
+    }
+
+    const gate: GateScope = {
+      sessionId: gateSessionId,
+      eventId: Number(gateRows[0].session.eventId),
+      eventTitle: gateRows[0].event.title || '',
+      eventTitleMr: gateRows[0].event.titleMr || gateRows[0].event.title || '',
+      showtime: gateRows[0].session.sessionStartTime,
+      venueName: gateRows[0].venue?.nameMr || gateRows[0].venue?.name || '',
+    };
+
     // Prefer server session identity over client-supplied scanner ids
     const effectiveScannerUserId = adminSession?.user?.userId || scannerUserId || null;
     void scannerOrganizerId;
+    void clientEventId;
 
     const { normalized, kind } = normalizeScannerPayload(String(ticketCodeOrPayload));
     let targetCode = normalized;
@@ -194,47 +295,31 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      // Organizer & Event Isolation Scope Check
-      if (targetEventId && Number(order.eventId) !== Number(targetEventId)) {
-        return NextResponse.json({
-          valid: false,
-          scanResult: 'WRONG_EVENT',
-          message: `हे तिकीट या कार्यक्रमाचे नाही! तिकीट '${event.titleMr || event.title}' चे आहे. आयोजक / प्रशासनशी संपर्क साधा.`,
-          ticket: ticketPassSummary({
-            code: order.orderNumber,
-            attendee: order.userName,
-            email: order.userEmail,
-            phone: order.userPhone,
-            grandTotal: order.grandTotal,
-            paymentStatus: order.paymentStatus,
-            orderNumber: order.orderNumber,
-            eventTitle: event.title,
-            eventTitleMr: event.titleMr,
-            venueName,
-            showtime: session.sessionStartTime,
-            sessionId: session.id,
-          }),
-          guest: guestFromOrder(order),
-        });
-      }
-
-      // Exact showtime / session lock — never accept another date/time for same event
-      if (targetSessionId && Number(order.sessionId) !== Number(targetSessionId)) {
-        return NextResponse.json({
-          valid: false,
-          scanResult: 'WRONG_SESSION',
-          message: `तिकीट या निवडलेल्या शो वेळेशी जुळत नाही. तिकीट वेळ: ${formatShowtimeIst(session.sessionStartTime)}. कृपया योग्य शो निवडा किंवा आयोजक / प्रशासनशी संपर्क साधा.`,
-          ticket: ticketPassSummary({
-            code: order.orderNumber,
-            attendee: order.userName,
-            eventTitle: event.title,
-            eventTitleMr: event.titleMr,
-            venueName,
-            showtime: session.sessionStartTime,
-            sessionId: session.id,
-          }),
-        });
-      }
+      const mtgrpScopeDeny = checkTicketMatchesGate({
+        gate,
+        ticketEventId: Number(order.eventId),
+        ticketSessionId: Number(order.sessionId),
+        ticketShowtime: session.sessionStartTime,
+        ticketEventTitle: event.title || '',
+        ticketEventTitleMr: event.titleMr,
+        venueName,
+        pass: {
+          code: order.orderNumber,
+          attendee: order.userName,
+          email: order.userEmail,
+          phone: order.userPhone,
+          grandTotal: order.grandTotal,
+          paymentStatus: order.paymentStatus,
+          orderNumber: order.orderNumber,
+          eventTitle: event.title,
+          eventTitleMr: event.titleMr,
+          venueName,
+          showtime: session.sessionStartTime,
+          sessionId: session.id,
+        },
+        guest: guestFromOrder(order),
+      });
+      if (mtgrpScopeDeny) return mtgrpScopeDeny;
 
       if (scannerOrganizerId && Number(event.organizerId) !== Number(scannerOrganizerId)) {
         return NextResponse.json({
@@ -444,38 +529,32 @@ export async function POST(request: NextRequest) {
         const { order: ord, session: sess, event: ev, venue: ven } = orderRows[0];
         const venueNameOrd = ven?.nameMr || ven?.name || '';
 
-        if (targetEventId && Number(ord.eventId) !== Number(targetEventId)) {
-          return NextResponse.json({
-            valid: false,
-            scanResult: 'WRONG_EVENT',
-            message: `हे तिकीट या कार्यक्रमाचे नाही! (Wrong Event: '${ev.titleMr || ev.title}'). आयोजक / प्रशासनशी संपर्क साधा.`,
-            ticket: ticketPassSummary({
-              code: ord.orderNumber,
-              attendee: ord.userName,
-              eventTitle: ev.title,
-              eventTitleMr: ev.titleMr,
-              venueName: venueNameOrd,
-              showtime: sess.sessionStartTime,
-              sessionId: sess.id,
-            }),
-          });
-        }
-        if (targetSessionId && Number(ord.sessionId) !== Number(targetSessionId)) {
-          return NextResponse.json({
-            valid: false,
-            scanResult: 'WRONG_SESSION',
-            message: `तिकीट या निवडलेल्या शो वेळेशी जुळत नाही. तिकीट वेळ: ${formatShowtimeIst(sess.sessionStartTime)}. कृपया योग्य शो निवडा किंवा आयोजक / प्रशासनशी संपर्क साधा.`,
-            ticket: ticketPassSummary({
-              code: ord.orderNumber,
-              attendee: ord.userName,
-              eventTitle: ev.title,
-              eventTitleMr: ev.titleMr,
-              venueName: venueNameOrd,
-              showtime: sess.sessionStartTime,
-              sessionId: sess.id,
-            }),
-          });
-        }
+        const orderScopeDeny = checkTicketMatchesGate({
+          gate,
+          ticketEventId: Number(ord.eventId),
+          ticketSessionId: Number(ord.sessionId),
+          ticketShowtime: sess.sessionStartTime,
+          ticketEventTitle: ev.title || '',
+          ticketEventTitleMr: ev.titleMr,
+          venueName: venueNameOrd,
+          pass: {
+            code: ord.orderNumber,
+            attendee: ord.userName,
+            email: ord.userEmail,
+            phone: ord.userPhone,
+            grandTotal: ord.grandTotal,
+            paymentStatus: ord.paymentStatus,
+            orderNumber: ord.orderNumber,
+            eventTitle: ev.title,
+            eventTitleMr: ev.titleMr,
+            venueName: venueNameOrd,
+            showtime: sess.sessionStartTime,
+            sessionId: sess.id,
+          },
+          guest: guestFromOrder(ord),
+        });
+        if (orderScopeDeny) return orderScopeDeny;
+
         if (scannerOrganizerId && Number(ev.organizerId) !== Number(scannerOrganizerId)) {
           return NextResponse.json({
             valid: false,
@@ -612,43 +691,32 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Strict Organizer & Event Isolation Check:
-    if (targetEventId && Number(order.eventId) !== Number(targetEventId)) {
-      return NextResponse.json({
-        valid: false,
-        scanResult: 'WRONG_EVENT',
-        message: `हे तिकीट या कार्यक्रमाचे नाही! (Wrong Event: तिकीट '${event.titleMr || event.title}' चे आहे).`,
-        ticket: ticketPassSummary({
-          code: 'PROTECTED',
-          seat: ticket.seatCode,
-          attendee: ticket.attendeeName,
-          eventTitle: event.title,
-          eventTitleMr: event.titleMr,
-          venueName,
-          showtime: session.sessionStartTime,
-          sessionId: session.id,
-        }),
-      });
-    }
-
-    // Exact showtime lock — ticket must match the selected session/date/time
-    if (targetSessionId && Number(ticket.sessionId) !== Number(targetSessionId)) {
-      return NextResponse.json({
-        valid: false,
-        scanResult: 'WRONG_SESSION',
-        message: `तिकीट या निवडलेल्या शो वेळेशी जुळत नाही. तिकीट वेळ: ${formatShowtimeIst(session.sessionStartTime)}. कृपया योग्य शो निवडा किंवा आयोजक / प्रशासनशी संपर्क साधा.`,
-        ticket: ticketPassSummary({
-          code: ticket.ticketCode,
-          seat: ticket.seatCode,
-          attendee: ticket.attendeeName,
-          eventTitle: event.title,
-          eventTitleMr: event.titleMr,
-          venueName,
-          showtime: session.sessionStartTime,
-          sessionId: session.id,
-        }),
-      });
-    }
+    const ticketScopeDeny = checkTicketMatchesGate({
+      gate,
+      ticketEventId: Number(order.eventId),
+      ticketSessionId: Number(ticket.sessionId || order.sessionId),
+      ticketShowtime: session.sessionStartTime,
+      ticketEventTitle: event.title || '',
+      ticketEventTitleMr: event.titleMr,
+      venueName,
+      pass: {
+        code: order.orderNumber || ticket.ticketCode,
+        seat: ticket.seatCode,
+        attendee: ticket.attendeeName || order.userName,
+        email: order.userEmail,
+        phone: order.userPhone,
+        grandTotal: order.grandTotal,
+        paymentStatus: order.paymentStatus,
+        orderNumber: order.orderNumber,
+        eventTitle: event.title,
+        eventTitleMr: event.titleMr,
+        venueName,
+        showtime: session.sessionStartTime,
+        sessionId: session.id,
+      },
+      guest: guestFromOrder(order),
+    });
+    if (ticketScopeDeny) return ticketScopeDeny;
 
     if (scannerOrganizerId && Number(event.organizerId) !== Number(scannerOrganizerId)) {
       return NextResponse.json({

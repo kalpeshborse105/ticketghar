@@ -408,8 +408,11 @@ export const AdminScanner: React.FC<AdminScannerProps> = ({
 
       setMetrics((prev) => {
         const next = { ...prev, total: prev.total + 1 };
-        if (data.valid) next.valid += 1;
-        else if (data.scanResult === 'ALREADY_USED') next.duplicate += 1;
+        if (data.valid) {
+          // One party QR may admit multiple seats — count people, not flashes
+          const seats = Math.max(1, Number(data.totalSeats) || (data.seatCodes?.length ?? 1));
+          next.valid += seats;
+        } else if (data.scanResult === 'ALREADY_USED') next.duplicate += 1;
         else next.rejected += 1;
         return next;
       });

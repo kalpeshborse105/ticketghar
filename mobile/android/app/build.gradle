@@ -83,8 +83,8 @@ android {
         applicationId "com.kalpkrutinfotech.mahaticket"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 29
-        versionName "1.0.28"
+        versionCode 35
+        versionName "1.0.34"
         // 64-bit only: Play 16 KB check applies to arm64/x86_64; drop legacy 32-bit ABIs
         ndk {
             abiFilters "arm64-v8a"

@@ -58,3 +58,14 @@
 
 # App package entry points
 -keep class com.kalpkrutinfotech.mahaticket.** { *; }
+
+# VisionCamera + bundled ML Kit barcode (FastGate native QR) — R8 strips these → FATAL crash
+-keep class com.mrousavy.camera.** { *; }
+-keep class com.mrousavy.** { *; }
+-keep class com.google.mlkit.** { *; }
+-keep class com.google.android.gms.internal.mlkit_** { *; }
+-keep class com.google.android.gms.internal.mlkit_vision_barcode.** { *; }
+-keep class com.google.android.gms.internal.mlkit_vision_barcode_bundled.** { *; }
+-dontwarn com.mrousavy.**
+-dontwarn com.google.mlkit.**
+-dontwarn com.google.android.gms.internal.mlkit_**

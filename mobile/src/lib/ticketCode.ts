@@ -4,6 +4,11 @@ export function extractTicketCode(raw: string): string | null {
   const trimmed = (raw || '').trim();
   if (!trimmed) return null;
 
+  // Preserve signed group / seat tokens — verify API decrypts them
+  if (/^MTGRP:v1:/i.test(trimmed) || /^MTSEC:v1:/i.test(trimmed)) {
+    return trimmed;
+  }
+
   if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
     try {
       const parsed = JSON.parse(trimmed);

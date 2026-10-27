@@ -1,14 +1,13 @@
 /**
- * Organizer FastGate — Android parity with web AdminScanner.
- * Fixed header + scope + tabs; camera fills remaining height (NOT inside ScrollView).
+ * Organizer FastGate — native VisionCamera gate scanner (theater / BookMyShow style).
+ * Scope lock (event + show) → live native QR decode → POST /api/scanner/verify.
+ * WebView/html5-qrcode path removed from organizer flow.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   BackHandler,
   Modal,
-  PermissionsAndroid,
-  Platform,
   StatusBar,
   StyleSheet,
   Text,
@@ -29,7 +28,7 @@ import {
   filterScannableSessions,
 } from '../api';
 import { useAuthStore } from '../store';
-import QrCameraWebView from '../components/QrCameraWebView';
+import GateQrScanner from '../components/GateQrScanner';
 import { extractTicketCode } from '../lib/ticketCode';
 
 type Tab = 'live' | 'manual' | 'recent';
@@ -49,6 +48,7 @@ type ScanRow = {
   status: 'valid' | 'already_used' | 'invalid';
   timestamp: string;
   valid: boolean;
+  seatCount?: number;
 };
 
 type Overlay = {
@@ -57,6 +57,9 @@ type Overlay = {
   message: string;
   ticket?: any;
   guest?: any;
+  scanResult?: string;
+  totalSeats?: number;
+  seatCodes?: string[];
 };
 
 function formatPaise(paise?: number | null) {
@@ -109,12 +112,17 @@ export default function OrganizerFastGateScreen({ navigation }: any) {
   const scopeReady = !!(eventId && sessionId);
 
   const metrics = {
-    valid: recent.filter((r) => r.status === 'valid').length,
+    // Party QR: count seats admitted, not just scan flashes
+    valid: recent
+      .filter((r) => r.status === 'valid')
+      .reduce((sum, r) => sum + (r.seatCount && r.seatCount > 0 ? r.seatCount : 1), 0),
     duplicate: recent.filter((r) => r.status === 'already_used').length,
     rejected: recent.filter((r) => r.status === 'invalid').length,
     total: recent.length,
   };
 
+  // Keep camera alive across MIUI privacy-indicator focus blips.
+  // Only stop camera on real Back / leaving scanner (not useFocusEffect cleanup).
   useFocusEffect(
     useCallback(() => {
       const onBack = () => {
@@ -132,10 +140,18 @@ export default function OrganizerFastGateScreen({ navigation }: any) {
       const sub = BackHandler.addEventListener('hardwareBackPress', onBack);
       return () => {
         sub.remove();
-        setCameraActive(false);
       };
     }, [navigation, cameraActive])
   );
+
+  useEffect(() => {
+    const unsub = navigation.addListener?.('beforeRemove', () => {
+      setCameraActive(false);
+    });
+    return () => {
+      if (typeof unsub === 'function') unsub();
+    };
+  }, [navigation]);
 
   useEffect(() => {
     if (!allowed) return;
@@ -149,40 +165,33 @@ export default function OrganizerFastGateScreen({ navigation }: any) {
     if (scopeReady) setScopeOpen(false);
   }, [scopeReady]);
 
-  const requestCamera = async () => {
+  /** Theater gate: after event+show lock, open native camera on Camera tab */
+  const startNativeCamera = useCallback(() => {
     if (!scopeReady) {
       Toast.show({
         type: 'error',
         text1: 'शो निवडा',
-        text2: 'कॅमेरा सुरू करण्यापूर्वी कार्यक्रम + वेळ लॉक करा.',
+        text2: 'आधी कार्यक्रम + शो वेळ निवडा, मग कॅमेरा.',
       });
       setScopeOpen(true);
       return;
     }
     setCameraError(null);
-    if (Platform.OS === 'android') {
-      try {
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.CAMERA,
-          {
-            title: 'MahaTicket Camera',
-            message: 'Gate QR स्कॅनसाठी कॅमेरा परवानगी आवश्यक आहे.',
-            buttonPositive: 'Allow',
-            buttonNegative: 'Deny',
-          }
-        );
-        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-          setCameraError('कॅमेरा परवानगी नाकारली.');
-          return;
-        }
-      } catch {
-        setCameraError('कॅमेरा परवानगी मिळाली नाही.');
-        return;
-      }
-    }
     setTab('live');
     setCameraActive(true);
-  };
+  }, [scopeReady]);
+
+  // Auto-arm once after scope lock (do not fight user stop / permission errors)
+  const autoArmedRef = useRef(false);
+  useEffect(() => {
+    if (!scopeReady) {
+      autoArmedRef.current = false;
+      return;
+    }
+    if (autoArmedRef.current || cameraError || tab !== 'live') return;
+    autoArmedRef.current = true;
+    setCameraActive(true);
+  }, [scopeReady, tab, cameraError]);
 
   const verifyCode = async (raw: string) => {
     if (verifyingRef.current || overlayRef.current) return;
@@ -218,14 +227,31 @@ export default function OrganizerFastGateScreen({ navigation }: any) {
         scannerUserId: user?.id,
       });
 
-      if (res.status === 'valid') Vibration.vibrate(80);
-      else Vibration.vibrate([0, 90, 70, 90]);
+      try {
+        if (res.status === 'valid') Vibration.vibrate(80);
+        else if (res.status === 'already_used') Vibration.vibrate([0, 120, 80, 120]);
+        else Vibration.vibrate([0, 90, 70, 90]);
+      } catch {
+        /* MIUI may deny vibrate without crashing scan flow */
+      }
+
+      const seatCount =
+        Number(res.totalSeats) ||
+        (Array.isArray(res.seatCodes) ? res.seatCodes.length : 0) ||
+        1;
+      const seatsLabel =
+        (Array.isArray(res.seatCodes) && res.seatCodes.length
+          ? res.seatCodes.join(', ')
+          : null) ||
+        res.ticket?.seats ||
+        res.ticket?.seatCode ||
+        '—';
 
       const row: ScanRow = {
         id: String(Date.now()),
         code: res.ticket?.ticketCode || clean,
         attendeeName: res.ticket?.attendeeName || res.guest?.name || 'प्रेक्षक',
-        seatCode: res.ticket?.seatCode || '—',
+        seatCode: seatsLabel,
         email: res.ticket?.email || res.guest?.email,
         phone: res.ticket?.phone || res.guest?.phone,
         grandTotal: res.ticket?.grandTotal ?? res.guest?.grandTotal,
@@ -240,22 +266,42 @@ export default function OrganizerFastGateScreen({ navigation }: any) {
           second: '2-digit',
         }),
         valid: !!res.valid,
+        seatCount: res.status === 'valid' ? seatCount : undefined,
       };
       setRecent((prev) => [row, ...prev].slice(0, 40));
       setOverlay({
         valid: !!res.valid,
         status: res.status,
         message: res.message,
-        ticket: res.ticket,
+        ticket: res.ticket
+          ? { ...res.ticket, seatCode: seatsLabel, seats: seatsLabel }
+          : res.ticket,
         guest: res.guest,
+        scanResult: res.scanResult,
+        totalSeats: seatCount,
+        seatCodes: res.seatCodes,
       });
+
+      // Wrong show/event → reopen scope so staff picks the ticket's theater + time
+      if (
+        !res.valid &&
+        (res.scanResult === 'WRONG_SESSION' || res.scanResult === 'WRONG_EVENT')
+      ) {
+        setScopeOpen(true);
+        setCameraActive(false);
+      }
+
       setManualCode('');
       setTimeout(() => {
         setOverlay(null);
         verifyingRef.current = false;
-      }, res.status === 'valid' ? 2200 : 1600);
+      }, res.status === 'valid' ? 2400 : res.status === 'already_used' ? 2000 : 1800);
     } catch (e: any) {
-      Vibration.vibrate([0, 120, 80, 120]);
+      try {
+        Vibration.vibrate([0, 120, 80, 120]);
+      } catch {
+        /* ignore vibrate */
+      }
       setOverlay({
         valid: false,
         status: 'invalid',
@@ -429,9 +475,10 @@ export default function OrganizerFastGateScreen({ navigation }: any) {
       <View style={styles.main}>
         {tab === 'live' ? (
           <View style={styles.cameraBox}>
-            {cameraActive ? (
-              <QrCameraWebView
-                active={cameraActive}
+            {cameraActive && scopeReady ? (
+              <GateQrScanner
+                active={cameraActive && tab === 'live'}
+                locked={verifying || !!overlay}
                 onScan={(code) => {
                   if (!verifyingRef.current) void verifyCode(code);
                 }}
@@ -443,14 +490,15 @@ export default function OrganizerFastGateScreen({ navigation }: any) {
               />
             ) : (
               <View style={styles.cameraIdle}>
-                <Icon name="camera" size={42} color="#EA580C" />
-                <Text style={styles.idleTitle}>कॅमेरा बंद आहे</Text>
-                <Text style={styles.idleSub}>तिकीट तपासण्यासाठी कॅमेरा सुरू करा</Text>
+                <Icon name="qrcode-scan" size={42} color="#EA580C" />
+                <Text style={styles.idleTitle}>Native Gate Scanner</Text>
+                <Text style={styles.idleSub}>
+                  कार्यक्रम + शो लॉक करा → QR दूरून स्कॅन (VisionCamera)
+                </Text>
                 {cameraError ? <Text style={styles.err}>{cameraError}</Text> : null}
                 <TouchableOpacity
                   style={[styles.primaryBtn, !scopeReady && { opacity: 0.45 }]}
-                  onPress={requestCamera}
-                  disabled={!scopeReady && !scopeOpen}
+                  onPress={startNativeCamera}
                 >
                   <Icon name="camera" size={16} color="#FFFFFF" />
                   <Text style={styles.primaryBtnText}>कॅमेरा सुरू करा</Text>
@@ -462,7 +510,13 @@ export default function OrganizerFastGateScreen({ navigation }: any) {
               <TouchableOpacity
                 style={[
                   styles.overlay,
-                  { backgroundColor: overlay.valid ? 'rgba(5,150,105,0.95)' : 'rgba(190,24,93,0.95)' },
+                  {
+                    backgroundColor: overlay.valid
+                      ? 'rgba(5,150,105,0.95)'
+                      : overlay.status === 'already_used'
+                        ? 'rgba(180,83,9,0.95)'
+                        : 'rgba(190,24,93,0.95)',
+                  },
                 ]}
                 activeOpacity={0.95}
                 onPress={() => {
@@ -471,15 +525,42 @@ export default function OrganizerFastGateScreen({ navigation }: any) {
                 }}
               >
                 <Icon
-                  name={overlay.valid ? 'check-circle' : 'close-circle'}
+                  name={
+                    overlay.valid
+                      ? 'check-circle'
+                      : overlay.status === 'already_used'
+                        ? 'alert-circle'
+                        : 'close-circle'
+                  }
                   size={56}
                   color="#FFFFFF"
                 />
                 <Text style={styles.overlayTitle}>
-                  {overlay.valid ? 'VALID · प्रवेश मंजूर' : overlay.message || 'DENIED'}
+                  {overlay.valid
+                    ? (overlay.totalSeats || 0) > 1
+                      ? `VALID · ग्रुप ${overlay.totalSeats} आसने`
+                      : 'VALID · प्रवेश मंजूर'
+                    : overlay.status === 'already_used'
+                      ? 'DUPLICATE · आधीच स्कॅन'
+                      : overlay.scanResult === 'WRONG_SESSION'
+                        ? 'WRONG SHOW · शो वेळ बदला'
+                        : overlay.scanResult === 'WRONG_EVENT'
+                          ? 'WRONG EVENT · शो निवडा'
+                          : overlay.message || 'DENIED'}
                 </Text>
+                {!overlay.valid ? (
+                  <Text style={[styles.overlaySeat, { fontSize: 13, opacity: 0.95 }]} numberOfLines={4}>
+                    {overlay.message}
+                  </Text>
+                ) : null}
                 <Text style={styles.overlaySeat}>
-                  {overlay.ticket?.seatCode || overlay.ticket?.seats || '—'}
+                  {overlay.ticket?.seatCode ||
+                    overlay.ticket?.seats ||
+                    (overlay.seatCodes || []).join(', ') ||
+                    '—'}
+                  {(overlay.totalSeats || 0) > 1
+                    ? ` · ${overlay.totalSeats} Tickets`
+                    : ''}
                 </Text>
                 <TouchableOpacity
                   onPress={() => {
@@ -746,7 +827,19 @@ const styles = StyleSheet.create({
   },
   idleTitle: { color: '#FFF', fontSize: 16, fontWeight: '900' },
   idleSub: { color: '#94A3B8', fontSize: 12, textAlign: 'center' },
-  err: { color: '#FCA5A5', fontSize: 11, textAlign: 'center' },
+  err: { color: '#FCA5A5', fontSize: 11, textAlign: 'center', lineHeight: 16 },
+  settingsBtn: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(253,186,116,0.45)',
+  },
+  settingsBtnText: { color: '#FDBA74', fontWeight: '800', fontSize: 12 },
   primaryBtn: {
     marginTop: 10,
     flexDirection: 'row',
