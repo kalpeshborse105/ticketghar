@@ -1,13 +1,18 @@
 /**
- * Organizer FastGate — native VisionCamera gate scanner (theater / BookMyShow style).
- * Scope lock (event + show) → live native QR decode → POST /api/scanner/verify.
- * WebView/html5-qrcode path removed from organizer flow.
+ * Organizer FastGate — WebView html5-qrcode gate scanner.
+ * VisionCamera removed: NDK 28 libVisionCamera.so crashes on open
+ * (UnsatisfiedLinkError __cxa_init_primary_exception vs RN libc++).
+ * Scope lock (event + show) → scan → POST /api/scanner/verify.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   BackHandler,
+  Linking,
   Modal,
+  PermissionsAndroid,
+  Platform,
+  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
@@ -28,7 +33,7 @@ import {
   filterScannableSessions,
 } from '../api';
 import { useAuthStore } from '../store';
-import GateQrScanner from '../components/GateQrScanner';
+import QrCameraWebView from '../components/QrCameraWebView';
 import { extractTicketCode } from '../lib/ticketCode';
 
 type Tab = 'live' | 'manual' | 'recent';
@@ -165,8 +170,12 @@ export default function OrganizerFastGateScreen({ navigation }: any) {
     if (scopeReady) setScopeOpen(false);
   }, [scopeReady]);
 
-  /** Theater gate: after event+show lock, open native camera on Camera tab */
-  const startNativeCamera = useCallback(() => {
+  const openAppSettings = () => {
+    Linking.openSettings().catch(() => undefined);
+  };
+
+  const requestCamera = async () => {
+    if (cameraActive) return;
     if (!scopeReady) {
       Toast.show({
         type: 'error',
@@ -177,21 +186,33 @@ export default function OrganizerFastGateScreen({ navigation }: any) {
       return;
     }
     setCameraError(null);
+    if (Platform.OS === 'android') {
+      try {
+        const already = await PermissionsAndroid.check(
+          PermissionsAndroid.PERMISSIONS.CAMERA
+        );
+        const granted = already
+          ? PermissionsAndroid.RESULTS.GRANTED
+          : await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA, {
+              title: 'MahaTicket Camera',
+              message: 'Gate QR स्कॅनसाठी कॅमेरा परवानगी आवश्यक आहे.',
+              buttonPositive: 'Allow',
+              buttonNegative: 'Deny',
+            });
+        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+          setCameraError('कॅमेरा बंद आहे — Settings → Camera → Allow.');
+          Toast.show({ type: 'error', text1: 'Camera permission आवश्यक' });
+          setTimeout(openAppSettings, 600);
+          return;
+        }
+      } catch {
+        setCameraError('कॅमेरा परवानगी मिळाली नाही.');
+        return;
+      }
+    }
     setTab('live');
     setCameraActive(true);
-  }, [scopeReady]);
-
-  // Auto-arm once after scope lock (do not fight user stop / permission errors)
-  const autoArmedRef = useRef(false);
-  useEffect(() => {
-    if (!scopeReady) {
-      autoArmedRef.current = false;
-      return;
-    }
-    if (autoArmedRef.current || cameraError || tab !== 'live') return;
-    autoArmedRef.current = true;
-    setCameraActive(true);
-  }, [scopeReady, tab, cameraError]);
+  };
 
   const verifyCode = async (raw: string) => {
     if (verifyingRef.current || overlayRef.current) return;
@@ -292,10 +313,11 @@ export default function OrganizerFastGateScreen({ navigation }: any) {
       }
 
       setManualCode('');
+      // Instant gate flash — keep overlay short so next guest can scan fast
       setTimeout(() => {
         setOverlay(null);
         verifyingRef.current = false;
-      }, res.status === 'valid' ? 2400 : res.status === 'already_used' ? 2000 : 1800);
+      }, res.status === 'valid' ? 900 : res.status === 'already_used' ? 1100 : 1000);
     } catch (e: any) {
       try {
         Vibration.vibrate([0, 120, 80, 120]);
@@ -376,7 +398,13 @@ export default function OrganizerFastGateScreen({ navigation }: any) {
       </TouchableOpacity>
 
       {scopeOpen ? (
-        <View style={styles.scopeBody}>
+        <ScrollView
+          style={styles.scopeBody}
+          contentContainerStyle={styles.scopeBodyContent}
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+          showsVerticalScrollIndicator={false}
+        >
           <Text style={styles.fieldLabel}>Gate</Text>
           <View style={styles.chipRow}>
             {(['GATE 1', 'GATE 2', 'VIP GATE'] as const).map((g) => (
@@ -392,7 +420,7 @@ export default function OrganizerFastGateScreen({ navigation }: any) {
 
           <Text style={styles.fieldLabel}>Event</Text>
           <View style={styles.chipWrap}>
-            {events.slice(0, 16).map((ev) => {
+            {events.slice(0, 24).map((ev) => {
               const on = ev.id === eventId;
               return (
                 <TouchableOpacity
@@ -442,7 +470,7 @@ export default function OrganizerFastGateScreen({ navigation }: any) {
           {!scopeReady ? (
             <Text style={styles.warn}>स्कॅनपूर्वी कार्यक्रम + शो वेळ लॉक करा.</Text>
           ) : null}
-        </View>
+        </ScrollView>
       ) : null}
 
       {/* Tabs */}
@@ -476,9 +504,8 @@ export default function OrganizerFastGateScreen({ navigation }: any) {
         {tab === 'live' ? (
           <View style={styles.cameraBox}>
             {cameraActive && scopeReady ? (
-              <GateQrScanner
-                active={cameraActive && tab === 'live'}
-                locked={verifying || !!overlay}
+              <QrCameraWebView
+                active={cameraActive}
                 onScan={(code) => {
                   if (!verifyingRef.current) void verifyCode(code);
                 }}
@@ -491,18 +518,24 @@ export default function OrganizerFastGateScreen({ navigation }: any) {
             ) : (
               <View style={styles.cameraIdle}>
                 <Icon name="qrcode-scan" size={42} color="#EA580C" />
-                <Text style={styles.idleTitle}>Native Gate Scanner</Text>
+                <Text style={styles.idleTitle}>Gate Scanner</Text>
                 <Text style={styles.idleSub}>
-                  कार्यक्रम + शो लॉक करा → QR दूरून स्कॅन (VisionCamera)
+                  कार्यक्रम + शो लॉक करा, मग कॅमेरा सुरू करा
                 </Text>
                 {cameraError ? <Text style={styles.err}>{cameraError}</Text> : null}
                 <TouchableOpacity
                   style={[styles.primaryBtn, !scopeReady && { opacity: 0.45 }]}
-                  onPress={startNativeCamera}
+                  onPress={() => void requestCamera()}
                 >
                   <Icon name="camera" size={16} color="#FFFFFF" />
                   <Text style={styles.primaryBtnText}>कॅमेरा सुरू करा</Text>
                 </TouchableOpacity>
+                {cameraError ? (
+                  <TouchableOpacity style={styles.settingsBtn} onPress={openAppSettings}>
+                    <Icon name="cog" size={15} color="#FDBA74" />
+                    <Text style={styles.settingsBtnText}>Camera Permission Settings</Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
             )}
 
@@ -657,11 +690,20 @@ export default function OrganizerFastGateScreen({ navigation }: any) {
                   <Text
                     style={{
                       fontWeight: '900',
-                      color: r.valid ? '#059669' : '#BE123C',
+                      color:
+                        r.status === 'valid'
+                          ? '#059669'
+                          : r.status === 'already_used'
+                            ? '#B45309'
+                            : '#BE123C',
                       fontSize: 11,
                     }}
                   >
-                    {r.valid ? 'OK' : 'DENY'}
+                    {r.status === 'valid'
+                      ? 'OK'
+                      : r.status === 'already_used'
+                        ? 'USED'
+                        : 'DENY'}
                   </Text>
                 </TouchableOpacity>
               ))
@@ -681,6 +723,25 @@ export default function OrganizerFastGateScreen({ navigation }: any) {
               </TouchableOpacity>
             </View>
             <Text style={styles.modalName}>{detail?.attendeeName}</Text>
+            <Text
+              style={{
+                fontSize: 13,
+                fontWeight: '900',
+                marginBottom: 10,
+                color:
+                  detail?.status === 'valid'
+                    ? '#059669'
+                    : detail?.status === 'already_used'
+                      ? '#B45309'
+                      : '#BE123C',
+              }}
+            >
+              {detail?.status === 'valid'
+                ? '✓ VERIFIED · प्रवेश मंजूर'
+                : detail?.status === 'already_used'
+                  ? '⚠ ALREADY VERIFIED · आधीच तपासले'
+                  : '✗ DENIED · नाकारले'}
+            </Text>
             {[
               ['आसन', detail?.seatCode],
               ['मोबाईल', detail?.phone || '—'],
@@ -762,11 +823,14 @@ const styles = StyleSheet.create({
   scopeSub: { fontSize: 11, color: '#94A3B8', marginTop: 2 },
   scopeToggle: { fontSize: 11, fontWeight: '800', color: '#FDBA74' },
   scopeBody: {
-    paddingHorizontal: 12,
-    paddingBottom: 12,
+    maxHeight: 220,
     backgroundColor: '#0F172A',
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
+  scopeBodyContent: {
+    paddingHorizontal: 12,
+    paddingBottom: 12,
     gap: 6,
   },
   fieldLabel: { fontSize: 11, fontWeight: '800', color: '#94A3B8', marginTop: 6 },

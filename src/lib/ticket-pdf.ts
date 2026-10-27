@@ -244,16 +244,16 @@ async function generateTicketPdfBufferInternal(
   currentY += 18;
 
   // 6. Central Unified QR Code (BookMyShow Style)
-  // Prefer signed MTGRP group token (one QR = whole party). Else production HTTPS share URL.
-  // Never encode localhost — scanners / phones cannot resolve it at the gate.
-  const publicShareUrl = getTicketQrShareUrl(input.ticketCode);
+  // Prefer MTGRP (party token). Else production URL keyed by ORDER so one scan = all seats.
+  // Never encode localhost — gate phones cannot resolve it.
+  const partyShareCode = input.orderNumber || input.ticketCode;
+  const publicShareUrl = getTicketQrShareUrl(partyShareCode);
   const rawPayload = typeof input.qrPayload === 'string' ? input.qrPayload.trim() : '';
   let qrTarget = publicShareUrl;
   if (rawPayload.startsWith('MTGRP:v1:') || rawPayload.startsWith('MTSEC:v1:')) {
     qrTarget = rawPayload;
   } else if (rawPayload.startsWith('http') && !isLocalAppUrl(rawPayload)) {
-    qrTarget = rawPayload;
-  } else if (rawPayload.startsWith('http') && isLocalAppUrl(rawPayload)) {
+    // Rewrite seat-only localhost / ticket URLs to production order URL (party check-in)
     qrTarget = publicShareUrl;
   }
 

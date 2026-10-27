@@ -92,9 +92,28 @@ type GateScope = {
   venueName: string;
 };
 
+function normalizeGateTitle(value: string): string {
+  return String(value || '')
+    .normalize('NFC')
+    .replace(/\s+/g, '')
+    .toLowerCase();
+}
+
+function showtimesMatch(
+  a: Date | string | null | undefined,
+  b: Date | string | null | undefined,
+  toleranceMs = 2 * 60 * 1000
+): boolean {
+  if (!a || !b) return false;
+  const ta = a instanceof Date ? a.getTime() : new Date(a).getTime();
+  const tb = b instanceof Date ? b.getTime() : new Date(b).getTime();
+  if (Number.isNaN(ta) || Number.isNaN(tb)) return false;
+  return Math.abs(ta - tb) <= toleranceMs;
+}
+
 /**
- * Gate lock = selected SHOW (session). Event is derived from that session row.
- * Industry pattern: theater staff pick venue/show, then auto-verify against that show only.
+ * Gate lock = selected SHOW. Duplicate catalog rows (same Marathi title + same clock time)
+ * must NOT false-reject — staff see identical chips but DB has different event/session ids.
  */
 function checkTicketMatchesGate(opts: {
   gate: GateScope;
@@ -107,7 +126,7 @@ function checkTicketMatchesGate(opts: {
   pass: Parameters<typeof ticketPassSummary>[0];
   guest?: ReturnType<typeof guestFromOrder>;
 }): NextResponse | null {
-  // Exact showtime match → admit (event is implied by session FK)
+  // Exact session id → admit
   if (Number(opts.ticketSessionId) === opts.gate.sessionId) {
     return null;
   }
@@ -118,7 +137,17 @@ function checkTicketMatchesGate(opts: {
   const gateWhen = formatShowtimeIst(opts.gate.showtime);
   const venueBit = opts.venueName ? ` · ${opts.venueName}` : '';
 
-  // Same event, different show → staff must switch showtime chip
+  const sameTitle =
+    normalizeGateTitle(ticketLabel) === normalizeGateTitle(gateLabel) &&
+    normalizeGateTitle(ticketLabel).length > 0;
+  const sameClock = showtimesMatch(opts.ticketShowtime, opts.gate.showtime);
+
+  // Duplicate listings / remapped sessions: same show to the eye → admit
+  if (sameTitle && sameClock) {
+    return null;
+  }
+
+  // Same event id, different clock → wrong showtime
   if (Number(opts.ticketEventId) === opts.gate.eventId) {
     return NextResponse.json({
       valid: false,
@@ -131,7 +160,6 @@ function checkTicketMatchesGate(opts: {
     });
   }
 
-  // Different event listing (titles may look identical) — show both showtimes so gate can switch
   return NextResponse.json({
     valid: false,
     scanResult: 'WRONG_EVENT',
