@@ -1374,7 +1374,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.bg },
-  scroll: { paddingHorizontal: SPACING.base, gap: SPACING.md, paddingBottom: 140 },
+  scroll: { paddingHorizontal: SPACING.base, gap: SPACING.md, paddingBottom: 84 },
 
   timerPillBanner: {
     paddingHorizontal: SPACING.base,

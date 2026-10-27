@@ -5,6 +5,9 @@ import {
   BackHandler,
   Easing,
   Linking,
+  Modal,
+  PermissionsAndroid,
+  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -28,6 +31,7 @@ import {
   filterScannableSessions,
 } from '../api';
 import { useAuthStore } from '../store';
+import QrCameraWebView from '../components/QrCameraWebView';
 
 const PUBLIC_TICKET_BASE_URL = 'https://mahaticket.kalpkrutinfotech.com/tickets';
 
@@ -113,9 +117,18 @@ interface ScanLog {
   attendeeName?: string;
   seatCode?: string;
   eventTitle?: string;
+  email?: string;
+  phone?: string;
+  grandTotal?: number | null;
+  paymentStatus?: string;
+  orderNumber?: string;
+  venue?: string;
+  showtimeLabel?: string;
   status: 'valid' | 'already_used' | 'invalid';
   timestamp: string;
 }
+
+type ScannerTab = 'live' | 'manual' | 'recent';
 
 export default function TicketScannerScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
@@ -130,12 +143,17 @@ export default function TicketScannerScreen({ navigation }: any) {
   const [scannerEvents, setScannerEvents] = useState<EventItem[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
+  const [scannerTab, setScannerTab] = useState<ScannerTab>('live');
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [detailGuest, setDetailGuest] = useState<ScanLog | null>(null);
   const [lastResult, setLastResult] = useState<{
     valid: boolean;
     status: 'valid' | 'already_used' | 'invalid';
     message: string;
     ticket?: any;
     order?: any;
+    guest?: any;
   } | null>(null);
 
   const selectedEvent = scannerEvents.find((e) => e.id === selectedEventId) || null;
@@ -143,7 +161,6 @@ export default function TicketScannerScreen({ navigation }: any) {
     selectedEvent?.sessions || []
   ) as SessionItem[];
 
-  const laserAnim = useRef(new Animated.Value(0)).current;
   const resultScaleAnim = useRef(new Animated.Value(0.95)).current;
 
   const extractedPreviewCode = extractTicketCode(ticketInput);
@@ -152,6 +169,10 @@ export default function TicketScannerScreen({ navigation }: any) {
   useFocusEffect(
     useCallback(() => {
       const onBack = () => {
+        if (cameraActive) {
+          setCameraActive(false);
+          return true;
+        }
         if (navigation.canGoBack()) {
           navigation.goBack();
           return true;
@@ -160,30 +181,12 @@ export default function TicketScannerScreen({ navigation }: any) {
         return true;
       };
       const sub = BackHandler.addEventListener('hardwareBackPress', onBack);
-      return () => sub.remove();
-    }, [navigation])
+      return () => {
+        sub.remove();
+        setCameraActive(false);
+      };
+    }, [navigation, cameraActive])
   );
-
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(laserAnim, {
-          toValue: 1,
-          duration: 1800,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
-        }),
-        Animated.timing(laserAnim, {
-          toValue: 0,
-          duration: 1800,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [laserAnim]);
 
   useEffect(() => {
     if (isOrganizerOrAdmin) {
@@ -237,6 +240,53 @@ export default function TicketScannerScreen({ navigation }: any) {
       return;
     }
     navigation.navigate('Login');
+  };
+
+  const requestCameraAndStart = async () => {
+    if (!selectedEventId || !selectedSessionId) {
+      Toast.show({
+        type: 'error',
+        text1: 'शो निवडा',
+        text2: 'कॅमेरा सुरू करण्यापूर्वी कार्यक्रम व वेळ निवडा.',
+      });
+      return;
+    }
+    setCameraError(null);
+    if (Platform.OS === 'android') {
+      try {
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.CAMERA,
+          {
+            title: 'MahaTicket Camera',
+            message: 'Gate QR स्कॅनसाठी कॅमेरा परवानगी आवश्यक आहे.',
+            buttonPositive: 'Allow',
+            buttonNegative: 'Deny',
+          }
+        );
+        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+          setCameraError('कॅमेरा परवानगी नाकारली. Settings मधून Allow करा.');
+          setCameraActive(false);
+          return;
+        }
+      } catch {
+        setCameraError('कॅमेरा परवानगी मिळाली नाही.');
+        return;
+      }
+    }
+    setScannerTab('live');
+    setCameraActive(true);
+  };
+
+  const openGuestDetail = (guest: ScanLog | null) => {
+    if (!guest) return;
+    setDetailGuest(guest);
+  };
+
+  const formatPaise = (paise?: number | null) => {
+    if (paise == null || !Number.isFinite(Number(paise))) return '—';
+    const n = Number(paise);
+    const rupees = n > 15000 ? Math.round(n / 100) : Math.round(n);
+    return `₹${rupees.toLocaleString('en-IN')}`;
   };
 
   const handleVerify = async (rawToVerify?: string) => {
@@ -303,12 +353,21 @@ export default function TicketScannerScreen({ navigation }: any) {
       const log: ScanLog = {
         id: String(Date.now()),
         code: res.ticket?.ticketCode || cleanCode,
-        attendeeName: res.ticket?.attendeeName || 'प्रेक्षक / Attendee',
+        attendeeName:
+          res.ticket?.attendeeName || res.guest?.name || 'प्रेक्षक / Attendee',
         seatCode: res.ticket?.seatCode || 'General',
         eventTitle:
+          res.ticket?.eventTitle ||
           res.order?.event?.titleMr ||
           res.order?.event?.title ||
           'मराठी नाट्यप्रयोग',
+        email: res.ticket?.email || res.guest?.email,
+        phone: res.ticket?.phone || res.guest?.phone,
+        grandTotal: res.ticket?.grandTotal ?? res.guest?.grandTotal,
+        paymentStatus: res.ticket?.paymentStatus || res.guest?.paymentStatus,
+        orderNumber: res.ticket?.orderNumber || res.guest?.orderNumber,
+        venue: res.ticket?.venue,
+        showtimeLabel: res.ticket?.showtimeLabel,
         status: res.status,
         timestamp: new Date().toLocaleTimeString('en-IN', {
           hour: '2-digit',
@@ -318,8 +377,8 @@ export default function TicketScannerScreen({ navigation }: any) {
       };
       setScanLogs((prev) => [log, ...prev]);
       setTicketInput('');
-      // Instant gate UX: flash result then clear for next guest
-      setTimeout(() => setLastResult(null), res.status === 'valid' ? 500 : 1000);
+      // Keep valid result visible so staff can tap name → full guest details
+      setTimeout(() => setLastResult(null), res.status === 'valid' ? 4200 : 1600);
     } catch (e: any) {
       Vibration.vibrate([0, 120, 80, 120]);
       setLastResult({
@@ -341,11 +400,6 @@ export default function TicketScannerScreen({ navigation }: any) {
   const validCount = scanLogs.filter((l) => l.status === 'valid').length;
   const duplicateCount = scanLogs.filter((l) => l.status === 'already_used').length;
   const invalidCount = scanLogs.filter((l) => l.status === 'invalid').length;
-
-  const laserTranslateY = laserAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-36, 36],
-  });
 
   if (!isOrganizerOrAdmin) {
     return (
@@ -599,87 +653,180 @@ export default function TicketScannerScreen({ navigation }: any) {
           </View>
         </View>
 
-        <View style={styles.viewfinderCard}>
+        <View style={styles.fastGateCard}>
           <View style={styles.viewfinderTopTag}>
             <Icon name="shield-check" size={14} color="#EA580C" />
             <Text style={styles.viewfinderTopTagText}>
-              MTSEC ENCRYPTED PASS VERIFIER • {selectedGate}
+              FastGate • {selectedGate}
             </Text>
           </View>
 
-          <View style={styles.reticleOuterFrame}>
-            <View style={[styles.cornerBracket, styles.cornerTL]} />
-            <View style={[styles.cornerBracket, styles.cornerTR]} />
-            <View style={[styles.cornerBracket, styles.cornerBL]} />
-            <View style={[styles.cornerBracket, styles.cornerBR]} />
-
-            <Icon name="qrcode" size={56} color="#EA580C" style={{ opacity: 0.85 }} />
-
-            <Animated.View
-              style={[
-                styles.animatedLaserLine,
-                { transform: [{ translateY: laserTranslateY }] },
-              ]}
-            />
-          </View>
-
-          <Text style={styles.viewfinderTitle}>
-            M-Ticket QR स्कॅन करा किंवा कोड टाका
-          </Text>
-          <Text style={styles.viewfinderSub}>
-            Supports Ticket Code, Full URL, or Encrypted JSON QR Payload
-          </Text>
-
-          <View style={styles.scannerInputContainer}>
-            <View style={styles.scannerInputBox}>
-              <Icon name="barcode-scan" size={20} color="#EA580C" />
-              <TextInput
-                style={styles.scannerTextInput}
-                placeholder="e.g. TG-TK-84920 or paste QR..."
-                placeholderTextColor="#94A3B8"
-                value={ticketInput}
-                onChangeText={setTicketInput}
-                autoCapitalize="characters"
-                autoCorrect={false}
-                returnKeyType="go"
-                onSubmitEditing={() => handleVerify()}
-              />
-              {ticketInput.length > 0 && (
+          <View style={styles.tabRow}>
+            {([
+              { id: 'live' as const, label: 'कॅमेरा', icon: 'camera' },
+              { id: 'manual' as const, label: 'मॅन्युअल', icon: 'keyboard-outline' },
+              { id: 'recent' as const, label: 'अलीकडील', icon: 'history' },
+            ]).map((tab) => {
+              const active = scannerTab === tab.id;
+              return (
                 <TouchableOpacity
-                  onPress={() => setTicketInput('')}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  key={tab.id}
+                  style={[styles.tabChip, active && styles.tabChipActive]}
+                  onPress={() => {
+                    setScannerTab(tab.id);
+                    if (tab.id !== 'live') setCameraActive(false);
+                  }}
+                  activeOpacity={0.85}
                 >
-                  <Icon name="close-circle" size={18} color="#94A3B8" />
+                  <Icon name={tab.icon} size={14} color={active ? '#FFFFFF' : '#64748B'} />
+                  <Text style={[styles.tabChipText, active && styles.tabChipTextActive]}>
+                    {tab.label}
+                  </Text>
                 </TouchableOpacity>
-              )}
-            </View>
-
-            <TouchableOpacity
-              onPress={() => handleVerify()}
-              disabled={verifying}
-              activeOpacity={0.85}
-              style={[styles.verifyBtn, verifying && { opacity: 0.7 }]}
-            >
-              {verifying ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <>
-                  <Icon name="check-bold" size={16} color="#FFFFFF" />
-                  <Text style={styles.verifyBtnText}>Verify</Text>
-                </>
-              )}
-            </TouchableOpacity>
+              );
+            })}
           </View>
 
-          {extractedPreviewCode && extractedPreviewCode !== ticketInput.trim() && (
-            <View style={styles.parsedCodeNotice}>
-              <Icon name="flash-outline" size={13} color="#EA580C" />
-              <Text style={styles.parsedCodeNoticeText}>
-                Ready to verify code:{' '}
-                <Text style={{ fontWeight: '900' }}>{extractedPreviewCode}</Text>
-              </Text>
+          {scannerTab === 'live' ? (
+            <View style={styles.cameraPane}>
+              {cameraActive ? (
+                <QrCameraWebView
+                  active={cameraActive && !verifying}
+                  onScan={(code) => {
+                    if (!verifying) handleVerify(code);
+                  }}
+                  onError={(msg) => {
+                    setCameraError(msg);
+                    setCameraActive(false);
+                  }}
+                />
+              ) : (
+                <View style={styles.cameraIdle}>
+                  <Icon name="camera" size={40} color="#EA580C" />
+                  <Text style={styles.cameraIdleTitle}>कॅमेरा बंद आहे</Text>
+                  <Text style={styles.cameraIdleSub}>
+                    तिकीट तपासण्यासाठी कॅमेरा सुरू करा — नाव + आसन पडताळणी
+                  </Text>
+                  {cameraError ? (
+                    <Text style={styles.cameraErrorText}>{cameraError}</Text>
+                  ) : null}
+                  <TouchableOpacity
+                    style={styles.startCameraBtn}
+                    onPress={requestCameraAndStart}
+                    activeOpacity={0.85}
+                  >
+                    <Icon name="camera" size={16} color="#FFFFFF" />
+                    <Text style={styles.startCameraBtnText}>कॅमेरा सुरू करा</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {cameraActive ? (
+                <TouchableOpacity
+                  style={styles.stopCameraFab}
+                  onPress={() => setCameraActive(false)}
+                >
+                  <Icon name="close" size={18} color="#FFFFFF" />
+                </TouchableOpacity>
+              ) : null}
             </View>
-          )}
+          ) : null}
+
+          {scannerTab === 'manual' ? (
+            <View style={styles.manualPane}>
+              <Text style={styles.viewfinderTitle}>मॅन्युअल कोड पडताळणी</Text>
+              <Text style={styles.viewfinderSub}>
+                QR अयशस्वी झाल्यास तिकीट / ऑर्डर कोड टाका
+              </Text>
+              <View style={styles.scannerInputContainer}>
+                <View style={styles.scannerInputBox}>
+                  <Icon name="barcode-scan" size={20} color="#EA580C" />
+                  <TextInput
+                    style={styles.scannerTextInput}
+                    placeholder="e.g. TG-TK-84920 or MT-2026-…"
+                    placeholderTextColor="#94A3B8"
+                    value={ticketInput}
+                    onChangeText={setTicketInput}
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                    returnKeyType="go"
+                    onSubmitEditing={() => handleVerify()}
+                  />
+                  {ticketInput.length > 0 && (
+                    <TouchableOpacity
+                      onPress={() => setTicketInput('')}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                      <Icon name="close-circle" size={18} color="#94A3B8" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+                <TouchableOpacity
+                  onPress={() => handleVerify()}
+                  disabled={verifying}
+                  activeOpacity={0.85}
+                  style={[styles.verifyBtn, verifying && { opacity: 0.7 }]}
+                >
+                  {verifying ? (
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                  ) : (
+                    <>
+                      <Icon name="check-bold" size={16} color="#FFFFFF" />
+                      <Text style={styles.verifyBtnText}>Verify</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+              {extractedPreviewCode && extractedPreviewCode !== ticketInput.trim() && (
+                <View style={styles.parsedCodeNotice}>
+                  <Icon name="flash-outline" size={13} color="#EA580C" />
+                  <Text style={styles.parsedCodeNoticeText}>
+                    Ready: <Text style={{ fontWeight: '900' }}>{extractedPreviewCode}</Text>
+                  </Text>
+                </View>
+              )}
+            </View>
+          ) : null}
+
+          {scannerTab === 'recent' ? (
+            <View style={styles.manualPane}>
+              {scanLogs.length === 0 ? (
+                <Text style={styles.emptyRecentText}>अद्याप स्कॅन नाही</Text>
+              ) : (
+                scanLogs.slice(0, 12).map((log) => (
+                  <TouchableOpacity
+                    key={`recent-${log.id}`}
+                    style={styles.recentRow}
+                    onPress={() => openGuestDetail(log)}
+                    activeOpacity={0.85}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.recentName} numberOfLines={1}>
+                        {log.attendeeName}
+                      </Text>
+                      <Text style={styles.recentMeta} numberOfLines={1}>
+                        {log.seatCode} · {log.timestamp}
+                      </Text>
+                    </View>
+                    <Text
+                      style={{
+                        fontWeight: '800',
+                        fontSize: 11,
+                        color:
+                          log.status === 'valid'
+                            ? '#16A34A'
+                            : log.status === 'already_used'
+                              ? '#D97706'
+                              : '#DC2626',
+                      }}
+                    >
+                      {log.status === 'valid' ? 'OK' : 'DENY'}
+                    </Text>
+                  </TouchableOpacity>
+                ))
+              )}
+            </View>
+          ) : null}
         </View>
 
         {lastResult && (
@@ -763,17 +910,42 @@ export default function TicketScannerScreen({ navigation }: any) {
 
                 <View style={styles.verdictStubDivider} />
 
-                <View style={[styles.verdictStubCol, { flex: 1.4 }]}>
-                  <Text style={styles.verdictStubLabel}>प्रेक्षक / ATTENDEE</Text>
-                  <Text style={styles.verdictStubValue} numberOfLines={1}>
+                <TouchableOpacity
+                  style={[styles.verdictStubCol, { flex: 1.5 }]}
+                  onPress={() =>
+                    openGuestDetail({
+                      id: 'live',
+                      code: lastResult.ticket.ticketCode,
+                      attendeeName: lastResult.ticket.attendeeName,
+                      seatCode: lastResult.ticket.seatCode,
+                      email: lastResult.ticket.email || lastResult.guest?.email,
+                      phone: lastResult.ticket.phone || lastResult.guest?.phone,
+                      grandTotal:
+                        lastResult.ticket.grandTotal ?? lastResult.guest?.grandTotal,
+                      paymentStatus:
+                        lastResult.ticket.paymentStatus ||
+                        lastResult.guest?.paymentStatus,
+                      orderNumber:
+                        lastResult.ticket.orderNumber || lastResult.guest?.orderNumber,
+                      eventTitle: lastResult.ticket.eventTitle,
+                      venue: lastResult.ticket.venue,
+                      showtimeLabel: lastResult.ticket.showtimeLabel,
+                      status: lastResult.status,
+                      timestamp: '',
+                    })
+                  }
+                  activeOpacity={0.75}
+                >
+                  <Text style={styles.verdictStubLabel}>नाव टॅप → डिटेल्स</Text>
+                  <Text style={[styles.verdictStubValue, { color: '#EA580C' }]} numberOfLines={1}>
                     {lastResult.ticket.attendeeName || 'Guest Attendee'}
                   </Text>
-                </View>
+                </TouchableOpacity>
 
                 <View style={styles.verdictStubDivider} />
 
-                <View style={[styles.verdictStubCol, { flex: 1.4 }]}>
-                  <Text style={styles.verdictStubLabel}>तिकीट कोड / CODE</Text>
+                <View style={[styles.verdictStubCol, { flex: 1.2 }]}>
+                  <Text style={styles.verdictStubLabel}>तिकीट कोड</Text>
                   <Text style={styles.verdictStubCode} numberOfLines={1}>
                     {lastResult.ticket.ticketCode}
                   </Text>
@@ -869,7 +1041,12 @@ export default function TicketScannerScreen({ navigation }: any) {
                 const isValid = log.status === 'valid';
                 const isDup = log.status === 'already_used';
                 return (
-                  <View key={log.id} style={styles.logItemCard}>
+                  <TouchableOpacity
+                    key={log.id}
+                    style={styles.logItemCard}
+                    onPress={() => openGuestDetail(log)}
+                    activeOpacity={0.85}
+                  >
                     <View
                       style={[
                         styles.logStatusIcon,
@@ -900,8 +1077,8 @@ export default function TicketScannerScreen({ navigation }: any) {
                         <Text style={styles.logSeatBadge}>Seat {log.seatCode}</Text>
                         <Text style={styles.logCodeText}>{log.code}</Text>
                       </View>
-                      <Text style={styles.logSubText} numberOfLines={1}>
-                        {log.attendeeName} • {log.eventTitle}
+                      <Text style={[styles.logSubText, { color: '#EA580C', fontWeight: '800' }]} numberOfLines={1}>
+                        {log.attendeeName} • टॅप डिटेल्स
                       </Text>
                     </View>
 
@@ -922,13 +1099,75 @@ export default function TicketScannerScreen({ navigation }: any) {
                       </Text>
                       <Text style={styles.logTimeText}>{log.timestamp}</Text>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 );
               })}
             </View>
           )}
         </View>
       </ScrollView>
+
+      <Modal
+        visible={!!detailGuest}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDetailGuest(null)}
+      >
+        <View style={styles.detailOverlay}>
+          <View style={styles.detailCard}>
+            <View style={styles.detailHeader}>
+              <Text style={styles.detailTitle}>प्रेक्षक तपशील</Text>
+              <TouchableOpacity onPress={() => setDetailGuest(null)} hitSlop={12}>
+                <Icon name="close" size={22} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.detailName}>{detailGuest?.attendeeName || '—'}</Text>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>आसन / Seat</Text>
+              <Text style={styles.detailValue}>{detailGuest?.seatCode || '—'}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>मोबाईल</Text>
+              <Text style={styles.detailValue}>{detailGuest?.phone || '—'}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>ईमेल</Text>
+              <Text style={styles.detailValue}>{detailGuest?.email || '—'}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>पेमेंट</Text>
+              <Text style={styles.detailValue}>
+                {formatPaise(detailGuest?.grandTotal)}
+                {detailGuest?.paymentStatus ? ` · ${detailGuest.paymentStatus}` : ''}
+              </Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>ऑर्डर</Text>
+              <Text style={styles.detailValue}>
+                {detailGuest?.orderNumber || detailGuest?.code || '—'}
+              </Text>
+            </View>
+            {detailGuest?.eventTitle ? (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>कार्यक्रम</Text>
+                <Text style={styles.detailValue}>{detailGuest.eventTitle}</Text>
+              </View>
+            ) : null}
+            {detailGuest?.venue ? (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>सभागृह</Text>
+                <Text style={styles.detailValue}>{detailGuest.venue}</Text>
+              </View>
+            ) : null}
+            <TouchableOpacity
+              style={styles.detailCloseBtn}
+              onPress={() => setDetailGuest(null)}
+            >
+              <Text style={styles.detailCloseBtnText}>ठीक आहे</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1131,6 +1370,190 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     ...SHADOWS.sm,
   },
+  fastGateCard: {
+    backgroundColor: '#FFFFFF',
+    padding: 14,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...SHADOWS.sm,
+  },
+  tabRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  tabChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingVertical: 9,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  tabChipActive: {
+    backgroundColor: '#EA580C',
+    borderColor: '#EA580C',
+  },
+  tabChipText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#64748B',
+  },
+  tabChipTextActive: {
+    color: '#FFFFFF',
+  },
+  cameraPane: {
+    height: 320,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#0B1220',
+    position: 'relative',
+  },
+  cameraIdle: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+    gap: 8,
+  },
+  cameraIdleTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  cameraIdleSub: {
+    color: '#94A3B8',
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 17,
+  },
+  cameraErrorText: {
+    color: '#FCA5A5',
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  startCameraBtn: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#EA580C',
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+    borderRadius: 12,
+  },
+  startCameraBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+    fontSize: 13,
+  },
+  stopCameraFab: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  manualPane: {
+    paddingTop: 4,
+    gap: 8,
+  },
+  emptyRecentText: {
+    textAlign: 'center',
+    color: '#94A3B8',
+    fontSize: 13,
+    paddingVertical: 24,
+  },
+  recentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#FFF7ED',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#FFEDD5',
+  },
+  recentName: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  recentMeta: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  detailOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15,23,42,0.55)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  detailCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 18,
+  },
+  detailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  detailTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#64748B',
+  },
+  detailName: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#0F172A',
+    marginBottom: 12,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  detailLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  detailValue: {
+    flex: 1,
+    textAlign: 'right',
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  detailCloseBtn: {
+    marginTop: 14,
+    backgroundColor: '#EA580C',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  detailCloseBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+    fontSize: 14,
+  },
   viewfinderTopTag: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1142,6 +1565,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: RADIUS.full,
     marginBottom: 16,
+    alignSelf: 'flex-start',
   },
   viewfinderTopTagText: {
     fontSize: 10,

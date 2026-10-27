@@ -64,6 +64,9 @@ export default function EditProfileScreen({ navigation }: any) {
   const [name, setName] = useState(user?.name || '');
   const [email, setEmail] = useState(user?.email || '');
   const [phone, setPhone] = useState(user?.phone || '');
+  const [age, setAge] = useState(
+    user?.age !== undefined && user?.age !== null ? String(user.age) : ''
+  );
   const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl || '');
   const [saving, setSaving] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
@@ -137,6 +140,23 @@ export default function EditProfileScreen({ navigation }: any) {
       });
       return;
     }
+    const trimmedAge = age.trim();
+    let ageValue: number | null | undefined = undefined;
+    if (trimmedAge) {
+      const n = Number.parseInt(trimmedAge, 10);
+      if (!Number.isFinite(n) || n < 1 || n > 120) {
+        setProfilePopupModal({
+          visible: true,
+          type: 'warning',
+          title: 'अवैध वय',
+          message: 'कृपया 1 ते 120 दरम्यानचे वय टाका.',
+        });
+        return;
+      }
+      ageValue = n;
+    } else {
+      ageValue = null;
+    }
 
     setSaving(true);
     try {
@@ -145,6 +165,7 @@ export default function EditProfileScreen({ navigation }: any) {
         name: trimmedName,
         email: trimmedEmail || undefined,
         phone: trimmedPhone || undefined,
+        age: ageValue,
         avatarUrl: avatarUrl || undefined,
       });
 
@@ -154,6 +175,7 @@ export default function EditProfileScreen({ navigation }: any) {
         email: trimmedEmail || user?.email,
         fullName: trimmedName,
         phoneNumber: trimmedPhone || undefined,
+        age: ageValue,
         avatarUrl: avatarUrl || undefined,
       }).catch(() => null);
 
@@ -241,6 +263,18 @@ export default function EditProfileScreen({ navigation }: any) {
                 keyboardType="phone-pad"
               />
               <Text style={styles.hint}>बुकिंग अपडेट्स आणि SMS तिकिटांसाठी वापरला जाईल.</Text>
+
+              <Text style={styles.label}>Age (वय)</Text>
+              <TextInput
+                style={styles.input}
+                value={age}
+                onChangeText={setAge}
+                placeholder="उदा. 28"
+                placeholderTextColor={COLORS.textDim}
+                keyboardType="number-pad"
+                maxLength={3}
+              />
+              <Text style={styles.hint}>प्रोफाइलसाठी पर्यायी. DB मध्ये सेव्ह होते.</Text>
 
               <Text style={styles.label}>Email (ईमेल पत्ता)</Text>
               <TextInput

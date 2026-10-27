@@ -18,7 +18,17 @@ export async function POST(request: Request) {
     const authHeader = request.headers.get('authorization');
     const session = await getCustomerSession(authHeader);
     const body = await request.json().catch(() => ({}));
-    const { uid, email, fullName, phoneNumber, avatarUrl, city } = body;
+    const { uid, email, fullName, phoneNumber, avatarUrl, city, age } = body;
+    const parsedAge =
+      age === null || age === undefined || age === ''
+        ? undefined
+        : Number.parseInt(String(age), 10);
+    const cleanAge =
+      parsedAge !== undefined && Number.isFinite(parsedAge) && parsedAge >= 1 && parsedAge <= 120
+        ? parsedAge
+        : age === null || age === ''
+          ? null
+          : undefined;
 
     const cleanEmail = (session?.email || email || '').trim().toLowerCase();
     if (!cleanEmail) {
@@ -53,6 +63,7 @@ export async function POST(request: Request) {
       }
       if (fullName) updateData.fullName = fullName;
       if (phoneNumber !== undefined) updateData.phoneNumber = phoneNumber;
+      if (cleanAge !== undefined) updateData.age = cleanAge;
       if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl;
       if (city) updateData.city = city;
 
@@ -70,6 +81,7 @@ export async function POST(request: Request) {
           email: cleanEmail,
           fullName: fullName || session?.fullName || 'MahaTicket User',
           phoneNumber: phoneNumber || session?.phoneNumber || null,
+          age: cleanAge ?? null,
           avatarUrl: avatarUrl || session?.avatarUrl || null,
           role: 'customer',
           preferredLanguage: 'mr',
@@ -85,6 +97,7 @@ export async function POST(request: Request) {
       email: activeUser.email,
       fullName: activeUser.fullName,
       phoneNumber: activeUser.phoneNumber,
+      age: activeUser.age ?? null,
       role: activeUser.role,
       avatarUrl: activeUser.avatarUrl,
     };

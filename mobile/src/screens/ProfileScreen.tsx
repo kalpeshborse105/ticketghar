@@ -154,6 +154,9 @@ export default function ProfileScreen({ navigation }: any) {
               </View>
               {user.phone && <Text style={styles.userPhone}>{user.phone}</Text>}
               {user.email && <Text style={styles.userEmail} numberOfLines={1}>{user.email}</Text>}
+              {user.age != null && Number(user.age) > 0 ? (
+                <Text style={styles.userPhone}>वय / Age: {user.age}</Text>
+              ) : null}
               <View style={styles.memberStatusChip}>
                 <Icon name="shield-check" size={11} color="#16A34A" />
                 <Text style={styles.memberStatusText}>

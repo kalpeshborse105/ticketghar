@@ -32,18 +32,48 @@ function ticketPassSummary(params: {
   venueName?: string | null;
   showtime?: Date | string | null;
   sessionId?: number | null;
+  email?: string | null;
+  phone?: string | null;
+  grandTotal?: number | null;
+  paymentStatus?: string | null;
+  orderNumber?: string | null;
 }) {
   return {
     code: params.code,
     seat: params.seat || params.seats || '',
     seats: params.seats || params.seat || '',
     attendee: params.attendee || '',
+    email: params.email || '',
+    phone: params.phone || '',
+    grandTotal: params.grandTotal ?? null,
+    paymentStatus: params.paymentStatus || '',
+    orderNumber: params.orderNumber || '',
     event: params.eventTitle || '',
     eventMr: params.eventTitleMr || params.eventTitle || '',
     venue: params.venueName || '',
     showtime: params.showtime || null,
     showtimeLabel: formatShowtimeIst(params.showtime),
     sessionId: params.sessionId ?? null,
+  };
+}
+
+function guestFromOrder(order: {
+  userName?: string | null;
+  userEmail?: string | null;
+  userPhone?: string | null;
+  orderNumber?: string | null;
+  grandTotal?: number | null;
+  paymentStatus?: string | null;
+  ticketCount?: number | null;
+}) {
+  return {
+    name: order.userName || '',
+    email: order.userEmail || '',
+    phone: order.userPhone || '',
+    orderNumber: order.orderNumber || '',
+    grandTotal: order.grandTotal ?? null,
+    paymentStatus: order.paymentStatus || '',
+    ticketCount: order.ticketCount ?? null,
   };
 }
 
@@ -173,12 +203,18 @@ export async function POST(request: NextRequest) {
           ticket: ticketPassSummary({
             code: order.orderNumber,
             attendee: order.userName,
+            email: order.userEmail,
+            phone: order.userPhone,
+            grandTotal: order.grandTotal,
+            paymentStatus: order.paymentStatus,
+            orderNumber: order.orderNumber,
             eventTitle: event.title,
             eventTitleMr: event.titleMr,
             venueName,
             showtime: session.sessionStartTime,
             sessionId: session.id,
           }),
+          guest: guestFromOrder(order),
         });
       }
 
@@ -699,12 +735,18 @@ export async function POST(request: NextRequest) {
           code: order.orderNumber || ticket.ticketCode,
           seats: allSeatCodes.join(', ') || ticket.seatCode,
           attendee: ticket.attendeeName || order.userName,
+          email: order.userEmail,
+          phone: order.userPhone,
+          grandTotal: order.grandTotal,
+          paymentStatus: order.paymentStatus,
+          orderNumber: order.orderNumber,
           eventTitle: event.title,
           eventTitleMr: event.titleMr,
           venueName,
           showtime: session.sessionStartTime,
           sessionId: session.id,
         }),
+        guest: guestFromOrder(order),
       });
     }
 
@@ -747,12 +789,18 @@ export async function POST(request: NextRequest) {
           code: order.orderNumber || ticket.ticketCode,
           seats: allSeatCodes.join(', ') || ticket.seatCode,
           attendee: ticket.attendeeName || order.userName,
+          email: order.userEmail,
+          phone: order.userPhone,
+          grandTotal: order.grandTotal,
+          paymentStatus: order.paymentStatus,
+          orderNumber: order.orderNumber,
           eventTitle: event.title,
           eventTitleMr: event.titleMr,
           venueName,
           showtime: session.sessionStartTime,
           sessionId: session.id,
         }),
+        guest: guestFromOrder(order),
       });
     }
 
@@ -770,12 +818,18 @@ export async function POST(request: NextRequest) {
         code: order.orderNumber || ticket.ticketCode,
         seats: allSeatCodes.join(', ') || ticket.seatCode,
         attendee: ticket.attendeeName || order.userName,
+        email: order.userEmail,
+        phone: order.userPhone,
+        grandTotal: order.grandTotal,
+        paymentStatus: order.paymentStatus,
+        orderNumber: order.orderNumber,
         eventTitle: event.title,
         eventTitleMr: event.titleMr,
         venueName,
         showtime: session.sessionStartTime,
         sessionId: session.id,
       }),
+      guest: guestFromOrder(order),
       scannedAt: redeem.scanLog.scannedAt,
     });
   } catch (error: any) {

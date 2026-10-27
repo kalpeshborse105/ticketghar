@@ -8,6 +8,8 @@ export const users = pgTable('users', {
   email: text('email').notNull().unique(),
   fullName: text('full_name').notNull().default('Guest User'),
   phoneNumber: text('phone_number'),
+  /** Optional age for profile / booking contact (years) */
+  age: integer('age'),
   avatarUrl: text('avatar_url'),
   // Roles (keep only these — easy to audit in admin):
   // customer = book tickets | organizer = own events/venues/sales | scanner = gate scan

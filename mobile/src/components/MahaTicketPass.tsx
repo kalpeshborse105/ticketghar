@@ -217,23 +217,25 @@ export function MahaTicketPass({
             </View>
           </View>
 
-          {isCancelled ? (
-            <View style={styles.validStatusBadge}>
-              <Text style={styles.validStatusText}>Cancelled</Text>
-            </View>
-          ) : null}
+          <View style={styles.validStatusBadge}>
+            <Icon name="shield-check" size={12} color={statusColor} />
+            <Text style={styles.validStatusText}>{statusLabel}</Text>
+          </View>
         </LinearGradient>
 
         {/* Ticket Upper Body */}
         <View style={styles.ticketBody}>
-          {/* Category Badge & Pass Counter */}
+          {/* Category Badge & Seat Count (web parity — one QR for party) */}
           <View style={styles.tagRow}>
             <View style={styles.categoryPill}>
               <Text style={styles.categoryPillText}>{eventCategory}</Text>
             </View>
             {totalTickets && totalTickets > 1 ? (
               <View style={styles.counterPill}>
-                <Text style={styles.counterText}>Pass {ticketIndex || 1} of {totalTickets}</Text>
+                <Text style={styles.counterText}>
+                  {totalTickets} आसने
+                  {ticketIndex ? ` · ${ticketIndex}/${totalTickets}` : ''}
+                </Text>
               </View>
             ) : null}
           </View>
@@ -303,14 +305,15 @@ export function MahaTicketPass({
           <View style={styles.notchRight} />
         </View>
 
-        {/* ══════ QR CODE PRESENTATION ZONE ══════ */}
+        {/* ══════ QR CODE PRESENTATION ZONE (match web MahaTicketCard) ══════ */}
         <View style={styles.qrContainer}>
           <View style={styles.qrInnerBox}>
             <QRCode
               value={qrPayload}
-              size={135}
+              size={168}
               backgroundColor="#FFFFFF"
               color="#111827"
+              ecl="M"
             />
           </View>
 
@@ -318,11 +321,21 @@ export function MahaTicketPass({
             प्रवेशद्वारावर हा QR कोड दाखवा (Entry Pass)
           </Text>
           <Text style={styles.qrSubInstructions}>
-            स्कॅन करण्यासाठी स्क्रीन ब्राईटनेस वाढवा • Increase brightness
+            स्कॅन करण्यासाठी स्क्रीन ब्राईटनेस वाढवा • Increase brightness for scan
           </Text>
           <Text style={styles.qrTicketCodeText}>
-            PASS ID: #{resolvedOrderNum}
+            CODE: {ticketCode || resolvedOrderNum}
           </Text>
+
+          <View style={styles.securityNoticeBox}>
+            <View style={styles.securityNoticeRow}>
+              <Icon name="shield-check" size={14} color="#EA580C" />
+              <Text style={styles.securityNoticeTitle}>सुरक्षित डिजिटल तिकीट पडताळणी</Text>
+            </View>
+            <Text style={styles.securityNoticeBody}>
+              Gate staff: verify name + seat on scan. One QR admits all seats in this booking.
+            </Text>
+          </View>
         </View>
       </View>
 
@@ -601,42 +614,67 @@ const styles = StyleSheet.create({
   qrContainer: {
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingBottom: 8,
-    paddingTop: 2,
+    paddingHorizontal: 14,
+    paddingBottom: 12,
+    paddingTop: 4,
   },
   qrInnerBox: {
-    padding: 6,
+    padding: 10,
     backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    borderWidth: 1.5,
+    borderRadius: 14,
+    borderWidth: 2,
     borderColor: '#E2E8F0',
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 4,
     elevation: 2,
-    marginBottom: 6,
+    marginBottom: 8,
   },
   qrInstructions: {
     fontSize: 11,
     fontWeight: '900',
     color: '#EA580C',
     textAlign: 'center',
-    marginBottom: 1,
+    marginBottom: 2,
+    letterSpacing: 0.3,
   },
   qrSubInstructions: {
     fontSize: 9.5,
     color: '#64748B',
     textAlign: 'center',
-    marginBottom: 2,
+    marginBottom: 4,
   },
   qrTicketCodeText: {
     fontSize: 10,
     fontWeight: '800',
     color: '#94A3B8',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    marginBottom: 2,
+    marginBottom: 8,
+  },
+  securityNoticeBox: {
+    width: '100%',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 10,
+    gap: 4,
+  },
+  securityNoticeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  securityNoticeTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  securityNoticeBody: {
+    fontSize: 10,
+    color: '#64748B',
+    lineHeight: 14,
   },
   iconActionsRow: {
     flexDirection: 'row',

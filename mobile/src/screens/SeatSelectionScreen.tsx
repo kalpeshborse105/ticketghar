@@ -766,13 +766,13 @@ export default function SeatSelectionScreen({ navigation, route }: any) {
     return { maxSeatsInRow: maxSeats, maxAislesInRow: maxAisles };
   }, [sectionViews]);
 
-  // Fit as many seats as possible; wide rows scroll horizontally (never clip)
+  // Fit seats; reserve space for BOTH row letters so they never crop
   const seatCellSize = useMemo(() => {
-    const labelSpace = 44;
+    const labelSpace = 64; // left + right row letters
     const aisleExtra = maxAislesInRow * 10;
-    const usable = SCREEN_WIDTH - 32 - labelSpace - aisleExtra;
+    const usable = SCREEN_WIDTH - 40 - labelSpace - aisleExtra;
     const fitted = Math.floor(usable / Math.max(maxSeatsInRow, 1));
-    return Math.max(22, Math.min(28, fitted));
+    return Math.max(20, Math.min(28, fitted));
   }, [maxSeatsInRow, maxAislesInRow]);
 
   const [showMiniMap, setShowMiniMap] = useState(false);
@@ -2161,13 +2161,13 @@ const styles = StyleSheet.create({
   // Section Card
   sectionCard: {
     backgroundColor: '#FFFFFF',
-    marginHorizontal: 8,
+    marginHorizontal: 6,
     marginBottom: 8,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     paddingVertical: 8,
-    paddingHorizontal: 2,
+    paddingHorizontal: 6,
     overflow: 'visible',
     ...SHADOWS.sm,
   },
@@ -2254,39 +2254,38 @@ const styles = StyleSheet.create({
   },
 
   sectionSeatsHorizontalScroll: {
-    paddingHorizontal: 4,
+    paddingHorizontal: 2,
     paddingVertical: 6,
-    paddingRight: 12,
     flexGrow: 1,
     justifyContent: 'center',
   },
   sectionSeatsGrid: {
-    alignItems: 'flex-start',
+    alignItems: 'stretch',
     gap: 5,
-    paddingRight: 8,
+    width: '100%',
   },
   seatRowWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 2,
-    flexShrink: 0,
+    width: '100%',
   },
   rowLabelText: {
-    width: 20,
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#64748B',
+    width: 28,
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#334155',
     textAlign: 'center',
-    marginRight: 4,
+    marginRight: 2,
     flexShrink: 0,
   },
   rowLabelTextRight: {
-    width: 20,
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#64748B',
+    width: 28,
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#334155',
     textAlign: 'center',
-    marginLeft: 4,
+    marginLeft: 2,
     flexShrink: 0,
   },
   rowLabelPill: {
@@ -2303,10 +2302,11 @@ const styles = StyleSheet.create({
     color: '#475569',
   },
   seatsTrack: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    flexShrink: 0,
+    justifyContent: 'center',
+    flexShrink: 1,
     gap: 3,
   },
 

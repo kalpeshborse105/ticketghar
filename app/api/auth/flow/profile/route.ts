@@ -15,6 +15,16 @@ export async function POST(req: NextRequest) {
     const fullName = body.fullName !== undefined ? String(body.fullName).trim() : session.fullName;
     const phoneNumber = body.phoneNumber !== undefined ? String(body.phoneNumber).trim() : session.phoneNumber;
     const avatarUrl = body.avatarUrl !== undefined ? String(body.avatarUrl) : session.avatarUrl;
+    const parsedAge =
+      body.age === null || body.age === undefined || body.age === ''
+        ? undefined
+        : Number.parseInt(String(body.age), 10);
+    const age =
+      parsedAge !== undefined && Number.isFinite(parsedAge) && parsedAge >= 1 && parsedAge <= 120
+        ? parsedAge
+        : body.age === null || body.age === ''
+          ? null
+          : (session as any).age;
 
     if (db && users && (session.id || session.email)) {
       try {
@@ -23,6 +33,9 @@ export async function POST(req: NextRequest) {
           phoneNumber: phoneNumber || session.phoneNumber,
           updatedAt: new Date(),
         };
+        if (age !== undefined) {
+          updateData.age = age;
+        }
         if (avatarUrl !== undefined) {
           updateData.avatarUrl = avatarUrl;
         }
@@ -41,6 +54,7 @@ export async function POST(req: NextRequest) {
       ...session,
       fullName: fullName || session.fullName,
       phoneNumber: phoneNumber || session.phoneNumber,
+      age: age !== undefined ? age : (session as any).age,
       avatarUrl: avatarUrl !== undefined ? avatarUrl : session.avatarUrl,
     };
 

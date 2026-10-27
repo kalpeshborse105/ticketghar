@@ -1331,12 +1331,20 @@ export const api = {
           ? {
             ticketCode: serverRes.ticket.code || cleanCode,
             seatCode: serverRes.ticket.seat || serverRes.ticket.seats,
-            attendeeName: serverRes.ticket.attendee,
+            attendeeName: serverRes.ticket.attendee || serverRes.guest?.name,
+            email: serverRes.ticket.email || serverRes.guest?.email,
+            phone: serverRes.ticket.phone || serverRes.guest?.phone,
+            grandTotal: serverRes.ticket.grandTotal ?? serverRes.guest?.grandTotal,
+            paymentStatus: serverRes.ticket.paymentStatus || serverRes.guest?.paymentStatus,
+            orderNumber: serverRes.ticket.orderNumber || serverRes.guest?.orderNumber,
             eventTitle: serverRes.ticket.eventMr || serverRes.ticket.event,
             showtime: serverRes.ticket.showtime,
+            showtimeLabel: serverRes.ticket.showtimeLabel,
+            venue: serverRes.ticket.venue,
           }
           : undefined,
         order: serverRes.order,
+        guest: serverRes.guest,
       };
     }
 
@@ -1448,6 +1456,7 @@ export const api = {
     fullName?: string;
     phone?: string;
     phoneNumber?: string;
+    age?: number | null;
     avatarUrl?: string;
     city?: string;
   }): Promise<{ success: boolean; user?: any; error?: string }> => {
@@ -1457,6 +1466,7 @@ export const api = {
         email: data.email,
         fullName: data.fullName || data.name || 'User',
         phoneNumber: data.phoneNumber || data.phone,
+        age: data.age,
         avatarUrl: data.avatarUrl,
         city: data.city,
       };

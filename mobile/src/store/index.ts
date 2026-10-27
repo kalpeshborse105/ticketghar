@@ -15,6 +15,7 @@ interface User {
   email?: string;
   phone?: string;
   phoneNumber?: string;
+  age?: number | null;
   avatarUrl?: string;
   role?:
     | 'customer'
@@ -63,6 +64,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       fullName: cleanName,
       phone: rawUser.phone || rawUser.phoneNumber,
       phoneNumber: rawUser.phoneNumber || rawUser.phone,
+      age: rawUser.age ?? null,
     };
     await AsyncStorage.multiSet([
       ['@mahaticket_user', JSON.stringify(cleanUser)],
@@ -141,6 +143,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       fullName: cleanName,
       phone: merged.phone || merged.phoneNumber,
       phoneNumber: merged.phoneNumber || merged.phone,
+      age: merged.age ?? null,
     };
     set({ user: updated });
     AsyncStorage.multiSet([
